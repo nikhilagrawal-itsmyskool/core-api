@@ -1,0 +1,28 @@
+{
+    "compilerOptions": {
+      "module": "commonjs",       // Keep CommonJS for Node.js compatibility
+      "target": "es2020",         // Set to ES2017 for modern JS features
+      "outDir": "./lib",          // Output directory for compiled files
+      "esModuleInterop": true,    // Allows default imports from non-ES modules
+      "allowJs": true,            // Allow JS files to be part of the project
+      "sourceMap": true,          // Generate source maps for easier debugging
+      "removeComments": true      // Remove comments from the output files
+    },
+    "include": [
+      "modules/**/*.ts", 
+      "modules/**/*.js",      
+      "shared/**/*.ts",
+      "shared/**/*.js",
+    ],
+    "exclude": [
+      "node_modules",
+      ".webpack/**/*",
+      ".git/**/*",
+      ".vscode/**/*",
+      ".serverless/**/*",
+      "handlers/**/*",
+      "configs/**/*",
+      "*.config.js"
+    ]
+  }
+  

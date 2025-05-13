@@ -1,0 +1,12 @@
+{
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.149",
+    "@types/node": "^22.15.17",
+    "prettier": "^3.5.3",
+    "serverless": "^4.14.3",
+    "serverless-webpack": "^5.15.1",
+    "ts-loader": "^9.5.2",
+    "typescript": "^5.8.3",
+    "webpack": "^5.99.8"
+  }
+}
