@@ -3,13 +3,11 @@ service: itsmyskool-sample-service
 # Add the serverless-webpack plugin
 plugins:
   - serverless-webpack
-  # - serverless-offline
-  # - serverless-plugin-log-subscription
+  - serverless-offline
   
 provider:
   name: aws
   runtime: nodejs20.x
-  logs:
   restApi:
     level: INFO
     accessLogging: true
@@ -28,15 +26,6 @@ provider:
   apiGateway:
     minimumCompressionSize: 1024 # Enable gzip compression for responses > 1 KB
     shouldStartNameWithService: true
-  # iamRoleStatements:
-  #   - Effect: Allow
-  #     Action:
-  #       - SNS:Publish
-  #     Resource: '*'
-  #   - Effect: Allow
-  #     Action:
-  #       - SQS:SendMessage
-  #     Resource: '*'
   package:
     excludeDevDependencies: true
     exclude:
@@ -48,34 +37,20 @@ provider:
       ${file(../../configs/${self:provider.stage}/${self:provider.stage}.yml)}
 
 custom:
-  # region: ${self:provider.region}
-  # stage: ${opt:stage, self:provider.stage}
-  # prefix: ${self:custom.stage}-${self:service}
-  # process: ${self:custom.prefix}-process
-  # config: ${self:custom.prefix}-config
-  # sns-logs: ${self:custom.prefix}-trigger-logs
-  # sqs-logs: ${self:custom.prefix}-messages-logs
-  # domains:
-  #   prod: api.itsmyskool.com
-  #   test: test-api.itsmyskool.com
-  #   dev: dev-api.itsmyskool.com
-  # customDomain:
-  #  basePath: 'samples'
-  #  domainName: ${self:custom.domains.${self:custom.stage}}
-  #  stage: ${self:custom.stage}
-  #  certificateName: itsmyskool.com
-  #  createRoute53Record: true
-  # logSubscription:
-  #   enabled: true
-  #   destinationArn: 'arn:aws:lambda:${aws:region}:${aws:accountId}:function:spardha-infra-service-2-${self:provider.stage}-ExecutionLogsToElasticsearch'
-  #   filterPattern: '[timestamp=*Z, request_id="*-*", level, event]' 
+  region: ${self:provider.region}
+  stage: ${opt:stage, self:provider.stage}
+  domains:
+    prod: api.itsmyskool.com
+    test: api.qa.itsmyskool.com
+    dev: api.dev.itsmyskool.com
+  customDomain:
+   basePath: 'samples'
+   domainName: ${self:custom.domains.${self:custom.stage}}
+   stage: ${self:custom.stage}
+   certificateName: itsmyskool.com
+   createRoute53Record: true
   webpack:
     webpackConfig: '../../webpack.config.js'   # Name of webpack configuration file
-#    includeModules: true   # Node modules configuration for packaging
-#    packager: 'npm'   # Packager that will be used to package your external modules
-    excludeFiles: '.test/**' # Provide a glob for files to ignore
-
-
   serverless-offline:
     host: '0.0.0.0'
 

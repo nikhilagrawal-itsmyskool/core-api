@@ -1,0 +1,7 @@
+  getSampleJob:
+    handler: sample-handler.get
+    events:
+      - http:
+          method: get
+          path: /
+          cors: true

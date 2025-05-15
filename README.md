@@ -22,3 +22,8 @@ Key features
    Manages recruitment, staff records, attendance, leave, and payroll processing. Generates salary slips and handles tax and compliance tasks.
 10. **Report and Analytics**
     Generates customizable reports and dashboards for performance, finance, and administration, aiding in informed decision-making and transparency.
+
+
+# Commands
+
+> npx serverless webpack --config serverless.yml --aws-profile sms-be-serverless --stage dev --verbose
