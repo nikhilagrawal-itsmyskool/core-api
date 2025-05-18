@@ -27,3 +27,19 @@ Key features
 # Commands
 
 > npx serverless webpack --config serverless.yml --aws-profile sms-be-serverless --stage dev --verbose
+>
+> npx serverless deploy --config serverless.yml --aws-profile sms-be-serverless --stage dev --verbose
+> 
+> npx serverless remove --config serverless.yml --aws-profile sms-be-serverless --stage dev --verbose
+>
+> npx serverless create_domain --config serverless.yml --aws-profile sms-be-serverless --stage dev --verbose
+
+
+
+# AWS
+
+You can construct the API Gateway endpoint yourself if you know the id and the stage name:
+https://{{restApiId}}.execute-api.{{region}}.amazonaws.com/{{stageName}}
+
+
+
