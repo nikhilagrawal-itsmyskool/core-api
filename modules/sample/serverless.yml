@@ -48,7 +48,7 @@ custom:
    basePath: 'samples'
    domainName: ${self:custom.domains.${self:custom.stage}}
    stage: ${self:custom.stage}
-   certificateName: '*.dev.itsmyskool.com'
+   certificateName: '*.itsmyskool.com'
    endpointType: 'regional'
    securityPolicy: tls_1_2
    apiType: rest
