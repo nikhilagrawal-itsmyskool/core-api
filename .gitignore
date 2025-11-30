@@ -1,0 +1,14 @@
+# package directories
+node_modules
+
+# Serverless directories
+.serverless
+
+# Webpack directories
+.webpack
+.env
+.vscode/launch.json
+
+lib
+!shared/*
+.local/

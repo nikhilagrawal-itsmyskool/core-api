@@ -1,3 +1,9 @@
+node --version
+v22.21.0
+
+npm --version
+10.9.4
+
 # School data management
 
 Key features
