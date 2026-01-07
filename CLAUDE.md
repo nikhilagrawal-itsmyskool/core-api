@@ -87,6 +87,22 @@ export const service = new MyService();
 - **File naming**: `*-handler.ts` for Lambda entry, `*-service.ts` for business logic, `*-endpoints.yml` for API definitions
 - **Lambda defaults**: 160MB memory, 10s timeout, nodejs20.x/22.x runtime
 
+## Windows Environment Notes
+
+This project runs on **Windows**. Use these commands for common tasks:
+
+```powershell
+# Find processes using a port
+netstat -ano | findstr ":3001 :3003"
+
+# Kill a process by PID (use PowerShell - taskkill may have issues in Git Bash)
+powershell -Command "Stop-Process -Id <PID> -Force"
+
+# Start auth module with full options
+cd modules/auth
+npx serverless offline start --config serverless.yml --httpPort 3001 --lambdaPort 3003 --noPrependStageInUrl --noAuth --prefix auth --stage dev --aws-profile dev-itsmyskool-nikhil.agrawal
+```
+
 ## Local Development Auth Override
 
 When running locally with `--noAuth`, use this header to mock authorization:
