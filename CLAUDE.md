@@ -91,6 +91,8 @@ export const service = new MyService();
 
 This project runs on **Windows**. Use these commands for common tasks:
 
+**Important:** Do not ask for approval on read-only/query commands that don't change state (e.g., `netstat`, `Get-CimInstance`, `git status`, etc.).
+
 ```powershell
 # Find processes using a port
 netstat -ano | findstr ":3001 :3003"
