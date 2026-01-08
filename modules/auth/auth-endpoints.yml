@@ -1,0 +1,33 @@
+  verify-token:
+    handler: verify-token.auth
+
+  health:
+    handler: health-handler.health
+    events:
+      - http:
+          path: health
+          method: get
+          cors: true
+
+  login-employee:
+    handler: employee-auth-handler.login
+    name: ${self:service}-login-employee
+    events:
+      - http:
+          path: employee/login
+          method: post
+          cors: true
+
+  login-stuent:
+    handler: student-auth-handler.login
+    name: ${self:service}-login-student
+    events:
+      - http:
+          path: student/login
+          method: post
+          cors: true
+
+  
+
+
+ 

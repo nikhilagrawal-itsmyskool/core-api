@@ -7,10 +7,10 @@ const config = JSON.parse(fs.readFileSync(path.join(__dirname, '../local.config.
 const port = process.env.GATEWAY_PORT || config.httpPort;
 const BASE_URL = `http://localhost:${port}/${config.prefix}`;
 
-describe('Student Auth API', () => {
-  const loginUrl = `${BASE_URL}/student/login`;
+describe('Employee Auth API', () => {
+  const loginUrl = `${BASE_URL}/employee/login`;
 
-  describe('POST /auth/student/login', () => {
+  describe('POST /auth/employee/login', () => {
     it('should return JWT token on successful login', async () => {
       const response = await fetch(loginUrl, {
         method: 'POST',
@@ -30,7 +30,7 @@ describe('Student Auth API', () => {
       expect(typeof data.token).toBe('string');
     });
 
-    it('should return JWT with login_name, school_code, and type=student', async () => {
+    it('should return JWT with login_name, school_code, and roles', async () => {
       const response = await fetch(loginUrl, {
         method: 'POST',
         headers: {
@@ -52,7 +52,8 @@ describe('Student Auth API', () => {
 
       expect(payload).toHaveProperty('login_name', TEST_USERNAME);
       expect(payload).toHaveProperty('school_code', TEST_SCHOOL_CODE);
-      expect(payload).toHaveProperty('type', 'student');
+      expect(payload).toHaveProperty('roles');
+      expect(Array.isArray(payload.roles)).toBe(true);
     });
 
     it('should return 401 for invalid password', async () => {

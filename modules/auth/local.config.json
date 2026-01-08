@@ -1,0 +1,5 @@
+{
+  "httpPort": 3001,
+  "lambdaPort": 3003,
+  "prefix": "auth"
+}

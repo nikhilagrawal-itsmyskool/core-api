@@ -1,0 +1,138 @@
+  # Health check
+  health:
+    handler: health-handler.health
+    events:
+      - http:
+          path: health
+          method: get
+          cors: true
+
+  # Lookup endpoints
+  get-units:
+    handler: medical-lookup-handler.getUnits
+    name: ${self:service}-get-units
+    events:
+      - http:
+          path: units
+          method: get
+          cors: true
+
+  # Medical Item endpoints
+  create-item:
+    handler: medical-item-handler.create
+    name: ${self:service}-create-item
+    events:
+      - http:
+          path: items
+          method: post
+          cors: true
+
+  update-item:
+    handler: medical-item-handler.update
+    name: ${self:service}-update-item
+    events:
+      - http:
+          path: items/{id}
+          method: put
+          cors: true
+
+  delete-item:
+    handler: medical-item-handler.remove
+    name: ${self:service}-delete-item
+    events:
+      - http:
+          path: items/{id}
+          method: delete
+          cors: true
+
+  search-items:
+    handler: medical-item-handler.search
+    name: ${self:service}-search-items
+    events:
+      - http:
+          path: items
+          method: get
+          cors: true
+
+  get-item:
+    handler: medical-item-handler.getById
+    name: ${self:service}-get-item
+    events:
+      - http:
+          path: items/{id}
+          method: get
+          cors: true
+
+  # Purchase Log endpoints
+  create-purchase:
+    handler: medical-purchase-handler.create
+    name: ${self:service}-create-purchase
+    events:
+      - http:
+          path: purchases
+          method: post
+          cors: true
+
+  update-purchase:
+    handler: medical-purchase-handler.update
+    name: ${self:service}-update-purchase
+    events:
+      - http:
+          path: purchases/{id}
+          method: put
+          cors: true
+
+  delete-purchase:
+    handler: medical-purchase-handler.remove
+    name: ${self:service}-delete-purchase
+    events:
+      - http:
+          path: purchases/{id}
+          method: delete
+          cors: true
+
+  list-purchases:
+    handler: medical-purchase-handler.list
+    name: ${self:service}-list-purchases
+    events:
+      - http:
+          path: purchases
+          method: get
+          cors: true
+
+  # Issue Log endpoints
+  create-issue:
+    handler: medical-issue-handler.create
+    name: ${self:service}-create-issue
+    events:
+      - http:
+          path: issues
+          method: post
+          cors: true
+
+  update-issue:
+    handler: medical-issue-handler.update
+    name: ${self:service}-update-issue
+    events:
+      - http:
+          path: issues/{id}
+          method: put
+          cors: true
+
+  delete-issue:
+    handler: medical-issue-handler.remove
+    name: ${self:service}-delete-issue
+    events:
+      - http:
+          path: issues/{id}
+          method: delete
+          cors: true
+
+  list-issues:
+    handler: medical-issue-handler.list
+    name: ${self:service}-list-issues
+    events:
+      - http:
+          path: issues
+          method: get
+          cors: true
