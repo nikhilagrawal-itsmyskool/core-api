@@ -52,6 +52,7 @@ class StudentAuthHandler {
 
       const resp = {
         token: token,
+        displayName: studentLogin.displayName,
       };
       ResponseBuilder.ok(resp, callback);
     } catch (err: any) {

@@ -91,6 +91,15 @@
           method: delete
           cors: true
 
+  get-purchase:
+    handler: medical-purchase-handler.getById
+    name: ${self:service}-get-purchase
+    events:
+      - http:
+          path: purchases/{id}
+          method: get
+          cors: true
+
   list-purchases:
     handler: medical-purchase-handler.list
     name: ${self:service}-list-purchases
@@ -126,6 +135,15 @@
       - http:
           path: issues/{id}
           method: delete
+          cors: true
+
+  get-issue:
+    handler: medical-issue-handler.getById
+    name: ${self:service}-get-issue
+    events:
+      - http:
+          path: issues/{id}
+          method: get
           cors: true
 
   list-issues:

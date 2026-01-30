@@ -1,86 +1,28 @@
-service: sample-service
-
-# Add the serverless-webpack plugin
-plugins:
-  - serverless-webpack
-  - serverless-domain-manager
-  - serverless-offline
-  
 provider:
   name: aws
-  runtime: nodejs20.x
-  restApi:
-    level: INFO
-    accessLogging: true
-    format: '{"requestTime":"$context.requestTime","requestId":"$context.requestId","httpMethod":"$context.httpMethod","path":"$context.path","resourcePath":"$context.resourcePath","status":$context.status,"responseLatency":$context.responseLatency}'
-    executionLogging: false 
-  tracing:
-    apiGateway: false
-    lambda: false
-  region: ap-south-1
   stage: ${opt:stage, 'dev'}
-  memorySize: 160  #Default Lambda Memory Size
-  logRetentionInDays: 1 # Set the default RetentionInDays for a CloudWatch LogGroup
-  timeout: 10 #Default Lambda timeout
-  versionFunctions: false # No functions versioning 
-  # endpointType: regional    
-  apiGateway:
-    minimumCompressionSize: 1024 # Enable gzip compression for responses > 1 KB
-    shouldStartNameWithService: true
-  package:
-    excludeDevDependencies: true
-    exclude:
-      - .git/**
-      - .vscode/**
-      - .test/**
-      - tests/**
-  environment: #Global Environment variables
-      ${file(../../configs/${self:provider.stage}/${self:provider.stage}.yml)}
+  environment:
+    ${file(../../configs/${self:provider.stage}/${self:provider.stage}.yml)}  
+  $<<: ${file(../global-config-${self:provider.stage}.yml):provider}  
 
 custom:
-  region: ${self:provider.region}
-  stage: ${opt:stage, self:provider.stage}
-  domains:
-    prod: api.itsmyskool.com
-    test: api.qa.itsmyskool.com
-    dev: api.dev.itsmyskool.com
+  prefix: itsmyskool
+  baseServiceName: sample-service
+  fullServiceName: ${self:custom.prefix}-${self:custom.baseServiceName}
   customDomain:
-   basePath: 'samples'
-   domainName: ${self:custom.domains.${self:custom.stage}}
-   stage: ${self:custom.stage}
-   certificateName: '*.itsmyskool.com'
-   endpointType: 'regional'
-   securityPolicy: tls_1_2
-   apiType: rest
-   createRoute53Record: true
-  #  route53Profile: ${self:provider.profile}
-   route53Region: ${self:provider.region}
-  webpack:
-    webpackConfig: '../../webpack.config.js'   # Name of webpack configuration file
-  serverless-offline:
-    host: '0.0.0.0'
+   basePath: 'sample'  
+  $<<: ${file(../global-config-${self:provider.stage}.yml):custom}
 
+ 
 
-functions: ${file(../../handlers/sample-endpoints.yml)}
+service: ${self:provider.stage}-${self:custom.fullServiceName}
+configValidationMode: off
 
-resources:
-  Resources:
-    GatewayResponseDefault4XX:
-      Type: 'AWS::ApiGateway::GatewayResponse'
-      Properties:
-        ResponseParameters:
-          gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
-          gatewayresponse.header.Access-Control-Allow-Headers: "'*'"
-        ResponseType: DEFAULT_4XX
-        RestApiId:
-          Ref: 'ApiGatewayRestApi'
+plugins:
+  - ../../plugins/serverless-merge-config.js
+  - serverless-webpack
+  - serverless-offline
 
-    GatewayResponseDefault5XX:
-      Type: 'AWS::ApiGateway::GatewayResponse'
-      Properties:
-        ResponseParameters:
-          gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
-          gatewayresponse.header.Access-Control-Allow-Headers: "'*'"
-        ResponseType: DEFAULT_5XX
-        RestApiId:
-          Ref: 'ApiGatewayRestApi'
+functions: ${file(sample-endpoints.yml)}
+
+$<<: ${file(../global-config-${self:provider.stage}.yml):resources}

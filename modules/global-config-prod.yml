@@ -1,0 +1,83 @@
+provider:
+  name: aws
+  runtime: nodejs22.x
+  logs:
+    restApi:
+      level: INFO
+      accessLogging: true
+      format: '{"requestTime":"$context.requestTime","requestId":"$context.requestId","httpMethod":"$context.httpMethod","path":"$context.path","resourcePath":"$context.resourcePath","status":$context.status,"responseLatency":$context.responseLatency}'
+      executionLogging: false
+    websocket:
+      level: ERROR
+      accessLogging: true
+      fullExecutionData: false
+  tracing:
+    apiGateway: false
+    lambda: false
+  region: ap-south-1
+  stage: ${opt:stage, 'prod'}
+  memorySize: 160
+  logRetentionInDays: 7
+  timeout: 10
+  versionFunctions: false
+  apiGateway:
+    minimumCompressionSize: 1024
+    shouldStartNameWithService: true
+  stackName: ${self:service}
+  iamRoleStatements:
+    - Effect: Allow
+      Action:
+        - SNS:Publish
+        - s3:PutObject
+        - s3:GetObject
+        - s3:PutObjectAcl
+      Resource: '*'
+    - Effect: Allow
+      Action:
+        - SQS:SendMessage
+      Resource: '*'
+  package:
+    excludeDevDependencies: true
+    exclude:
+      - .git/**
+      - .vscode/**
+      - .test/**
+      - tests/**
+
+custom:
+  webpack:
+    webpackConfig: '../../webpack.config.js'
+    includeModules:
+      packagePath: '../../package.json'
+      forceExclude:
+        - aws-sdk
+    packager: 'npm'
+    excludeFiles: '.test/**'
+    keepOutputDirectory: true
+  package:
+    individually: true
+  serverless-offline:
+    host: '0.0.0.0'
+    port: 6001
+
+resources:
+  Resources:
+    GatewayResponseDefault4XX:
+      Type: 'AWS::ApiGateway::GatewayResponse'
+      Properties:
+        ResponseParameters:
+          gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+          gatewayresponse.header.Access-Control-Allow-Headers: "'*'"
+        ResponseType: DEFAULT_4XX
+        RestApiId:
+          Ref: 'ApiGatewayRestApi'
+
+    GatewayResponseDefault5XX:
+      Type: 'AWS::ApiGateway::GatewayResponse'
+      Properties:
+        ResponseParameters:
+          gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+          gatewayresponse.header.Access-Control-Allow-Headers: "'*'"
+        ResponseType: DEFAULT_5XX
+        RestApiId:
+          Ref: 'ApiGatewayRestApi'

@@ -24,7 +24,7 @@ describe('Medical Item API', () => {
         body: JSON.stringify({
           name: 'Paracetamol 500mg',
           unit: 'tablet',
-          reorder_level: 100,
+          reorderLevel: 100,
           comments: 'For fever and pain relief',
         }),
       });
@@ -35,8 +35,8 @@ describe('Medical Item API', () => {
       expect(data).toHaveProperty('uuid');
       expect(data.name).toBe('Paracetamol 500mg');
       expect(data.unit).toBe('tablet');
-      expect(data.reorder_level).toBe(100);
-      expect(data.current_stock).toBe(0);
+      expect(data.reorderLevel).toBe(100);
+      expect(data.currentStock).toBe(0);
       expect(data.status).toBe('active');
 
       createdItemId = data.uuid;
@@ -153,6 +153,67 @@ describe('Medical Item API', () => {
       expect(Array.isArray(data)).toBe(true);
       expect(data.length).toBeGreaterThan(0);
     });
+
+    it('should exclude deleted items by default', async () => {
+      // Create an item
+      const createResponse = await fetch(itemsUrl, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          name: 'Item to Delete for Search Test',
+          unit: 'tablet',
+        }),
+      });
+      const createdItem = await createResponse.json();
+
+      // Delete the item
+      await fetch(`${itemsUrl}/${createdItem.uuid}`, {
+        method: 'DELETE',
+        headers,
+      });
+
+      // Search without includeDeleted - should not find the deleted item
+      const searchResponse = await fetch(`${itemsUrl}?search=Item to Delete for Search Test`, {
+        method: 'GET',
+        headers,
+      });
+
+      expect(searchResponse.status).toBe(200);
+      const results = await searchResponse.json();
+      const found = results.find((item: any) => item.uuid === createdItem.uuid);
+      expect(found).toBeUndefined();
+    });
+
+    it('should include deleted items when includeDeleted=true', async () => {
+      // Create an item
+      const createResponse = await fetch(itemsUrl, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          name: 'Item to Delete for Include Test',
+          unit: 'tablet',
+        }),
+      });
+      const createdItem = await createResponse.json();
+
+      // Delete the item
+      await fetch(`${itemsUrl}/${createdItem.uuid}`, {
+        method: 'DELETE',
+        headers,
+      });
+
+      // Search with includeDeleted=true - should find the deleted item
+      const searchResponse = await fetch(`${itemsUrl}?search=Item to Delete for Include Test&includeDeleted=true`, {
+        method: 'GET',
+        headers,
+      });
+
+      expect(searchResponse.status).toBe(200);
+      const results = await searchResponse.json();
+      const found = results.find((item: any) => item.uuid === createdItem.uuid);
+      expect(found).toBeDefined();
+      expect(found.status).toBe('deleted');
+    });
   });
 
   describe('PUT /medical/items/{id}', () => {
@@ -162,7 +223,7 @@ describe('Medical Item API', () => {
         headers,
         body: JSON.stringify({
           name: 'Paracetamol 650mg',
-          reorder_level: 150,
+          reorderLevel: 150,
         }),
       });
 
@@ -171,7 +232,7 @@ describe('Medical Item API', () => {
 
       expect(data.uuid).toBe(createdItemId);
       expect(data.name).toBe('Paracetamol 650mg');
-      expect(data.reorder_level).toBe(150);
+      expect(data.reorderLevel).toBe(150);
     });
 
     it('should return 404 for updating non-existent item', async () => {

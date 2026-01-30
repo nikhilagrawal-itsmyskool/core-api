@@ -11,7 +11,7 @@ describe('Employee Auth API', () => {
   const loginUrl = `${BASE_URL}/employee/login`;
 
   describe('POST /auth/employee/login', () => {
-    it('should return JWT token on successful login', async () => {
+    it('should return JWT token and displayName on successful login', async () => {
       const response = await fetch(loginUrl, {
         method: 'POST',
         headers: {
@@ -28,6 +28,8 @@ describe('Employee Auth API', () => {
       const data = await response.json();
       expect(data).toHaveProperty('token');
       expect(typeof data.token).toBe('string');
+      expect(data).toHaveProperty('displayName');
+      expect(typeof data.displayName).toBe('string');
     });
 
     it('should return JWT with login_name, school_code, and roles', async () => {

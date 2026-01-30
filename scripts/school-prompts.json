@@ -1,0 +1,16 @@
+{
+  "SS1": {
+    "schoolName": "Sample School 1",
+    "schoolCode": "SS1",
+    "employeeName": "Itsmyskool Admin",
+    "employeePassword": "Itsmyskool@123",
+    "studentPassword": "Itsmyskool@123"
+  },
+  "TS1": {
+    "schoolName": "Test School 1",
+    "schoolCode": "TS1",
+    "employeeName": "Itsmyskool Admin",
+    "employeePassword": "Itsmyskool@123",
+    "studentPassword": "Itsmyskool@123"
+  }
+}

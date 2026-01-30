@@ -1,0 +1,9 @@
+delete from employee_role where school_id = '6zoptlhtok3n';
+delete from employee_login where school_id = '6zoptlhtok3n';
+delete from employee where school_id = '6zoptlhtok3n';
+delete from role where school_id = '6zoptlhtok3n';
+delete from student_login where school_id = '6zoptlhtok3n';
+delete from student_class where school_id = '6zoptlhtok3n';
+delete from student where school_id = '6zoptlhtok3n';
+delete from class where school_id = '6zoptlhtok3n';
+delete from academic_year where school_id = '6zoptlhtok3n';

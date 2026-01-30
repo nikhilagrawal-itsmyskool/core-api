@@ -1,0 +1,11 @@
+ENV: local
+
+POSTGRES_ENDPOINT: 'localhost'
+POSTGRES_DATABASE: 'itsmyskool_local'
+POSTGRES_USERNAME: 'postgres'
+POSTGRES_PASSWORD: 'itsmyskool'
+POSTGRES_PORT: '5432'
+POSTGRES_SSL: 'false'
+
+JWT_SECRET: 'local-dev-secret-key'
+JWT_ADMIN_EXPIRY_TIME: '24h'

@@ -7,13 +7,13 @@ module.exports = {
     entry: slsw.lib.entries,
     stats: 'errors-only', // Minimal output
     externalsPresets: { node: true },
-    externals: [nodeExternals()], // Remove unused externals for minimalism
+    externals: [nodeExternals(), "pg", "jsonwebtoken"], // Remove unused externals for minimalism
     resolve: {
         extensions: ['.ts', '.tsx'], // Only include TypeScript file extensions
     },
     output: {
         libraryTarget: 'commonjs',
-        path: path.join(__dirname, '.webpack'),
+        path: path.join(process.cwd(), '.webpack'),
         filename: '[name].js',
     },
     module: {

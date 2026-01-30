@@ -1,0 +1,16 @@
+  health:
+    handler: health-handler.health
+    events:
+      - http:
+          path: health
+          method: get
+          cors: true
+
+  search-employee:
+    handler: employee-handler.search
+    name: ${self:service}-search-employee
+    events:
+      - http:
+          path: search
+          method: get
+          cors: true

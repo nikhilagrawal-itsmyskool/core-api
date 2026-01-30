@@ -1,5 +1,5 @@
 {
-  "httpPort": 3002,
+  "httpPort": 3003,
   "lambdaPort": 3004,
   "prefix": "medical"
 }

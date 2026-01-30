@@ -1,1 +1,9 @@
 ENV: dev
+
+POSTGRES_ENDPOINT: 'dev-iac-itsmyskool-postgresql-public.cklgcjuwpax9.ap-south-1.rds.amazonaws.com'
+READONLY_POSTGRES_ENDPOINT: 'dev-iac-itsmyskool-postgresql-public.cklgcjuwpax9.ap-south-1.rds.amazonaws.com'
+POSTGRES_DATABASE: 'itsmyskool'
+POSTGRES_USERNAME: 'root'
+POSTGRES_PASSWORD: 'itsmyskool123'
+JWT_SECRET: 'itsmyskool-dev-secret-key-2024'
+JWT_ADMIN_EXPIRY_TIME: '24h'

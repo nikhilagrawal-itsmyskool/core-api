@@ -1,0 +1,16 @@
+  health:
+    handler: health-handler.health
+    events:
+      - http:
+          path: health
+          method: get
+          cors: true
+
+  get-sample:
+    handler: sample-handler.get
+    name: ${self:service}-get-sample
+    events:
+      - http:
+          path: data
+          method: get
+          cors: true

@@ -1,0 +1,26 @@
+provider:
+  name: aws
+  stage: ${opt:stage, 'dev'}
+  environment:
+    ${file(../../configs/${self:provider.stage}/${self:provider.stage}.yml)}
+  $<<: ${file(../global-config-${self:provider.stage}.yml):provider}
+
+custom:
+  prefix: itsmyskool
+  baseServiceName: academic-year-service
+  fullServiceName: ${self:custom.prefix}-${self:custom.baseServiceName}
+  customDomain:
+   basePath: 'academic-years'
+  $<<: ${file(../global-config-${self:provider.stage}.yml):custom}
+
+service: ${self:provider.stage}-${self:custom.fullServiceName}
+configValidationMode: off
+
+plugins:
+  - ../../plugins/serverless-merge-config.js
+  - serverless-webpack
+  - serverless-offline
+
+functions: ${file(academic-year-endpoints.yml)}
+
+$<<: ${file(../global-config-${self:provider.stage}.yml):resources}

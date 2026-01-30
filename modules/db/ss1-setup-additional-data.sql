@@ -1,342 +1,392 @@
 insert into academic_year (uuid, name, code, start_date, end_date, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('eso8p4ft3133', '2025-26', '2025-26', '2025-04-01', '2026-03-31', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('nebgkw2assin', '2025-26', '2025-26', '2025-04-01', '2026-03-31', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 
 insert into class (uuid, name, code, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('3jvvqt7ans2h', 'Nursery-A', 'Nursery-A', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('17zwk7gmswr8', 'Nursery-A', 'Nursery-A', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into class (uuid, name, code, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('dok0gkds31i6', 'Nursery-B', 'Nursery-B', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('pjhdiyrasumd', 'Nursery-B', 'Nursery-B', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into class (uuid, name, code, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('5tsoeqo3y20s', 'LKG-A', 'LKG-A', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('bhr4ff1scjq4', 'LKG-A', 'LKG-A', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into class (uuid, name, code, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('bbrrlflw8n9n', 'LKG-B', 'LKG-B', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('nv7cjmelzmfl', 'LKG-B', 'LKG-B', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into class (uuid, name, code, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('f1dhaxvljzoi', 'UKG-A', 'UKG-A', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('2g5lcuw8i3y9', 'UKG-A', 'UKG-A', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into class (uuid, name, code, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('af7ffpcxdxk7', 'UKG-B', 'UKG-B', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('077iegqkq2ej', 'UKG-B', 'UKG-B', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into class (uuid, name, code, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('o04mjd8o4mqp', 'I-A', 'I-A', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('v506tm39v742', 'I-A', 'I-A', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into class (uuid, name, code, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('q1c26c84v2td', 'I-B', 'I-B', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('cqpghsmp35cc', 'I-B', 'I-B', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into class (uuid, name, code, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('3moc8e933jph', 'II-A', 'II-A', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('9lyawtpt1s9r', 'II-A', 'II-A', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into class (uuid, name, code, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('tx36g2pmy5q1', 'II-B', 'II-B', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('x2vwnms4pt73', 'II-B', 'II-B', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into class (uuid, name, code, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('pas22390i4e0', 'III-A', 'III-A', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('gkpe7taug5v8', 'III-A', 'III-A', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into class (uuid, name, code, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('zwsumoo7lpng', 'III-B', 'III-B', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('b58rgpxegt3a', 'III-B', 'III-B', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into class (uuid, name, code, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('qtmd89od3he4', 'IV-A', 'IV-A', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('tgd8rig4d2ta', 'IV-A', 'IV-A', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into class (uuid, name, code, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('ls9r3wvjliyk', 'IV-B', 'IV-B', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('5bchp32ktxns', 'IV-B', 'IV-B', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into class (uuid, name, code, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('nyjfqis5t5lz', 'V-A', 'V-A', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('nvq8mmvwnvb9', 'V-A', 'V-A', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into class (uuid, name, code, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('hbuxii0jjnve', 'V-B', 'V-B', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('h3epzv47mw6o', 'V-B', 'V-B', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into class (uuid, name, code, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('ki5rs92i3b2a', 'VI-A', 'VI-A', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('izugu0fvakts', 'VI-A', 'VI-A', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into class (uuid, name, code, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('q3olhaej6sy8', 'VI-B', 'VI-B', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('pnxig2e7mcbi', 'VI-B', 'VI-B', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into class (uuid, name, code, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('lpg9hbm3y0ke', 'VII-A', 'VII-A', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('ntsudw0cw9bn', 'VII-A', 'VII-A', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into class (uuid, name, code, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('scr1wtdr4pdr', 'VII-B', 'VII-B', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('9tn6mo01lqoo', 'VII-B', 'VII-B', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into class (uuid, name, code, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('y6vgo4uzke5c', 'VIII-A', 'VIII-A', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('30wghj90qkjp', 'VIII-A', 'VIII-A', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into class (uuid, name, code, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('bhebdm6wirwn', 'VIII-B', 'VIII-B', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('r7ssrbx4hc0j', 'VIII-B', 'VIII-B', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into class (uuid, name, code, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('vo6zvw7txao6', 'IX-A', 'IX-A', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('mdjzkyi59e1v', 'IX-A', 'IX-A', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into class (uuid, name, code, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('lhr50lnyzbns', 'IX-B', 'IX-B', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('ll39d33w5azd', 'IX-B', 'IX-B', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into class (uuid, name, code, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('oyaqa2s6jx2t', 'X-A', 'X-A', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('tjjbw374uwc4', 'X-A', 'X-A', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into class (uuid, name, code, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('0ian53e1fdv2', 'X-B', 'X-B', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('4u8x32340kju', 'X-B', 'X-B', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into class (uuid, name, code, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('7q8udvyvk9ri', 'XI-A', 'XI-A', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('9wnttjjflpqn', 'XI-A', 'XI-A', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into class (uuid, name, code, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('afsfvs0790r9', 'XI-B', 'XI-B', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('i1fr9ryr09ko', 'XI-B', 'XI-B', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into class (uuid, name, code, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('tjb210n44g65', 'XII-A', 'XII-A', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('v9d3i2ot07kt', 'XII-A', 'XII-A', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into class (uuid, name, code, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('d8zeu32v33rn', 'XII-B', 'XII-B', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('tl87izv51xva', 'XII-B', 'XII-B', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 
-insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('bdc6ll2uib04', '4y432qnfqoza', 'Nursery-A Student 1', null, null, '8373919558', '8373919558', '8373919558', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
-insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('43l8wir9w06i', 'qu5ougo3iq31', 'Nursery-A Student 2', null, null, '8373919560', '8373919560', '8373919560', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
-insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('p5k2jmhrq0mk', '55ohob1i4ymx', 'Nursery-B Student 1', null, null, '8373919557', '8373919557', '8373919557', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
-insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('i1vfs6qumfxf', 'vnl8unh9x58m', 'Nursery-B Student 2', null, null, '8373919556', '8373919556', '8373919556', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
-insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('l0ezjk3m2080', 'fy4ulij2rlvw', 'LKG-A Student 1', null, null, '8373919558', '8373919558', '8373919558', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
-insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('34mm01qjev28', '0z58eymzy43m', 'LKG-A Student 2', null, null, '8373919555', '8373919555', '8373919555', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
-insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('loqjt2fmszzc', 'rl76n99xgy8f', 'LKG-B Student 1', null, null, '8373919556', '8373919556', '8373919556', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
-insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('mm62v5iicawd', 'ejt1ou0336qi', 'LKG-B Student 2', null, null, '8373919553', '8373919553', '8373919553', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
-insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('3q1v89auvi7j', 'h5dinlex2kyn', 'UKG-A Student 1', null, null, '8373919567', '8373919567', '8373919567', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
-insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('p112ush20nrq', 'sf4mwnekriih', 'UKG-A Student 2', null, null, '8373919560', '8373919560', '8373919560', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
-insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('ukjphebonk0l', '8djpaar05rhs', 'UKG-B Student 1', null, null, '8373919563', '8373919563', '8373919563', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
-insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('2lwtya24tjzo', 'rwi3uoh2mqul', 'UKG-B Student 2', null, null, '8373919551', '8373919551', '8373919551', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
-insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('xu2kzjoks37m', 'h6ialqpwm467', 'I-A Student 1', null, null, '8373919562', '8373919562', '8373919562', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
-insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('hkmhohr3uom7', 'eqcwtv4hv48m', 'I-A Student 2', null, null, '8373919562', '8373919562', '8373919562', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
-insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('qe0m8gb2xbgm', 'brvxqyzm6cko', 'I-B Student 1', null, null, '8373919551', '8373919551', '8373919551', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
-insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('mimdekhfizx2', 'atmf4xl49iq1', 'I-B Student 2', null, null, '8373919560', '8373919560', '8373919560', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
-insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('ryeqqle4vzr0', '0z4h1ap1uwj7', 'II-A Student 1', null, null, '8373919561', '8373919561', '8373919561', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
-insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('gk0xpzm770ip', 'j5zlse9lvn5z', 'II-A Student 2', null, null, '8373919552', '8373919552', '8373919552', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
-insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('6a9x6847kxe0', 'rliyhlen5s9j', 'II-B Student 1', null, null, '8373919556', '8373919556', '8373919556', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
-insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('ig8uxx4q70jz', 'ydd9ch7j9shy', 'II-B Student 2', null, null, '8373919555', '8373919555', '8373919555', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
-insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('r75cw1ph3jfx', '6nrdmbuo585e', 'III-A Student 1', null, null, '8373919558', '8373919558', '8373919558', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
-insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('bk8zb9ijeyxu', '8onswtbfkvpq', 'III-A Student 2', null, null, '8373919557', '8373919557', '8373919557', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
-insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('3xdbvstx4pvx', 'xqtosrdrpdvz', 'III-B Student 1', null, null, '8373919559', '8373919559', '8373919559', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
-insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('zg7nnegw1ya1', '8jcwdkbcn7cm', 'III-B Student 2', null, null, '8373919570', '8373919570', '8373919570', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
-insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('6g51ix7korth', 'jzdel96o584q', 'IV-A Student 1', null, null, '8373919568', '8373919568', '8373919568', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
-insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('u44ljt1i8p1r', 'ni6smxgdnu49', 'IV-A Student 2', null, null, '8373919552', '8373919552', '8373919552', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
-insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('8wsdvsvzp6tu', 'n881eete5qho', 'IV-B Student 1', null, null, '8373919566', '8373919566', '8373919566', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
-insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('h1sx2ssczrco', '39fp3wxz5qqg', 'IV-B Student 2', null, null, '8373919564', '8373919564', '8373919564', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
-insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('udkhnpfvojmp', 'n9rq1imxaict', 'V-A Student 1', null, null, '8373919554', '8373919554', '8373919554', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
-insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('xcajkhd33ozv', 'zneqawi65pmn', 'V-A Student 2', null, null, '8373919551', '8373919551', '8373919551', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
-insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('gv79jq0qupbf', 'qyhch8wqptnv', 'V-B Student 1', null, null, '8373919566', '8373919566', '8373919566', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
-insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('a3phdlan34gc', '9x9nh9v2mtql', 'V-B Student 2', null, null, '8373919559', '8373919559', '8373919559', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
-insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('gu422n9epk29', '6bogvx3enxql', 'VI-A Student 1', null, null, '8373919570', '8373919570', '8373919570', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
-insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('lzkxoads0bpt', '06129wexf9hp', 'VI-A Student 2', null, null, '8373919563', '8373919563', '8373919563', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
-insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('kk7ro1f65b0u', 'cgraqoaz34f9', 'VI-B Student 1', null, null, '8373919567', '8373919567', '8373919567', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
-insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('a25igg43rg6f', '88omm50nlrb5', 'VI-B Student 2', null, null, '8373919565', '8373919565', '8373919565', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
-insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('ivi4w5qxakea', 'v2eotyzdef11', 'VII-A Student 1', null, null, '8373919557', '8373919557', '8373919557', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
-insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('ea05ncbnvrg7', 'i285qh7micti', 'VII-A Student 2', null, null, '8373919568', '8373919568', '8373919568', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
-insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('opd6556lq1nb', '0yk0efxkx2p6', 'VII-B Student 1', null, null, '8373919557', '8373919557', '8373919557', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
-insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('dru1bu1m9dos', 'ierkeqzp1uzj', 'VII-B Student 2', null, null, '8373919554', '8373919554', '8373919554', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
-insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('tli4yu5z8mv9', '3t0ig7dbm48e', 'VIII-A Student 1', null, null, '8373919558', '8373919558', '8373919558', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
-insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('ehzma2dqm4ab', '0aucjwj4r2ir', 'VIII-A Student 2', null, null, '8373919559', '8373919559', '8373919559', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
-insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('wqbb4czau654', '51w0nkl040g4', 'VIII-B Student 1', null, null, '8373919568', '8373919568', '8373919568', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
-insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('k9l8d13pa5hy', 'pidomwza3kvy', 'VIII-B Student 2', null, null, '8373919554', '8373919554', '8373919554', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
-insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('7iv4ik1c2ywl', '6xan34ieqnx7', 'IX-A Student 1', null, null, '8373919566', '8373919566', '8373919566', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
-insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('cm2foliij7m2', 'h0clejjcgpz0', 'IX-A Student 2', null, null, '8373919561', '8373919561', '8373919561', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
-insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('wmg5v13dcs0q', 'vjsxi32z75iz', 'IX-B Student 1', null, null, '8373919561', '8373919561', '8373919561', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
-insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('p7nyrrz7ermd', 'b2aghd8ap6m5', 'IX-B Student 2', null, null, '8373919555', '8373919555', '8373919555', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
-insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('k3ybzlm7ulmh', '3l4wplspc2q7', 'X-A Student 1', null, null, '8373919560', '8373919560', '8373919560', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
-insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('3ejk4i7afcu6', 'j1iii89924qm', 'X-A Student 2', null, null, '8373919564', '8373919564', '8373919564', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
-insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('q1agl1popmxj', 'f02kmyyy078r', 'X-B Student 1', null, null, '8373919570', '8373919570', '8373919570', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
-insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('9xbw3tc1hxx4', 'umczpy1a5iit', 'X-B Student 2', null, null, '8373919570', '8373919570', '8373919570', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
-insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('25ciot4z4itn', 'rf0t6i38ps0l', 'XI-A Student 1', null, null, '8373919555', '8373919555', '8373919555', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
-insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('qunj6qa8fhsf', 'ji4htcy2iin0', 'XI-A Student 2', null, null, '8373919560', '8373919560', '8373919560', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
-insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('hbi5asluoxrw', 'pfwc8fnxzxk6', 'XI-B Student 1', null, null, '8373919567', '8373919567', '8373919567', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
-insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('9asaufmdaf06', '9pvv6n5r09ec', 'XI-B Student 2', null, null, '8373919563', '8373919563', '8373919563', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
-insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('ig8ziwwcz6yp', 'tmiftdl7uap3', 'XII-A Student 1', null, null, '8373919551', '8373919551', '8373919551', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
-insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('2phvvwntt6pn', 'e5wzf7omwsth', 'XII-A Student 2', null, null, '8373919551', '8373919551', '8373919551', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
-insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('npver9xgjdoe', 'mdc10ub2fa4n', 'XII-B Student 1', null, null, '8373919562', '8373919562', '8373919562', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
-insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('ltg2qb3m0n9o', 'e4tp8vyx4wvz', 'XII-B Student 2', null, null, '8373919558', '8373919558', '8373919558', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
+values ('9mvnxmnebml7', 'o6v2zosvtuu7', 'Nursery-A Student 1', null, null, '8373919569', '8373919569', '8373919569', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
+values ('dmnkwihebtj2', '0bmf4i41ltdf', 'Nursery-A Student 2', null, null, '8373919570', '8373919570', '8373919570', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
+values ('v7bpolb6od67', '5n9n6590a6im', 'Nursery-B Student 1', null, null, '8373919563', '8373919563', '8373919563', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
+values ('2hepx40saw22', 'o7j35v4aipak', 'Nursery-B Student 2', null, null, '8373919568', '8373919568', '8373919568', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
+values ('ctlbqryqikjj', 'a0ujo70fmxzs', 'LKG-A Student 1', null, null, '8373919561', '8373919561', '8373919561', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
+values ('tlgpbpak7b7d', 'hjkmeywuavdd', 'LKG-A Student 2', null, null, '8373919557', '8373919557', '8373919557', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
+values ('tcehqo09qz96', 'b2lhvg2z0kk7', 'LKG-B Student 1', null, null, '8373919563', '8373919563', '8373919563', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
+values ('jvenz4t5owx1', 'b5pizhw2e8kb', 'LKG-B Student 2', null, null, '8373919551', '8373919551', '8373919551', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
+values ('zgkub3gghsf0', 'aervmrnl22hl', 'UKG-A Student 1', null, null, '8373919554', '8373919554', '8373919554', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
+values ('zmfqvhacbx62', 'a7zp5s4kfe14', 'UKG-A Student 2', null, null, '8373919556', '8373919556', '8373919556', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
+values ('l1g6rv4tb8g5', '3c2ju5xyx6yy', 'UKG-B Student 1', null, null, '8373919567', '8373919567', '8373919567', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
+values ('g129jnf6pi3h', '513k37ebejhq', 'UKG-B Student 2', null, null, '8373919553', '8373919553', '8373919553', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
+values ('0y8fximgmjse', 'yeff8romtiti', 'I-A Student 1', null, null, '8373919570', '8373919570', '8373919570', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
+values ('prxqjt5ucw4w', 'x222kpuc81lh', 'I-A Student 2', null, null, '8373919562', '8373919562', '8373919562', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
+values ('spjounujko0i', 'vbcwomjobtme', 'I-B Student 1', null, null, '8373919559', '8373919559', '8373919559', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
+values ('xrkwgm2npfq6', 'q62yfptcv6lu', 'I-B Student 2', null, null, '8373919557', '8373919557', '8373919557', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
+values ('6rlqn6hezf86', 'ayuimpfoetyt', 'II-A Student 1', null, null, '8373919568', '8373919568', '8373919568', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
+values ('53t5auzbs2td', 'yamw876swb48', 'II-A Student 2', null, null, '8373919553', '8373919553', '8373919553', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
+values ('rp8d15ofu2dx', '3zydlqbaebem', 'II-B Student 1', null, null, '8373919555', '8373919555', '8373919555', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
+values ('0lj1503jpz2t', 'bhnd9etm7ra7', 'II-B Student 2', null, null, '8373919558', '8373919558', '8373919558', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
+values ('mznwg3wu3wyy', 'w5rhgm2wmeii', 'III-A Student 1', null, null, '8373919568', '8373919568', '8373919568', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
+values ('u1q3btg7qbri', '1lrricnx75pa', 'III-A Student 2', null, null, '8373919570', '8373919570', '8373919570', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
+values ('ri13itp6bo3r', 'rcr6ecnn79ej', 'III-B Student 1', null, null, '8373919557', '8373919557', '8373919557', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
+values ('ez7cw2sbdku5', 'mg3qwwdd40ah', 'III-B Student 2', null, null, '8373919564', '8373919564', '8373919564', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
+values ('cjli0jngxh3l', 'hkx5z26bmg1q', 'IV-A Student 1', null, null, '8373919551', '8373919551', '8373919551', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
+values ('en7few7ogp2u', '99jbwwja3m7w', 'IV-A Student 2', null, null, '8373919559', '8373919559', '8373919559', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
+values ('8yswoi82xpli', 'ez2tuzqsqkmq', 'IV-B Student 1', null, null, '8373919559', '8373919559', '8373919559', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
+values ('7bw43gf8dsr4', 'kgc6tkap9bze', 'IV-B Student 2', null, null, '8373919552', '8373919552', '8373919552', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
+values ('ugh0wtyxj80g', 'gt5cmy4k4eh2', 'V-A Student 1', null, null, '8373919554', '8373919554', '8373919554', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
+values ('ey5m958liczi', 'nexcnr15ykvc', 'V-A Student 2', null, null, '8373919570', '8373919570', '8373919570', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
+values ('ixaojfzbqgnw', 'pgg835twwh85', 'V-B Student 1', null, null, '8373919561', '8373919561', '8373919561', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
+values ('x28br68hz6se', 'ylq527f712u3', 'V-B Student 2', null, null, '8373919568', '8373919568', '8373919568', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
+values ('1qcbefq6ncmp', 'vy18n753acx6', 'VI-A Student 1', null, null, '8373919558', '8373919558', '8373919558', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
+values ('qjosfztxj40d', 'q8eyvwzccte9', 'VI-A Student 2', null, null, '8373919563', '8373919563', '8373919563', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
+values ('t2dhy5t3oe3u', 'e73rt2hauiu0', 'VI-B Student 1', null, null, '8373919569', '8373919569', '8373919569', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
+values ('j6ixlgdb01zs', 'nnagj28lz936', 'VI-B Student 2', null, null, '8373919564', '8373919564', '8373919564', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
+values ('8fzvrlhgjssn', 'i3dmg35018x4', 'VII-A Student 1', null, null, '8373919566', '8373919566', '8373919566', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
+values ('bgtusefoabvw', '0jcdxqvgxawl', 'VII-A Student 2', null, null, '8373919553', '8373919553', '8373919553', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
+values ('p5aht0mlkjkp', 'zb9vf4tkrugt', 'VII-B Student 1', null, null, '8373919553', '8373919553', '8373919553', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
+values ('2ggwlhx63jcd', 'uxfoajp6ysma', 'VII-B Student 2', null, null, '8373919566', '8373919566', '8373919566', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
+values ('m3rn0fe8p6ub', 'zjqj0270lhv8', 'VIII-A Student 1', null, null, '8373919561', '8373919561', '8373919561', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
+values ('2j2735mfhpl6', 'ufo88nj00rhq', 'VIII-A Student 2', null, null, '8373919570', '8373919570', '8373919570', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
+values ('nnfy8epvlqeg', '7xgj0u5umquv', 'VIII-B Student 1', null, null, '8373919562', '8373919562', '8373919562', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
+values ('tko6d20yx0j8', '5fabw09qy0ld', 'VIII-B Student 2', null, null, '8373919562', '8373919562', '8373919562', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
+values ('6j7biimtgu6f', 'fwx4f6drysit', 'IX-A Student 1', null, null, '8373919564', '8373919564', '8373919564', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
+values ('rgp5ys8if6kz', 'syk1dec52nt0', 'IX-A Student 2', null, null, '8373919559', '8373919559', '8373919559', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
+values ('19jrn98t71dm', 'c454nfcxclxx', 'IX-B Student 1', null, null, '8373919553', '8373919553', '8373919553', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
+values ('sdehg2akvpnp', 'noyvtcwitcwq', 'IX-B Student 2', null, null, '8373919562', '8373919562', '8373919562', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
+values ('5ccje7bw5505', 'i87me4bwlv48', 'X-A Student 1', null, null, '8373919553', '8373919553', '8373919553', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
+values ('e9auzrcuahj5', 'qci99lzu3ckz', 'X-A Student 2', null, null, '8373919569', '8373919569', '8373919569', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
+values ('gdzuu3xiyp18', 'gpdjm136b8hd', 'X-B Student 1', null, null, '8373919552', '8373919552', '8373919552', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
+values ('s8k6z77m620u', 'c39g4yr7umwd', 'X-B Student 2', null, null, '8373919560', '8373919560', '8373919560', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
+values ('nc1x3q87fga6', 'wxo9cw3z7a44', 'XI-A Student 1', null, null, '8373919552', '8373919552', '8373919552', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
+values ('vfygnuj29cve', 'qiq28ul5a37x', 'XI-A Student 2', null, null, '8373919567', '8373919567', '8373919567', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
+values ('96nxggv5mby6', 'tkrhs4wfaaul', 'XI-B Student 1', null, null, '8373919558', '8373919558', '8373919558', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
+values ('s9anymdzvboi', '20ivnj8ipga2', 'XI-B Student 2', null, null, '8373919569', '8373919569', '8373919569', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
+values ('zotewyruzeja', '0kp35rq0fd0w', 'XII-A Student 1', null, null, '8373919569', '8373919569', '8373919569', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
+values ('2trlb2t5ijti', 'eupw8dn5yc1j', 'XII-A Student 2', null, null, '8373919552', '8373919552', '8373919552', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
+values ('5w99blyv1rki', 'ys0cl18hwssd', 'XII-B Student 1', null, null, '8373919561', '8373919561', '8373919561', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
+values ('ldytp0camtir', 'kgcax5ritvlm', 'XII-B Student 2', null, null, '8373919555', '8373919555', '8373919555', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+
+insert into student_login (uuid, username, password, display_name, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
+values ('01ickx4oqaug', '8373919569', 'Itsmyskool@123', 'Nursery-A Student 1', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+insert into student_login (uuid, username, password, display_name, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
+values ('xdk4jx9zij21', '8373919570', 'Itsmyskool@123', 'Nursery-A Student 2', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+insert into student_login (uuid, username, password, display_name, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
+values ('9cbwzh3f79vl', '8373919563', 'Itsmyskool@123', 'Nursery-B Student 1', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+insert into student_login (uuid, username, password, display_name, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
+values ('g9ab95yadddt', '8373919568', 'Itsmyskool@123', 'Nursery-B Student 2', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+insert into student_login (uuid, username, password, display_name, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
+values ('4hw4a92r4tye', '8373919561', 'Itsmyskool@123', 'LKG-A Student 1', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+insert into student_login (uuid, username, password, display_name, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
+values ('obbmjy63e9he', '8373919557', 'Itsmyskool@123', 'LKG-A Student 2', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+insert into student_login (uuid, username, password, display_name, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
+values ('434g0xl2zmai', '8373919551', 'Itsmyskool@123', 'LKG-B Student 2', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+insert into student_login (uuid, username, password, display_name, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
+values ('ie69voc6plqt', '8373919554', 'Itsmyskool@123', 'UKG-A Student 1', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+insert into student_login (uuid, username, password, display_name, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
+values ('wd2vtv2pcsmc', '8373919556', 'Itsmyskool@123', 'UKG-A Student 2', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+insert into student_login (uuid, username, password, display_name, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
+values ('hqfwkq9spg91', '8373919567', 'Itsmyskool@123', 'UKG-B Student 1', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+insert into student_login (uuid, username, password, display_name, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
+values ('2x8f0atxpf5v', '8373919553', 'Itsmyskool@123', 'UKG-B Student 2', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+insert into student_login (uuid, username, password, display_name, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
+values ('1zo6070qlly5', '8373919562', 'Itsmyskool@123', 'I-A Student 2', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+insert into student_login (uuid, username, password, display_name, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
+values ('hjku9vzurb38', '8373919559', 'Itsmyskool@123', 'I-B Student 1', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+insert into student_login (uuid, username, password, display_name, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
+values ('apktqk8niwus', '8373919555', 'Itsmyskool@123', 'II-B Student 1', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+insert into student_login (uuid, username, password, display_name, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
+values ('xm3imti2t5qr', '8373919558', 'Itsmyskool@123', 'II-B Student 2', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+insert into student_login (uuid, username, password, display_name, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
+values ('ue8crpzy6153', '8373919564', 'Itsmyskool@123', 'III-B Student 2', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+insert into student_login (uuid, username, password, display_name, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
+values ('1n44q59h65tn', '8373919552', 'Itsmyskool@123', 'IV-B Student 2', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+insert into student_login (uuid, username, password, display_name, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
+values ('be9fjkjwanqe', '8373919566', 'Itsmyskool@123', 'VII-A Student 1', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+insert into student_login (uuid, username, password, display_name, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
+values ('9sky631gqre7', '8373919560', 'Itsmyskool@123', 'X-B Student 2', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 
 insert into student_class (uuid, student_id, academic_year_id, class_id, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('7hste2pux1o1', 'bdc6ll2uib04', 'eso8p4ft3133', '3jvvqt7ans2h', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('97ijppo6rs2j', '9mvnxmnebml7', 'nebgkw2assin', '17zwk7gmswr8', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into student_class (uuid, student_id, academic_year_id, class_id, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('svc0362fpjhm', '43l8wir9w06i', 'eso8p4ft3133', '3jvvqt7ans2h', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('3xx3ecwylx2d', 'dmnkwihebtj2', 'nebgkw2assin', '17zwk7gmswr8', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into student_class (uuid, student_id, academic_year_id, class_id, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('8on0163ynyct', 'p5k2jmhrq0mk', 'eso8p4ft3133', 'dok0gkds31i6', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('ze3p5qe7jve6', 'v7bpolb6od67', 'nebgkw2assin', 'pjhdiyrasumd', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into student_class (uuid, student_id, academic_year_id, class_id, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('op66ma71rxsl', 'i1vfs6qumfxf', 'eso8p4ft3133', 'dok0gkds31i6', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('2pv4ad7w67c7', '2hepx40saw22', 'nebgkw2assin', 'pjhdiyrasumd', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into student_class (uuid, student_id, academic_year_id, class_id, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('e5vl03exxl5d', 'l0ezjk3m2080', 'eso8p4ft3133', '5tsoeqo3y20s', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('3a2s9uudwy1y', 'ctlbqryqikjj', 'nebgkw2assin', 'bhr4ff1scjq4', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into student_class (uuid, student_id, academic_year_id, class_id, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('e2mrnmajtyw7', '34mm01qjev28', 'eso8p4ft3133', '5tsoeqo3y20s', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('ze35b7bijz6u', 'tlgpbpak7b7d', 'nebgkw2assin', 'bhr4ff1scjq4', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into student_class (uuid, student_id, academic_year_id, class_id, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('bqvxjm6fh6s3', 'loqjt2fmszzc', 'eso8p4ft3133', 'bbrrlflw8n9n', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('82lysik9ycpp', 'tcehqo09qz96', 'nebgkw2assin', 'nv7cjmelzmfl', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into student_class (uuid, student_id, academic_year_id, class_id, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('hyixdofb1tfg', 'mm62v5iicawd', 'eso8p4ft3133', 'bbrrlflw8n9n', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('a0e7l9fk3u77', 'jvenz4t5owx1', 'nebgkw2assin', 'nv7cjmelzmfl', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into student_class (uuid, student_id, academic_year_id, class_id, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('915pzjk0rguu', '3q1v89auvi7j', 'eso8p4ft3133', 'f1dhaxvljzoi', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('90sgxhvqqlgp', 'zgkub3gghsf0', 'nebgkw2assin', '2g5lcuw8i3y9', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into student_class (uuid, student_id, academic_year_id, class_id, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('gpxm37b9ycgd', 'p112ush20nrq', 'eso8p4ft3133', 'f1dhaxvljzoi', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('9b0vkpw5tftg', 'zmfqvhacbx62', 'nebgkw2assin', '2g5lcuw8i3y9', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into student_class (uuid, student_id, academic_year_id, class_id, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('zdw0vb8xcjms', 'ukjphebonk0l', 'eso8p4ft3133', 'af7ffpcxdxk7', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('0b3nt0yu8zgr', 'l1g6rv4tb8g5', 'nebgkw2assin', '077iegqkq2ej', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into student_class (uuid, student_id, academic_year_id, class_id, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('onad280c8ax1', '2lwtya24tjzo', 'eso8p4ft3133', 'af7ffpcxdxk7', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('l9rz4t3qwn96', 'g129jnf6pi3h', 'nebgkw2assin', '077iegqkq2ej', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into student_class (uuid, student_id, academic_year_id, class_id, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('sn1if4syq428', 'xu2kzjoks37m', 'eso8p4ft3133', 'o04mjd8o4mqp', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('xg52yqbk0pku', '0y8fximgmjse', 'nebgkw2assin', 'v506tm39v742', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into student_class (uuid, student_id, academic_year_id, class_id, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('5djr43edrs43', 'hkmhohr3uom7', 'eso8p4ft3133', 'o04mjd8o4mqp', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('slfadzb1xz9m', 'prxqjt5ucw4w', 'nebgkw2assin', 'v506tm39v742', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into student_class (uuid, student_id, academic_year_id, class_id, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('6s17a3443iev', 'qe0m8gb2xbgm', 'eso8p4ft3133', 'q1c26c84v2td', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('4npwgf5kqmap', 'spjounujko0i', 'nebgkw2assin', 'cqpghsmp35cc', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into student_class (uuid, student_id, academic_year_id, class_id, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('enlrgfzlhm76', 'mimdekhfizx2', 'eso8p4ft3133', 'q1c26c84v2td', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('15qeud50yu8z', 'xrkwgm2npfq6', 'nebgkw2assin', 'cqpghsmp35cc', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into student_class (uuid, student_id, academic_year_id, class_id, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('q6nslff0747l', 'ryeqqle4vzr0', 'eso8p4ft3133', '3moc8e933jph', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('2kwikcmdp66a', '6rlqn6hezf86', 'nebgkw2assin', '9lyawtpt1s9r', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into student_class (uuid, student_id, academic_year_id, class_id, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('a5x12beqbyct', 'gk0xpzm770ip', 'eso8p4ft3133', '3moc8e933jph', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('46wday1zv916', '53t5auzbs2td', 'nebgkw2assin', '9lyawtpt1s9r', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into student_class (uuid, student_id, academic_year_id, class_id, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('6m20u80yxntr', '6a9x6847kxe0', 'eso8p4ft3133', 'tx36g2pmy5q1', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('621nni7qqvgh', 'rp8d15ofu2dx', 'nebgkw2assin', 'x2vwnms4pt73', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into student_class (uuid, student_id, academic_year_id, class_id, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('exf0tq8vnthv', 'ig8uxx4q70jz', 'eso8p4ft3133', 'tx36g2pmy5q1', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('8fhsttyzlrmy', '0lj1503jpz2t', 'nebgkw2assin', 'x2vwnms4pt73', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into student_class (uuid, student_id, academic_year_id, class_id, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('ghz1rpsccfaz', 'r75cw1ph3jfx', 'eso8p4ft3133', 'pas22390i4e0', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('7ifybb909e7i', 'mznwg3wu3wyy', 'nebgkw2assin', 'gkpe7taug5v8', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into student_class (uuid, student_id, academic_year_id, class_id, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('cgo24zsqa5gs', 'bk8zb9ijeyxu', 'eso8p4ft3133', 'pas22390i4e0', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('b47f1cpdb9ix', 'u1q3btg7qbri', 'nebgkw2assin', 'gkpe7taug5v8', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into student_class (uuid, student_id, academic_year_id, class_id, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('5rulz3fjjltx', '3xdbvstx4pvx', 'eso8p4ft3133', 'zwsumoo7lpng', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('5jf0sceazxxi', 'ri13itp6bo3r', 'nebgkw2assin', 'b58rgpxegt3a', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into student_class (uuid, student_id, academic_year_id, class_id, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('m9rkv70q0kyk', 'zg7nnegw1ya1', 'eso8p4ft3133', 'zwsumoo7lpng', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('lsems7tcgshw', 'ez7cw2sbdku5', 'nebgkw2assin', 'b58rgpxegt3a', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into student_class (uuid, student_id, academic_year_id, class_id, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('qrb26kr333ly', '6g51ix7korth', 'eso8p4ft3133', 'qtmd89od3he4', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('6641j37sh9z3', 'cjli0jngxh3l', 'nebgkw2assin', 'tgd8rig4d2ta', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into student_class (uuid, student_id, academic_year_id, class_id, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('mwvfsjijbrta', 'u44ljt1i8p1r', 'eso8p4ft3133', 'qtmd89od3he4', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('ltjaf4ecp84n', 'en7few7ogp2u', 'nebgkw2assin', 'tgd8rig4d2ta', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into student_class (uuid, student_id, academic_year_id, class_id, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('0v3yo92epxy6', '8wsdvsvzp6tu', 'eso8p4ft3133', 'ls9r3wvjliyk', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('23rjuh2k9rk2', '8yswoi82xpli', 'nebgkw2assin', '5bchp32ktxns', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into student_class (uuid, student_id, academic_year_id, class_id, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('j6eelvo3j2vl', 'h1sx2ssczrco', 'eso8p4ft3133', 'ls9r3wvjliyk', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('h0v18eodpdqa', '7bw43gf8dsr4', 'nebgkw2assin', '5bchp32ktxns', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into student_class (uuid, student_id, academic_year_id, class_id, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('menxp3svdjor', 'udkhnpfvojmp', 'eso8p4ft3133', 'nyjfqis5t5lz', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('k6fcrx8a4aah', 'ugh0wtyxj80g', 'nebgkw2assin', 'nvq8mmvwnvb9', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into student_class (uuid, student_id, academic_year_id, class_id, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('d0uv2urvpy02', 'xcajkhd33ozv', 'eso8p4ft3133', 'nyjfqis5t5lz', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('hh08vd0bmoh1', 'ey5m958liczi', 'nebgkw2assin', 'nvq8mmvwnvb9', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into student_class (uuid, student_id, academic_year_id, class_id, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('d9t4zukja5xl', 'gv79jq0qupbf', 'eso8p4ft3133', 'hbuxii0jjnve', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('g7w77pur3nh3', 'ixaojfzbqgnw', 'nebgkw2assin', 'h3epzv47mw6o', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into student_class (uuid, student_id, academic_year_id, class_id, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('ge0az5g4c0jz', 'a3phdlan34gc', 'eso8p4ft3133', 'hbuxii0jjnve', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('2p3e0flq8zih', 'x28br68hz6se', 'nebgkw2assin', 'h3epzv47mw6o', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into student_class (uuid, student_id, academic_year_id, class_id, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('kpnfuiyq08my', 'gu422n9epk29', 'eso8p4ft3133', 'ki5rs92i3b2a', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('72m2m71nma5e', '1qcbefq6ncmp', 'nebgkw2assin', 'izugu0fvakts', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into student_class (uuid, student_id, academic_year_id, class_id, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('kuwo0p9pigwc', 'lzkxoads0bpt', 'eso8p4ft3133', 'ki5rs92i3b2a', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('s966771g0imz', 'qjosfztxj40d', 'nebgkw2assin', 'izugu0fvakts', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into student_class (uuid, student_id, academic_year_id, class_id, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('ma5quevag0sd', 'kk7ro1f65b0u', 'eso8p4ft3133', 'q3olhaej6sy8', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('wwrcxumox11d', 't2dhy5t3oe3u', 'nebgkw2assin', 'pnxig2e7mcbi', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into student_class (uuid, student_id, academic_year_id, class_id, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('ztzsz7zhymkz', 'a25igg43rg6f', 'eso8p4ft3133', 'q3olhaej6sy8', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('m6uym84gyoqp', 'j6ixlgdb01zs', 'nebgkw2assin', 'pnxig2e7mcbi', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into student_class (uuid, student_id, academic_year_id, class_id, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('li4ftsi2ovwr', 'ivi4w5qxakea', 'eso8p4ft3133', 'lpg9hbm3y0ke', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('hsaoj9uqrcop', '8fzvrlhgjssn', 'nebgkw2assin', 'ntsudw0cw9bn', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into student_class (uuid, student_id, academic_year_id, class_id, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('hpegha60b1cm', 'ea05ncbnvrg7', 'eso8p4ft3133', 'lpg9hbm3y0ke', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('l2qvh8jbet8x', 'bgtusefoabvw', 'nebgkw2assin', 'ntsudw0cw9bn', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into student_class (uuid, student_id, academic_year_id, class_id, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('ecxrbu06y78p', 'opd6556lq1nb', 'eso8p4ft3133', 'scr1wtdr4pdr', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('lqtjlwuaeb5v', 'p5aht0mlkjkp', 'nebgkw2assin', '9tn6mo01lqoo', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into student_class (uuid, student_id, academic_year_id, class_id, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('k0d0jwoo3wc3', 'dru1bu1m9dos', 'eso8p4ft3133', 'scr1wtdr4pdr', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('4e0kgk252kk6', '2ggwlhx63jcd', 'nebgkw2assin', '9tn6mo01lqoo', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into student_class (uuid, student_id, academic_year_id, class_id, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('8xnntp35olea', 'tli4yu5z8mv9', 'eso8p4ft3133', 'y6vgo4uzke5c', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('o9d2krd4h9y4', 'm3rn0fe8p6ub', 'nebgkw2assin', '30wghj90qkjp', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into student_class (uuid, student_id, academic_year_id, class_id, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('vnn2mc6s384d', 'ehzma2dqm4ab', 'eso8p4ft3133', 'y6vgo4uzke5c', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('o3d9qsoh3vy2', '2j2735mfhpl6', 'nebgkw2assin', '30wghj90qkjp', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into student_class (uuid, student_id, academic_year_id, class_id, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('mcy8omgoav6y', 'wqbb4czau654', 'eso8p4ft3133', 'bhebdm6wirwn', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('q917ofpvk2e7', 'nnfy8epvlqeg', 'nebgkw2assin', 'r7ssrbx4hc0j', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into student_class (uuid, student_id, academic_year_id, class_id, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('08gmcp0qxhcq', 'k9l8d13pa5hy', 'eso8p4ft3133', 'bhebdm6wirwn', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('68a9l9d4wrik', 'tko6d20yx0j8', 'nebgkw2assin', 'r7ssrbx4hc0j', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into student_class (uuid, student_id, academic_year_id, class_id, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('i3pkosirh1en', '7iv4ik1c2ywl', 'eso8p4ft3133', 'vo6zvw7txao6', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('nzj493of17ga', '6j7biimtgu6f', 'nebgkw2assin', 'mdjzkyi59e1v', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into student_class (uuid, student_id, academic_year_id, class_id, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('sszlgmpqawfo', 'cm2foliij7m2', 'eso8p4ft3133', 'vo6zvw7txao6', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('iw5plizvcop0', 'rgp5ys8if6kz', 'nebgkw2assin', 'mdjzkyi59e1v', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into student_class (uuid, student_id, academic_year_id, class_id, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('6ycem67nlgxn', 'wmg5v13dcs0q', 'eso8p4ft3133', 'lhr50lnyzbns', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('j52addgwl6k9', '19jrn98t71dm', 'nebgkw2assin', 'll39d33w5azd', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into student_class (uuid, student_id, academic_year_id, class_id, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('085avd7rfmxw', 'p7nyrrz7ermd', 'eso8p4ft3133', 'lhr50lnyzbns', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('krdueushh3xw', 'sdehg2akvpnp', 'nebgkw2assin', 'll39d33w5azd', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into student_class (uuid, student_id, academic_year_id, class_id, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('uyacclr4n1ev', 'k3ybzlm7ulmh', 'eso8p4ft3133', 'oyaqa2s6jx2t', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('dgvx5p3hf9lz', '5ccje7bw5505', 'nebgkw2assin', 'tjjbw374uwc4', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into student_class (uuid, student_id, academic_year_id, class_id, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('nxl4hsfch41s', '3ejk4i7afcu6', 'eso8p4ft3133', 'oyaqa2s6jx2t', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('x320a2rgh6gu', 'e9auzrcuahj5', 'nebgkw2assin', 'tjjbw374uwc4', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into student_class (uuid, student_id, academic_year_id, class_id, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('67u0bil9m6q6', 'q1agl1popmxj', 'eso8p4ft3133', '0ian53e1fdv2', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('bm0ccypckv17', 'gdzuu3xiyp18', 'nebgkw2assin', '4u8x32340kju', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into student_class (uuid, student_id, academic_year_id, class_id, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('p69l9epvziik', '9xbw3tc1hxx4', 'eso8p4ft3133', '0ian53e1fdv2', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('xojrrls4c98t', 's8k6z77m620u', 'nebgkw2assin', '4u8x32340kju', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into student_class (uuid, student_id, academic_year_id, class_id, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('o5017lvry08h', '25ciot4z4itn', 'eso8p4ft3133', '7q8udvyvk9ri', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('gxzxfboz9j5l', 'nc1x3q87fga6', 'nebgkw2assin', '9wnttjjflpqn', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into student_class (uuid, student_id, academic_year_id, class_id, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('37vnpn170ky9', 'qunj6qa8fhsf', 'eso8p4ft3133', '7q8udvyvk9ri', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('0ssa6bokmqx7', 'vfygnuj29cve', 'nebgkw2assin', '9wnttjjflpqn', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into student_class (uuid, student_id, academic_year_id, class_id, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('pyli10gpisc8', 'hbi5asluoxrw', 'eso8p4ft3133', 'afsfvs0790r9', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('msk1jy97g7h8', '96nxggv5mby6', 'nebgkw2assin', 'i1fr9ryr09ko', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into student_class (uuid, student_id, academic_year_id, class_id, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('idald9emzjt6', '9asaufmdaf06', 'eso8p4ft3133', 'afsfvs0790r9', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('vvy88mrkbysg', 's9anymdzvboi', 'nebgkw2assin', 'i1fr9ryr09ko', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into student_class (uuid, student_id, academic_year_id, class_id, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('uwvtz4tlkjbq', 'ig8ziwwcz6yp', 'eso8p4ft3133', 'tjb210n44g65', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('wmg8i9u2nldw', 'zotewyruzeja', 'nebgkw2assin', 'v9d3i2ot07kt', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into student_class (uuid, student_id, academic_year_id, class_id, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('y6ngze2qsery', '2phvvwntt6pn', 'eso8p4ft3133', 'tjb210n44g65', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('7wovy7bghb91', '2trlb2t5ijti', 'nebgkw2assin', 'v9d3i2ot07kt', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into student_class (uuid, student_id, academic_year_id, class_id, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('x3x5ugzi61mx', 'npver9xgjdoe', 'eso8p4ft3133', 'd8zeu32v33rn', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('b9uwbhhye0tu', '5w99blyv1rki', 'nebgkw2assin', 'tl87izv51xva', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into student_class (uuid, student_id, academic_year_id, class_id, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('q6rzhxtjs8lq', 'ltg2qb3m0n9o', 'eso8p4ft3133', 'd8zeu32v33rn', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('j6hzjcd84qi8', 'ldytp0camtir', 'nebgkw2assin', 'tl87izv51xva', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 
 insert into role (uuid, name, code, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('g9bz6iv21s7m', 'God', 'god', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('9nmllkq87gzg', 'God', 'god', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into role (uuid, name, code, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('m5ye61ao7ben', 'Admin', 'admin', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('vf9birfpd6dh', 'Admin', 'admin', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into role (uuid, name, code, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('mk5ceshi1oze', 'Class Teacher', 'class-teacher', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('v0jki2jzb82b', 'Class Teacher', 'class-teacher', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into role (uuid, name, code, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('rv678rno7mgz', 'Transport Incharge', 'transport-incharge', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('w79zi7l9g7w7', 'Transport Incharge', 'transport-incharge', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into role (uuid, name, code, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('7hb8xgmwfecn', 'Medical Incharge', 'medical-incharge', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('jxdginsq3mdd', 'Medical Incharge', 'medical-incharge', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 insert into role (uuid, name, code, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('eob5515vlpyh', 'Teacher', 'teacher', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+values ('srdbf57ah3sb', 'Teacher', 'teacher', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
 
-insert into employee (uuid, employee_number, name, family_unique_number, mobile, whatsapp, school_id, createdby_userid, created_at) 
-values ('e6mw85d3tpq4', 'ovx8a88j1gms', 'Employee 1', '8373919598', '8373919598', '8373919598', 'mggd21p5dwf6', 'iww8zvhjv2bi', now());
-insert into employee (uuid, employee_number, name, family_unique_number, mobile, whatsapp, school_id, createdby_userid, created_at) 
-values ('thqebm6tt0d3', 'v0iwaqy83r84', 'Employee 2', '8373919595', '8373919595', '8373919595', 'mggd21p5dwf6', 'iww8zvhjv2bi', now());
-insert into employee (uuid, employee_number, name, family_unique_number, mobile, whatsapp, school_id, createdby_userid, created_at) 
-values ('ngs23e66kvxp', 'ymnqw2shzjr0', 'Employee 3', '8373919592', '8373919592', '8373919592', 'mggd21p5dwf6', 'iww8zvhjv2bi', now());
-insert into employee (uuid, employee_number, name, family_unique_number, mobile, whatsapp, school_id, createdby_userid, created_at) 
-values ('b6fxgtp4wmsm', 'ioflog4jep47', 'Employee 4', '8373919599', '8373919599', '8373919599', 'mggd21p5dwf6', 'iww8zvhjv2bi', now());
-insert into employee (uuid, employee_number, name, family_unique_number, mobile, whatsapp, school_id, createdby_userid, created_at) 
-values ('u5a72ctgmu11', 'je38age8x9ue', 'Employee 5', '8373919591', '8373919591', '8373919591', 'mggd21p5dwf6', 'iww8zvhjv2bi', now());
+insert into employee (uuid, employee_number, name, family_unique_number, mobile, whatsapp, school_id, createdby_userid, created_at)
+values ('gjj7sii2hkyu', 'qquxjt53gwj2', 'Employee 1', '8373919597', '8373919597', '8373919597', '6zoptlhtok3n', 'zbtuiuwn5smc', now());
+insert into employee (uuid, employee_number, name, family_unique_number, mobile, whatsapp, school_id, createdby_userid, created_at)
+values ('jh0udadh4z3y', '8zlqo3hm5hmr', 'Employee 2', '8373919593', '8373919593', '8373919593', '6zoptlhtok3n', 'zbtuiuwn5smc', now());
+insert into employee (uuid, employee_number, name, family_unique_number, mobile, whatsapp, school_id, createdby_userid, created_at)
+values ('1m0zrz13n65d', 'r1i81csxlsih', 'Employee 3', '8373919598', '8373919598', '8373919598', '6zoptlhtok3n', 'zbtuiuwn5smc', now());
+insert into employee (uuid, employee_number, name, family_unique_number, mobile, whatsapp, school_id, createdby_userid, created_at)
+values ('qaenw2pffisp', 'su7z3bynx3so', 'Employee 4', '8373919596', '8373919596', '8373919596', '6zoptlhtok3n', 'zbtuiuwn5smc', now());
+insert into employee (uuid, employee_number, name, family_unique_number, mobile, whatsapp, school_id, createdby_userid, created_at)
+values ('r3s3lhdm9g9i', 'aqht22s8k2i1', 'Employee 5', '8373919594', '8373919594', '8373919594', '6zoptlhtok3n', 'zbtuiuwn5smc', now());
 
-insert into employee_role (uuid, staff_id, role_id, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('aovnue7pdce7', 'e6mw85d3tpq4', 'm5ye61ao7ben', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
-insert into employee_role (uuid, staff_id, role_id, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('cu6338fb2iyc', 'thqebm6tt0d3', 'mk5ceshi1oze', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
-insert into employee_role (uuid, staff_id, role_id, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('4yh1c9onnkjm', 'ngs23e66kvxp', 'rv678rno7mgz', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
-insert into employee_role (uuid, staff_id, role_id, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('8z0f0gwwgwgx', 'b6fxgtp4wmsm', '7hb8xgmwfecn', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
-insert into employee_role (uuid, staff_id, role_id, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('nbh1n5ostcas', 'u5a72ctgmu11', 'eob5515vlpyh', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
-insert into employee_role (uuid, staff_id, role_id, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
-values ('ebjvq7wfoc3p', 'iww8zvhjv2bi', 'g9bz6iv21s7m', 'mggd21p5dwf6', 'iww8zvhjv2bi', now(), null, null);
+insert into employee_login (uuid, username, password, display_name, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
+values ('co99pe4uh2bj', '8373919597', 'Itsmyskool@123', 'Employee 1', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+insert into employee_login (uuid, username, password, display_name, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
+values ('b7gqkc814giv', '8373919593', 'Itsmyskool@123', 'Employee 2', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+insert into employee_login (uuid, username, password, display_name, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
+values ('5ew6rgcpcuw0', '8373919598', 'Itsmyskool@123', 'Employee 3', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+insert into employee_login (uuid, username, password, display_name, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
+values ('nvgftlmt3485', '8373919596', 'Itsmyskool@123', 'Employee 4', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+insert into employee_login (uuid, username, password, display_name, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
+values ('ctczn84dxtyg', '8373919594', 'Itsmyskool@123', 'Employee 5', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+
+insert into employee_role (uuid, employee_id, role_id, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
+values ('9s9og6yrff2u', 'gjj7sii2hkyu', 'vf9birfpd6dh', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+insert into employee_role (uuid, employee_id, role_id, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
+values ('l6tfbvj2wbv1', 'jh0udadh4z3y', 'v0jki2jzb82b', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+insert into employee_role (uuid, employee_id, role_id, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
+values ('p8ou102z9ps1', '1m0zrz13n65d', 'w79zi7l9g7w7', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+insert into employee_role (uuid, employee_id, role_id, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
+values ('qtdz9hzfrt4l', 'qaenw2pffisp', 'jxdginsq3mdd', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+insert into employee_role (uuid, employee_id, role_id, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
+values ('znn2xx9kvz48', 'r3s3lhdm9g9i', 'srdbf57ah3sb', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);
+insert into employee_role (uuid, employee_id, role_id, school_id, createdby_userid, created_at, updatedby_userid, updated_at) 
+values ('ah62fu5zzvdc', 'zbtuiuwn5smc', '9nmllkq87gzg', '6zoptlhtok3n', 'zbtuiuwn5smc', now(), null, null);

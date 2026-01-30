@@ -29,7 +29,7 @@ describe('Medical Issue API', () => {
       body: JSON.stringify({
         name: 'Test Medicine for Issue',
         unit: 'tablet',
-        reorder_level: 20,
+        reorderLevel: 20,
       }),
     });
     const itemData = await itemResponse.json();
@@ -40,8 +40,8 @@ describe('Medical Issue API', () => {
       method: 'POST',
       headers,
       body: JSON.stringify({
-        item_id: testItemId,
-        purchase_date: '2025-01-07',
+        itemId: testItemId,
+        purchaseDate: '2025-01-07',
         quantity: 100,
       }),
     });
@@ -63,13 +63,13 @@ describe('Medical Issue API', () => {
         method: 'POST',
         headers,
         body: JSON.stringify({
-          item_id: testItemId,
-          issue_date: '2025-01-07',
-          entity_type: 'student',
-          entity_id: 'student12345',
+          itemId: testItemId,
+          issueDate: '2025-01-07',
+          entityType: 'student',
+          entityId: 'student12345',
           quantity: 2,
           remarks: 'Headache',
-          parent_consent: true,
+          parentConsent: true,
         }),
       });
 
@@ -77,10 +77,11 @@ describe('Medical Issue API', () => {
       const data = await response.json();
 
       expect(data).toHaveProperty('uuid');
-      expect(data.item_id).toBe(testItemId);
-      expect(data.entity_type).toBe('student');
+      expect(data.itemId).toBe(testItemId);
+      expect(data.itemName).toBe('Test Medicine for Issue');
+      expect(data.entityType).toBe('student');
       expect(data.quantity).toBe(2);
-      expect(data.parent_consent).toBe(true);
+      expect(data.parentConsent).toBe(true);
       expect(data.status).toBe('active');
 
       createdIssueId = data.uuid;
@@ -91,7 +92,7 @@ describe('Medical Issue API', () => {
         headers,
       });
       const itemData = await itemResponse.json();
-      expect(itemData.current_stock).toBe(98);
+      expect(itemData.currentStock).toBe(98);
     });
 
     it('should use default quantity of 1 if not specified', async () => {
@@ -99,10 +100,10 @@ describe('Medical Issue API', () => {
         method: 'POST',
         headers,
         body: JSON.stringify({
-          item_id: testItemId,
-          issue_date: '2025-01-07',
-          entity_type: 'employee',
-          entity_id: 'employee123',
+          itemId: testItemId,
+          issueDate: '2025-01-07',
+          entityType: 'employee',
+          entityId: 'employee123',
         }),
       });
 
@@ -117,29 +118,29 @@ describe('Medical Issue API', () => {
       });
     });
 
-    it('should return 400 for invalid entity_type', async () => {
+    it('should return 400 for invalid entityType', async () => {
       const response = await fetch(issuesUrl, {
         method: 'POST',
         headers,
         body: JSON.stringify({
-          item_id: testItemId,
-          issue_date: '2025-01-07',
-          entity_type: 'invalid_type',
-          entity_id: 'test123',
+          itemId: testItemId,
+          issueDate: '2025-01-07',
+          entityType: 'invalid_type',
+          entityId: 'test123',
         }),
       });
 
       expect(response.status).toBe(400);
     });
 
-    it('should return 400 for missing entity_id', async () => {
+    it('should return 400 for missing entityId', async () => {
       const response = await fetch(issuesUrl, {
         method: 'POST',
         headers,
         body: JSON.stringify({
-          item_id: testItemId,
-          issue_date: '2025-01-07',
-          entity_type: 'student',
+          itemId: testItemId,
+          issueDate: '2025-01-07',
+          entityType: 'student',
         }),
       });
 
@@ -147,24 +148,46 @@ describe('Medical Issue API', () => {
     });
   });
 
-  describe('GET /medical/issues', () => {
-    it('should list issues by item_id', async () => {
-      const response = await fetch(`${issuesUrl}?item_id=${testItemId}`, {
+  describe('GET /medical/issues/{id}', () => {
+    it('should get issue by ID', async () => {
+      const response = await fetch(`${issuesUrl}/${createdIssueId}`, {
         method: 'GET',
         headers,
       });
 
       expect(response.status).toBe(200);
       const data = await response.json();
-
-      expect(Array.isArray(data)).toBe(true);
-      expect(data.length).toBeGreaterThan(0);
-      expect(data[0].item_id).toBe(testItemId);
+      expect(data.uuid).toBe(createdIssueId);
+      expect(data.itemId).toBe(testItemId);
+      expect(data.itemName).toBe('Test Medicine for Issue');
     });
 
-    it('should list issues by entity', async () => {
+    it('should return 404 for non-existent issue', async () => {
+      const response = await fetch(`${issuesUrl}/nonexistent1`, {
+        method: 'GET',
+        headers,
+      });
+
+      expect(response.status).toBe(404);
+    });
+  });
+
+  describe('GET /medical/issues', () => {
+    it('should list issues with no parameters (default date range)', async () => {
+      const response = await fetch(issuesUrl, {
+        method: 'GET',
+        headers,
+      });
+
+      expect(response.status).toBe(200);
+      const data = await response.json();
+      expect(Array.isArray(data)).toBe(true);
+    });
+
+    it('should list issues by itemId', async () => {
+      // Include date range that covers test data
       const response = await fetch(
-        `${issuesUrl}?entity_type=student&entity_id=student12345`,
+        `${issuesUrl}?itemId=${testItemId}&startDate=2025-01-01&endDate=2030-12-31`,
         {
           method: 'GET',
           headers,
@@ -176,17 +199,162 @@ describe('Medical Issue API', () => {
 
       expect(Array.isArray(data)).toBe(true);
       expect(data.length).toBeGreaterThan(0);
-      expect(data[0].entity_type).toBe('student');
-      expect(data[0].entity_id).toBe('student12345');
+      expect(data[0].itemId).toBe(testItemId);
+      expect(data[0].itemName).toBe('Test Medicine for Issue');
     });
 
-    it('should return 400 for missing query parameters', async () => {
-      const response = await fetch(issuesUrl, {
+    it('should list issues by entityType only', async () => {
+      const response = await fetch(`${issuesUrl}?entityType=student`, {
+        method: 'GET',
+        headers,
+      });
+
+      expect(response.status).toBe(200);
+      const data = await response.json();
+      expect(Array.isArray(data)).toBe(true);
+      // All returned issues should have entityType = 'student'
+      data.forEach((issue: any) => {
+        expect(issue.entityType).toBe('student');
+      });
+    });
+
+    it('should list issues by entityType and entityId', async () => {
+      // Include date range that covers test data
+      const response = await fetch(
+        `${issuesUrl}?entityType=student&entityId=student12345&startDate=2025-01-01&endDate=2030-12-31`,
+        {
+          method: 'GET',
+          headers,
+        }
+      );
+
+      expect(response.status).toBe(200);
+      const data = await response.json();
+
+      expect(Array.isArray(data)).toBe(true);
+      expect(data.length).toBeGreaterThan(0);
+      expect(data[0].entityType).toBe('student');
+      expect(data[0].entityId).toBe('student12345');
+    });
+
+    it('should list issues with custom date range', async () => {
+      const response = await fetch(
+        `${issuesUrl}?startDate=2025-01-01&endDate=2025-12-31`,
+        {
+          method: 'GET',
+          headers,
+        }
+      );
+
+      expect(response.status).toBe(200);
+      const data = await response.json();
+      expect(Array.isArray(data)).toBe(true);
+    });
+
+    it('should return 400 for invalid startDate format', async () => {
+      const response = await fetch(`${issuesUrl}?startDate=invalid`, {
         method: 'GET',
         headers,
       });
 
       expect(response.status).toBe(400);
+    });
+
+    it('should return 400 for invalid endDate format', async () => {
+      const response = await fetch(`${issuesUrl}?endDate=01-01-2025`, {
+        method: 'GET',
+        headers,
+      });
+
+      expect(response.status).toBe(400);
+    });
+
+    it('should return 400 for invalid entityType', async () => {
+      const response = await fetch(`${issuesUrl}?entityType=invalid`, {
+        method: 'GET',
+        headers,
+      });
+
+      expect(response.status).toBe(400);
+    });
+
+    it('should exclude deleted issues by default', async () => {
+      // Create an issue
+      const createResponse = await fetch(issuesUrl, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          itemId: testItemId,
+          issueDate: '2025-01-08',
+          entityType: 'student',
+          entityId: 'stu-del-tst', // 11 chars to fit varchar(12)
+          quantity: 1,
+        }),
+      });
+      expect(createResponse.status).toBe(200);
+      const createdIssue = await createResponse.json();
+      expect(createdIssue.uuid).toBeDefined();
+
+      // Delete the issue
+      const deleteResponse = await fetch(`${issuesUrl}/${createdIssue.uuid}`, {
+        method: 'DELETE',
+        headers,
+      });
+      expect(deleteResponse.status).toBe(200);
+
+      // List without includeDeleted - should not find the deleted issue
+      const listResponse = await fetch(
+        `${issuesUrl}?itemId=${testItemId}&startDate=2025-01-01&endDate=2030-12-31`,
+        {
+          method: 'GET',
+          headers,
+        }
+      );
+
+      expect(listResponse.status).toBe(200);
+      const results = await listResponse.json();
+      const found = results.find((i: any) => i.uuid === createdIssue.uuid);
+      expect(found).toBeUndefined();
+    });
+
+    it('should include deleted issues when includeDeleted=true', async () => {
+      // Create an issue
+      const createResponse = await fetch(issuesUrl, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          itemId: testItemId,
+          issueDate: '2025-01-09',
+          entityType: 'student',
+          entityId: 'stu-inc-tst', // 11 chars to fit varchar(12)
+          quantity: 1,
+        }),
+      });
+      expect(createResponse.status).toBe(200);
+      const createdIssue = await createResponse.json();
+      expect(createdIssue.uuid).toBeDefined();
+
+      // Delete the issue
+      const deleteResponse = await fetch(`${issuesUrl}/${createdIssue.uuid}`, {
+        method: 'DELETE',
+        headers,
+      });
+      expect(deleteResponse.status).toBe(200);
+
+      // List with includeDeleted=true - should find the deleted issue
+      const listResponse = await fetch(
+        `${issuesUrl}?itemId=${testItemId}&startDate=2025-01-01&endDate=2030-12-31&includeDeleted=true`,
+        {
+          method: 'GET',
+          headers,
+        }
+      );
+
+      expect(listResponse.status).toBe(200);
+      const results = await listResponse.json();
+      const found = results.find((i: any) => i.uuid === createdIssue.uuid);
+      expect(found).toBeDefined();
+      expect(found.status).toBe('deleted');
     });
   });
 
@@ -213,7 +381,7 @@ describe('Medical Issue API', () => {
         headers,
       });
       const itemData = await itemResponse.json();
-      expect(itemData.current_stock).toBe(95);
+      expect(itemData.currentStock).toBe(95);
     });
   });
 
@@ -232,7 +400,7 @@ describe('Medical Issue API', () => {
         headers,
       });
       const itemData = await itemResponse.json();
-      expect(itemData.current_stock).toBe(100);
+      expect(itemData.currentStock).toBe(100);
     });
 
     it('should return 404 for deleting non-existent issue', async () => {

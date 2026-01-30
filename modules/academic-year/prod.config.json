@@ -1,0 +1,5 @@
+{
+  "httpPort": 6013,
+  "lambdaPort": 6014,
+  "prefix": "academic-years"
+}

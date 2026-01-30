@@ -3,6 +3,7 @@ import { DB, singleLineString } from '../../shared/lib/db';
 
 export interface StudentLogin {
   uuid: string;
+  displayName: string;
 }
 
 export class StudentAuthService {
@@ -24,7 +25,7 @@ export class StudentAuthService {
   }
 
   public async validateUsernameAndPassword(username: string, password: string, schoolId: string): Promise<StudentLogin | null> {
-    const loginQuery = singleLineString`select uuid, password from student_login where username = $1 and school_id = $2`;
+    const loginQuery = singleLineString`select uuid, password, display_name from student_login where username = $1 and school_id = $2`;
     const loginResults = await DB.query(loginQuery, [username, schoolId]);
 
     if (loginResults.length === 0) {
@@ -37,7 +38,8 @@ export class StudentAuthService {
     }
 
     return {
-      uuid: loginResults[0].uuid
+      uuid: loginResults[0].uuid,
+      displayName: loginResults[0].displayName
     };
   }
 }
