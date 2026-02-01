@@ -74,7 +74,7 @@ Each module runs on dedicated ports to allow simultaneous local development:
 scripts/
 ├── sample-school-setup.js    # Create sample school data
 ├── actual-school-setup.js    # School data generation utilities
-├── run-sql.js                # Run SQL files against database
+├── run-sql.js                # Run SQL files against database (--stage, --file)
 ├── school-prompts.json       # Saved school configurations
 └── local/                # Local development tools
     ├── module-loader.js      # Auto-discovers modules from local.config.json

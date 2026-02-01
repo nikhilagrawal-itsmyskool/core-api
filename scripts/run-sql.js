@@ -72,17 +72,47 @@ async function runSqlString(pool, sql, description) {
   console.log(`Completed: ${description}`);
 }
 
+function parseArgs(args) {
+  const result = { stage: null, files: [] };
+
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === '--stage' || args[i] === '-s') {
+      result.stage = args[i + 1];
+      i++;
+    } else if (args[i] === '--file' || args[i] === '-f') {
+      result.files.push(args[i + 1]);
+      i++;
+    }
+  }
+
+  return result;
+}
+
+function showUsage() {
+  console.log('Usage: node run-sql.js --stage <stage> --file <sql-file> [--file <sql-file2>] ...');
+  console.log('       node run-sql.js -s <stage> -f <sql-file> [-f <sql-file2>] ...');
+  console.log('');
+  console.log('Options:');
+  console.log('  --stage, -s  Stage (local, dev, qa, prod)');
+  console.log('  --file, -f   SQL file to execute (can be specified multiple times)');
+  console.log('');
+  console.log('Examples:');
+  console.log('  node run-sql.js -s dev -f modules/db/db-1.sql');
+  console.log('  node run-sql.js --stage local --file modules/db/db-1.sql');
+  console.log('  node run-sql.js -s dev -f file1.sql -f file2.sql');
+}
+
 async function main() {
   const args = process.argv.slice(2);
+  const parsed = parseArgs(args);
 
-  if (args.length < 2) {
-    console.log('Usage: node run-sql.js <stage> <sql-file> [sql-file2] ...');
-    console.log('Example: node run-sql.js dev modules/db/ts2-setup.sql');
+  if (!parsed.stage || parsed.files.length === 0) {
+    showUsage();
     process.exit(1);
   }
 
-  const stage = args[0];
-  const sqlFiles = args.slice(1);
+  const stage = parsed.stage;
+  const sqlFiles = parsed.files;
 
   try {
     const config = loadConfig(stage);

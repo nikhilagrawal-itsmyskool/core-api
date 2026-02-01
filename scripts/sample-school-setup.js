@@ -382,24 +382,16 @@ async function main() {
     const basicSetupPath = path.join(__dirname, '../modules/db', basicSetupFileName);
 
     // Generate school and first employee (Itsmyskool Admin)
-    const { schoolUuid, employeeUuid, schoolInsert, employeeInsert } = generateSchoolAndEmployee(
+    const { schoolUuid, employeeUuid, schoolInsert, employeeInsert, employeeLoginInsert } = generateSchoolAndEmployee(
       schoolName,
       schoolCode,
-      employeeName
-    );
-
-    // Generate employee_login for first employee
-    const firstEmployeeLoginInsert = generateEmployeeLoginInsert(
-      employeeUuid,
-      '8373919559',  // family_unique_number from actual-school-setup.js
-      employeePassword.trim(),
-      employeeName.trim(),  // display_name from employee name
-      schoolUuid,
-      '0'
+      employeeName,
+      '8373919559',  // default family_unique_number for sample setup
+      employeePassword
     );
 
     // Write basic setup file (school + employee + employee_login)
-    const basicSetupContent = schoolInsert + '\n\n' + employeeInsert + '\n\n' + firstEmployeeLoginInsert + '\n';
+    const basicSetupContent = schoolInsert + '\n\n' + employeeInsert + '\n\n' + employeeLoginInsert + '\n';
     fs.writeFileSync(basicSetupPath, basicSetupContent, 'utf8');
     console.log(`\nBasic setup file created: ${basicSetupPath}`);
 
