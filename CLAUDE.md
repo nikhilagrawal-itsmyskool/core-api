@@ -33,6 +33,8 @@ npx prettier --write .
 
 Available modules: `auth`, `medical`, `sample`, `student`, `employee`, `class`, `academic-year`
 
+> These always run on `local` stage (hardcoded in `start-module.js`). Stage cannot be changed for individual module commands.
+
 ### All Modules Commands
 | Command | Description |
 |---------|-------------|
@@ -41,6 +43,16 @@ Available modules: `auth`, `medical`, `sample`, `student`, `employee`, `class`, 
 | `npm run stop:all` | Stop all modules + gateway |
 | `npm run test:all` | Run all tests (requires servers running) |
 | `npm run test:all:full` | Full cycle: stop → start → test → stop |
+
+> These run on `local` stage by default (ports 3000-3014). Pass `--stage prod` to use prod ports (6000-6014).
+
+#### Prod Stage Commands
+
+| Command | Description |
+|---------|-------------|
+| `npm run start:all:prod` | Start all modules + gateway on port 6000 |
+| `npm run health:all:prod` | Check health of all modules on port 6000 |
+| `npm run stop:all:prod` | Stop all modules + gateway (prod ports) |
 
 ## Architecture
 
@@ -58,6 +70,8 @@ Each module in `modules/` is an independent Lambda microservice with its own `se
 ### Module Port Conventions
 Each module runs on dedicated ports to allow simultaneous local development:
 
+#### Local Stage (default)
+
 | Module        | HTTP Port | Lambda Port | Gateway Route     |
 |---------------|-----------|-------------|-------------------|
 | auth          | 3001      | 3002        | /auth/*           |
@@ -68,6 +82,19 @@ Each module runs on dedicated ports to allow simultaneous local development:
 | class         | 3011      | 3012        | /class/*          |
 | academic-year | 3013      | 3014        | /academic-year/*  |
 | gateway       | 3000      | -           | (routes all)      |
+
+#### Prod Stage
+
+| Module        | HTTP Port | Lambda Port |
+|---------------|-----------|-------------|
+| auth          | 6001      | 6002        |
+| medical       | 6003      | 6004        |
+| sample        | 6005      | 6006        |
+| student       | 6007      | 6008        |
+| employee      | 6009      | 6010        |
+| class         | 6011      | 6012        |
+| academic-year | 6013      | 6014        |
+| gateway       | 6000      | -           |
 
 ### Scripts Organization
 ```
@@ -82,6 +109,12 @@ scripts/
     ├── start-all.js          # Start all modules + gateway
     ├── start-module.js       # Start a single module by name
     └── kill-ports.js         # Kill processes on module ports
+```
+
+```bash
+node scripts/run-sql.js --stage local --file modules/db/db-1.sql
+node scripts/sample-school-setup.js    # interactive
+node scripts/actual-school-setup.js    # interactive
 ```
 
 ### Module Configuration
