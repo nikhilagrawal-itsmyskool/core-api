@@ -16,8 +16,8 @@ class MedicalIssueService {
     // Use transaction to insert issue and update stock
     const insertQuery = singleLineString`
       insert into medical_issue_log
-      (uuid, item_id, issue_date, entity_type, entity_id, quantity, remarks, parent_consent, status, school_id, createdby_userid, created_at)
-      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      (uuid, item_id, issue_date, entity_type, entity_id, quantity, remarks, parent_consent, issued_by_id, status, school_id, createdby_userid, created_at)
+      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
     `;
 
     const updateStockQuery = singleLineString`
@@ -35,6 +35,7 @@ class MedicalIssueService {
       quantity,
       data.remarks || null,
       data.parentConsent ?? DEFAULTS.PARENT_CONSENT,
+      data.issuedById || userId,
       DEFAULTS.STATUS,
       schoolId,
       userId,
@@ -93,6 +94,10 @@ class MedicalIssueService {
     if (data.parentConsent !== undefined) {
       updates.push(`parent_consent = $${paramIndex++}`);
       params.push(data.parentConsent);
+    }
+    if (data.issuedById !== undefined) {
+      updates.push(`issued_by_id = $${paramIndex++}`);
+      params.push(data.issuedById);
     }
 
     if (updates.length === 0) {
@@ -175,11 +180,13 @@ class MedicalIssueService {
     const query = singleLineString`
       select il.*, i.name as item_name,
         case when il.entity_type = 'employee' then e.name else s.name end as entity_name,
-        latest_class.class_name as entity_class_name
+        latest_class.class_name as entity_class_name,
+        issuer.name as issued_by_name
       from medical_issue_log il
       left join medical_item i on il.item_id = i.uuid
       left join employee e on il.entity_type = 'employee' and il.entity_id = e.uuid
       left join student s on il.entity_type = 'student' and il.entity_id = s.uuid
+      left join employee issuer on il.issued_by_id = issuer.uuid
       left join lateral (
         select c.name as class_name
         from student_class sc
@@ -200,11 +207,13 @@ class MedicalIssueService {
     const query = singleLineString`
       select il.*, i.name as item_name,
         case when il.entity_type = 'employee' then e.name else s.name end as entity_name,
-        latest_class.class_name as entity_class_name
+        latest_class.class_name as entity_class_name,
+        issuer.name as issued_by_name
       from medical_issue_log il
       left join medical_item i on il.item_id = i.uuid
       left join employee e on il.entity_type = 'employee' and il.entity_id = e.uuid
       left join student s on il.entity_type = 'student' and il.entity_id = s.uuid
+      left join employee issuer on il.issued_by_id = issuer.uuid
       left join lateral (
         select c.name as class_name
         from student_class sc
@@ -228,11 +237,13 @@ class MedicalIssueService {
     const query = singleLineString`
       select il.*, i.name as item_name,
         case when il.entity_type = 'employee' then e.name else s.name end as entity_name,
-        latest_class.class_name as entity_class_name
+        latest_class.class_name as entity_class_name,
+        issuer.name as issued_by_name
       from medical_issue_log il
       left join medical_item i on il.item_id = i.uuid
       left join employee e on il.entity_type = 'employee' and il.entity_id = e.uuid
       left join student s on il.entity_type = 'student' and il.entity_id = s.uuid
+      left join employee issuer on il.issued_by_id = issuer.uuid
       left join lateral (
         select c.name as class_name
         from student_class sc
@@ -262,11 +273,13 @@ class MedicalIssueService {
     let query = `
       select il.*, i.name as item_name,
         case when il.entity_type = 'employee' then e.name else s.name end as entity_name,
-        latest_class.class_name as entity_class_name
+        latest_class.class_name as entity_class_name,
+        issuer.name as issued_by_name
       from medical_issue_log il
       left join medical_item i on il.item_id = i.uuid
       left join employee e on il.entity_type = 'employee' and il.entity_id = e.uuid
       left join student s on il.entity_type = 'student' and il.entity_id = s.uuid
+      left join employee issuer on il.issued_by_id = issuer.uuid
       left join lateral (
         select c.name as class_name
         from student_class sc

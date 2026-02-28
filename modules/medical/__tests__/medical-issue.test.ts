@@ -82,6 +82,8 @@ describe('Medical Issue API', () => {
       expect(data.entityType).toBe('student');
       expect(data.quantity).toBe(2);
       expect(data.parentConsent).toBe(true);
+      expect(data.issuedById).toBe('system'); // defaults to auth userId
+      expect(data).toHaveProperty('issuedByName'); // null - no employee record for 'system'
       expect(data.status).toBe('active');
 
       createdIssueId = data.uuid;
@@ -146,6 +148,31 @@ describe('Medical Issue API', () => {
 
       expect(response.status).toBe(400);
     });
+
+    it('should create an issue with explicit issuedById', async () => {
+      const response = await fetch(issuesUrl, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          itemId: testItemId,
+          issueDate: '2025-01-07',
+          entityType: 'employee',
+          entityId: 'emp-issued',
+          quantity: 1,
+          issuedById: 'custom-issur',
+        }),
+      });
+
+      expect(response.status).toBe(200);
+      const data = await response.json();
+      expect(data.issuedById).toBe('custom-issur');
+
+      // Clean up
+      await fetch(`${issuesUrl}/${data.uuid}`, {
+        method: 'DELETE',
+        headers,
+      });
+    });
   });
 
   describe('GET /medical/issues/{id}', () => {
@@ -160,6 +187,8 @@ describe('Medical Issue API', () => {
       expect(data.uuid).toBe(createdIssueId);
       expect(data.itemId).toBe(testItemId);
       expect(data.itemName).toBe('Test Medicine for Issue');
+      expect(data).toHaveProperty('issuedById');
+      expect(data).toHaveProperty('issuedByName');
     });
 
     it('should return 404 for non-existent issue', async () => {
@@ -201,6 +230,8 @@ describe('Medical Issue API', () => {
       expect(data.length).toBeGreaterThan(0);
       expect(data[0].itemId).toBe(testItemId);
       expect(data[0].itemName).toBe('Test Medicine for Issue');
+      expect(data[0]).toHaveProperty('issuedById');
+      expect(data[0]).toHaveProperty('issuedByName');
     });
 
     it('should list issues by entityType only', async () => {
@@ -367,6 +398,7 @@ describe('Medical Issue API', () => {
         body: JSON.stringify({
           quantity: 5,
           remarks: 'Updated - severe headache',
+          issuedById: 'upd-issuer',
         }),
       });
 
@@ -374,6 +406,7 @@ describe('Medical Issue API', () => {
       const data = await response.json();
       expect(data.quantity).toBe(5);
       expect(data.remarks).toBe('Updated - severe headache');
+      expect(data.issuedById).toBe('upd-issuer');
 
       // Verify stock was adjusted (98 - 3 = 95)
       const itemResponse = await fetch(`${itemsUrl}/${testItemId}`, {

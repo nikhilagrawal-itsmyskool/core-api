@@ -81,6 +81,8 @@ export interface MedicalIssueLog extends BaseEntity {
   quantity: number;
   remarks?: string;
   parentConsent: boolean;
+  issuedById?: string;
+  issuedByName?: string;
   status: StatusValue;
 }
 
@@ -92,6 +94,7 @@ export interface CreateIssueLogRequest {
   quantity?: number;
   remarks?: string;
   parentConsent?: boolean;
+  issuedById?: string;
 }
 
 export interface UpdateIssueLogRequest {
@@ -101,4 +104,5 @@ export interface UpdateIssueLogRequest {
   quantity?: number;
   remarks?: string;
   parentConsent?: boolean;
+  issuedById?: string;
 }

@@ -71,6 +71,11 @@ class MedicalIssueHandler {
 
       const userId = event.requestContext?.authorizer?.principalId || 'system';
 
+      // Default issuedById to the authenticated user if not provided
+      if (!body.issuedById) {
+        body.issuedById = userId;
+      }
+
       const result = await medicalIssueService.create(body, schoolId, userId);
       ResponseBuilder.ok(result, callback);
     } catch (err: any) {
