@@ -1,8 +1,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
-// Load dev environment variables
-const configPath = path.join(__dirname, '../configs/dev/dev.yml');
+// Load local environment variables
+const configPath = path.join(__dirname, '../configs/local/local.yml');
 const configContent = fs.readFileSync(configPath, 'utf8');
 
 // Simple YAML parser for key: value pairs

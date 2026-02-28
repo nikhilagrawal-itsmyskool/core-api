@@ -30,6 +30,8 @@ describe('Employee Auth API', () => {
       expect(typeof data.token).toBe('string');
       expect(data).toHaveProperty('displayName');
       expect(typeof data.displayName).toBe('string');
+      expect(data).toHaveProperty('mustChangePassword');
+      expect(typeof data.mustChangePassword).toBe('boolean');
     });
 
     it('should return JWT with login_name, school_code, and roles', async () => {

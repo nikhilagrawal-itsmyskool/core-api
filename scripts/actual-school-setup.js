@@ -28,11 +28,11 @@ function generateSchoolAndEmployee(schoolName, schoolCode, employeeName, employe
   const schoolInsert = `insert into school (uuid, name, code, createdby_userid, created_at, updatedby_userid, updated_at)
 values ('${schoolUuid}', '${schoolName.trim()}', '${schoolCode.trim()}', '0', now(), null, null);`;
 
-  const employeeInsert = `insert into employee (uuid, employee_number, name, family_unique_number, school_id, createdby_userid, created_at)
-values ('${employeeUuid}', '${employeeNumber}', '${employeeName.trim()}', '${employeeFamilyNumber.trim()}', '${schoolUuid}', '0', now());`;
+  const employeeInsert = `insert into employee (uuid, employee_number, name, family_unique_number, status, school_id, createdby_userid, created_at)
+values ('${employeeUuid}', '${employeeNumber}', '${employeeName.trim()}', '${employeeFamilyNumber.trim()}', 'active', '${schoolUuid}', '0', now());`;
 
-  const employeeLoginInsert = `insert into employee_login (uuid, username, password, display_name, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
-values ('${loginUuid}', '${employeeFamilyNumber.trim()}', '${employeePassword.trim()}', '${employeeName.trim()}', '${schoolUuid}', '0', now(), null, null);`;
+  const employeeLoginInsert = `insert into employee_login (uuid, username, password, display_name, must_change_password, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
+values ('${loginUuid}', '${employeeFamilyNumber.trim()}', '${employeePassword.trim()}', '${employeeName.trim()}', false, '${schoolUuid}', '0', now(), null, null);`;
 
   return {
     schoolUuid,

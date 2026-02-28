@@ -1,5 +1,8 @@
 # Executive Summary
 
+## Repository
+- https://github.com/nikhilagrawal-itsmyskool/core-api
+
 ## Stack
 - **Runtime**: Node.js 22.x, TypeScript 5.8 (target ES2020, CommonJS)
 - **Framework**: Serverless Framework 3.40 with serverless-offline 13.3

@@ -55,6 +55,7 @@ class EmployeeAuthHandler {
       const resp = {
         token: token,
         displayName: employeeLogin.displayName,
+        mustChangePassword: employeeLogin.mustChangePassword,
       };
       ResponseBuilder.ok(resp, callback);
     } catch (err: any) {

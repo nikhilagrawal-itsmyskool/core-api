@@ -27,7 +27,20 @@
           method: post
           cors: true
 
-  
+  change-password-employee:
+    handler: employee-password-handler.changePassword
+    name: ${self:service}-change-password-employee
+    events:
+      - http:
+          path: employee/change-password
+          method: post
+          cors: true
 
-
- 
+  reset-password-employee:
+    handler: employee-password-handler.resetPassword
+    name: ${self:service}-reset-password-employee
+    events:
+      - http:
+          path: employee/reset-password
+          method: post
+          cors: true

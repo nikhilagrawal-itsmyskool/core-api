@@ -80,8 +80,8 @@ function generateStudentInserts(schoolUuid, classes, academicYearUuid, createdBy
       const randomIndex = Math.floor(Math.random() * 20);
       const mobileNumber = mobileNumbers[randomIndex];
       
-      const studentInsert = `insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
-values ('${studentUuid}', '${admissionNumber}', '${studentName}', null, null, '${mobileNumber}', '${mobileNumber}', '${mobileNumber}', '${schoolUuid}', '${createdByUserId}', now(), null, null);`;
+      const studentInsert = `insert into student (uuid, admission_number, name, gender, dob, family_unique_number, father_mobile, father_whatsapp, status, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
+values ('${studentUuid}', '${admissionNumber}', '${studentName}', null, null, '${mobileNumber}', '${mobileNumber}', '${mobileNumber}', 'active', '${schoolUuid}', '${createdByUserId}', now(), null, null);`;
 
       students.push({ uuid: studentUuid, name: studentName, familyUniqueNumber: mobileNumber, insert: studentInsert });
       
@@ -145,8 +145,8 @@ function generateEmployeeInserts(schoolUuid, count, createdByUserId) {
     usedIndices.add(randomIndex);
     const familyUniqueNumber = familyUniqueNumbers[randomIndex];
     
-    const employeeInsert = `insert into employee (uuid, employee_number, name, family_unique_number, mobile, whatsapp, school_id, createdby_userid, created_at)
-values ('${employeeUuid}', '${employeeNumber}', '${employeeName}', '${familyUniqueNumber}', '${familyUniqueNumber}', '${familyUniqueNumber}', '${schoolUuid}', '${createdByUserId}', now());`;
+    const employeeInsert = `insert into employee (uuid, employee_number, name, family_unique_number, mobile, whatsapp, status, school_id, createdby_userid, created_at)
+values ('${employeeUuid}', '${employeeNumber}', '${employeeName}', '${familyUniqueNumber}', '${familyUniqueNumber}', '${familyUniqueNumber}', 'active', '${schoolUuid}', '${createdByUserId}', now());`;
 
     employees.push({ uuid: employeeUuid, name: employeeName, familyUniqueNumber: familyUniqueNumber, insert: employeeInsert });
   }
@@ -189,8 +189,8 @@ values ('${employeeRoleUuid}', '${firstEmployeeUuid}', '${godRole.uuid}', '${sch
 
 function generateEmployeeLoginInsert(employeeUuid, username, password, displayName, schoolUuid, createdByUserId) {
   const loginUuid = generateShortUuid(12);
-  return `insert into employee_login (uuid, username, password, display_name, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
-values ('${loginUuid}', '${username}', '${password}', '${displayName}', '${schoolUuid}', '${createdByUserId}', now(), null, null);`;
+  return `insert into employee_login (uuid, username, password, display_name, must_change_password, school_id, createdby_userid, created_at, updatedby_userid, updated_at)
+values ('${loginUuid}', '${username}', '${password}', '${displayName}', false, '${schoolUuid}', '${createdByUserId}', now(), null, null);`;
 }
 
 function generateStudentLoginInserts(students, password, schoolUuid, createdByUserId) {

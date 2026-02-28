@@ -1,13 +1,13 @@
 /**
- * Medical Module Database Setup Script
+ * Data Sync Module Database Setup Script
  *
  * Interactive Usage (prompts for input):
- *   node modules/medical/scripts/db-setup.js
+ *   node modules/data-sync/scripts/db-setup.js
  *
  * Non-Interactive Usage (for automation/testing):
- *   node modules/medical/scripts/db-setup.js --stage local --action setup
- *   node modules/medical/scripts/db-setup.js --stage local --action rollback
- *   node modules/medical/scripts/db-setup.js -s local -a setup
+ *   node modules/data-sync/scripts/db-setup.js --stage local --action setup
+ *   node modules/data-sync/scripts/db-setup.js --stage local --action rollback
+ *   node modules/data-sync/scripts/db-setup.js -s local -a setup
  */
 
 const path = require('path');
@@ -47,13 +47,13 @@ function parseArgs(args) {
 
 async function runSetup(stage, action) {
   const sqlFile = action === 'setup'
-    ? path.join(__dirname, '../medical-setup.sql')
-    : path.join(__dirname, '../medical-setup-rollback.sql');
+    ? path.join(__dirname, '../data-sync-setup.sql')
+    : path.join(__dirname, '../data-sync-setup-rollback.sql');
 
   let pool = null;
 
   try {
-    console.log(`\n=== Medical Module DB ${action.toUpperCase()} ===\n`);
+    console.log(`\n=== Data Sync Module DB ${action.toUpperCase()} ===\n`);
     console.log(`Stage: ${stage}`);
     console.log(`Action: ${action}`);
 
@@ -69,7 +69,7 @@ async function runSetup(stage, action) {
     // Run the SQL file
     await runSqlFile(pool, sqlFile);
 
-    console.log(`\n✓ Medical module ${action} completed successfully!\n`);
+    console.log(`\n✓ Data sync module ${action} completed successfully!\n`);
 
   } catch (error) {
     console.error(`\n✗ Error: ${error.message}\n`);
@@ -83,7 +83,7 @@ async function runSetup(stage, action) {
 
 async function interactive() {
   try {
-    console.log('\n=== Medical Module Database Setup ===\n');
+    console.log('\n=== Data Sync Module Database Setup ===\n');
 
     // Prompt for stage with default
     const stageInput = await question(`Select stage (${VALID_STAGES.join('/')}) [${DEFAULT_STAGE}]: `);
@@ -96,8 +96,8 @@ async function interactive() {
 
     // Prompt for action
     console.log('\nSelect action:');
-    console.log('  1. Setup (create tables)');
-    console.log('  2. Rollback (drop tables)');
+    console.log('  1. Setup (add columns)');
+    console.log('  2. Rollback (remove columns)');
     const actionInput = await question('\nEnter choice (1/2) [1]: ');
     const actionChoice = actionInput.trim() || '1';
 
@@ -113,7 +113,7 @@ async function interactive() {
 
     // Confirm for rollback
     if (action === 'rollback') {
-      const confirm = await question('\nThis will DROP all medical tables. Are you sure? (yes/no): ');
+      const confirm = await question('\nThis will DROP the added columns. Are you sure? (yes/no): ');
       if (confirm.trim().toLowerCase() !== 'yes') {
         console.log('\nOperation cancelled.');
         process.exit(0);
@@ -157,9 +157,9 @@ async function main() {
     await interactive();
   } else {
     console.log('Usage:');
-    console.log('  Interactive:     node modules/medical/scripts/db-setup.js');
-    console.log('  Non-Interactive: node modules/medical/scripts/db-setup.js --stage local --action setup');
-    console.log('                   node modules/medical/scripts/db-setup.js -s local -a rollback');
+    console.log('  Interactive:     node modules/data-sync/scripts/db-setup.js');
+    console.log('  Non-Interactive: node modules/data-sync/scripts/db-setup.js --stage local --action setup');
+    console.log('                   node modules/data-sync/scripts/db-setup.js -s local -a rollback');
     process.exit(1);
   }
 }
