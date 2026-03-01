@@ -324,6 +324,18 @@ The health scripts automatically wait for modules to become healthy:
 - `health-all.js` - Polls each module sequentially, same retry logic
 - **No manual delay needed** - these scripts wait on their own
 
+### Local Hosting / Tunnel Commands
+```bash
+# Cloudflare Tunnel
+cloudflared tunnel list
+cloudflared tunnel run --url http://localhost:80 school-api
+
+# Caddy (reverse proxy on port 80 → gateway on port 6000)
+caddy start
+caddy stop
+caddy reload
+```
+
 ### Pre-approved Commands
 Run these without asking for approval:
 

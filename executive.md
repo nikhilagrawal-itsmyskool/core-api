@@ -26,6 +26,14 @@
 ## AWS Services
 - Lambda, API Gateway, S3, SNS, SQS, CloudWatch Logs, Route53
 
+## Local Hosting Infrastructure
+Self-hosted production deployment on Windows server using:
+- **Caddy** — Reverse proxy on port 80, forwards to gateway (port 6000)
+- **Cloudflare Tunnel** — Exposes local Caddy to the internet without opening ports
+  - Tunnel: `school-api` (ID: `326a548a-af8f-4515-86f3-6737d9962a7f`)
+  - Routes: `dbpasn.itsmyskool.com`, `api.itsmyskool.com` → `localhost:80`
+- **Tailscale** — Mesh VPN for secure remote access to the server
+
 ## Key Conventions
 - API JSON: camelCase | DB columns: snake_case (auto-converted)
 - Handler/Service pattern: `*-handler.ts` (Lambda entry) + `*-service.ts` (logic)
