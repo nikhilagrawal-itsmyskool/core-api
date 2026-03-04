@@ -1,0 +1,284 @@
+  # Health check
+  health:
+    handler: health-handler.health
+    events:
+      - http:
+          path: health
+          method: get
+          cors: true
+
+  # Lookup endpoints
+  get-units:
+    handler: lab-lookup-handler.getUnits
+    name: ${self:service}-get-units
+    events:
+      - http:
+          path: lookups/units
+          method: get
+          cors: true
+
+  get-categories:
+    handler: lab-lookup-handler.getCategories
+    name: ${self:service}-get-categories
+    events:
+      - http:
+          path: lookups/categories
+          method: get
+          cors: true
+
+  get-lab-types:
+    handler: lab-lookup-handler.getLabTypes
+    name: ${self:service}-get-lab-types
+    events:
+      - http:
+          path: lookups/lab-types
+          method: get
+          cors: true
+
+  get-conditions:
+    handler: lab-lookup-handler.getConditions
+    name: ${self:service}-get-conditions
+    events:
+      - http:
+          path: lookups/conditions
+          method: get
+          cors: true
+
+  # Lab endpoints
+  create-lab:
+    handler: lab-handler.create
+    name: ${self:service}-create-lab
+    events:
+      - http:
+          path: labs
+          method: post
+          cors: true
+
+  list-labs:
+    handler: lab-handler.list
+    name: ${self:service}-list-labs
+    events:
+      - http:
+          path: labs
+          method: get
+          cors: true
+
+  get-lab:
+    handler: lab-handler.getById
+    name: ${self:service}-get-lab
+    events:
+      - http:
+          path: labs/{id}
+          method: get
+          cors: true
+
+  update-lab:
+    handler: lab-handler.update
+    name: ${self:service}-update-lab
+    events:
+      - http:
+          path: labs/{id}
+          method: put
+          cors: true
+
+  delete-lab:
+    handler: lab-handler.remove
+    name: ${self:service}-delete-lab
+    events:
+      - http:
+          path: labs/{id}
+          method: delete
+          cors: true
+
+  # Lab Item endpoints
+  create-item:
+    handler: lab-item-handler.create
+    name: ${self:service}-create-item
+    events:
+      - http:
+          path: items
+          method: post
+          cors: true
+
+  search-items:
+    handler: lab-item-handler.search
+    name: ${self:service}-search-items
+    events:
+      - http:
+          path: items
+          method: get
+          cors: true
+
+  get-item:
+    handler: lab-item-handler.getById
+    name: ${self:service}-get-item
+    events:
+      - http:
+          path: items/{id}
+          method: get
+          cors: true
+
+  update-item:
+    handler: lab-item-handler.update
+    name: ${self:service}-update-item
+    events:
+      - http:
+          path: items/{id}
+          method: put
+          cors: true
+
+  delete-item:
+    handler: lab-item-handler.remove
+    name: ${self:service}-delete-item
+    events:
+      - http:
+          path: items/{id}
+          method: delete
+          cors: true
+
+  # Purchase Log endpoints
+  create-purchase:
+    handler: lab-purchase-handler.create
+    name: ${self:service}-create-purchase
+    events:
+      - http:
+          path: purchases
+          method: post
+          cors: true
+
+  list-purchases:
+    handler: lab-purchase-handler.list
+    name: ${self:service}-list-purchases
+    events:
+      - http:
+          path: purchases
+          method: get
+          cors: true
+
+  get-purchase:
+    handler: lab-purchase-handler.getById
+    name: ${self:service}-get-purchase
+    events:
+      - http:
+          path: purchases/{id}
+          method: get
+          cors: true
+
+  update-purchase:
+    handler: lab-purchase-handler.update
+    name: ${self:service}-update-purchase
+    events:
+      - http:
+          path: purchases/{id}
+          method: put
+          cors: true
+
+  delete-purchase:
+    handler: lab-purchase-handler.remove
+    name: ${self:service}-delete-purchase
+    events:
+      - http:
+          path: purchases/{id}
+          method: delete
+          cors: true
+
+  # Issue Log endpoints
+  create-issue:
+    handler: lab-issue-handler.create
+    name: ${self:service}-create-issue
+    events:
+      - http:
+          path: issues
+          method: post
+          cors: true
+
+  list-issues:
+    handler: lab-issue-handler.list
+    name: ${self:service}-list-issues
+    events:
+      - http:
+          path: issues
+          method: get
+          cors: true
+
+  get-issue:
+    handler: lab-issue-handler.getById
+    name: ${self:service}-get-issue
+    events:
+      - http:
+          path: issues/{id}
+          method: get
+          cors: true
+
+  update-issue:
+    handler: lab-issue-handler.update
+    name: ${self:service}-update-issue
+    events:
+      - http:
+          path: issues/{id}
+          method: put
+          cors: true
+
+  delete-issue:
+    handler: lab-issue-handler.remove
+    name: ${self:service}-delete-issue
+    events:
+      - http:
+          path: issues/{id}
+          method: delete
+          cors: true
+
+  return-issue:
+    handler: lab-issue-handler.returnItem
+    name: ${self:service}-return-issue
+    events:
+      - http:
+          path: issues/{id}/return
+          method: put
+          cors: true
+
+  # Breakage Log endpoints
+  create-breakage:
+    handler: lab-breakage-handler.create
+    name: ${self:service}-create-breakage
+    events:
+      - http:
+          path: breakages
+          method: post
+          cors: true
+
+  list-breakages:
+    handler: lab-breakage-handler.list
+    name: ${self:service}-list-breakages
+    events:
+      - http:
+          path: breakages
+          method: get
+          cors: true
+
+  get-breakage:
+    handler: lab-breakage-handler.getById
+    name: ${self:service}-get-breakage
+    events:
+      - http:
+          path: breakages/{id}
+          method: get
+          cors: true
+
+  update-breakage:
+    handler: lab-breakage-handler.update
+    name: ${self:service}-update-breakage
+    events:
+      - http:
+          path: breakages/{id}
+          method: put
+          cors: true
+
+  delete-breakage:
+    handler: lab-breakage-handler.remove
+    name: ${self:service}-delete-breakage
+    events:
+      - http:
+          path: breakages/{id}
+          method: delete
+          cors: true

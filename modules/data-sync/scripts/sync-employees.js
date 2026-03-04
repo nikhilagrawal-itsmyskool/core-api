@@ -3,19 +3,20 @@
  *
  * Imports employees from a CSV file into the database.
  * Creates employee, employee_login (with default password), and employee_role records.
+ * Auto-creates roles if they don't exist.
  *
  * Usage:
- *   node scripts/data-sync/sync-employees.js --stage dev --school-code SS1 --file employees.csv
+ *   node modules/data-sync/scripts/sync-employees.js --stage prod --school-code DBPASN --file employees.csv
  *
  * CSV format (header required):
- *   name,phone_number,role_code,status
+ *   name,phone_number,role,status
  *   Jane Doe,9876543210,teacher,active
  */
 
 const fs = require('fs');
 const path = require('path');
-const { loadConfig, createPool } = require('../run-sql');
-const { generateShortUuid } = require('../generate-uuid');
+const { loadConfig, createPool } = require('../../../scripts/run-sql');
+const { generateShortUuid } = require('../../../scripts/generate-uuid');
 
 const DEFAULT_PASSWORD = 'Itsmyskool@123';
 
@@ -47,7 +48,7 @@ function parseCsv(filePath) {
   }
 
   const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
-  const requiredHeaders = ['name', 'phone_number', 'role_code', 'status'];
+  const requiredHeaders = ['name', 'phone_number', 'role', 'status'];
 
   for (const required of requiredHeaders) {
     if (!headers.includes(required)) {
@@ -68,12 +69,19 @@ function parseCsv(filePath) {
   return rows;
 }
 
+function toTitleCase(str) {
+  return str
+    .split('-')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
+}
+
 async function main() {
   const args = process.argv.slice(2);
   const parsed = parseArgs(args);
 
   if (!parsed.stage || !parsed.schoolCode || !parsed.file) {
-    console.log('Usage: node scripts/data-sync/sync-employees.js --stage dev --school-code SS1 --file employees.csv');
+    console.log('Usage: node modules/data-sync/scripts/sync-employees.js --stage prod --school-code DBPASN --file employees.csv');
     console.log('');
     console.log('Options:');
     console.log('  --stage, -s        Stage (local, dev, qa, prod)');
@@ -81,7 +89,7 @@ async function main() {
     console.log('  --file, -f         CSV file path');
     console.log('');
     console.log('CSV format (header required):');
-    console.log('  name,phone_number,role_code,status');
+    console.log('  name,phone_number,role,status');
     console.log('  Jane Doe,9876543210,teacher,active');
     process.exit(1);
   }
@@ -124,6 +132,7 @@ async function main() {
 
     let successCount = 0;
     let errorCount = 0;
+    let rolesCreated = 0;
 
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
@@ -133,17 +142,28 @@ async function main() {
       try {
         await client.query('BEGIN');
 
-        // Look up role
-        const roleCode = row.role_code;
+        // Look up role - auto-create if not found
+        const roleCode = row.role;
         if (!roleCache[roleCode]) {
           const roleResult = await client.query(
             'select uuid from role where lower(code) = lower($1) and school_id = $2',
             [roleCode, schoolId]
           );
           if (roleResult.rows.length === 0) {
-            throw new Error(`Role not found: ${roleCode}`);
+            // Auto-create role
+            const roleUuid = generateShortUuid(12);
+            const roleName = toTitleCase(roleCode);
+            await client.query(
+              `insert into role (uuid, name, code, school_id, createdby_userid, created_at)
+               values ($1, $2, $3, $4, '0', now())`,
+              [roleUuid, roleName, roleCode, schoolId]
+            );
+            roleCache[roleCode] = roleUuid;
+            rolesCreated++;
+            console.log(`  [Role] Auto-created: ${roleCode} -> ${roleName}`);
+          } else {
+            roleCache[roleCode] = roleResult.rows[0].uuid;
           }
-          roleCache[roleCode] = roleResult.rows[0].uuid;
         }
         const roleId = roleCache[roleCode];
 
@@ -190,6 +210,7 @@ async function main() {
     console.log(`\n=== Summary ===`);
     console.log(`Success: ${successCount}`);
     console.log(`Errors: ${errorCount}`);
+    console.log(`Roles auto-created: ${rolesCreated}`);
     console.log(`Total: ${rows.length}`);
 
   } catch (error) {

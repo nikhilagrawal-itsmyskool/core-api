@@ -51,7 +51,16 @@
       "Bash(node scripts/local/start-all.js:*)",
       "Bash(node scripts/local/health-all.js:*)",
       "Bash(set GATEWAY_PORT=3000)",
-      "Bash(node -e:*)"
+      "Bash(node -e:*)",
+      "WebSearch",
+      "WebFetch(domain:www.datadial.net)",
+      "WebFetch(domain:teacher.ac)",
+      "WebFetch(domain:www.labcup.net)",
+      "WebFetch(domain:www.labkafe.com)",
+      "WebFetch(domain:djgteaching.wordpress.com)",
+      "WebFetch(domain:slideshare.net)",
+      "WebFetch(domain:www.boxhero.io)",
+      "WebFetch(domain:oxmaint.com)"
     ]
   }
 }
