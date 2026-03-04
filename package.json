@@ -2,7 +2,7 @@
   "scripts": {
     "start:auth": "node scripts/local/start-module.js auth --kill",
     "health:auth": "node scripts/local/health-module.js auth",
-    "test:auth": "jest modules/auth",  
+    "test:auth": "jest modules/auth",
     "stop:auth": "node scripts/local/kill-ports.js --auth",
     "test:auth:full": "start-server-and-test start:auth http://localhost:3001/auth/health test:auth && npm run stop:auth",
     "start:medical": "node scripts/local/start-module.js medical --kill",
@@ -46,6 +46,8 @@
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.808.0",
+    "csv-parse": "^6.1.0",
+    "exceljs": "^4.4.0",
     "jsonwebtoken": "^9.0.3",
     "pg": "^8.16.3"
   },

@@ -136,3 +136,7 @@ alter table lab_issue_log add column if not exists issued_to_type varchar(16);
 alter table lab_issue_log add column if not exists issued_to_id varchar(12);
 
 alter table lab_breakage_log add column if not exists responsible_id varchar(12);
+
+-- Unique constraints for upsert support (data-sync)
+create unique index if not exists idx_lab_name_school_id on lab(lower(name), school_id);
+create unique index if not exists idx_lab_item_name_lab_school_id on lab_item(lower(name), lab_id, school_id);

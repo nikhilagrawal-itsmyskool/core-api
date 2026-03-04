@@ -1,70 +1,33 @@
 /**
  * Student Data Sync Script
  *
- * Imports students from a CSV file into the database.
+ * Imports students from a CSV or Excel (.xlsx) file into the database using upsert.
  * Auto-creates academic years and classes if they don't exist.
+ * Supports admission number changes via old_admission_number column.
  *
  * Usage:
- *   node modules/data-sync/scripts/sync-students.js --stage prod --school-code DBPASN --file students.csv
+ *   node modules/data-sync/scripts/sync-students.js --stage prod --school-code DBPASN --file students.xlsx [--dry-run]
  *
- * CSV format (header required):
- *   name,class,academic_session,status
- *   John Doe,IX-A,2025-26,active
+ * Supports both .xlsx and .csv files.
+ *
+ * Columns (header required):
+ *   admission_number,name,class,academic_session,gender,dob,father_mobile,mother_mobile,old_admission_number,status
+ *   S001,Rahul Kumar,IX-A,2025-26,M,2010-05-15,9876543210,9876543211,,active
+ *
+ * Required columns: admission_number, name, class, academic_session
+ * Natural key: admission_number + school_id
  */
 
-const fs = require('fs');
-const path = require('path');
-const { loadConfig, createPool } = require('../../../scripts/run-sql');
-const { generateShortUuid } = require('../../../scripts/generate-uuid');
-
-function parseArgs(args) {
-  const result = { stage: null, schoolCode: null, file: null };
-
-  for (let i = 0; i < args.length; i++) {
-    if (args[i] === '--stage' || args[i] === '-s') {
-      result.stage = args[i + 1];
-      i++;
-    } else if (args[i] === '--school-code' || args[i] === '-c') {
-      result.schoolCode = args[i + 1];
-      i++;
-    } else if (args[i] === '--file' || args[i] === '-f') {
-      result.file = args[i + 1];
-      i++;
-    }
-  }
-
-  return result;
-}
-
-function parseCsv(filePath) {
-  const content = fs.readFileSync(filePath, 'utf8');
-  const lines = content.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-
-  if (lines.length < 2) {
-    throw new Error('CSV file must have a header row and at least one data row');
-  }
-
-  const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
-  const requiredHeaders = ['name', 'class', 'academic_session', 'status'];
-
-  for (const required of requiredHeaders) {
-    if (!headers.includes(required)) {
-      throw new Error(`Missing required CSV header: ${required}`);
-    }
-  }
-
-  const rows = [];
-  for (let i = 1; i < lines.length; i++) {
-    const values = lines[i].split(',').map(v => v.trim());
-    const row = {};
-    headers.forEach((header, index) => {
-      row[header] = values[index] || '';
-    });
-    rows.push(row);
-  }
-
-  return rows;
-}
+const {
+  parseArgs,
+  readFile,
+  getSchoolId,
+  logHeader,
+  logSummary,
+  resolveFile,
+  connectDb,
+  generateShortUuid,
+} = require('./lib/sync-utils');
 
 /**
  * Derive start_date and end_date from academic session code.
@@ -92,70 +55,60 @@ async function main() {
   const parsed = parseArgs(args);
 
   if (!parsed.stage || !parsed.schoolCode || !parsed.file) {
-    console.log('Usage: node modules/data-sync/scripts/sync-students.js --stage prod --school-code DBPASN --file students.csv');
+    console.log(
+      'Usage: node modules/data-sync/scripts/sync-students.js --stage prod --school-code DBPASN --file students.xlsx [--dry-run]'
+    );
     console.log('');
     console.log('Options:');
     console.log('  --stage, -s        Stage (local, dev, qa, prod)');
     console.log('  --school-code, -c  School code');
-    console.log('  --file, -f         CSV file path');
+    console.log('  --file, -f         Data file path (.xlsx or .csv)');
+    console.log('  --dry-run          Preview changes without committing');
     console.log('');
-    console.log('CSV format (header required):');
-    console.log('  name,class,academic_session,status');
-    console.log('  John Doe,IX-A,2025-26,active');
+    console.log('Columns (required marked with *):');
+    console.log(
+      '  admission_number*, name*, class*, academic_session*, gender, dob, father_mobile, mother_mobile, old_admission_number, status'
+    );
     process.exit(1);
   }
 
-  const filePath = path.isAbsolute(parsed.file) ? parsed.file : path.join(process.cwd(), parsed.file);
-  if (!fs.existsSync(filePath)) {
-    console.error(`Error: File not found: ${filePath}`);
-    process.exit(1);
-  }
-
+  const filePath = resolveFile(parsed.file);
   let pool = null;
 
   try {
-    console.log('\n=== Student Data Sync ===\n');
-    console.log(`Stage: ${parsed.stage}`);
-    console.log(`School Code: ${parsed.schoolCode}`);
-    console.log(`File: ${filePath}`);
+    logHeader('Student', { ...parsed, file: filePath });
 
-    // Parse CSV
-    const rows = parseCsv(filePath);
-    console.log(`\nFound ${rows.length} rows in CSV`);
+    // Parse data file
+    const rows = await readFile(filePath, ['admission_number', 'name', 'class', 'academic_session']);
+    console.log(`\nFound ${rows.length} rows`);
 
     // Connect to database
-    const config = loadConfig(parsed.stage);
-    console.log(`\nConnecting to ${config.POSTGRES_ENDPOINT || config.POSTGRES_HOST}/${config.POSTGRES_DATABASE}...`);
-    pool = createPool(config);
-    await pool.query('SELECT 1');
-    console.log('Database connection successful.');
+    pool = await connectDb(parsed.stage);
 
     // Look up school
-    const schoolResult = await pool.query('select uuid from school where lower(code) = lower($1)', [parsed.schoolCode]);
-    if (schoolResult.rows.length === 0) {
-      throw new Error(`School not found with code: ${parsed.schoolCode}`);
-    }
-    const schoolId = schoolResult.rows[0].uuid;
+    const schoolId = await getSchoolId(pool, parsed.schoolCode);
     console.log(`School ID: ${schoolId}`);
 
-    // Cache for lookups
+    // Caches for lookups
     const academicYearCache = {};
     const classCache = {};
 
-    let successCount = 0;
+    let inserted = 0;
+    let updated = 0;
+    let admissionChanges = 0;
     let errorCount = 0;
     let academicYearsCreated = 0;
     let classesCreated = 0;
 
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
-      const rowNum = i + 2; // +2 for 1-indexed + header row
+      const rowNum = i + 2;
       const client = await pool.connect();
 
       try {
         await client.query('BEGIN');
 
-        // Look up academic year - auto-create if not found
+        // Look up or auto-create academic year
         const ayCode = row.academic_session;
         if (!academicYearCache[ayCode]) {
           const ayResult = await client.query(
@@ -163,15 +116,19 @@ async function main() {
             [ayCode, schoolId]
           );
           if (ayResult.rows.length === 0) {
-            // Auto-create academic year
             const ayUuid = generateShortUuid(12);
             const { startDate, endDate } = deriveAcademicDates(ayCode);
             await client.query(
               `insert into academic_year (uuid, name, code, start_date, end_date, school_id, createdby_userid, created_at)
-               values ($1, $2, $3, $4, $5, $6, '0', now())`,
+               values ($1, $2, $3, $4, $5, $6, '0', now())
+               on conflict (code, school_id) do nothing`,
               [ayUuid, ayCode, ayCode, startDate, endDate, schoolId]
             );
-            academicYearCache[ayCode] = ayUuid;
+            const refetch = await client.query(
+              'select uuid from academic_year where lower(code) = lower($1) and school_id = $2',
+              [ayCode, schoolId]
+            );
+            academicYearCache[ayCode] = refetch.rows[0].uuid;
             academicYearsCreated++;
             console.log(`  [Academic Year] Auto-created: ${ayCode} (${startDate} to ${endDate})`);
           } else {
@@ -180,7 +137,7 @@ async function main() {
         }
         const academicYearId = academicYearCache[ayCode];
 
-        // Look up class - auto-create if not found
+        // Look up or auto-create class
         const classCode = row.class;
         if (!classCache[classCode]) {
           const classResult = await client.query(
@@ -188,14 +145,18 @@ async function main() {
             [classCode, schoolId]
           );
           if (classResult.rows.length === 0) {
-            // Auto-create class
             const classUuid = generateShortUuid(12);
             await client.query(
               `insert into class (uuid, name, code, school_id, createdby_userid, created_at)
-               values ($1, $2, $3, $4, '0', now())`,
+               values ($1, $2, $3, $4, '0', now())
+               on conflict (code, school_id) do nothing`,
               [classUuid, classCode, classCode, schoolId]
             );
-            classCache[classCode] = classUuid;
+            const refetch = await client.query(
+              'select uuid from class where lower(code) = lower($1) and school_id = $2',
+              [classCode, schoolId]
+            );
+            classCache[classCode] = refetch.rows[0].uuid;
             classesCreated++;
             console.log(`  [Class] Auto-created: ${classCode}`);
           } else {
@@ -204,27 +165,117 @@ async function main() {
         }
         const classId = classCache[classCode];
 
-        // Generate UUIDs
-        const studentUuid = generateShortUuid(12);
-        const studentClassUuid = generateShortUuid(12);
+        const admissionNumber = row.admission_number;
+        const oldAdmissionNumber = row.old_admission_number || '';
+        const status = row.status || 'active';
+        const gender = row.gender || null;
+        const dob = row.dob || null;
+        const fatherMobile = row.father_mobile || null;
+        const motherMobile = row.mother_mobile || null;
 
-        // INSERT student
-        await client.query(
-          `insert into student (uuid, name, status, school_id, createdby_userid, created_at)
-           values ($1, $2, $3, $4, '0', now())`,
-          [studentUuid, row.name, row.status || 'active', schoolId]
-        );
+        let studentUuid = null;
+        let isInsert = true;
 
-        // INSERT student_class
+        // Handle admission number change
+        if (oldAdmissionNumber) {
+          const oldResult = await client.query(
+            'select uuid from student where admission_number = $1 and school_id = $2',
+            [oldAdmissionNumber, schoolId]
+          );
+          if (oldResult.rows.length > 0) {
+            // Found by old admission number - update it
+            studentUuid = oldResult.rows[0].uuid;
+            await client.query(
+              `update student set
+                 admission_number = $1,
+                 old_admission_number = $2,
+                 name = $3,
+                 gender = coalesce($4, gender),
+                 dob = coalesce($5, dob),
+                 father_mobile = coalesce($6, father_mobile),
+                 mother_mobile = coalesce($7, mother_mobile),
+                 status = $8,
+                 updatedby_userid = '0',
+                 updated_at = now()
+               where uuid = $9`,
+              [
+                admissionNumber,
+                oldAdmissionNumber,
+                row.name,
+                gender,
+                dob,
+                fatherMobile,
+                motherMobile,
+                status,
+                studentUuid,
+              ]
+            );
+            isInsert = false;
+            admissionChanges++;
+            console.log(
+              `  [Row ${rowNum}] ADMISSION CHANGE - ${row.name} (${oldAdmissionNumber} -> ${admissionNumber})`
+            );
+          }
+        }
+
+        // Standard upsert if not handled by admission change
+        if (!studentUuid) {
+          const stuResult = await client.query(
+            `insert into student (uuid, admission_number, name, gender, dob, father_mobile, mother_mobile, status, school_id, createdby_userid, created_at)
+             values ($1, $2, $3, $4, $5, $6, $7, $8, $9, '0', now())
+             on conflict (admission_number, school_id) do update set
+               name = excluded.name,
+               gender = coalesce(excluded.gender, student.gender),
+               dob = coalesce(excluded.dob, student.dob),
+               father_mobile = coalesce(excluded.father_mobile, student.father_mobile),
+               mother_mobile = coalesce(excluded.mother_mobile, student.mother_mobile),
+               status = excluded.status,
+               updatedby_userid = '0',
+               updated_at = now()
+             returning uuid, (xmax = 0) as is_insert`,
+            [
+              generateShortUuid(12),
+              admissionNumber,
+              row.name,
+              gender,
+              dob,
+              fatherMobile,
+              motherMobile,
+              status,
+              schoolId,
+            ]
+          );
+          studentUuid = stuResult.rows[0].uuid;
+          isInsert = stuResult.rows[0].is_insert;
+        }
+
+        if (isInsert) {
+          inserted++;
+        } else if (!oldAdmissionNumber) {
+          // Only count as update if not already counted as admission change
+          updated++;
+        }
+
+        // UPSERT student_class
         await client.query(
           `insert into student_class (uuid, student_id, academic_year_id, class_id, school_id, createdby_userid, created_at)
-           values ($1, $2, $3, $4, $5, '0', now())`,
-          [studentClassUuid, studentUuid, academicYearId, classId, schoolId]
+           values ($1, $2, $3, $4, $5, '0', now())
+           on conflict (student_id, academic_year_id, class_id, school_id) do nothing`,
+          [generateShortUuid(12), studentUuid, academicYearId, classId, schoolId]
         );
 
-        await client.query('COMMIT');
-        successCount++;
-        console.log(`  [Row ${rowNum}] OK - ${row.name} (${classCode}, ${ayCode})`);
+        if (parsed.dryRun) {
+          await client.query('ROLLBACK');
+        } else {
+          await client.query('COMMIT');
+        }
+
+        if (!oldAdmissionNumber) {
+          const action = isInsert ? 'INSERT' : 'UPDATE';
+          console.log(
+            `  [Row ${rowNum}] ${action} - ${row.name} (${admissionNumber}, ${classCode}, ${ayCode})`
+          );
+        }
       } catch (err) {
         await client.query('ROLLBACK');
         errorCount++;
@@ -234,13 +285,19 @@ async function main() {
       }
     }
 
-    console.log(`\n=== Summary ===`);
-    console.log(`Success: ${successCount}`);
-    console.log(`Errors: ${errorCount}`);
-    console.log(`Academic years auto-created: ${academicYearsCreated}`);
-    console.log(`Classes auto-created: ${classesCreated}`);
-    console.log(`Total: ${rows.length}`);
+    logSummary({
+      inserted,
+      updated,
+      'admission changes': admissionChanges,
+      errors: errorCount,
+      'academic years auto-created': academicYearsCreated,
+      'classes auto-created': classesCreated,
+      total: rows.length,
+    });
 
+    if (parsed.dryRun) {
+      console.log('\n(Dry run - no data was committed)');
+    }
   } catch (error) {
     console.error(`\nError: ${error.message}`);
     process.exit(1);

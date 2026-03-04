@@ -72,3 +72,6 @@ create index if not exists idx_medical_issue_log_status on medical_issue_log(sch
 
 -- Incremental changes (safe to re-run, guards with IF NOT EXISTS)
 alter table medical_issue_log add column if not exists issued_by_id varchar(12);
+
+-- Unique constraint for upsert support (data-sync)
+create unique index if not exists idx_medical_item_name_school_id on medical_item(lower(name), school_id);
