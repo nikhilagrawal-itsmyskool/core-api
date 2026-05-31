@@ -75,3 +75,28 @@ alter table medical_issue_log add column if not exists issued_by_id varchar(12);
 
 -- Unique constraint for upsert support (data-sync)
 create unique index if not exists idx_medical_item_name_school_id on medical_item(lower(name), school_id);
+
+-- Incremental: batch_id on purchase log (links purchase to a bulk batch)
+alter table medical_purchase_log add column if not exists batch_id varchar(12);
+create index if not exists idx_medical_purchase_log_batch on medical_purchase_log(batch_id);
+
+-- Table 4: medical_purchase_batch (invoice-level grouping for bulk purchases)
+create table if not exists medical_purchase_batch (
+    uuid varchar(12) primary key,
+    purchase_date date not null,
+    supplier varchar(128),
+    invoice_number varchar(64),
+    batch_no varchar(64),
+    notes varchar(512),
+    file_id varchar(12),
+    status varchar(16) check (status in ('active', 'deleted')),
+    school_id varchar(12) not null,
+    createdby_userid varchar(12),
+    created_at timestamp(0),
+    updatedby_userid varchar(12),
+    updated_at timestamp(0)
+);
+
+create index if not exists idx_medical_purchase_batch_school on medical_purchase_batch(school_id);
+create index if not exists idx_medical_purchase_batch_school_status on medical_purchase_batch(school_id, status);
+create index if not exists idx_medical_purchase_batch_date on medical_purchase_batch(school_id, purchase_date);

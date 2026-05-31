@@ -136,6 +136,90 @@
           method: delete
           cors: true
 
+  # Purchase Batch endpoints (bulk purchase)
+  create-bulk-lab-purchase:
+    handler: lab-purchase-batch-handler.createBulk
+    name: ${self:service}-create-bulk-lab-purchase
+    events:
+      - http:
+          path: purchases/bulk
+          method: post
+          cors: true
+
+  list-lab-purchase-batches:
+    handler: lab-purchase-batch-handler.list
+    name: ${self:service}-list-lab-purchase-batches
+    events:
+      - http:
+          path: purchases/batches
+          method: get
+          cors: true
+
+  get-lab-purchase-batch:
+    handler: lab-purchase-batch-handler.getById
+    name: ${self:service}-get-lab-purchase-batch
+    events:
+      - http:
+          path: purchases/batches/{batchId}
+          method: get
+          cors: true
+
+  update-lab-purchase-batch:
+    handler: lab-purchase-batch-handler.update
+    name: ${self:service}-update-lab-purchase-batch
+    events:
+      - http:
+          path: purchases/batches/{batchId}
+          method: put
+          cors: true
+
+  delete-lab-purchase-batch:
+    handler: lab-purchase-batch-handler.remove
+    name: ${self:service}-delete-lab-purchase-batch
+    events:
+      - http:
+          path: purchases/batches/{batchId}
+          method: delete
+          cors: true
+
+  # Purchase Batch bill endpoints
+  upload-lab-bill:
+    handler: lab-purchase-batch-handler.uploadBill
+    name: ${self:service}-upload-lab-bill
+    events:
+      - http:
+          path: purchases/batches/{batchId}/bill
+          method: post
+          cors: true
+
+  get-lab-bill:
+    handler: lab-purchase-batch-handler.getBill
+    name: ${self:service}-get-lab-bill
+    events:
+      - http:
+          path: purchases/batches/{batchId}/bill
+          method: get
+          cors: true
+
+  delete-lab-bill:
+    handler: lab-purchase-batch-handler.deleteBill
+    name: ${self:service}-delete-lab-bill
+    events:
+      - http:
+          path: purchases/batches/{batchId}/bill
+          method: delete
+          cors: true
+
+  # Alerts endpoint
+  list-lab-alerts:
+    handler: lab-purchase-batch-handler.listAlerts
+    name: ${self:service}-list-lab-alerts
+    events:
+      - http:
+          path: alerts
+          method: get
+          cors: true
+
   # Purchase Log endpoints
   create-purchase:
     handler: lab-purchase-handler.create
@@ -280,5 +364,24 @@
     events:
       - http:
           path: breakages/{id}
+          method: delete
+          cors: true
+
+  # Breakage image endpoints
+  get-lab-breakage-image:
+    handler: lab-breakage-handler.getImage
+    name: ${self:service}-get-lab-breakage-image
+    events:
+      - http:
+          path: breakages/{id}/image
+          method: get
+          cors: true
+
+  delete-lab-breakage-image:
+    handler: lab-breakage-handler.deleteImage
+    name: ${self:service}-delete-lab-breakage-image
+    events:
+      - http:
+          path: breakages/{id}/image
           method: delete
           cors: true

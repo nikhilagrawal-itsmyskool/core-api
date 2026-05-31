@@ -50,6 +50,28 @@ function deriveAcademicDates(sessionCode) {
   };
 }
 
+/**
+ * Normalize dob to YYYY-MM-DD.
+ * Handles:
+ *   - Already ISO format: "2010-05-15"  → "2010-05-15"
+ *   - dd/mm/yyyy text:   "15/05/2010"  → "2010-05-15"
+ *   - null / empty       → null
+ */
+function parseDob(raw) {
+  if (!raw) return null;
+  const s = String(raw).trim();
+  if (!s) return null;
+
+  // dd/mm/yyyy  (the Excel text format for this school)
+  const ddmmyyyy = s.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (ddmmyyyy) {
+    return `${ddmmyyyy[3]}-${ddmmyyyy[2]}-${ddmmyyyy[1]}`;
+  }
+
+  // Already YYYY-MM-DD (ExcelJS Date path or CSV)
+  return s;
+}
+
 async function main() {
   const args = process.argv.slice(2);
   const parsed = parseArgs(args);
@@ -169,7 +191,7 @@ async function main() {
         const oldAdmissionNumber = row.old_admission_number || '';
         const status = row.status || 'active';
         const gender = row.gender || null;
-        const dob = row.dob || null;
+        const dob = parseDob(row.dob);
         const fatherMobile = row.father_mobile || null;
         const motherMobile = row.mother_mobile || null;
 

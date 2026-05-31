@@ -109,6 +109,88 @@
           method: get
           cors: true
 
+  # Purchase Batch endpoints (bulk purchase + bill upload)
+  create-bulk-purchase:
+    handler: medical-purchase-batch-handler.createBulk
+    name: ${self:service}-create-bulk-purchase
+    events:
+      - http:
+          path: purchases/bulk
+          method: post
+          cors: true
+
+  list-expiring-purchases:
+    handler: medical-purchase-batch-handler.listExpiring
+    name: ${self:service}-list-expiring-purchases
+    events:
+      - http:
+          path: purchases/expiring
+          method: get
+          cors: true
+
+  list-purchase-batches:
+    handler: medical-purchase-batch-handler.list
+    name: ${self:service}-list-purchase-batches
+    events:
+      - http:
+          path: purchases/batches
+          method: get
+          cors: true
+
+  get-purchase-batch:
+    handler: medical-purchase-batch-handler.getById
+    name: ${self:service}-get-purchase-batch
+    events:
+      - http:
+          path: purchases/batches/{batchId}
+          method: get
+          cors: true
+
+  update-purchase-batch:
+    handler: medical-purchase-batch-handler.update
+    name: ${self:service}-update-purchase-batch
+    events:
+      - http:
+          path: purchases/batches/{batchId}
+          method: put
+          cors: true
+
+  delete-purchase-batch:
+    handler: medical-purchase-batch-handler.remove
+    name: ${self:service}-delete-purchase-batch
+    events:
+      - http:
+          path: purchases/batches/{batchId}
+          method: delete
+          cors: true
+
+  upload-purchase-bill:
+    handler: medical-purchase-batch-handler.uploadBill
+    name: ${self:service}-upload-purchase-bill
+    events:
+      - http:
+          path: purchases/batches/{batchId}/bill
+          method: post
+          cors: true
+
+  get-purchase-bill:
+    handler: medical-purchase-batch-handler.getBill
+    name: ${self:service}-get-purchase-bill
+    events:
+      - http:
+          path: purchases/batches/{batchId}/bill
+          method: get
+          cors: true
+
+  delete-purchase-bill:
+    handler: medical-purchase-batch-handler.deleteBill
+    name: ${self:service}-delete-purchase-bill
+    events:
+      - http:
+          path: purchases/batches/{batchId}/bill
+          method: delete
+          cors: true
+
   # Issue Log endpoints
   create-issue:
     handler: medical-issue-handler.create

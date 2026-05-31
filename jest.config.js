@@ -6,4 +6,6 @@ module.exports = {
   setupFilesAfterEnv: ['<rootDir>/tests/setup.ts'],
   testTimeout: 10000,
   verbose: true,
+  // Integration tests hit real HTTP servers — parallel execution causes ECONNRESET/timeouts
+  maxWorkers: 1,
 };

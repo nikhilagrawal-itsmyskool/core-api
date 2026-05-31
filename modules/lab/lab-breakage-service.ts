@@ -1,4 +1,5 @@
 import { DB, singleLineString } from '../../shared/lib/db';
+import { fileStorageService, StoredFileWithData } from '../../shared/lib/file-storage';
 import { LabBreakageLog, CreateBreakageLogRequest, UpdateBreakageLogRequest } from './lab-interfaces';
 import { DEFAULTS } from './lab-constants';
 const { generateShortUuid } = require('../../shared/util/generate-uuid.js');
@@ -51,6 +52,23 @@ class LabBreakageService {
       [insertQuery, updateStockQuery],
       [insertParams, updateStockParams]
     );
+
+    // Upload image if provided
+    if (data.fileData) {
+      const stored = await fileStorageService.upload({
+        fileName: data.fileData.fileName,
+        mimeType: data.fileData.mimeType,
+        base64Data: data.fileData.base64Data,
+        entityType: 'lab_breakage_log',
+        entityId: uuid,
+        schoolId,
+        userId,
+      });
+      await DB.query(
+        `update lab_breakage_log set file_id = $1 where uuid = $2 and school_id = $3`,
+        [stored.uuid, uuid, schoolId]
+      );
+    }
 
     return this.getById(uuid, schoolId) as Promise<LabBreakageLog>;
   }
@@ -115,6 +133,28 @@ class LabBreakageService {
     if (data.remarks !== undefined) {
       updates.push(`remarks = $${paramIndex++}`);
       params.push(data.remarks);
+    }
+
+    // Handle image upload / deletion first so file_id is included in the SET clause
+    if (data.deleteFile && existing.fileId) {
+      await fileStorageService.delete(existing.fileId, schoolId);
+      updates.push(`file_id = $${paramIndex++}`);
+      params.push(null);
+    } else if (data.fileData) {
+      if (existing.fileId) {
+        await fileStorageService.delete(existing.fileId, schoolId);
+      }
+      const stored = await fileStorageService.upload({
+        fileName: data.fileData.fileName,
+        mimeType: data.fileData.mimeType,
+        base64Data: data.fileData.base64Data,
+        entityType: 'lab_breakage_log',
+        entityId: id,
+        schoolId,
+        userId,
+      });
+      updates.push(`file_id = $${paramIndex++}`);
+      params.push(stored.uuid);
     }
 
     if (updates.length === 0) {
@@ -269,6 +309,22 @@ class LabBreakageService {
     query += ` order by b.breakage_date desc`;
 
     return DB.query(query, queryParams);
+  }
+
+  public async getImage(id: string, schoolId: string): Promise<StoredFileWithData | null> {
+    const breakage = await this.getById(id, schoolId);
+    if (!breakage?.fileId) return null;
+    return fileStorageService.getWithData(breakage.fileId, schoolId);
+  }
+
+  public async deleteImage(id: string, schoolId: string, userId: string): Promise<void> {
+    const breakage = await this.getById(id, schoolId);
+    if (!breakage?.fileId) return;
+    await fileStorageService.delete(breakage.fileId, schoolId);
+    await DB.query(
+      `update lab_breakage_log set file_id = null where uuid = $1 and school_id = $2`,
+      [id, schoolId]
+    );
   }
 }
 

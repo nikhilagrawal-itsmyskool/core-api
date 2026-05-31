@@ -190,6 +190,7 @@ export interface LabBreakageLog extends BaseEntity {
   actionTaken?: BreakageAction;
   breakageStatus?: BreakageStatus;
   remarks?: string;
+  fileId?: string;
   status: StatusValue;
 }
 
@@ -207,6 +208,7 @@ export interface CreateBreakageLogRequest {
   actionTaken?: BreakageAction;
   breakageStatus?: BreakageStatus;
   remarks?: string;
+  fileData?: { fileName: string; mimeType: string; base64Data: string };
 }
 
 export interface UpdateBreakageLogRequest {
@@ -221,4 +223,69 @@ export interface UpdateBreakageLogRequest {
   actionTaken?: BreakageAction;
   breakageStatus?: BreakageStatus;
   remarks?: string;
+  fileData?: { fileName: string; mimeType: string; base64Data: string };
+  deleteFile?: boolean;
+}
+
+// Purchase Batch
+export interface LabPurchaseBatch extends BaseEntity {
+  purchaseDate: Date;
+  supplier?: string;
+  invoiceNumber?: string;
+  batchNo?: string;
+  expiryDate?: Date;
+  warrantyEndDate?: Date;
+  notes?: string;
+  fileId?: string;
+  status: StatusValue;
+  items?: LabPurchaseLog[];
+  recordType?: 'batch' | 'purchase';
+  itemCount?: number;
+  totalCost?: number;
+}
+
+export interface BulkLabPurchaseLineItem {
+  itemId: string;
+  labId: string;
+  quantity: number;
+  costPerUnit?: number;
+  batchNo?: string;
+  expiryDate?: string;
+  warrantyEndDate?: string;
+  remarks?: string;
+}
+
+export interface CreateBulkLabPurchaseRequest {
+  purchaseDate: string;
+  supplier?: string;
+  invoiceNumber?: string;
+  batchNo?: string;
+  expiryDate?: string;
+  warrantyEndDate?: string;
+  notes?: string;
+  items: BulkLabPurchaseLineItem[];
+  bill?: { fileName: string; mimeType: string; base64Data: string };
+}
+
+export interface UpdateLabPurchaseBatchRequest {
+  purchaseDate?: string;
+  supplier?: string;
+  invoiceNumber?: string;
+  batchNo?: string;
+  expiryDate?: string;
+  warrantyEndDate?: string;
+  notes?: string;
+}
+
+export interface LabAlertItem {
+  itemId: string;
+  itemName: string;
+  labId: string;
+  labName: string;
+  unit: string;
+  currentStock: number;
+  nearestExpiry: string | null;
+  expiryDaysLeft: number | null;
+  nearestWarrantyEnd: string | null;
+  warrantyDaysLeft: number | null;
 }

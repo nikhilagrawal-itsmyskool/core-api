@@ -1,6 +1,7 @@
 import { TEST_SCHOOL_CODE, TEST_USERNAME, TEST_PASSWORD } from '../../../tests/setup';
 import * as fs from 'fs';
 import * as path from 'path';
+const jwt = require('jsonwebtoken');
 
 // Load module config - use GATEWAY_PORT env var if set, otherwise use module port
 const config = JSON.parse(fs.readFileSync(path.join(__dirname, '../local.config.json'), 'utf8'));
@@ -21,6 +22,33 @@ async function getAuthToken(): Promise<string> {
   });
   const data = await response.json();
   return data.token;
+}
+
+// Creates a JWT token with admin role, signed with the real server JWT_SECRET from local.yml.
+// The test user may not have admin/god in the DB, so we mint one directly for reset-password tests.
+// We read JWT_SECRET from local.yml directly (test/setup.ts overrides process.env.JWT_SECRET).
+function getServerJwtSecret(): string {
+  const localConfigPath = path.join(__dirname, '../../../configs/local/local.yml');
+  const content = fs.readFileSync(localConfigPath, 'utf8');
+  const match = content.match(/^JWT_SECRET:\s*['"]?([^'"]+)['"]?\s*$/m);
+  return match ? match[1].trim() : 'local-dev-secret-key';
+}
+
+function getAdminToken(employeeId: string, schoolId: string): string {
+  const secret = getServerJwtSecret();
+  // JWT_MAGIC_KEY is not set in local.yml, so auth field must be undefined (same as login)
+  return jwt.sign(
+    {
+      id: employeeId,
+      login_name: TEST_USERNAME,
+      school_id: schoolId,
+      school_code: TEST_SCHOOL_CODE,
+      type: 'employee',
+      roles: ['admin'],
+    },
+    secret,
+    { expiresIn: '1h' }
+  );
 }
 
 describe('Employee Password API', () => {
@@ -133,13 +161,15 @@ describe('Employee Password API', () => {
   });
 
   describe('POST /auth/employee/reset-password', () => {
-    it('should reset password successfully with god role', async () => {
-      const token = await getAuthToken();
-
-      // Get the login ID from the token payload
-      const [, payloadBase64] = token.split('.');
+    it('should reset password successfully with admin role', async () => {
+      // Get a real token first to extract the employee ID and school ID
+      const realToken = await getAuthToken();
+      const [, payloadBase64] = realToken.split('.');
       const payload = JSON.parse(Buffer.from(payloadBase64, 'base64').toString());
       const loginId = payload.id;
+
+      // Mint an admin token (test user may not have admin role in DB)
+      const token = getAdminToken(payload.id, payload.school_id);
 
       const response = await fetch(resetPasswordUrl, {
         method: 'POST',
@@ -192,7 +222,11 @@ describe('Employee Password API', () => {
     });
 
     it('should return 400 for missing employeeLoginId', async () => {
-      const token = await getAuthToken();
+      // Mint an admin token so the role check passes and we reach the validation
+      const realToken = await getAuthToken();
+      const [, payloadBase64] = realToken.split('.');
+      const payload = JSON.parse(Buffer.from(payloadBase64, 'base64').toString());
+      const token = getAdminToken(payload.id, payload.school_id);
 
       const response = await fetch(resetPasswordUrl, {
         method: 'POST',

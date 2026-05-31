@@ -22,7 +22,7 @@ npx prettier --write .
 
 ## NPM Scripts
 
-### Module Commands (auth, medical, lab, student, employee, class, academic-year)
+### Module Commands (auth, medical, lab, student, employee, class, academic-year, fine)
 | Command | Description |
 |---------|-------------|
 | `npm run start:<module>` | Start module (auto-kills ports first) |
@@ -31,7 +31,7 @@ npx prettier --write .
 | `npm run stop:<module>` | Stop module |
 | `npm run test:<module>:full` | Full cycle: stop → start → test → stop |
 
-Available modules: `auth`, `medical`, `lab`, `sample`, `student`, `employee`, `class`, `academic-year`
+Available modules: `auth`, `medical`, `lab`, `sample`, `student`, `employee`, `class`, `academic-year`, `fine`, `uniform`, `shop`
 
 > These always run on `local` stage (hardcoded in `start-module.js`). Stage cannot be changed for individual module commands.
 
@@ -44,7 +44,7 @@ Available modules: `auth`, `medical`, `lab`, `sample`, `student`, `employee`, `c
 | `npm run test:all` | Run all tests (requires servers running) |
 | `npm run test:all:full` | Full cycle: stop → start → test → stop |
 
-> These run on `local` stage by default (ports 3000-3016). Pass `--stage prod` to use prod ports (6000-6016).
+> These run on `local` stage by default (ports 3000-3018). Pass `--stage prod` to use prod ports (6000-6018).
 
 #### Prod Stage Commands
 
@@ -61,6 +61,7 @@ Each module in `modules/` is an independent Lambda microservice with its own `se
 - **auth/**: Employee and student authentication (JWT-based)
 - **medical/**: Medical inventory, purchases, and issue tracking
 - **lab/**: Lab inventory management - items, purchases, issues, breakages across all lab types
+- **fine/**: Fine collection - incident tracking, workflow (open→under review→decision→closed), evidence upload, receipt generation
 - **student/**: Student search by name, class, and academic year
 - **employee/**: Employee search by name
 - **class/**: Class search for dropdowns (uuid + name)
@@ -83,6 +84,9 @@ Each module runs on dedicated ports to allow simultaneous local development:
 | class         | 3011      | 3012        | /class/*          |
 | academic-year | 3013      | 3014        | /academic-year/*  |
 | lab           | 3015      | 3016        | /lab/*            |
+| fine          | 3017      | 3018        | /fine/*           |
+| uniform       | 3019      | 3020        | /uniform/*        |
+| shop          | 3021      | 3022        | /shop/*           |
 | gateway       | 3000      | -           | (routes all)      |
 
 #### Prod Stage
@@ -97,6 +101,9 @@ Each module runs on dedicated ports to allow simultaneous local development:
 | class         | 6011      | 6012        |
 | academic-year | 6013      | 6014        |
 | lab           | 6015      | 6016        |
+| fine          | 6017      | 6018        |
+| uniform       | 6019      | 6020        |
+| shop          | 6021      | 6022        |
 | gateway       | 6000      | -           |
 
 ### Scripts Organization
@@ -301,7 +308,7 @@ set GATEWAY_PORT=3000 && node node_modules/jest/bin/jest.js
 node scripts/local/kill-ports.js --all
 ```
 
-**Expected result**: 75 tests passed, 11 test suites (auth: 12, medical: 42, sample: 2, student: 5, employee: 5, class: 5, academic-year: 4)
+**Expected result**: ~114 tests passed, 15 test suites (auth: 12, medical: 42, sample: 2, student: 5, employee: 5, class: 5, academic-year: 4, fine: ~39)
 
 ### Single Module Test Cycle (test:module:full equivalent)
 ```bash

@@ -1,0 +1,267 @@
+  # Health check
+  health:
+    handler: health-handler.health
+    events:
+      - http:
+          path: health
+          method: get
+          cors: true
+
+  # Stats
+  get-stats:
+    handler: uniform-stats-handler.getStats
+    name: ${self:service}-get-stats
+    events:
+      - http:
+          path: stats
+          method: get
+          cors: true
+
+  # Lookups
+  get-lookups:
+    handler: uniform-lookup-handler.getLookups
+    name: ${self:service}-get-lookups
+    events:
+      - http:
+          path: lookups
+          method: get
+          cors: true
+
+  # Items
+  create-item:
+    handler: uniform-item-handler.createItem
+    name: ${self:service}-create-item
+    events:
+      - http:
+          path: items
+          method: post
+          cors: true
+
+  list-items:
+    handler: uniform-item-handler.listItems
+    name: ${self:service}-list-items
+    events:
+      - http:
+          path: items
+          method: get
+          cors: true
+
+  update-item:
+    handler: uniform-item-handler.updateItem
+    name: ${self:service}-update-item
+    events:
+      - http:
+          path: items/{id}
+          method: put
+          cors: true
+
+  delete-item:
+    handler: uniform-item-handler.deleteItem
+    name: ${self:service}-delete-item
+    events:
+      - http:
+          path: items/{id}
+          method: delete
+          cors: true
+
+  # Sizes (nested under items)
+  create-size:
+    handler: uniform-item-handler.createSize
+    name: ${self:service}-create-size
+    events:
+      - http:
+          path: items/{id}/sizes
+          method: post
+          cors: true
+
+  update-size:
+    handler: uniform-item-handler.updateSize
+    name: ${self:service}-update-size
+    events:
+      - http:
+          path: items/{id}/sizes/{sizeId}
+          method: put
+          cors: true
+
+  delete-size:
+    handler: uniform-item-handler.deleteSize
+    name: ${self:service}-delete-size
+    events:
+      - http:
+          path: items/{id}/sizes/{sizeId}
+          method: delete
+          cors: true
+
+  # Purchases
+  create-purchase:
+    handler: uniform-purchase-handler.create
+    name: ${self:service}-create-purchase
+    events:
+      - http:
+          path: purchases
+          method: post
+          cors: true
+
+  list-purchases:
+    handler: uniform-purchase-handler.list
+    name: ${self:service}-list-purchases
+    events:
+      - http:
+          path: purchases
+          method: get
+          cors: true
+
+  get-purchase:
+    handler: uniform-purchase-handler.getById
+    name: ${self:service}-get-purchase
+    events:
+      - http:
+          path: purchases/{id}
+          method: get
+          cors: true
+
+  delete-purchase:
+    handler: uniform-purchase-handler.remove
+    name: ${self:service}-delete-purchase
+    events:
+      - http:
+          path: purchases/{id}
+          method: delete
+          cors: true
+
+  upload-purchase-bill:
+    handler: uniform-purchase-handler.uploadBill
+    name: ${self:service}-upload-purchase-bill
+    events:
+      - http:
+          path: purchases/{id}/bill
+          method: put
+          cors: true
+
+  get-purchase-bill:
+    handler: uniform-purchase-handler.getBill
+    name: ${self:service}-get-purchase-bill
+    events:
+      - http:
+          path: purchases/{id}/bill
+          method: get
+          cors: true
+
+  delete-purchase-bill:
+    handler: uniform-purchase-handler.deleteBill
+    name: ${self:service}-delete-purchase-bill
+    events:
+      - http:
+          path: purchases/{id}/bill
+          method: delete
+          cors: true
+
+  # Sets
+  create-set:
+    handler: uniform-set-handler.create
+    name: ${self:service}-create-set
+    events:
+      - http:
+          path: sets
+          method: post
+          cors: true
+
+  list-sets:
+    handler: uniform-set-handler.list
+    name: ${self:service}-list-sets
+    events:
+      - http:
+          path: sets
+          method: get
+          cors: true
+
+  get-set:
+    handler: uniform-set-handler.getById
+    name: ${self:service}-get-set
+    events:
+      - http:
+          path: sets/{id}
+          method: get
+          cors: true
+
+  expand-set:
+    handler: uniform-set-handler.expandSet
+    name: ${self:service}-expand-set
+    events:
+      - http:
+          path: sets/{id}/expand
+          method: get
+          cors: true
+
+  update-set:
+    handler: uniform-set-handler.update
+    name: ${self:service}-update-set
+    events:
+      - http:
+          path: sets/{id}
+          method: put
+          cors: true
+
+  delete-set:
+    handler: uniform-set-handler.remove
+    name: ${self:service}-delete-set
+    events:
+      - http:
+          path: sets/{id}
+          method: delete
+          cors: true
+
+  # Sales
+  create-sale:
+    handler: uniform-sale-handler.create
+    name: ${self:service}-create-sale
+    events:
+      - http:
+          path: sales
+          method: post
+          cors: true
+
+  list-sales:
+    handler: uniform-sale-handler.list
+    name: ${self:service}-list-sales
+    events:
+      - http:
+          path: sales
+          method: get
+          cors: true
+
+  get-sale:
+    handler: uniform-sale-handler.getById
+    name: ${self:service}-get-sale
+    events:
+      - http:
+          path: sales/{id}
+          method: get
+          cors: true
+
+  add-payment:
+    handler: uniform-sale-handler.addPayment
+    name: ${self:service}-add-payment
+    events:
+      - http:
+          path: sales/{id}/payments
+          method: post
+          cors: true
+
+  create-return:
+    handler: uniform-sale-handler.createReturn
+    name: ${self:service}-create-return
+    events:
+      - http:
+          path: sales/{id}/returns
+          method: post
+          cors: true
+
+  get-return-evidence:
+    handler: uniform-sale-handler.getReturnEvidence
+    name: ${self:service}-get-return-evidence
+    events:
+      - http:
+          path: sales/{id}/returns/{returnId}/evidence
+          method: get
+          cors: true

@@ -38,6 +38,28 @@ function toTitleCase(str) {
     .join(' ');
 }
 
+/**
+ * Normalize dob to YYYY-MM-DD.
+ * Handles:
+ *   - dd-mm-yyyy text:   "15-06-1985"  → "1985-06-15"
+ *   - Already ISO:       "1985-06-15"  → "1985-06-15"
+ *   - null / empty       → null
+ */
+function parseDob(raw) {
+  if (!raw) return null;
+  const s = String(raw).trim();
+  if (!s) return null;
+
+  // dd-mm-yyyy (the Excel text format for this school)
+  const ddmmyyyy = s.match(/^(\d{2})-(\d{2})-(\d{4})$/);
+  if (ddmmyyyy) {
+    return `${ddmmyyyy[3]}-${ddmmyyyy[2]}-${ddmmyyyy[1]}`;
+  }
+
+  // Already YYYY-MM-DD
+  return s;
+}
+
 async function main() {
   const args = process.argv.slice(2);
   const parsed = parseArgs(args);
@@ -124,7 +146,7 @@ async function main() {
         const phoneNumber = row.phone_number;
         const status = row.status || 'active';
         const gender = row.gender || null;
-        const dob = row.dob || null;
+        const dob = parseDob(row.dob);
         const email = row.email || null;
         const whatsapp = row.whatsapp || null;
 

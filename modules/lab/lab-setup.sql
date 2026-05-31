@@ -131,12 +131,39 @@ create index if not exists idx_lab_breakage_lab on lab_breakage_log(lab_id);
 create index if not exists idx_lab_breakage_school on lab_breakage_log(school_id);
 create index if not exists idx_lab_breakage_school_status on lab_breakage_log(school_id, status);
 
+-- Table 6: lab_purchase_batch (bulk purchase invoice header)
+create table if not exists lab_purchase_batch (
+    uuid varchar(12) primary key,
+    purchase_date date not null,
+    supplier varchar(128),
+    invoice_number varchar(64),
+    batch_no varchar(64),
+    expiry_date date,
+    warranty_end_date date,
+    notes varchar(512),
+    file_id varchar(64),
+    status varchar(16) check (status in ('active', 'deleted')),
+    school_id varchar(12) not null,
+    createdby_userid varchar(12) not null,
+    created_at timestamp not null,
+    updatedby_userid varchar(12),
+    updated_at timestamp
+);
+
+create index if not exists idx_lab_purchase_batch_school on lab_purchase_batch(school_id);
+create index if not exists idx_lab_purchase_batch_school_status on lab_purchase_batch(school_id, status);
+
 -- Entity linking columns (idempotent)
 alter table lab_issue_log add column if not exists issued_to_type varchar(16);
 alter table lab_issue_log add column if not exists issued_to_id varchar(12);
 
 alter table lab_breakage_log add column if not exists responsible_id varchar(12);
+alter table lab_breakage_log add column if not exists file_id varchar(64);
+
+alter table lab_purchase_log add column if not exists batch_id varchar(12);
+create index if not exists idx_lab_purchase_batch_id on lab_purchase_log(batch_id);
 
 -- Unique constraints for upsert support (data-sync)
-create unique index if not exists idx_lab_name_school_id on lab(lower(name), school_id);
-create unique index if not exists idx_lab_item_name_lab_school_id on lab_item(lower(name), lab_id, school_id);
+-- Partial indexes exclude soft-deleted records so names can be reused after deletion
+create unique index if not exists idx_lab_name_school_id on lab(lower(name), school_id) where status = 'active';
+create unique index if not exists idx_lab_item_name_lab_school_id on lab_item(lower(name), lab_id, school_id) where status = 'active';

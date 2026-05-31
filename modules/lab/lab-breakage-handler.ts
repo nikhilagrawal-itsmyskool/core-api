@@ -267,6 +267,38 @@ class LabBreakageHandler {
       ResponseBuilder.handleError(err, callback);
     }
   };
+
+  public getImage = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
+    _context.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const schoolCode = validateSchoolCodeHeader(event);
+      const schoolId = await labService.getSchoolIdByCode(schoolCode);
+      if (!schoolId) { ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'Invalid school code', callback); return; }
+
+      const id = event.pathParameters?.id;
+      if (!id) { ResponseBuilder.badRequest(ErrorCode.MissingId, 'Breakage ID is required', callback); return; }
+
+      const result = await labBreakageService.getImage(id, schoolId);
+      if (!result) { ResponseBuilder.notFound(ErrorCode.InvalidId, 'Image not found', callback); return; }
+      ResponseBuilder.ok(result, callback);
+    } catch (err: any) { ResponseBuilder.handleError(err, callback); }
+  };
+
+  public deleteImage = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
+    _context.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const schoolCode = validateSchoolCodeHeader(event);
+      const schoolId = await labService.getSchoolIdByCode(schoolCode);
+      if (!schoolId) { ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'Invalid school code', callback); return; }
+
+      const id = event.pathParameters?.id;
+      if (!id) { ResponseBuilder.badRequest(ErrorCode.MissingId, 'Breakage ID is required', callback); return; }
+
+      const userId = event.requestContext?.authorizer?.principalId || 'system';
+      await labBreakageService.deleteImage(id, schoolId, userId);
+      ResponseBuilder.ok({ message: 'Image deleted successfully' }, callback);
+    } catch (err: any) { ResponseBuilder.handleError(err, callback); }
+  };
 }
 
 const handler = new LabBreakageHandler();
@@ -275,3 +307,5 @@ export const update = handler.update;
 export const remove = handler.remove;
 export const getById = handler.getById;
 export const list = handler.list;
+export const getImage = handler.getImage;
+export const deleteImage = handler.deleteImage;

@@ -1,0 +1,203 @@
+  # Health check
+  health:
+    handler: health-handler.health
+    events:
+      - http:
+          path: health
+          method: get
+          cors: true
+
+  # Stats
+  get-stats:
+    handler: shop-stats-handler.getStats
+    name: ${self:service}-get-stats
+    events:
+      - http:
+          path: stats
+          method: get
+          cors: true
+
+  # Lookups
+  get-lookups:
+    handler: shop-lookup-handler.getLookups
+    name: ${self:service}-get-lookups
+    events:
+      - http:
+          path: lookups
+          method: get
+          cors: true
+
+  # Items
+  create-item:
+    handler: shop-item-handler.createItem
+    name: ${self:service}-create-item
+    events:
+      - http:
+          path: items
+          method: post
+          cors: true
+
+  list-items:
+    handler: shop-item-handler.listItems
+    name: ${self:service}-list-items
+    events:
+      - http:
+          path: items
+          method: get
+          cors: true
+
+  update-item:
+    handler: shop-item-handler.updateItem
+    name: ${self:service}-update-item
+    events:
+      - http:
+          path: items/{id}
+          method: put
+          cors: true
+
+  delete-item:
+    handler: shop-item-handler.deleteItem
+    name: ${self:service}-delete-item
+    events:
+      - http:
+          path: items/{id}
+          method: delete
+          cors: true
+
+  # Purchases
+  create-purchase:
+    handler: shop-purchase-handler.create
+    name: ${self:service}-create-purchase
+    events:
+      - http:
+          path: purchases
+          method: post
+          cors: true
+
+  list-purchases:
+    handler: shop-purchase-handler.list
+    name: ${self:service}-list-purchases
+    events:
+      - http:
+          path: purchases
+          method: get
+          cors: true
+
+  get-purchase:
+    handler: shop-purchase-handler.getById
+    name: ${self:service}-get-purchase
+    events:
+      - http:
+          path: purchases/{id}
+          method: get
+          cors: true
+
+  delete-purchase:
+    handler: shop-purchase-handler.remove
+    name: ${self:service}-delete-purchase
+    events:
+      - http:
+          path: purchases/{id}
+          method: delete
+          cors: true
+
+  upload-purchase-bill:
+    handler: shop-purchase-handler.uploadBill
+    name: ${self:service}-upload-purchase-bill
+    events:
+      - http:
+          path: purchases/{id}/bill
+          method: put
+          cors: true
+
+  get-purchase-bill:
+    handler: shop-purchase-handler.getBill
+    name: ${self:service}-get-purchase-bill
+    events:
+      - http:
+          path: purchases/{id}/bill
+          method: get
+          cors: true
+
+  delete-purchase-bill:
+    handler: shop-purchase-handler.deleteBill
+    name: ${self:service}-delete-purchase-bill
+    events:
+      - http:
+          path: purchases/{id}/bill
+          method: delete
+          cors: true
+
+  # Sets
+  create-set:
+    handler: shop-set-handler.create
+    name: ${self:service}-create-set
+    events:
+      - http:
+          path: sets
+          method: post
+          cors: true
+
+  list-sets:
+    handler: shop-set-handler.list
+    name: ${self:service}-list-sets
+    events:
+      - http:
+          path: sets
+          method: get
+          cors: true
+
+  get-set:
+    handler: shop-set-handler.getById
+    name: ${self:service}-get-set
+    events:
+      - http:
+          path: sets/{id}
+          method: get
+          cors: true
+
+  update-set:
+    handler: shop-set-handler.update
+    name: ${self:service}-update-set
+    events:
+      - http:
+          path: sets/{id}
+          method: put
+          cors: true
+
+  delete-set:
+    handler: shop-set-handler.remove
+    name: ${self:service}-delete-set
+    events:
+      - http:
+          path: sets/{id}
+          method: delete
+          cors: true
+
+  # Sales
+  create-sale:
+    handler: shop-sale-handler.create
+    name: ${self:service}-create-sale
+    events:
+      - http:
+          path: sales
+          method: post
+          cors: true
+
+  list-sales:
+    handler: shop-sale-handler.list
+    name: ${self:service}-list-sales
+    events:
+      - http:
+          path: sales
+          method: get
+          cors: true
+
+  get-sale:
+    handler: shop-sale-handler.getById
+    name: ${self:service}-get-sale
+    events:
+      - http:
+          path: sales/{id}
+          method: get
+          cors: true

@@ -1,0 +1,176 @@
+  # Health check
+  health:
+    handler: health-handler.health
+    events:
+      - http:
+          path: health
+          method: get
+          cors: true
+
+  # Stats endpoint
+  get-stats:
+    handler: fine-stats-handler.getStats
+    name: ${self:service}-get-stats
+    events:
+      - http:
+          path: stats
+          method: get
+          cors: true
+
+  # Lookup endpoints
+  get-categories:
+    handler: fine-lookup-handler.getCategories
+    name: ${self:service}-get-categories
+    events:
+      - http:
+          path: categories
+          method: get
+          cors: true
+
+  get-statuses:
+    handler: fine-lookup-handler.getStatuses
+    name: ${self:service}-get-statuses
+    events:
+      - http:
+          path: statuses
+          method: get
+          cors: true
+
+  get-decisions:
+    handler: fine-lookup-handler.getDecisions
+    name: ${self:service}-get-decisions
+    events:
+      - http:
+          path: decisions
+          method: get
+          cors: true
+
+  get-payment-methods:
+    handler: fine-lookup-handler.getPaymentMethods
+    name: ${self:service}-get-payment-methods
+    events:
+      - http:
+          path: payment-methods
+          method: get
+          cors: true
+
+  # Incident endpoints
+  create-incident:
+    handler: fine-incident-handler.create
+    name: ${self:service}-create-incident
+    events:
+      - http:
+          path: incidents
+          method: post
+          cors: true
+
+  list-incidents:
+    handler: fine-incident-handler.list
+    name: ${self:service}-list-incidents
+    events:
+      - http:
+          path: incidents
+          method: get
+          cors: true
+
+  get-incident:
+    handler: fine-incident-handler.getById
+    name: ${self:service}-get-incident
+    events:
+      - http:
+          path: incidents/{id}
+          method: get
+          cors: true
+
+  update-incident:
+    handler: fine-incident-handler.update
+    name: ${self:service}-update-incident
+    events:
+      - http:
+          path: incidents/{id}
+          method: put
+          cors: true
+
+  delete-incident:
+    handler: fine-incident-handler.remove
+    name: ${self:service}-delete-incident
+    events:
+      - http:
+          path: incidents/{id}
+          method: delete
+          cors: true
+
+  # Note endpoints
+  create-note:
+    handler: fine-note-handler.create
+    name: ${self:service}-create-note
+    events:
+      - http:
+          path: incidents/{id}/notes
+          method: post
+          cors: true
+
+  list-notes:
+    handler: fine-note-handler.list
+    name: ${self:service}-list-notes
+    events:
+      - http:
+          path: incidents/{id}/notes
+          method: get
+          cors: true
+
+  # Evidence endpoints
+  upload-evidence:
+    handler: fine-evidence-handler.upload
+    name: ${self:service}-upload-evidence
+    events:
+      - http:
+          path: incidents/{id}/evidence
+          method: post
+          cors: true
+
+  get-evidence:
+    handler: fine-evidence-handler.get
+    name: ${self:service}-get-evidence
+    events:
+      - http:
+          path: incidents/{id}/evidence/{evidenceId}
+          method: get
+          cors: true
+
+  delete-evidence:
+    handler: fine-evidence-handler.remove
+    name: ${self:service}-delete-evidence
+    events:
+      - http:
+          path: incidents/{id}/evidence/{evidenceId}
+          method: delete
+          cors: true
+
+  # Collection endpoints
+  collect-fine:
+    handler: fine-collection-handler.collect
+    name: ${self:service}-collect-fine
+    events:
+      - http:
+          path: incidents/{id}/collect
+          method: post
+          cors: true
+
+  get-receipt:
+    handler: fine-collection-handler.getReceipt
+    name: ${self:service}-get-receipt
+    events:
+      - http:
+          path: incidents/{id}/receipt
+          method: get
+          cors: true
+
+  list-collections:
+    handler: fine-collection-handler.listCollections
+    name: ${self:service}-list-collections
+    events:
+      - http:
+          path: incidents/{id}/collections
+          method: get
+          cors: true

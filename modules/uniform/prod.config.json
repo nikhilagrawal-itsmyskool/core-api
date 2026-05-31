@@ -1,0 +1,5 @@
+{
+  "httpPort": 6019,
+  "lambdaPort": 6020,
+  "prefix": "uniform"
+}

@@ -13,6 +13,11 @@ drop index if exists idx_lab_issue_lab;
 drop index if exists idx_lab_issue_item;
 drop table if exists lab_issue_log;
 
+drop index if exists idx_lab_purchase_batch_school_status;
+drop index if exists idx_lab_purchase_batch_school;
+drop table if exists lab_purchase_batch;
+
+drop index if exists idx_lab_purchase_batch_id;
 drop index if exists idx_lab_purchase_school_status;
 drop index if exists idx_lab_purchase_school;
 drop index if exists idx_lab_purchase_lab;
