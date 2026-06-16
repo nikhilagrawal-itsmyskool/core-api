@@ -6,7 +6,7 @@ import { labPurchaseService } from './lab-purchase-service';
 import { labItemService } from './lab-item-service';
 import { labService } from './lab-service';
 import { CreatePurchaseLogRequest, UpdatePurchaseLogRequest } from './lab-interfaces';
-import { getDefaultStartDate, getDefaultEndDate, isValidDate } from '../../shared/util/datetime';
+import { isValidDate } from '../../shared/util/datetime';
 
 class LabPurchaseHandler {
   public create = async (
@@ -199,15 +199,15 @@ class LabPurchaseHandler {
 
       const labId = event.queryStringParameters?.labId;
       const itemId = event.queryStringParameters?.itemId;
-      const startDate = event.queryStringParameters?.startDate || getDefaultStartDate();
-      const endDate = event.queryStringParameters?.endDate || getDefaultEndDate();
+      const startDate = event.queryStringParameters?.startDate;
+      const endDate = event.queryStringParameters?.endDate;
       const includeDeleted = event.queryStringParameters?.includeDeleted === 'true';
 
-      if (!isValidDate(startDate)) {
+      if (startDate && !isValidDate(startDate)) {
         ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'Invalid start_date format. Use YYYY-MM-DD', callback);
         return;
       }
-      if (!isValidDate(endDate)) {
+      if (endDate && !isValidDate(endDate)) {
         ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'Invalid end_date format. Use YYYY-MM-DD', callback);
         return;
       }

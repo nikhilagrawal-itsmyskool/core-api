@@ -9,7 +9,6 @@ import {
   CreateBulkLabPurchaseRequest,
   UpdateLabPurchaseBatchRequest,
 } from './lab-interfaces';
-import { getDefaultStartDate, getDefaultEndDate } from '../../shared/util/datetime';
 const { generateShortUuid } = require('../../shared/util/generate-uuid.js');
 
 class LabPurchaseBatchService {
@@ -115,27 +114,40 @@ class LabPurchaseBatchService {
     labId?: string;
     itemId?: string;
   }): Promise<LabPurchaseBatch[]> {
-    const startDate = params.startDate || getDefaultStartDate();
-    const endDate = params.endDate || getDefaultEndDate();
     const statusFilter = params.includeDeleted ? "('active', 'deleted')" : "('active')";
 
-    const queryParams: any[] = [params.schoolId, startDate, endDate];
+    const queryParams: any[] = [params.schoolId];
+    let paramIndex = 2;
+    let batchDateFilter = '';
+    let purchaseDateFilter = '';
     let batchLabFilter = '';
     let batchItemFilter = '';
     let purchaseLabFilter = '';
     let purchaseItemFilter = '';
 
+    if (params.startDate) {
+      queryParams.push(params.startDate);
+      batchDateFilter += ` and b.purchase_date >= $${paramIndex}`;
+      purchaseDateFilter += ` and p.purchase_date >= $${paramIndex}`;
+      paramIndex++;
+    }
+    if (params.endDate) {
+      queryParams.push(params.endDate);
+      batchDateFilter += ` and b.purchase_date <= $${paramIndex}`;
+      purchaseDateFilter += ` and p.purchase_date <= $${paramIndex}`;
+      paramIndex++;
+    }
     if (params.labId) {
       queryParams.push(params.labId);
-      const p = queryParams.length;
-      batchLabFilter = `and exists (select 1 from lab_purchase_log p2 where p2.batch_id = b.uuid and p2.lab_id = $${p} and p2.status = 'active')`;
-      purchaseLabFilter = `and p.lab_id = $${p}`;
+      batchLabFilter = `and exists (select 1 from lab_purchase_log p2 where p2.batch_id = b.uuid and p2.lab_id = $${paramIndex} and p2.status = 'active')`;
+      purchaseLabFilter = `and p.lab_id = $${paramIndex}`;
+      paramIndex++;
     }
     if (params.itemId) {
       queryParams.push(params.itemId);
-      const p = queryParams.length;
-      batchItemFilter = `and exists (select 1 from lab_purchase_log p2 where p2.batch_id = b.uuid and p2.item_id = $${p} and p2.status = 'active')`;
-      purchaseItemFilter = `and p.item_id = $${p}`;
+      batchItemFilter = `and exists (select 1 from lab_purchase_log p2 where p2.batch_id = b.uuid and p2.item_id = $${paramIndex} and p2.status = 'active')`;
+      purchaseItemFilter = `and p.item_id = $${paramIndex}`;
+      paramIndex++;
     }
 
     const query = `
@@ -154,8 +166,7 @@ class LabPurchaseBatchService {
       from lab_purchase_batch b
       where b.school_id = $1
         and b.status in ${statusFilter}
-        and b.purchase_date >= $2
-        and b.purchase_date <= $3
+        ${batchDateFilter}
         ${batchLabFilter}
         ${batchItemFilter}
 
@@ -180,8 +191,7 @@ class LabPurchaseBatchService {
       where p.school_id = $1
         and p.batch_id is null
         and p.status in ${statusFilter}
-        and p.purchase_date >= $2
-        and p.purchase_date <= $3
+        ${purchaseDateFilter}
         ${purchaseLabFilter}
         ${purchaseItemFilter}
 
@@ -250,39 +260,203 @@ class LabPurchaseBatchService {
     userId: string
   ): Promise<LabPurchaseBatch | null> {
     const existing = await this.getBatchById(batchId, schoolId);
-    if (!existing || existing.recordType !== 'batch') {
-      return null;
+    if (!existing) return null;
+
+    const headerKeys: (keyof UpdateLabPurchaseBatchRequest)[] = [
+      'purchaseDate', 'supplier', 'invoiceNumber', 'batchNo', 'expiryDate', 'warrantyEndDate', 'notes',
+    ];
+    const hasHeaderUpdate = headerKeys.some((k) => data[k] !== undefined);
+    const hasItems = data.items !== undefined;
+    const isLegacy = existing.recordType !== 'batch';
+
+    // Nothing to do — avoid upgrading a legacy purchase on an empty request.
+    if (!hasHeaderUpdate && !hasItems) return existing;
+
+    const now = new Date();
+    const queries: string[] = [];
+    const params: any[][] = [];
+
+    // Determine the working batch id; upgrade a legacy single purchase into a batch.
+    let workingBatchId = batchId;
+
+    if (isLegacy) {
+      workingBatchId = generateShortUuid(12);
+      // Create the batch header, preferring update values over the legacy purchase's values.
+      queries.push(singleLineString`
+        insert into lab_purchase_batch
+        (uuid, purchase_date, supplier, invoice_number, batch_no, expiry_date, warranty_end_date, notes, status, school_id, createdby_userid, created_at)
+        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      `);
+      params.push([
+        workingBatchId,
+        data.purchaseDate ?? existing.purchaseDate,
+        data.supplier ?? existing.supplier ?? null,
+        data.invoiceNumber ?? existing.invoiceNumber ?? null,
+        data.batchNo ?? existing.batchNo ?? null,
+        data.expiryDate ?? null,
+        data.warrantyEndDate ?? null,
+        data.notes ?? null,
+        DEFAULTS.STATUS,
+        schoolId,
+        userId,
+        now,
+      ]);
+
+      // Attach the legacy purchase log row to the new batch.
+      queries.push(singleLineString`
+        update lab_purchase_log
+        set batch_id = $1, updatedby_userid = $2, updated_at = $3
+        where uuid = $4 and school_id = $5 and status = 'active'
+      `);
+      params.push([workingBatchId, userId, now, batchId, schoolId]);
+    } else if (hasHeaderUpdate) {
+      // Existing batch: apply header field updates.
+      const updates: string[] = [];
+      const headerParams: any[] = [];
+      let p = 1;
+      if (data.purchaseDate !== undefined) { updates.push(`purchase_date = $${p++}`); headerParams.push(data.purchaseDate); }
+      if (data.supplier !== undefined) { updates.push(`supplier = $${p++}`); headerParams.push(data.supplier); }
+      if (data.invoiceNumber !== undefined) { updates.push(`invoice_number = $${p++}`); headerParams.push(data.invoiceNumber); }
+      if (data.batchNo !== undefined) { updates.push(`batch_no = $${p++}`); headerParams.push(data.batchNo); }
+      if (data.expiryDate !== undefined) { updates.push(`expiry_date = $${p++}`); headerParams.push(data.expiryDate); }
+      if (data.warrantyEndDate !== undefined) { updates.push(`warranty_end_date = $${p++}`); headerParams.push(data.warrantyEndDate); }
+      if (data.notes !== undefined) { updates.push(`notes = $${p++}`); headerParams.push(data.notes); }
+
+      updates.push(`updatedby_userid = $${p++}`);
+      headerParams.push(userId);
+      updates.push(`updated_at = $${p++}`);
+      headerParams.push(now);
+      headerParams.push(workingBatchId);
+      headerParams.push(schoolId);
+
+      queries.push(singleLineString`
+        update lab_purchase_batch
+        set ${updates.join(', ')}
+        where uuid = $${p++} and school_id = $${p++} and status = 'active'
+      `);
+      params.push(headerParams);
     }
 
-    const updates: string[] = [];
-    const queryParams: any[] = [];
-    let paramIndex = 1;
+    // Item-level edits (declarative: payload is the desired final list of items).
+    if (hasItems) {
+      const existingItems = existing.items || [];
+      const incoming = data.items || [];
+      const incomingUuids = new Set(incoming.filter((i) => i.uuid).map((i) => i.uuid));
 
-    if (data.purchaseDate !== undefined) { updates.push(`purchase_date = $${paramIndex++}`); queryParams.push(data.purchaseDate); }
-    if (data.supplier !== undefined) { updates.push(`supplier = $${paramIndex++}`); queryParams.push(data.supplier); }
-    if (data.invoiceNumber !== undefined) { updates.push(`invoice_number = $${paramIndex++}`); queryParams.push(data.invoiceNumber); }
-    if (data.batchNo !== undefined) { updates.push(`batch_no = $${paramIndex++}`); queryParams.push(data.batchNo); }
-    if (data.expiryDate !== undefined) { updates.push(`expiry_date = $${paramIndex++}`); queryParams.push(data.expiryDate); }
-    if (data.warrantyEndDate !== undefined) { updates.push(`warranty_end_date = $${paramIndex++}`); queryParams.push(data.warrantyEndDate); }
-    if (data.notes !== undefined) { updates.push(`notes = $${paramIndex++}`); queryParams.push(data.notes); }
+      // 1. Soft-delete existing items absent from the incoming list + reverse stock.
+      for (const prev of existingItems) {
+        if (!incomingUuids.has(prev.uuid)) {
+          queries.push(singleLineString`
+            update lab_purchase_log
+            set status = 'deleted', updatedby_userid = $1, updated_at = $2
+            where uuid = $3 and school_id = $4 and status = 'active'
+          `);
+          params.push([userId, now, prev.uuid, schoolId]);
 
-    if (updates.length === 0) return existing;
+          queries.push(singleLineString`
+            update lab_item
+            set current_stock = current_stock - $1, updatedby_userid = $2, updated_at = $3
+            where uuid = $4 and school_id = $5
+          `);
+          params.push([prev.quantity, userId, now, prev.itemId, schoolId]);
+        }
+      }
 
-    updates.push(`updatedby_userid = $${paramIndex++}`);
-    queryParams.push(userId);
-    updates.push(`updated_at = $${paramIndex++}`);
-    queryParams.push(new Date());
-    queryParams.push(batchId);
-    queryParams.push(schoolId);
+      // 2. Update existing items / 3. insert new items.
+      for (const item of incoming) {
+        if (item.uuid) {
+          const prev = existingItems.find((e) => e.uuid === item.uuid);
+          if (!prev) continue; // unknown uuid — ignore defensively
 
-    const updateQuery = singleLineString`
-      update lab_purchase_batch
-      set ${updates.join(', ')}
-      where uuid = $${paramIndex++} and school_id = $${paramIndex++} and status = 'active'
-    `;
+          queries.push(singleLineString`
+            update lab_purchase_log
+            set item_id = $1, lab_id = $2, quantity = $3, cost_per_unit = $4, batch_no = $5,
+                expiry_date = $6, warranty_end_date = $7, remarks = $8, updatedby_userid = $9, updated_at = $10
+            where uuid = $11 and school_id = $12 and status = 'active'
+          `);
+          params.push([
+            item.itemId,
+            item.labId,
+            item.quantity,
+            item.costPerUnit ?? null,
+            item.batchNo ?? null,
+            item.expiryDate ?? null,
+            item.warrantyEndDate ?? null,
+            item.remarks ?? null,
+            userId,
+            now,
+            item.uuid,
+            schoolId,
+          ]);
 
-    await DB.query(updateQuery, queryParams);
-    return this.getBatchById(batchId, schoolId);
+          // Stock adjustment.
+          if (item.itemId === prev.itemId) {
+            const diff = item.quantity - prev.quantity;
+            if (diff !== 0) {
+              queries.push(singleLineString`
+                update lab_item
+                set current_stock = current_stock + $1, updatedby_userid = $2, updated_at = $3
+                where uuid = $4 and school_id = $5
+              `);
+              params.push([diff, userId, now, item.itemId, schoolId]);
+            }
+          } else {
+            // Item reassigned: remove old item's qty, add new item's qty.
+            queries.push(singleLineString`
+              update lab_item
+              set current_stock = current_stock - $1, updatedby_userid = $2, updated_at = $3
+              where uuid = $4 and school_id = $5
+            `);
+            params.push([prev.quantity, userId, now, prev.itemId, schoolId]);
+            queries.push(singleLineString`
+              update lab_item
+              set current_stock = current_stock + $1, updatedby_userid = $2, updated_at = $3
+              where uuid = $4 and school_id = $5
+            `);
+            params.push([item.quantity, userId, now, item.itemId, schoolId]);
+          }
+        } else {
+          // New item added to the batch.
+          const purchaseId = generateShortUuid(12);
+          queries.push(singleLineString`
+            insert into lab_purchase_log
+            (uuid, item_id, lab_id, purchase_date, quantity, cost_per_unit, supplier, invoice_number, batch_no, expiry_date, warranty_end_date, remarks, batch_id, status, school_id, createdby_userid, created_at)
+            values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+          `);
+          params.push([
+            purchaseId,
+            item.itemId,
+            item.labId,
+            data.purchaseDate ?? existing.purchaseDate,
+            item.quantity,
+            item.costPerUnit ?? null,
+            data.supplier ?? existing.supplier ?? null,
+            data.invoiceNumber ?? existing.invoiceNumber ?? null,
+            item.batchNo ?? data.batchNo ?? existing.batchNo ?? null,
+            item.expiryDate ?? data.expiryDate ?? null,
+            item.warrantyEndDate ?? data.warrantyEndDate ?? null,
+            item.remarks ?? null,
+            workingBatchId,
+            DEFAULTS.STATUS,
+            schoolId,
+            userId,
+            now,
+          ]);
+
+          queries.push(singleLineString`
+            update lab_item
+            set current_stock = current_stock + $1, updatedby_userid = $2, updated_at = $3
+            where uuid = $4 and school_id = $5
+          `);
+          params.push([item.quantity, userId, now, item.itemId, schoolId]);
+        }
+      }
+    }
+
+    if (queries.length === 0) return existing;
+
+    await DB.queriesInTransaction(queries, params);
+    return this.getBatchById(workingBatchId, schoolId);
   }
 
   public async deleteBatch(batchId: string, schoolId: string, userId: string): Promise<boolean> {

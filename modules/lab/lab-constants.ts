@@ -55,7 +55,7 @@ export const BREAKAGE_STATUSES = ['reported', 'resolved'] as const;
 export const RETURN_CONDITIONS = ['good', 'damaged', 'lost'] as const;
 
 export const CATEGORIES_BY_LAB_TYPE: Record<string, string[]> = {
-  physics: ['Electrical', 'Optics', 'Mechanics', 'Measurement', 'Heat', 'Waves', 'General'],
+  physics: ['Electricity', 'Electronics', 'Electromagnetic', 'Optics', 'Mechanics', 'Measurement', 'Thermodynamics', 'Waves', 'General'],
   chemistry: ['Chemicals', 'Glassware', 'Apparatus', 'Safety Equipment', 'Reagents', 'General'],
   biology: ['Microscopy', 'Specimens', 'Dissection', 'Lab Ware', 'Cultures', 'General'],
   computer: ['Hardware', 'Peripherals', 'Networking', 'Cables', 'General'],

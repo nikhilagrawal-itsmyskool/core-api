@@ -267,6 +267,18 @@ export interface CreateBulkLabPurchaseRequest {
   bill?: { fileName: string; mimeType: string; base64Data: string };
 }
 
+export interface UpdateBatchLineItem {
+  uuid?: string; // present = existing row; absent = new item to add
+  itemId: string;
+  labId: string;
+  quantity: number;
+  costPerUnit?: number;
+  batchNo?: string;
+  expiryDate?: string;
+  warrantyEndDate?: string;
+  remarks?: string;
+}
+
 export interface UpdateLabPurchaseBatchRequest {
   purchaseDate?: string;
   supplier?: string;
@@ -275,6 +287,7 @@ export interface UpdateLabPurchaseBatchRequest {
   expiryDate?: string;
   warrantyEndDate?: string;
   notes?: string;
+  items?: UpdateBatchLineItem[];
 }
 
 export interface LabAlertItem {

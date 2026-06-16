@@ -195,8 +195,8 @@ class LabPurchaseService {
     schoolId: string;
     labId?: string;
     itemId?: string;
-    startDate: string;
-    endDate: string;
+    startDate?: string;
+    endDate?: string;
     includeDeleted?: boolean;
   }): Promise<LabPurchaseLog[]> {
     const statusFilter = params.includeDeleted ? "('active', 'deleted')" : "('active')";
@@ -207,11 +207,19 @@ class LabPurchaseService {
       left join lab_item i on p.item_id = i.uuid
       where p.school_id = $1
         and p.status in ${statusFilter}
-        and p.purchase_date >= $2
-        and p.purchase_date <= $3
     `;
-    const queryParams: any[] = [params.schoolId, params.startDate, params.endDate];
-    let paramIndex = 4;
+    const queryParams: any[] = [params.schoolId];
+    let paramIndex = 2;
+
+    if (params.startDate) {
+      query += ` and p.purchase_date >= $${paramIndex++}`;
+      queryParams.push(params.startDate);
+    }
+
+    if (params.endDate) {
+      query += ` and p.purchase_date <= $${paramIndex++}`;
+      queryParams.push(params.endDate);
+    }
 
     if (params.labId) {
       query += ` and p.lab_id = $${paramIndex++}`;

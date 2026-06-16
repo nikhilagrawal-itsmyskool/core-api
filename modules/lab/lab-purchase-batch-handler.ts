@@ -9,7 +9,7 @@ import {
   UpdateLabPurchaseBatchRequest,
   LabAlertItem,
 } from './lab-interfaces';
-import { isValidDate, getDefaultStartDate, getDefaultEndDate } from '../../shared/util/datetime';
+import { isValidDate } from '../../shared/util/datetime';
 
 class LabPurchaseBatchHandler {
   public createBulk = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
@@ -85,17 +85,17 @@ class LabPurchaseBatchHandler {
         return;
       }
 
-      const startDate = event.queryStringParameters?.startDate || getDefaultStartDate();
-      const endDate = event.queryStringParameters?.endDate || getDefaultEndDate();
+      const startDate = event.queryStringParameters?.startDate;
+      const endDate = event.queryStringParameters?.endDate;
       const includeDeleted = event.queryStringParameters?.includeDeleted === 'true';
       const labId = event.queryStringParameters?.labId;
       const itemId = event.queryStringParameters?.itemId;
 
-      if (!isValidDate(startDate)) {
+      if (startDate && !isValidDate(startDate)) {
         ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'Invalid startDate format. Use YYYY-MM-DD', callback);
         return;
       }
-      if (!isValidDate(endDate)) {
+      if (endDate && !isValidDate(endDate)) {
         ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'Invalid endDate format. Use YYYY-MM-DD', callback);
         return;
       }
@@ -164,6 +164,29 @@ class LabPurchaseBatchHandler {
       }
 
       const body: UpdateLabPurchaseBatchRequest = JSON.parse(event.body);
+
+      if (body.items !== undefined) {
+        if (!Array.isArray(body.items)) {
+          ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'items must be an array', callback);
+          return;
+        }
+        for (let i = 0; i < body.items.length; i++) {
+          const item = body.items[i];
+          if (!item.itemId) {
+            ResponseBuilder.badRequest(ErrorCode.InvalidInput, `items[${i}].itemId is required`, callback);
+            return;
+          }
+          if (!item.labId) {
+            ResponseBuilder.badRequest(ErrorCode.InvalidInput, `items[${i}].labId is required`, callback);
+            return;
+          }
+          if (!item.quantity || item.quantity <= 0) {
+            ResponseBuilder.badRequest(ErrorCode.InvalidInput, `items[${i}].quantity must be greater than 0`, callback);
+            return;
+          }
+        }
+      }
+
       const userId = event.requestContext?.authorizer?.principalId || 'system';
 
       const result = await labPurchaseBatchService.update(batchId, body, schoolId, userId);
