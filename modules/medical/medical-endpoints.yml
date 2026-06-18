@@ -164,6 +164,15 @@
           method: delete
           cors: true
 
+  restore-purchase-batch:
+    handler: medical-purchase-batch-handler.restore
+    name: ${self:service}-restore-purchase-batch
+    events:
+      - http:
+          path: purchases/batches/{batchId}/restore
+          method: post
+          cors: true
+
   upload-purchase-bill:
     handler: medical-purchase-batch-handler.uploadBill
     name: ${self:service}-upload-purchase-bill

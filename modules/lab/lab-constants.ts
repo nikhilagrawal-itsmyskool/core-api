@@ -5,6 +5,7 @@ export const LAB_TYPES = [
   { value: 'computer', label: 'Computer' },
   { value: 'language', label: 'Language' },
   { value: 'mathematics', label: 'Mathematics' },
+  { value: 'composite', label: 'Composite' },
   { value: 'other', label: 'Other' },
 ] as const;
 

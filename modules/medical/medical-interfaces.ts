@@ -146,12 +146,22 @@ export interface CreateBulkPurchaseRequest {
   };
 }
 
+export interface UpdateBatchLineItem {
+  uuid?: string; // present = existing row; absent = new item to add
+  itemId: string;
+  quantity: number;
+  costPerUnit?: number;
+  expiryDate?: string;
+  batchNo?: string;
+}
+
 export interface UpdatePurchaseBatchRequest {
   purchaseDate?: string;
   supplier?: string;
   invoiceNumber?: string;
   batchNo?: string;
   notes?: string;
+  items?: UpdateBatchLineItem[];
 }
 
 export interface UploadBillRequest {

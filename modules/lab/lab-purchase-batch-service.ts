@@ -139,13 +139,13 @@ class LabPurchaseBatchService {
     }
     if (params.labId) {
       queryParams.push(params.labId);
-      batchLabFilter = `and exists (select 1 from lab_purchase_log p2 where p2.batch_id = b.uuid and p2.lab_id = $${paramIndex} and p2.status = 'active')`;
+      batchLabFilter = `and exists (select 1 from lab_purchase_log p2 where p2.batch_id = b.uuid and p2.lab_id = $${paramIndex} and p2.status = b.status and (b.status = 'active' or p2.updated_at::timestamp(0) = b.updated_at::timestamp(0)))`;
       purchaseLabFilter = `and p.lab_id = $${paramIndex}`;
       paramIndex++;
     }
     if (params.itemId) {
       queryParams.push(params.itemId);
-      batchItemFilter = `and exists (select 1 from lab_purchase_log p2 where p2.batch_id = b.uuid and p2.item_id = $${paramIndex} and p2.status = 'active')`;
+      batchItemFilter = `and exists (select 1 from lab_purchase_log p2 where p2.batch_id = b.uuid and p2.item_id = $${paramIndex} and p2.status = b.status and (b.status = 'active' or p2.updated_at::timestamp(0) = b.updated_at::timestamp(0)))`;
       purchaseItemFilter = `and p.item_id = $${paramIndex}`;
       paramIndex++;
     }
@@ -155,14 +155,14 @@ class LabPurchaseBatchService {
         b.uuid, b.purchase_date, b.supplier, b.invoice_number, b.batch_no, b.notes, b.file_id, b.status,
         b.school_id, b.createdby_userid, b.created_at, b.updatedby_userid, b.updated_at,
         'batch' as record_type,
-        (select count(*) from lab_purchase_log p where p.batch_id = b.uuid and p.status = 'active')::int as item_count,
-        (select sum(p.quantity * p.cost_per_unit) from lab_purchase_log p where p.batch_id = b.uuid and p.status = 'active') as total_cost,
-        (select p3.expiry_date from lab_purchase_log p3 where p3.batch_id = b.uuid and p3.status = 'active' order by p3.created_at asc limit 1) as expiry_date,
-        (select p3.warranty_end_date from lab_purchase_log p3 where p3.batch_id = b.uuid and p3.status = 'active' order by p3.created_at asc limit 1) as warranty_end_date,
-        (select sum(p3.quantity) from lab_purchase_log p3 where p3.batch_id = b.uuid and p3.status = 'active')::int as quantity,
-        (select p3.cost_per_unit from lab_purchase_log p3 where p3.batch_id = b.uuid and p3.status = 'active' order by p3.created_at asc limit 1) as cost_per_unit,
-        (select i.name from lab_purchase_log p3 join lab_item i on p3.item_id = i.uuid where p3.batch_id = b.uuid and p3.status = 'active' order by p3.created_at asc limit 1) as item_name,
-        (select l.name from lab_purchase_log p3 join lab l on p3.lab_id = l.uuid where p3.batch_id = b.uuid and p3.status = 'active' order by p3.created_at asc limit 1) as lab_name
+        (select count(*) from lab_purchase_log p where p.batch_id = b.uuid and p.status = b.status and (b.status = 'active' or p.updated_at::timestamp(0) = b.updated_at::timestamp(0)))::int as item_count,
+        (select sum(p.quantity * p.cost_per_unit) from lab_purchase_log p where p.batch_id = b.uuid and p.status = b.status and (b.status = 'active' or p.updated_at::timestamp(0) = b.updated_at::timestamp(0))) as total_cost,
+        (select p3.expiry_date from lab_purchase_log p3 where p3.batch_id = b.uuid and p3.status = b.status and (b.status = 'active' or p3.updated_at::timestamp(0) = b.updated_at::timestamp(0)) order by p3.created_at asc limit 1) as expiry_date,
+        (select p3.warranty_end_date from lab_purchase_log p3 where p3.batch_id = b.uuid and p3.status = b.status and (b.status = 'active' or p3.updated_at::timestamp(0) = b.updated_at::timestamp(0)) order by p3.created_at asc limit 1) as warranty_end_date,
+        (select sum(p3.quantity) from lab_purchase_log p3 where p3.batch_id = b.uuid and p3.status = b.status and (b.status = 'active' or p3.updated_at::timestamp(0) = b.updated_at::timestamp(0)))::int as quantity,
+        (select p3.cost_per_unit from lab_purchase_log p3 where p3.batch_id = b.uuid and p3.status = b.status and (b.status = 'active' or p3.updated_at::timestamp(0) = b.updated_at::timestamp(0)) order by p3.created_at asc limit 1) as cost_per_unit,
+        (select i.name from lab_purchase_log p3 join lab_item i on p3.item_id = i.uuid where p3.batch_id = b.uuid and p3.status = b.status and (b.status = 'active' or p3.updated_at::timestamp(0) = b.updated_at::timestamp(0)) order by p3.created_at asc limit 1) as item_name,
+        (select l.name from lab_purchase_log p3 join lab l on p3.lab_id = l.uuid where p3.batch_id = b.uuid and p3.status = b.status and (b.status = 'active' or p3.updated_at::timestamp(0) = b.updated_at::timestamp(0)) order by p3.created_at asc limit 1) as lab_name
       from lab_purchase_batch b
       where b.school_id = $1
         and b.status in ${statusFilter}
@@ -202,34 +202,37 @@ class LabPurchaseBatchService {
   }
 
   public async getBatchById(batchId: string, schoolId: string): Promise<LabPurchaseBatch | null> {
-    // Try batch header first
+    // Try batch header first (active or deleted, so deleted rows can be re-read)
     const batchQuery = singleLineString`
       select * from lab_purchase_batch
-      where uuid = $1 and school_id = $2 and status = 'active'
+      where uuid = $1 and school_id = $2 and status in ('active', 'deleted')
     `;
     const batches = await DB.query(batchQuery, [batchId, schoolId]);
 
     if (batches.length > 0) {
       const batch = batches[0];
+      // For an active batch show active items; for a deleted batch show only the
+      // items deleted together with it (same updated_at), excluding edit-removed ones.
       const itemsQuery = singleLineString`
         select p.*, i.name as item_name, l.name as lab_name
         from lab_purchase_log p
         left join lab_item i on p.item_id = i.uuid
         left join lab l on p.lab_id = l.uuid
-        where p.batch_id = $1 and p.school_id = $2 and p.status = 'active'
+        where p.batch_id = $1 and p.school_id = $2 and p.status = $3
+          and ($3 = 'active' or p.updated_at::timestamp(0) = $4::timestamp(0))
         order by p.created_at asc
       `;
-      const items: LabPurchaseLog[] = await DB.query(itemsQuery, [batchId, schoolId]);
+      const items: LabPurchaseLog[] = await DB.query(itemsQuery, [batchId, schoolId, batch.status, batch.updatedAt]);
       return { ...batch, items, recordType: 'batch' };
     }
 
-    // Fall through to pre-batch individual purchase
+    // Fall through to pre-batch individual purchase (active or deleted)
     const purchaseQuery = singleLineString`
       select p.*, i.name as item_name, l.name as lab_name
       from lab_purchase_log p
       left join lab_item i on p.item_id = i.uuid
       left join lab l on p.lab_id = l.uuid
-      where p.uuid = $1 and p.school_id = $2 and p.batch_id is null and p.status = 'active'
+      where p.uuid = $1 and p.school_id = $2 and p.batch_id is null and p.status in ('active', 'deleted')
     `;
     const purchases = await DB.query(purchaseQuery, [batchId, schoolId]);
     if (purchases.length === 0) {
@@ -495,6 +498,90 @@ class LabPurchaseBatchService {
 
     await DB.queriesInTransaction(queries, params);
     return true;
+  }
+
+  public async restoreBatch(batchId: string, schoolId: string, userId: string): Promise<LabPurchaseBatch | null> {
+    const now = new Date();
+    const queries: string[] = [];
+    const params: any[][] = [];
+
+    // Batch case: restore the header and exactly the items deleted alongside it.
+    const batchRows = await DB.query(
+      singleLineString`
+        select uuid, updated_at from lab_purchase_batch
+        where uuid = $1 and school_id = $2 and status = 'deleted'
+      `,
+      [batchId, schoolId]
+    );
+
+    if (batchRows.length > 0) {
+      const deletedAt = batchRows[0].updatedAt;
+      const items = await DB.query(
+        singleLineString`
+          select uuid, item_id, quantity from lab_purchase_log
+          where batch_id = $1 and school_id = $2 and status = 'deleted'
+            and updated_at::timestamp(0) = $3::timestamp(0)
+        `,
+        [batchId, schoolId, deletedAt]
+      );
+
+      for (const item of items) {
+        queries.push(singleLineString`
+          update lab_purchase_log
+          set status = 'active', updatedby_userid = $1, updated_at = $2
+          where uuid = $3 and school_id = $4 and status = 'deleted'
+        `);
+        params.push([userId, now, item.uuid, schoolId]);
+
+        queries.push(singleLineString`
+          update lab_item
+          set current_stock = current_stock + $1, updatedby_userid = $2, updated_at = $3
+          where uuid = $4 and school_id = $5
+        `);
+        params.push([item.quantity, userId, now, item.itemId, schoolId]);
+      }
+
+      queries.push(singleLineString`
+        update lab_purchase_batch
+        set status = 'active', updatedby_userid = $1, updated_at = $2
+        where uuid = $3 and school_id = $4 and status = 'deleted'
+      `);
+      params.push([userId, now, batchId, schoolId]);
+
+      await DB.queriesInTransaction(queries, params);
+      return this.getBatchById(batchId, schoolId);
+    }
+
+    // Legacy case: a deleted pre-batch single purchase.
+    const purchaseRows = await DB.query(
+      singleLineString`
+        select uuid, item_id, quantity from lab_purchase_log
+        where uuid = $1 and school_id = $2 and batch_id is null and status = 'deleted'
+      `,
+      [batchId, schoolId]
+    );
+
+    if (purchaseRows.length > 0) {
+      const purchase = purchaseRows[0];
+      queries.push(singleLineString`
+        update lab_purchase_log
+        set status = 'active', updatedby_userid = $1, updated_at = $2
+        where uuid = $3 and school_id = $4 and status = 'deleted'
+      `);
+      params.push([userId, now, batchId, schoolId]);
+
+      queries.push(singleLineString`
+        update lab_item
+        set current_stock = current_stock + $1, updatedby_userid = $2, updated_at = $3
+        where uuid = $4 and school_id = $5
+      `);
+      params.push([purchase.quantity, userId, now, purchase.itemId, schoolId]);
+
+      await DB.queriesInTransaction(queries, params);
+      return this.getBatchById(batchId, schoolId);
+    }
+
+    return null;
   }
 
   public async listAlerts(schoolId: string, days: number): Promise<LabAlertItem[]> {

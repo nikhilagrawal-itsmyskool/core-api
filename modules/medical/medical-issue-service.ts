@@ -181,12 +181,13 @@ class MedicalIssueService {
       select il.*, i.name as item_name,
         case when il.entity_type = 'employee' then e.name else s.name end as entity_name,
         latest_class.class_name as entity_class_name,
-        issuer.name as issued_by_name
+        coalesce(issuer.name, issuer_login.display_name) as issued_by_name
       from medical_issue_log il
       left join medical_item i on il.item_id = i.uuid
       left join employee e on il.entity_type = 'employee' and il.entity_id = e.uuid
       left join student s on il.entity_type = 'student' and il.entity_id = s.uuid
       left join employee issuer on il.issued_by_id = issuer.uuid
+      left join employee_login issuer_login on il.issued_by_id = issuer_login.uuid
       left join lateral (
         select c.name as class_name
         from student_class sc
@@ -208,12 +209,13 @@ class MedicalIssueService {
       select il.*, i.name as item_name,
         case when il.entity_type = 'employee' then e.name else s.name end as entity_name,
         latest_class.class_name as entity_class_name,
-        issuer.name as issued_by_name
+        coalesce(issuer.name, issuer_login.display_name) as issued_by_name
       from medical_issue_log il
       left join medical_item i on il.item_id = i.uuid
       left join employee e on il.entity_type = 'employee' and il.entity_id = e.uuid
       left join student s on il.entity_type = 'student' and il.entity_id = s.uuid
       left join employee issuer on il.issued_by_id = issuer.uuid
+      left join employee_login issuer_login on il.issued_by_id = issuer_login.uuid
       left join lateral (
         select c.name as class_name
         from student_class sc
@@ -238,12 +240,13 @@ class MedicalIssueService {
       select il.*, i.name as item_name,
         case when il.entity_type = 'employee' then e.name else s.name end as entity_name,
         latest_class.class_name as entity_class_name,
-        issuer.name as issued_by_name
+        coalesce(issuer.name, issuer_login.display_name) as issued_by_name
       from medical_issue_log il
       left join medical_item i on il.item_id = i.uuid
       left join employee e on il.entity_type = 'employee' and il.entity_id = e.uuid
       left join student s on il.entity_type = 'student' and il.entity_id = s.uuid
       left join employee issuer on il.issued_by_id = issuer.uuid
+      left join employee_login issuer_login on il.issued_by_id = issuer_login.uuid
       left join lateral (
         select c.name as class_name
         from student_class sc
@@ -274,12 +277,13 @@ class MedicalIssueService {
       select il.*, i.name as item_name,
         case when il.entity_type = 'employee' then e.name else s.name end as entity_name,
         latest_class.class_name as entity_class_name,
-        issuer.name as issued_by_name
+        coalesce(issuer.name, issuer_login.display_name) as issued_by_name
       from medical_issue_log il
       left join medical_item i on il.item_id = i.uuid
       left join employee e on il.entity_type = 'employee' and il.entity_id = e.uuid
       left join student s on il.entity_type = 'student' and il.entity_id = s.uuid
       left join employee issuer on il.issued_by_id = issuer.uuid
+      left join employee_login issuer_login on il.issued_by_id = issuer_login.uuid
       left join lateral (
         select c.name as class_name
         from student_class sc

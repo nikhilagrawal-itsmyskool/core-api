@@ -2,6 +2,7 @@ const jwt = require('jsonwebtoken');
 
 export interface DecodedToken {
   id: string;
+  employee_id?: string;
   login_name: string;
   school_id: string;
   school_code: string;
@@ -27,6 +28,7 @@ export function extractAndVerifyToken(authorizationHeader: string | undefined): 
 
     return {
       id: decoded.id,
+      employee_id: decoded.employee_id,
       login_name: decoded.login_name,
       school_id: decoded.school_id,
       school_code: decoded.school_code,

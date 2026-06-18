@@ -38,6 +38,7 @@ class EmployeeAuthHandler {
       const token: string = employeeAuthService.signToken({
         auth: process.env.JWT_MAGIC_KEY,
         id: employeeLogin.uuid,
+        employee_id: employeeLogin.employeeId,
         login_name: username,
         school_id: schoolId,
         school_code: schoolCode,

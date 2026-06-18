@@ -182,6 +182,15 @@
           method: delete
           cors: true
 
+  restore-lab-purchase-batch:
+    handler: lab-purchase-batch-handler.restore
+    name: ${self:service}-restore-lab-purchase-batch
+    events:
+      - http:
+          path: purchases/batches/{batchId}/restore
+          method: post
+          cors: true
+
   # Purchase Batch bill endpoints
   upload-lab-bill:
     handler: lab-purchase-batch-handler.uploadBill

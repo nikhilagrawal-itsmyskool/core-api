@@ -8,7 +8,9 @@ export class AuthResponseDto {
 
 export const generatePolicy = (decoded, effect, resource) => {
   const authResponse: AuthResponseDto = new AuthResponseDto();
-  authResponse.principalId = decoded.id;
+  // Actor id for audit columns: prefer the employee uuid, fall back to the login
+  // id for tokens without an employee (students, legacy tokens).
+  authResponse.principalId = decoded.employee_id || decoded.id;
   if (effect && resource) {
     const policyDocument = {
       Version: '2012-10-17',

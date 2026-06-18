@@ -230,6 +230,35 @@ class LabPurchaseBatchHandler {
     }
   };
 
+  public restore = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
+    _context.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const schoolCode = validateSchoolCodeHeader(event);
+      const schoolId = await labService.getSchoolIdByCode(schoolCode);
+      if (!schoolId) {
+        ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'Invalid school code', callback);
+        return;
+      }
+
+      const batchId = event.pathParameters?.batchId;
+      if (!batchId) {
+        ResponseBuilder.badRequest(ErrorCode.MissingId, 'Batch ID is required', callback);
+        return;
+      }
+
+      const userId = event.requestContext?.authorizer?.principalId || 'system';
+      const result = await labPurchaseBatchService.restoreBatch(batchId, schoolId, userId);
+      if (!result) {
+        ResponseBuilder.notFound(ErrorCode.InvalidId, 'Deleted purchase not found', callback);
+        return;
+      }
+
+      ResponseBuilder.ok(result, callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
   public listAlerts = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
     _context.callbackWaitsForEmptyEventLoop = false;
     try {
@@ -322,6 +351,7 @@ export const list = handler.list;
 export const getById = handler.getById;
 export const update = handler.update;
 export const remove = handler.remove;
+export const restore = handler.restore;
 export const listAlerts = handler.listAlerts;
 export const uploadBill = handler.uploadBill;
 export const getBill = handler.getBill;

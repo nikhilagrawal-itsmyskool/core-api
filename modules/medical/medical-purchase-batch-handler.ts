@@ -176,6 +176,25 @@ class MedicalPurchaseBatchHandler {
       }
 
       const body: UpdatePurchaseBatchRequest = JSON.parse(event.body);
+
+      if (body.items !== undefined) {
+        if (!Array.isArray(body.items)) {
+          ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'items must be an array', callback);
+          return;
+        }
+        for (let i = 0; i < body.items.length; i++) {
+          const item = body.items[i];
+          if (!item.itemId) {
+            ResponseBuilder.badRequest(ErrorCode.InvalidInput, `items[${i}].itemId is required`, callback);
+            return;
+          }
+          if (!item.quantity || item.quantity <= 0) {
+            ResponseBuilder.badRequest(ErrorCode.InvalidInput, `items[${i}].quantity must be greater than 0`, callback);
+            return;
+          }
+        }
+      }
+
       const userId = event.requestContext?.authorizer?.principalId || 'system';
 
       const result = await medicalPurchaseBatchService.update(batchId, body, schoolId, userId);
@@ -215,6 +234,36 @@ class MedicalPurchaseBatchHandler {
       }
 
       ResponseBuilder.ok({ message: 'Purchase batch deleted successfully' }, callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
+  public restore = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
+    _context.callbackWaitsForEmptyEventLoop = false;
+
+    try {
+      const schoolCode = validateSchoolCodeHeader(event);
+      const schoolId = await medicalItemService.getSchoolIdByCode(schoolCode);
+      if (!schoolId) {
+        ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'Invalid school code', callback);
+        return;
+      }
+
+      const batchId = event.pathParameters?.batchId;
+      if (!batchId) {
+        ResponseBuilder.badRequest(ErrorCode.MissingId, 'Batch ID is required', callback);
+        return;
+      }
+
+      const userId = event.requestContext?.authorizer?.principalId || 'system';
+      const result = await medicalPurchaseBatchService.restoreBatch(batchId, schoolId, userId);
+      if (!result) {
+        ResponseBuilder.notFound(ErrorCode.InvalidId, 'Deleted purchase not found', callback);
+        return;
+      }
+
+      ResponseBuilder.ok(result, callback);
     } catch (err: any) {
       ResponseBuilder.handleError(err, callback);
     }
@@ -368,6 +417,7 @@ export const list = handler.list;
 export const getById = handler.getById;
 export const update = handler.update;
 export const remove = handler.remove;
+export const restore = handler.restore;
 export const uploadBill = handler.uploadBill;
 export const getBill = handler.getBill;
 export const deleteBill = handler.deleteBill;

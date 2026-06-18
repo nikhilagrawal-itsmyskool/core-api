@@ -3,6 +3,7 @@ import { DB, singleLineString } from '../../shared/lib/db';
 
 export interface EmployeeLogin {
   uuid: string;
+  employeeId: string | null;
   displayName: string;
   roles: string[];
   mustChangePassword: boolean;
@@ -42,13 +43,30 @@ export class EmployeeAuthService {
     const employeeUuid = loginResults[0].uuid;
     const displayName = loginResults[0].displayName;
     const mustChangePassword = loginResults[0].mustChangePassword === true;
-    const rolesQuery = singleLineString`select r.code from employee_role er join role r on er.role_id = r.uuid where er.employee_id = $1 and er.school_id = $2`;
-    const rolesResults = await DB.query(rolesQuery, [employeeUuid, schoolId]);
+
+    // The login links to the employee via username = family_unique_number.
+    // Resolve the employee uuid (used as the actor id for audit columns) and
+    // read that employee's roles.
+    const employeeQuery = singleLineString`
+      select uuid from employee
+      where family_unique_number = $1 and school_id = $2 and status = 'active'
+      order by created_at asc limit 1`;
+    const employeeResults = await DB.query(employeeQuery, [username, schoolId]);
+    const employeeId = employeeResults.length > 0 ? employeeResults[0].uuid : null;
+
+    const rolesQuery = singleLineString`
+      select distinct r.code
+      from employee e
+      join employee_role er on er.employee_id = e.uuid and er.school_id = e.school_id
+      join role r on r.uuid = er.role_id
+      where e.family_unique_number = $1 and e.school_id = $2`;
+    const rolesResults = await DB.query(rolesQuery, [username, schoolId]);
 
     const roles = rolesResults.map((row: any) => row.code);
 
     return {
       uuid: employeeUuid,
+      employeeId: employeeId,
       displayName: displayName,
       roles: roles,
       mustChangePassword: mustChangePassword
