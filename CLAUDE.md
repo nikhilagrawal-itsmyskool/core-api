@@ -31,7 +31,7 @@ npx prettier --write .
 | `npm run stop:<module>` | Stop module |
 | `npm run test:<module>:full` | Full cycle: stop → start → test → stop |
 
-Available modules: `auth`, `medical`, `lab`, `sample`, `student`, `employee`, `class`, `academic-year`, `fine`, `uniform`, `shop`
+Available modules: `auth`, `medical`, `lab`, `sample`, `student`, `employee`, `class`, `academic-year`, `fine`, `uniform`, `shop`, `sports`
 
 > These always run on `local` stage (hardcoded in `start-module.js`). Stage cannot be changed for individual module commands.
 
@@ -61,6 +61,7 @@ Each module in `modules/` is an independent Lambda microservice with its own `se
 - **auth/**: Employee and student authentication (JWT-based)
 - **medical/**: Medical inventory, purchases, and issue tracking
 - **lab/**: Lab inventory management - items, purchases, issues, breakages across all lab types
+- **sports/**: Sports equipment inventory (bulk) - items, purchases, issues, breakages grouped by sport
 - **fine/**: Fine collection - incident tracking, workflow (open→under review→decision→closed), evidence upload, receipt generation
 - **student/**: Student search by name, class, and academic year
 - **employee/**: Employee search by name
@@ -87,6 +88,7 @@ Each module runs on dedicated ports to allow simultaneous local development:
 | fine          | 3017      | 3018        | /fine/*           |
 | uniform       | 3019      | 3020        | /uniform/*        |
 | shop          | 3021      | 3022        | /shop/*           |
+| sports        | 3023      | 3024        | /sports/*         |
 | gateway       | 3000      | -           | (routes all)      |
 
 #### Prod Stage
@@ -104,6 +106,7 @@ Each module runs on dedicated ports to allow simultaneous local development:
 | fine          | 6017      | 6018        |
 | uniform       | 6019      | 6020        |
 | shop          | 6021      | 6022        |
+| sports        | 6023      | 6024        |
 | gateway       | 6000      | -           |
 
 ### Scripts Organization

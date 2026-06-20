@@ -6,7 +6,7 @@ export const LAB_TYPES = [
   { value: 'language', label: 'Language' },
   { value: 'mathematics', label: 'Mathematics' },
   { value: 'composite', label: 'Composite' },
-  { value: 'other', label: 'Other' },
+  { value: 'other', label: 'Other' }
 ] as const;
 
 export const LAB_UNITS = [

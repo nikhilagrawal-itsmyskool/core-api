@@ -1,0 +1,368 @@
+  # Health check
+  health:
+    handler: health-handler.health
+    events:
+      - http:
+          path: health
+          method: get
+          cors: true
+
+  # Lookup endpoints
+  get-units:
+    handler: sport-lookup-handler.getUnits
+    name: ${self:service}-get-units
+    events:
+      - http:
+          path: lookups/units
+          method: get
+          cors: true
+
+  get-categories:
+    handler: sport-lookup-handler.getCategories
+    name: ${self:service}-get-categories
+    events:
+      - http:
+          path: lookups/categories
+          method: get
+          cors: true
+
+  get-sport-types:
+    handler: sport-lookup-handler.getSportTypes
+    name: ${self:service}-get-sport-types
+    events:
+      - http:
+          path: lookups/sport-types
+          method: get
+          cors: true
+
+  get-conditions:
+    handler: sport-lookup-handler.getConditions
+    name: ${self:service}-get-conditions
+    events:
+      - http:
+          path: lookups/conditions
+          method: get
+          cors: true
+
+  # Sport in-charge endpoints (per sport type; multiple in-charges allowed)
+  list-sport-incharges:
+    handler: sport-incharge-handler.list
+    name: ${self:service}-list-sport-incharges
+    events:
+      - http:
+          path: sports/incharges
+          method: get
+          cors: true
+
+  get-sport-incharges:
+    handler: sport-incharge-handler.getBySport
+    name: ${self:service}-get-sport-incharges
+    events:
+      - http:
+          path: sports/{sportType}/incharges
+          method: get
+          cors: true
+
+  set-sport-incharges:
+    handler: sport-incharge-handler.setForSport
+    name: ${self:service}-set-sport-incharges
+    events:
+      - http:
+          path: sports/{sportType}/incharges
+          method: put
+          cors: true
+
+  # Sport Item endpoints
+  create-item:
+    handler: sport-item-handler.create
+    name: ${self:service}-create-item
+    events:
+      - http:
+          path: items
+          method: post
+          cors: true
+
+  search-items:
+    handler: sport-item-handler.search
+    name: ${self:service}-search-items
+    events:
+      - http:
+          path: items
+          method: get
+          cors: true
+
+  get-item:
+    handler: sport-item-handler.getById
+    name: ${self:service}-get-item
+    events:
+      - http:
+          path: items/{id}
+          method: get
+          cors: true
+
+  update-item:
+    handler: sport-item-handler.update
+    name: ${self:service}-update-item
+    events:
+      - http:
+          path: items/{id}
+          method: put
+          cors: true
+
+  delete-item:
+    handler: sport-item-handler.remove
+    name: ${self:service}-delete-item
+    events:
+      - http:
+          path: items/{id}
+          method: delete
+          cors: true
+
+  # Purchase Batch endpoints (bulk purchase)
+  create-bulk-sport-purchase:
+    handler: sport-purchase-batch-handler.createBulk
+    name: ${self:service}-create-bulk-sport-purchase
+    events:
+      - http:
+          path: purchases/bulk
+          method: post
+          cors: true
+
+  list-sport-purchase-batches:
+    handler: sport-purchase-batch-handler.list
+    name: ${self:service}-list-sport-purchase-batches
+    events:
+      - http:
+          path: purchases/batches
+          method: get
+          cors: true
+
+  get-sport-purchase-batch:
+    handler: sport-purchase-batch-handler.getById
+    name: ${self:service}-get-sport-purchase-batch
+    events:
+      - http:
+          path: purchases/batches/{batchId}
+          method: get
+          cors: true
+
+  update-sport-purchase-batch:
+    handler: sport-purchase-batch-handler.update
+    name: ${self:service}-update-sport-purchase-batch
+    events:
+      - http:
+          path: purchases/batches/{batchId}
+          method: put
+          cors: true
+
+  delete-sport-purchase-batch:
+    handler: sport-purchase-batch-handler.remove
+    name: ${self:service}-delete-sport-purchase-batch
+    events:
+      - http:
+          path: purchases/batches/{batchId}
+          method: delete
+          cors: true
+
+  restore-sport-purchase-batch:
+    handler: sport-purchase-batch-handler.restore
+    name: ${self:service}-restore-sport-purchase-batch
+    events:
+      - http:
+          path: purchases/batches/{batchId}/restore
+          method: post
+          cors: true
+
+  # Purchase Batch bill endpoints
+  upload-sport-bill:
+    handler: sport-purchase-batch-handler.uploadBill
+    name: ${self:service}-upload-sport-bill
+    events:
+      - http:
+          path: purchases/batches/{batchId}/bill
+          method: post
+          cors: true
+
+  get-sport-bill:
+    handler: sport-purchase-batch-handler.getBill
+    name: ${self:service}-get-sport-bill
+    events:
+      - http:
+          path: purchases/batches/{batchId}/bill
+          method: get
+          cors: true
+
+  delete-sport-bill:
+    handler: sport-purchase-batch-handler.deleteBill
+    name: ${self:service}-delete-sport-bill
+    events:
+      - http:
+          path: purchases/batches/{batchId}/bill
+          method: delete
+          cors: true
+
+  # Purchase Log endpoints
+  create-purchase:
+    handler: sport-purchase-handler.create
+    name: ${self:service}-create-purchase
+    events:
+      - http:
+          path: purchases
+          method: post
+          cors: true
+
+  list-purchases:
+    handler: sport-purchase-handler.list
+    name: ${self:service}-list-purchases
+    events:
+      - http:
+          path: purchases
+          method: get
+          cors: true
+
+  get-purchase:
+    handler: sport-purchase-handler.getById
+    name: ${self:service}-get-purchase
+    events:
+      - http:
+          path: purchases/{id}
+          method: get
+          cors: true
+
+  update-purchase:
+    handler: sport-purchase-handler.update
+    name: ${self:service}-update-purchase
+    events:
+      - http:
+          path: purchases/{id}
+          method: put
+          cors: true
+
+  delete-purchase:
+    handler: sport-purchase-handler.remove
+    name: ${self:service}-delete-purchase
+    events:
+      - http:
+          path: purchases/{id}
+          method: delete
+          cors: true
+
+  # Issue Log endpoints
+  create-issue:
+    handler: sport-issue-handler.create
+    name: ${self:service}-create-issue
+    events:
+      - http:
+          path: issues
+          method: post
+          cors: true
+
+  list-issues:
+    handler: sport-issue-handler.list
+    name: ${self:service}-list-issues
+    events:
+      - http:
+          path: issues
+          method: get
+          cors: true
+
+  get-issue:
+    handler: sport-issue-handler.getById
+    name: ${self:service}-get-issue
+    events:
+      - http:
+          path: issues/{id}
+          method: get
+          cors: true
+
+  update-issue:
+    handler: sport-issue-handler.update
+    name: ${self:service}-update-issue
+    events:
+      - http:
+          path: issues/{id}
+          method: put
+          cors: true
+
+  delete-issue:
+    handler: sport-issue-handler.remove
+    name: ${self:service}-delete-issue
+    events:
+      - http:
+          path: issues/{id}
+          method: delete
+          cors: true
+
+  return-issue:
+    handler: sport-issue-handler.returnItem
+    name: ${self:service}-return-issue
+    events:
+      - http:
+          path: issues/{id}/return
+          method: put
+          cors: true
+
+  # Breakage Log endpoints
+  create-breakage:
+    handler: sport-breakage-handler.create
+    name: ${self:service}-create-breakage
+    events:
+      - http:
+          path: breakages
+          method: post
+          cors: true
+
+  list-breakages:
+    handler: sport-breakage-handler.list
+    name: ${self:service}-list-breakages
+    events:
+      - http:
+          path: breakages
+          method: get
+          cors: true
+
+  get-breakage:
+    handler: sport-breakage-handler.getById
+    name: ${self:service}-get-breakage
+    events:
+      - http:
+          path: breakages/{id}
+          method: get
+          cors: true
+
+  update-breakage:
+    handler: sport-breakage-handler.update
+    name: ${self:service}-update-breakage
+    events:
+      - http:
+          path: breakages/{id}
+          method: put
+          cors: true
+
+  delete-breakage:
+    handler: sport-breakage-handler.remove
+    name: ${self:service}-delete-breakage
+    events:
+      - http:
+          path: breakages/{id}
+          method: delete
+          cors: true
+
+  # Breakage image endpoints
+  get-sport-breakage-image:
+    handler: sport-breakage-handler.getImage
+    name: ${self:service}-get-sport-breakage-image
+    events:
+      - http:
+          path: breakages/{id}/image
+          method: get
+          cors: true
+
+  delete-sport-breakage-image:
+    handler: sport-breakage-handler.deleteImage
+    name: ${self:service}-delete-sport-breakage-image
+    events:
+      - http:
+          path: breakages/{id}/image
+          method: delete
+          cors: true
