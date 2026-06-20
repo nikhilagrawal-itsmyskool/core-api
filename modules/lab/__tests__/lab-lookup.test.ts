@@ -78,7 +78,7 @@ describe('Lab Lookup API', () => {
 
       expect(data).toHaveProperty('categories');
       expect(Array.isArray(data.categories)).toBe(true);
-      expect(data.categories).toContain('Electrical');
+      expect(data.categories).toContain('Electricity');
       expect(data.categories).toContain('Optics');
       expect(data.categories).toContain('Mechanics');
     });

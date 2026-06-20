@@ -292,9 +292,11 @@ describe('Medical Purchase Bulk API', () => {
       });
       expect(response.status).toBe(200);
 
-      // Batch should no longer be found
+      // Batch should now be soft-deleted, not gone (kept for restore workflow)
       const getResponse = await fetch(`${batchesUrl}/${createdBatchId}`, { headers });
-      expect(getResponse.status).toBe(404);
+      expect(getResponse.status).toBe(200);
+      const deletedBatch = await getResponse.json();
+      expect(deletedBatch.status).toBe('deleted');
 
       // Stock should be reversed
       const [s1After, s2After, s3After] = await Promise.all([
