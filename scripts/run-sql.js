@@ -23,7 +23,7 @@ function createPool(config) {
 }
 
 async function runSqlFile(pool, filePath) {
-  const sql = fs.readFileSync(filePath, 'utf8');
+  const sql = fs.readFileSync(filePath, 'utf8').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
   // Remove single-line comments before splitting by semicolon
   const sqlWithoutComments = sql
     .split('\n')
