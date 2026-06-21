@@ -100,6 +100,15 @@
           method: post
           cors: true
 
+  create-items-bulk:
+    handler: lab-item-handler.createBulk
+    name: ${self:service}-create-items-bulk
+    events:
+      - http:
+          path: items/bulk
+          method: post
+          cors: true
+
   search-items:
     handler: lab-item-handler.search
     name: ${self:service}-search-items

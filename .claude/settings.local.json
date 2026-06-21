@@ -62,7 +62,11 @@
       "WebFetch(domain:www.boxhero.io)",
       "WebFetch(domain:oxmaint.com)",
       "Bash(xargs grep:*)",
-      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\([\\(i['uuid'], i['name'], [\\(s['uuid'],s['sizeLabel'],s['currentStock']\\) for s in i.get\\('sizes',[]\\)]\\) for i in d if 'Sale Test' in i.get\\('name',''\\)]\\)\")"
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\([\\(i['uuid'], i['name'], [\\(s['uuid'],s['sizeLabel'],s['currentStock']\\) for s in i.get\\('sizes',[]\\)]\\) for i in d if 'Sale Test' in i.get\\('name',''\\)]\\)\")",
+      "Read(//h/github/itsmyskool/admin-portal/**)",
+      "Bash(ls src/pages)",
+      "Bash(find src *)",
+      "Bash(ls src/services)"
     ]
   }
 }

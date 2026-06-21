@@ -1,0 +1,226 @@
+  # Health check
+  health:
+    handler: health-handler.health
+    events:
+      - http:
+          path: health
+          method: get
+          cors: true
+
+  # Lookup endpoints
+  get-types:
+    handler: asset-lookup-handler.getTypes
+    name: ${self:service}-get-types
+    events:
+      - http:
+          path: lookups/types
+          method: get
+          cors: true
+
+  get-conditions:
+    handler: asset-lookup-handler.getConditions
+    name: ${self:service}-get-conditions
+    events:
+      - http:
+          path: lookups/conditions
+          method: get
+          cors: true
+
+  get-statuses:
+    handler: asset-lookup-handler.getStatuses
+    name: ${self:service}-get-statuses
+    events:
+      - http:
+          path: lookups/statuses
+          method: get
+          cors: true
+
+  get-kinds:
+    handler: asset-lookup-handler.getKinds
+    name: ${self:service}-get-kinds
+    events:
+      - http:
+          path: lookups/kinds
+          method: get
+          cors: true
+
+  # Asset Type (managed lookup) endpoints
+  list-asset-types:
+    handler: asset-type-handler.list
+    name: ${self:service}-list-asset-types
+    events:
+      - http:
+          path: asset-types
+          method: get
+          cors: true
+
+  create-asset-type:
+    handler: asset-type-handler.create
+    name: ${self:service}-create-asset-type
+    events:
+      - http:
+          path: asset-types
+          method: post
+          cors: true
+
+  update-asset-type:
+    handler: asset-type-handler.update
+    name: ${self:service}-update-asset-type
+    events:
+      - http:
+          path: asset-types/{id}
+          method: put
+          cors: true
+
+  delete-asset-type:
+    handler: asset-type-handler.remove
+    name: ${self:service}-delete-asset-type
+    events:
+      - http:
+          path: asset-types/{id}
+          method: delete
+          cors: true
+
+  # Asset tree
+  get-asset-tree:
+    handler: asset-handler.getTree
+    name: ${self:service}-get-asset-tree
+    events:
+      - http:
+          path: assets/tree
+          method: get
+          cors: true
+
+  # Per-type quantity summary
+  get-asset-summary:
+    handler: asset-handler.summary
+    name: ${self:service}-get-asset-summary
+    events:
+      - http:
+          path: assets/summary
+          method: get
+          cors: true
+
+  # Per-type drill-down with ancestor breadcrumbs
+  get-asset-counts:
+    handler: asset-handler.counts
+    name: ${self:service}-get-asset-counts
+    events:
+      - http:
+          path: assets/counts
+          method: get
+          cors: true
+
+  # Asset code suggestion
+  suggest-asset-code:
+    handler: asset-handler.suggestCode
+    name: ${self:service}-suggest-asset-code
+    events:
+      - http:
+          path: assets/code/suggest
+          method: get
+          cors: true
+
+  # Assets responsible-for listing
+  get-assets-by-responsible:
+    handler: asset-handler.getByResponsible
+    name: ${self:service}-get-assets-by-responsible
+    events:
+      - http:
+          path: assets/responsible/{employeeId}
+          method: get
+          cors: true
+
+  # Asset CRUD
+  create-asset:
+    handler: asset-handler.create
+    name: ${self:service}-create-asset
+    events:
+      - http:
+          path: assets
+          method: post
+          cors: true
+
+  search-assets:
+    handler: asset-handler.search
+    name: ${self:service}-search-assets
+    events:
+      - http:
+          path: assets
+          method: get
+          cors: true
+
+  get-asset:
+    handler: asset-handler.getById
+    name: ${self:service}-get-asset
+    events:
+      - http:
+          path: assets/{id}
+          method: get
+          cors: true
+
+  update-asset:
+    handler: asset-handler.update
+    name: ${self:service}-update-asset
+    events:
+      - http:
+          path: assets/{id}
+          method: put
+          cors: true
+
+  delete-asset:
+    handler: asset-handler.remove
+    name: ${self:service}-delete-asset
+    events:
+      - http:
+          path: assets/{id}
+          method: delete
+          cors: true
+
+  # Asset tree operations
+  move-asset:
+    handler: asset-handler.move
+    name: ${self:service}-move-asset
+    events:
+      - http:
+          path: assets/{id}/move
+          method: post
+          cors: true
+
+  individualize-asset:
+    handler: asset-handler.individualize
+    name: ${self:service}-individualize-asset
+    events:
+      - http:
+          path: assets/{id}/individualize
+          method: post
+          cors: true
+
+  # Asset responsibility
+  set-asset-responsibility:
+    handler: asset-handler.setResponsibility
+    name: ${self:service}-set-asset-responsibility
+    events:
+      - http:
+          path: assets/{id}/responsibility
+          method: put
+          cors: true
+
+  get-asset-responsibility:
+    handler: asset-handler.getResponsibility
+    name: ${self:service}-get-asset-responsibility
+    events:
+      - http:
+          path: assets/{id}/responsibility
+          method: get
+          cors: true
+
+  # Asset movement history
+  get-asset-movements:
+    handler: asset-handler.getMovements
+    name: ${self:service}-get-asset-movements
+    events:
+      - http:
+          path: assets/{id}/movements
+          method: get
+          cors: true

@@ -42,6 +42,24 @@ export class StudentAuthService {
       displayName: loginResults[0].displayName
     };
   }
+
+  public async changePassword(loginId: string, currentPassword: string, newPassword: string, schoolId: string): Promise<{ success: boolean; message: string }> {
+    const query = singleLineString`select uuid, password from student_login where uuid = $1 and school_id = $2`;
+    const results = await DB.query(query, [loginId, schoolId]);
+
+    if (results.length === 0) {
+      return { success: false, message: 'Student login not found' };
+    }
+
+    if (results[0].password !== currentPassword) {
+      return { success: false, message: 'Current password is incorrect' };
+    }
+
+    const updateQuery = singleLineString`update student_login set password = $1, updated_at = now() where uuid = $2 and school_id = $3`;
+    await DB.query(updateQuery, [newPassword, loginId, schoolId]);
+
+    return { success: true, message: 'Password changed successfully' };
+  }
 }
 
 export const studentAuthService = new StudentAuthService();

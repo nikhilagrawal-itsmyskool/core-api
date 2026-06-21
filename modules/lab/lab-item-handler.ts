@@ -4,7 +4,7 @@ import { ErrorCode } from '../../shared/lib/error-codes';
 import { validateSchoolCodeHeader } from '../auth/auth-utils';
 import { labItemService } from './lab-item-service';
 import { labService } from './lab-service';
-import { CreateLabItemRequest, UpdateLabItemRequest } from './lab-interfaces';
+import { CreateLabItemRequest, UpdateLabItemRequest, CreateLabItemBulkRequest } from './lab-interfaces';
 import { LAB_UNITS, ITEM_TYPES, ITEM_CONDITIONS } from './lab-constants';
 
 class LabItemHandler {
@@ -79,6 +79,78 @@ class LabItemHandler {
       const userId = event.requestContext?.authorizer?.principalId || 'system';
 
       const result = await labItemService.create(body, schoolId, userId);
+      ResponseBuilder.ok(result, callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
+  public createBulk = async (
+    event: ApiEvent,
+    _context: ApiContext,
+    callback: ApiCallback
+  ) => {
+    _context.callbackWaitsForEmptyEventLoop = false;
+
+    try {
+      const schoolCode = validateSchoolCodeHeader(event);
+      const schoolId = await labService.getSchoolIdByCode(schoolCode);
+      if (!schoolId) {
+        ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'Invalid school code', callback);
+        return;
+      }
+
+      if (!event.body) {
+        ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'Request body is required', callback);
+        return;
+      }
+
+      const body: CreateLabItemBulkRequest = JSON.parse(event.body);
+
+      if (!body.labId) {
+        ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'Lab ID is required', callback);
+        return;
+      }
+
+      if (!Array.isArray(body.items) || body.items.length === 0) {
+        ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'At least one item is required', callback);
+        return;
+      }
+
+      // Validate target lab exists
+      const lab = await labService.getById(body.labId, schoolId);
+      if (!lab) {
+        ResponseBuilder.badRequest(ErrorCode.InvalidId, 'Lab not found', callback);
+        return;
+      }
+
+      const validUnits = LAB_UNITS.map(u => u.value);
+      const validConditions = ITEM_CONDITIONS.map(c => c.value);
+
+      for (let i = 0; i < body.items.length; i++) {
+        const item = body.items[i];
+        const prefix = `Item ${i + 1}:`;
+        if (!item.name || !item.name.trim()) {
+          ResponseBuilder.badRequest(ErrorCode.InvalidInput, `${prefix} Name is required`, callback);
+          return;
+        }
+        if (!item.itemType || !ITEM_TYPES.includes(item.itemType as any)) {
+          ResponseBuilder.badRequest(ErrorCode.InvalidInput, `${prefix} Invalid item type. Must be one of: ${ITEM_TYPES.join(', ')}`, callback);
+          return;
+        }
+        if (!item.unit || !validUnits.includes(item.unit)) {
+          ResponseBuilder.badRequest(ErrorCode.InvalidInput, `${prefix} Invalid unit. Must be one of: ${validUnits.join(', ')}`, callback);
+          return;
+        }
+        if (item.itemCondition && !validConditions.includes(item.itemCondition)) {
+          ResponseBuilder.badRequest(ErrorCode.InvalidInput, `${prefix} Invalid condition. Must be one of: ${validConditions.join(', ')}`, callback);
+          return;
+        }
+      }
+
+      const userId = event.requestContext?.authorizer?.principalId || 'system';
+
+      const result = await labItemService.createBulk(body.labId, body.items, schoolId, userId);
       ResponseBuilder.ok(result, callback);
     } catch (err: any) {
       ResponseBuilder.handleError(err, callback);
@@ -250,6 +322,7 @@ class LabItemHandler {
 
 const handler = new LabItemHandler();
 export const create = handler.create;
+export const createBulk = handler.createBulk;
 export const update = handler.update;
 export const remove = handler.remove;
 export const getById = handler.getById;

@@ -79,6 +79,30 @@ export interface UpdateLabItemRequest {
   comments?: string;
 }
 
+// A single item definition for bulk create / copy-between-labs.
+// Stock is intentionally omitted - copied items start at stock 0.
+export interface CreateLabItemDefinition {
+  name: string;
+  category?: string;
+  itemType: ItemType;
+  unit: LabUnit;
+  reorderLevel?: number;
+  location?: string;
+  itemCondition?: ItemCondition;
+  costPerUnit?: number;
+  comments?: string;
+}
+
+export interface CreateLabItemBulkRequest {
+  labId: string; // target lab (e.g. the composite lab)
+  items: CreateLabItemDefinition[];
+}
+
+export interface CreateLabItemBulkResult {
+  created: LabItem[];
+  skipped: { name: string; reason: string }[];
+}
+
 // Purchase Log
 export interface LabPurchaseLog extends BaseEntity {
   itemId: string;

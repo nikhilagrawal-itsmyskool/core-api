@@ -44,3 +44,12 @@
           path: employee/reset-password
           method: post
           cors: true
+
+  change-password-student:
+    handler: student-password-handler.changePassword
+    name: ${self:service}-change-password-student
+    events:
+      - http:
+          path: student/change-password
+          method: post
+          cors: true

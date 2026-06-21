@@ -120,6 +120,108 @@ describe('Lab Item API', () => {
     });
   });
 
+  describe('POST /lab/items/bulk', () => {
+    let targetLabId: string;
+    const bulkUrl = `${itemsUrl}/bulk`;
+
+    beforeAll(async () => {
+      const response = await fetch(labsUrl, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ name: 'Composite Lab for Bulk', type: 'composite' }),
+      });
+      const data = await response.json();
+      targetLabId = data.uuid;
+    });
+
+    afterAll(async () => {
+      if (targetLabId) {
+        await fetch(`${labsUrl}/${targetLabId}`, { method: 'DELETE', headers });
+      }
+    });
+
+    it('should bulk-create items at stock 0', async () => {
+      const response = await fetch(bulkUrl, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          labId: targetLabId,
+          items: [
+            { name: 'Bulk Beaker', itemType: 'equipment', unit: 'piece', reorderLevel: 3 },
+            { name: 'Bulk Test Tube', itemType: 'consumable', unit: 'piece' },
+          ],
+        }),
+      });
+
+      expect(response.status).toBe(200);
+      const data = await response.json();
+      expect(data.created.length).toBe(2);
+      expect(data.skipped.length).toBe(0);
+      data.created.forEach((item: any) => {
+        expect(item.currentStock).toBe(0);
+        expect(item.labId).toBe(targetLabId);
+        expect(item.status).toBe('active');
+      });
+    });
+
+    it('should skip duplicate names (existing in target and within payload)', async () => {
+      const response = await fetch(bulkUrl, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          labId: targetLabId,
+          items: [
+            { name: 'Bulk Beaker', itemType: 'equipment', unit: 'piece' }, // already exists
+            { name: 'Bulk Funnel', itemType: 'equipment', unit: 'piece' },
+            { name: 'Bulk Funnel', itemType: 'equipment', unit: 'piece' }, // duplicate in payload
+          ],
+        }),
+      });
+
+      expect(response.status).toBe(200);
+      const data = await response.json();
+      expect(data.created.length).toBe(1);
+      expect(data.created[0].name).toBe('Bulk Funnel');
+      expect(data.skipped.length).toBe(2);
+    });
+
+    it('should return 400 for empty items', async () => {
+      const response = await fetch(bulkUrl, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ labId: targetLabId, items: [] }),
+      });
+
+      expect(response.status).toBe(400);
+    });
+
+    it('should return 400 for non-existent lab', async () => {
+      const response = await fetch(bulkUrl, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          labId: 'nonexistent1',
+          items: [{ name: 'X', itemType: 'equipment', unit: 'piece' }],
+        }),
+      });
+
+      expect(response.status).toBe(400);
+    });
+
+    it('should return 400 for invalid unit in an item', async () => {
+      const response = await fetch(bulkUrl, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          labId: targetLabId,
+          items: [{ name: 'Bad Unit Item', itemType: 'equipment', unit: 'invalid_unit' }],
+        }),
+      });
+
+      expect(response.status).toBe(400);
+    });
+  });
+
   describe('GET /lab/items/{id}', () => {
     it('should get item by ID', async () => {
       const response = await fetch(`${itemsUrl}/${createdItemId}`, {

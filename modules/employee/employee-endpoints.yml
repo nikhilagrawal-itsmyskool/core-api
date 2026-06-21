@@ -6,6 +6,7 @@
           method: get
           cors: true
 
+  # Static paths first so they resolve ahead of /{id}
   search-employee:
     handler: employee-handler.search
     name: ${self:service}-search-employee
@@ -13,4 +14,77 @@
       - http:
           path: search
           method: get
+          cors: true
+
+  list-roles:
+    handler: employee-handler.listRoles
+    name: ${self:service}-list-roles
+    events:
+      - http:
+          path: roles
+          method: get
+          cors: true
+
+  create-employee:
+    handler: employee-handler.create
+    name: ${self:service}-create-employee
+    events:
+      - http:
+          path: create
+          method: post
+          cors: true
+
+  # Per-employee endpoints
+  get-employee:
+    handler: employee-handler.getById
+    name: ${self:service}-get-employee
+    events:
+      - http:
+          path: '{id}'
+          method: get
+          cors: true
+
+  update-employee:
+    handler: employee-handler.update
+    name: ${self:service}-update-employee
+    events:
+      - http:
+          path: '{id}'
+          method: put
+          cors: true
+
+  delete-employee:
+    handler: employee-handler.remove
+    name: ${self:service}-delete-employee
+    events:
+      - http:
+          path: '{id}'
+          method: delete
+          cors: true
+
+  restore-employee:
+    handler: employee-handler.restore
+    name: ${self:service}-restore-employee
+    events:
+      - http:
+          path: '{id}/restore'
+          method: post
+          cors: true
+
+  get-employee-credentials:
+    handler: employee-handler.getCredentials
+    name: ${self:service}-get-employee-credentials
+    events:
+      - http:
+          path: '{id}/credentials'
+          method: get
+          cors: true
+
+  reset-employee-password:
+    handler: employee-handler.resetPassword
+    name: ${self:service}-reset-employee-password
+    events:
+      - http:
+          path: '{id}/reset-password'
+          method: post
           cors: true

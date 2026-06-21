@@ -7,7 +7,7 @@
 create table if not exists lab (
     uuid varchar(12) primary key,
     name varchar(128) not null,
-    type varchar(32) not null check (type in ('physics', 'chemistry', 'biology', 'computer', 'language', 'mathematics', 'other')),
+    type varchar(32) not null check (type in ('physics', 'chemistry', 'biology', 'computer', 'language', 'mathematics', 'composite', 'other')),
     location varchar(128),
     in_charge_id varchar(12),
     status varchar(16) check (status in ('active', 'inactive', 'deleted')),
@@ -152,6 +152,12 @@ create table if not exists lab_purchase_batch (
 
 create index if not exists idx_lab_purchase_batch_school on lab_purchase_batch(school_id);
 create index if not exists idx_lab_purchase_batch_school_status on lab_purchase_batch(school_id, status);
+
+-- Widen lab.type to include 'composite' on already-created tables (idempotent).
+-- The inline check above only applies to fresh installs. Existing tables keep
+-- their original constraint, so drop and re-add it under a known name.
+alter table lab drop constraint if exists lab_type_check;
+alter table lab add constraint lab_type_check check (type in ('physics', 'chemistry', 'biology', 'computer', 'language', 'mathematics', 'composite', 'other'));
 
 -- Entity linking columns (idempotent)
 alter table lab_issue_log add column if not exists issued_to_type varchar(16);

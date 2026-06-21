@@ -62,6 +62,7 @@ export const CATEGORIES_BY_LAB_TYPE: Record<string, string[]> = {
   computer: ['Hardware', 'Peripherals', 'Networking', 'Cables', 'General'],
   language: ['Audio', 'Recording', 'Display', 'General'],
   mathematics: ['Measurement', 'Models', 'Geometry', 'General'],
+  composite: ['Electricity', 'Electronics', 'Optics', 'Mechanics', 'Measurement', 'Chemicals', 'Glassware', 'Apparatus', 'Reagents', 'Microscopy', 'Specimens', 'Dissection', 'General'],
   other: ['General'],
 };
 

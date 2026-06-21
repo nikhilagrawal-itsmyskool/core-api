@@ -1,0 +1,5 @@
+{
+  "httpPort": 3025,
+  "lambdaPort": 3026,
+  "prefix": "asset"
+}
