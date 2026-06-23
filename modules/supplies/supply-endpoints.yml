@@ -1,0 +1,329 @@
+  # Health check
+  health:
+    handler: health-handler.health
+    events:
+      - http:
+          path: health
+          method: get
+          cors: true
+
+  # Lookup endpoints
+  get-units:
+    handler: supply-lookup-handler.getUnits
+    name: ${self:service}-get-units
+    events:
+      - http:
+          path: lookups/units
+          method: get
+          cors: true
+
+  get-conditions:
+    handler: supply-lookup-handler.getConditions
+    name: ${self:service}-get-conditions
+    events:
+      - http:
+          path: lookups/conditions
+          method: get
+          cors: true
+
+  # Category endpoints
+  list-categories:
+    handler: supply-category-handler.list
+    name: ${self:service}-list-categories
+    events:
+      - http:
+          path: categories
+          method: get
+          cors: true
+
+  create-category:
+    handler: supply-category-handler.create
+    name: ${self:service}-create-category
+    events:
+      - http:
+          path: categories
+          method: post
+          cors: true
+
+  get-category:
+    handler: supply-category-handler.getById
+    name: ${self:service}-get-category
+    events:
+      - http:
+          path: categories/{id}
+          method: get
+          cors: true
+
+  update-category:
+    handler: supply-category-handler.update
+    name: ${self:service}-update-category
+    events:
+      - http:
+          path: categories/{id}
+          method: put
+          cors: true
+
+  delete-category:
+    handler: supply-category-handler.remove
+    name: ${self:service}-delete-category
+    events:
+      - http:
+          path: categories/{id}
+          method: delete
+          cors: true
+
+  # Item endpoints
+  create-item:
+    handler: supply-item-handler.create
+    name: ${self:service}-create-item
+    events:
+      - http:
+          path: items
+          method: post
+          cors: true
+
+  search-items:
+    handler: supply-item-handler.search
+    name: ${self:service}-search-items
+    events:
+      - http:
+          path: items
+          method: get
+          cors: true
+
+  get-item:
+    handler: supply-item-handler.getById
+    name: ${self:service}-get-item
+    events:
+      - http:
+          path: items/{id}
+          method: get
+          cors: true
+
+  update-item:
+    handler: supply-item-handler.update
+    name: ${self:service}-update-item
+    events:
+      - http:
+          path: items/{id}
+          method: put
+          cors: true
+
+  delete-item:
+    handler: supply-item-handler.remove
+    name: ${self:service}-delete-item
+    events:
+      - http:
+          path: items/{id}
+          method: delete
+          cors: true
+
+  merge-item:
+    handler: supply-item-handler.merge
+    name: ${self:service}-merge-item
+    events:
+      - http:
+          path: items/{id}/merge
+          method: post
+          cors: true
+
+  # Purchase batch endpoints (bulk-only)
+  create-bulk-purchase:
+    handler: supply-purchase-batch-handler.createBulk
+    name: ${self:service}-create-bulk-purchase
+    events:
+      - http:
+          path: purchases/bulk
+          method: post
+          cors: true
+
+  list-purchases:
+    handler: supply-purchase-batch-handler.list
+    name: ${self:service}-list-purchases
+    events:
+      - http:
+          path: purchases
+          method: get
+          cors: true
+
+  get-purchase:
+    handler: supply-purchase-batch-handler.getById
+    name: ${self:service}-get-purchase
+    events:
+      - http:
+          path: purchases/{batchId}
+          method: get
+          cors: true
+
+  update-purchase:
+    handler: supply-purchase-batch-handler.update
+    name: ${self:service}-update-purchase
+    events:
+      - http:
+          path: purchases/{batchId}
+          method: put
+          cors: true
+
+  delete-purchase:
+    handler: supply-purchase-batch-handler.remove
+    name: ${self:service}-delete-purchase
+    events:
+      - http:
+          path: purchases/{batchId}
+          method: delete
+          cors: true
+
+  restore-purchase:
+    handler: supply-purchase-batch-handler.restore
+    name: ${self:service}-restore-purchase
+    events:
+      - http:
+          path: purchases/{batchId}/restore
+          method: post
+          cors: true
+
+  upload-purchase-bill:
+    handler: supply-purchase-batch-handler.uploadBill
+    name: ${self:service}-upload-purchase-bill
+    events:
+      - http:
+          path: purchases/{batchId}/bill
+          method: post
+          cors: true
+
+  get-purchase-bill:
+    handler: supply-purchase-batch-handler.getBill
+    name: ${self:service}-get-purchase-bill
+    events:
+      - http:
+          path: purchases/{batchId}/bill
+          method: get
+          cors: true
+
+  delete-purchase-bill:
+    handler: supply-purchase-batch-handler.deleteBill
+    name: ${self:service}-delete-purchase-bill
+    events:
+      - http:
+          path: purchases/{batchId}/bill
+          method: delete
+          cors: true
+
+  # Issue endpoints
+  create-issue:
+    handler: supply-issue-handler.create
+    name: ${self:service}-create-issue
+    events:
+      - http:
+          path: issues
+          method: post
+          cors: true
+
+  list-issues:
+    handler: supply-issue-handler.list
+    name: ${self:service}-list-issues
+    events:
+      - http:
+          path: issues
+          method: get
+          cors: true
+
+  get-issue:
+    handler: supply-issue-handler.getById
+    name: ${self:service}-get-issue
+    events:
+      - http:
+          path: issues/{id}
+          method: get
+          cors: true
+
+  update-issue:
+    handler: supply-issue-handler.update
+    name: ${self:service}-update-issue
+    events:
+      - http:
+          path: issues/{id}
+          method: put
+          cors: true
+
+  delete-issue:
+    handler: supply-issue-handler.remove
+    name: ${self:service}-delete-issue
+    events:
+      - http:
+          path: issues/{id}
+          method: delete
+          cors: true
+
+  return-issue:
+    handler: supply-issue-handler.returnItem
+    name: ${self:service}-return-issue
+    events:
+      - http:
+          path: issues/{id}/return
+          method: put
+          cors: true
+
+  # Wastage endpoints
+  create-wastage:
+    handler: supply-wastage-handler.create
+    name: ${self:service}-create-wastage
+    events:
+      - http:
+          path: wastages
+          method: post
+          cors: true
+
+  list-wastages:
+    handler: supply-wastage-handler.list
+    name: ${self:service}-list-wastages
+    events:
+      - http:
+          path: wastages
+          method: get
+          cors: true
+
+  get-wastage:
+    handler: supply-wastage-handler.getById
+    name: ${self:service}-get-wastage
+    events:
+      - http:
+          path: wastages/{id}
+          method: get
+          cors: true
+
+  update-wastage:
+    handler: supply-wastage-handler.update
+    name: ${self:service}-update-wastage
+    events:
+      - http:
+          path: wastages/{id}
+          method: put
+          cors: true
+
+  delete-wastage:
+    handler: supply-wastage-handler.remove
+    name: ${self:service}-delete-wastage
+    events:
+      - http:
+          path: wastages/{id}
+          method: delete
+          cors: true
+
+  get-wastage-image:
+    handler: supply-wastage-handler.getImage
+    name: ${self:service}-get-wastage-image
+    events:
+      - http:
+          path: wastages/{id}/image
+          method: get
+          cors: true
+
+  delete-wastage-image:
+    handler: supply-wastage-handler.deleteImage
+    name: ${self:service}-delete-wastage-image
+    events:
+      - http:
+          path: wastages/{id}/image
+          method: delete
+          cors: true

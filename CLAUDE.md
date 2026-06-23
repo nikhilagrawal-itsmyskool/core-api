@@ -22,7 +22,7 @@ npx prettier --write .
 
 ## NPM Scripts
 
-### Module Commands (auth, medical, lab, student, employee, class, academic-year, fine)
+### Module Commands (auth, medical, lab, student, employee, class, academic-year, fine, supplies)
 | Command | Description |
 |---------|-------------|
 | `npm run start:<module>` | Start module (auto-kills ports first) |
@@ -31,7 +31,7 @@ npx prettier --write .
 | `npm run stop:<module>` | Stop module |
 | `npm run test:<module>:full` | Full cycle: stop → start → test → stop |
 
-Available modules: `auth`, `medical`, `lab`, `sample`, `student`, `employee`, `class`, `academic-year`, `fine`, `uniform`, `shop`, `sports`, `asset`
+Available modules: `auth`, `medical`, `lab`, `sample`, `student`, `employee`, `class`, `academic-year`, `fine`, `uniform`, `shop`, `sports`, `asset`, `library`, `supplies`
 
 > These always run on `local` stage (hardcoded in `start-module.js`). Stage cannot be changed for individual module commands.
 
@@ -63,6 +63,8 @@ Each module in `modules/` is an independent Lambda microservice with its own `se
 - **lab/**: Lab inventory management - items, purchases, issues, breakages across all lab types
 - **sports/**: Sports equipment inventory (bulk) - items, purchases, issues, breakages grouped by sport
 - **asset/**: Physical asset register - a containment tree (room→fan/bench/almirah), per-school managed asset types, responsibility with inheritance/delegation, quantity buckets that individualize into coded items, and location-move logging
+- **library/**: Library catalog & circulation - three-level Work→Title→Copy model (FRBR-style), DDC classification with auto-derived call numbers (Cutter author mark), per-school lookups (color/age/location), ISBN auto-fill, QR/barcode labels resolving live location, issue/return/renew, and per-school overdue/lost fines
+- **supplies/**: General school consumables inventory (stationery, art/craft, cleaning, etc.) - user-defined per-school categories seeded with a curated item master (versioned seed-on-first-use), bulk-only purchases (one bill, many lines) with inline item creation guarded by exact-reuse + fuzzy near-match confirm + admin merge, plus issue and wastage logs
 - **fine/**: Fine collection - incident tracking, workflow (open→under review→decision→closed), evidence upload, receipt generation
 - **student/**: Student search by name, class, and academic year
 - **employee/**: Employee search by name
@@ -91,6 +93,8 @@ Each module runs on dedicated ports to allow simultaneous local development:
 | shop          | 3021      | 3022        | /shop/*           |
 | sports        | 3023      | 3024        | /sports/*         |
 | asset         | 3025      | 3026        | /asset/*          |
+| library       | 3027      | 3028        | /library/*        |
+| supplies      | 3029      | 3030        | /supplies/*       |
 | gateway       | 3000      | -           | (routes all)      |
 
 #### Prod Stage
@@ -110,6 +114,8 @@ Each module runs on dedicated ports to allow simultaneous local development:
 | shop          | 6021      | 6022        |
 | sports        | 6023      | 6024        |
 | asset         | 6025      | 6026        |
+| library       | 6027      | 6028        |
+| supplies      | 6029      | 6030        |
 | gateway       | 6000      | -           |
 
 ### Scripts Organization
@@ -365,7 +371,7 @@ node scripts/local/kill-ports.js --all
 node scripts/local/health-all.js
 set GATEWAY_PORT=3000 && node node_modules/jest/bin/jest.js
 
-# Single module lifecycle (module = auth, medical, lab, sample, student, employee, class, academic-year)
+# Single module lifecycle (module = auth, medical, lab, sample, student, employee, class, academic-year, supplies)
 node scripts/local/start-module.js <module> --kill
 node scripts/local/kill-ports.js --<module>
 node scripts/local/health-module.js <module>

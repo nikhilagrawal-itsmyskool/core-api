@@ -1,0 +1,382 @@
+  # Health check
+  health:
+    handler: health-handler.health
+    events:
+      - http:
+          path: health
+          method: get
+          cors: true
+
+  # ---- Catalog (one-shot work + title + copies) ----
+  catalog:
+    handler: library-work-handler.catalog
+    name: ${self:service}-catalog
+    events:
+      - http:
+          path: catalog
+          method: post
+          cors: true
+
+  # ---- Works ----
+  create-work:
+    handler: library-work-handler.createWork
+    name: ${self:service}-create-work
+    events:
+      - http:
+          path: works
+          method: post
+          cors: true
+
+  search-works:
+    handler: library-work-handler.search
+    name: ${self:service}-search-works
+    events:
+      - http:
+          path: works
+          method: get
+          cors: true
+
+  add-title:
+    handler: library-work-handler.addTitle
+    name: ${self:service}-add-title
+    events:
+      - http:
+          path: works/{id}/titles
+          method: post
+          cors: true
+
+  get-work:
+    handler: library-work-handler.getWork
+    name: ${self:service}-get-work
+    events:
+      - http:
+          path: works/{id}
+          method: get
+          cors: true
+
+  update-work:
+    handler: library-work-handler.updateWork
+    name: ${self:service}-update-work
+    events:
+      - http:
+          path: works/{id}
+          method: put
+          cors: true
+
+  # ---- Titles ----
+  add-copies:
+    handler: library-copy-handler.addCopies
+    name: ${self:service}-add-copies
+    events:
+      - http:
+          path: titles/{id}/copies
+          method: post
+          cors: true
+
+  list-title-copies:
+    handler: library-copy-handler.listByTitle
+    name: ${self:service}-list-title-copies
+    events:
+      - http:
+          path: titles/{id}/copies
+          method: get
+          cors: true
+
+  get-title:
+    handler: library-work-handler.getTitle
+    name: ${self:service}-get-title
+    events:
+      - http:
+          path: titles/{id}
+          method: get
+          cors: true
+
+  update-title:
+    handler: library-work-handler.updateTitle
+    name: ${self:service}-update-title
+    events:
+      - http:
+          path: titles/{id}
+          method: put
+          cors: true
+
+  # ---- Copies ----
+  search-copies:
+    handler: library-copy-handler.searchCopies
+    name: ${self:service}-search-copies
+    events:
+      - http:
+          path: copies-search
+          method: get
+          cors: true
+
+  get-copy-by-accession:
+    handler: library-copy-handler.getByAccession
+    name: ${self:service}-get-copy-by-accession
+    events:
+      - http:
+          path: copies/by-accession/{accessionNo}
+          method: get
+          cors: true
+
+  get-copy-label:
+    handler: library-label-handler.getLabel
+    name: ${self:service}-get-copy-label
+    events:
+      - http:
+          path: copies/{id}/label
+          method: get
+          cors: true
+
+  get-copy:
+    handler: library-copy-handler.getCopy
+    name: ${self:service}-get-copy
+    events:
+      - http:
+          path: copies/{id}
+          method: get
+          cors: true
+
+  update-copy:
+    handler: library-copy-handler.updateCopy
+    name: ${self:service}-update-copy
+    events:
+      - http:
+          path: copies/{id}
+          method: put
+          cors: true
+
+  delete-copy:
+    handler: library-copy-handler.deleteCopy
+    name: ${self:service}-delete-copy
+    events:
+      - http:
+          path: copies/{id}
+          method: delete
+          cors: true
+
+  # ---- Label resolve (mobile scan) ----
+  resolve-accession:
+    handler: library-label-handler.resolve
+    name: ${self:service}-resolve-accession
+    events:
+      - http:
+          path: resolve/{accessionNo}
+          method: get
+          cors: true
+
+  # ---- Reference / static enums ----
+  get-enums:
+    handler: library-lookup-handler.getStaticLookups
+    name: ${self:service}-get-enums
+    events:
+      - http:
+          path: enums
+          method: get
+          cors: true
+
+  # ---- DDC ----
+  get-ddc:
+    handler: library-lookup-handler.getDdc
+    name: ${self:service}-get-ddc
+    events:
+      - http:
+          path: ddc
+          method: get
+          cors: true
+
+  get-ddc-used:
+    handler: library-lookup-handler.getUsedDdc
+    name: ${self:service}-get-ddc-used
+    events:
+      - http:
+          path: ddc-used
+          method: get
+          cors: true
+
+  get-ddc-by-code:
+    handler: library-lookup-handler.getDdcByCode
+    name: ${self:service}-get-ddc-by-code
+    events:
+      - http:
+          path: ddc/{code}
+          method: get
+          cors: true
+
+  # ---- Author / call number ----
+  normalize-author:
+    handler: library-lookup-handler.normalizeAuthor
+    name: ${self:service}-normalize-author
+    events:
+      - http:
+          path: authors/normalize
+          method: post
+          cors: true
+
+  generate-callno:
+    handler: library-lookup-handler.generateCallNo
+    name: ${self:service}-generate-callno
+    events:
+      - http:
+          path: callno/generate
+          method: post
+          cors: true
+
+  # ---- ISBN ----
+  isbn-lookup:
+    handler: library-lookup-handler.isbnLookup
+    name: ${self:service}-isbn-lookup
+    events:
+      - http:
+          path: isbn/{isbn}
+          method: get
+          cors: true
+
+  # ---- Keyword suggestions ----
+  get-keywords:
+    handler: library-lookup-handler.getKeywords
+    name: ${self:service}-get-keywords
+    events:
+      - http:
+          path: keywords
+          method: get
+          cors: true
+
+  # ---- Managed lookups ----
+  create-lookup:
+    handler: library-lookup-handler.createLookup
+    name: ${self:service}-create-lookup
+    events:
+      - http:
+          path: lookups
+          method: post
+          cors: true
+
+  list-lookups:
+    handler: library-lookup-handler.listLookups
+    name: ${self:service}-list-lookups
+    events:
+      - http:
+          path: lookups
+          method: get
+          cors: true
+
+  list-lookups-by-type:
+    handler: library-lookup-handler.listLookups
+    name: ${self:service}-list-lookups-by-type
+    events:
+      - http:
+          path: lookups/{type}
+          method: get
+          cors: true
+
+  update-lookup:
+    handler: library-lookup-handler.updateLookup
+    name: ${self:service}-update-lookup
+    events:
+      - http:
+          path: lookups/{id}
+          method: put
+          cors: true
+
+  delete-lookup:
+    handler: library-lookup-handler.deleteLookup
+    name: ${self:service}-delete-lookup
+    events:
+      - http:
+          path: lookups/{id}
+          method: delete
+          cors: true
+
+  # ---- Circulation ----
+  issue-book:
+    handler: library-circulation-handler.issue
+    name: ${self:service}-issue-book
+    events:
+      - http:
+          path: issue
+          method: post
+          cors: true
+
+  return-book:
+    handler: library-circulation-handler.returnBook
+    name: ${self:service}-return-book
+    events:
+      - http:
+          path: return
+          method: post
+          cors: true
+
+  renew-book:
+    handler: library-circulation-handler.renew
+    name: ${self:service}-renew-book
+    events:
+      - http:
+          path: renew
+          method: post
+          cors: true
+
+  list-circulation:
+    handler: library-circulation-handler.list
+    name: ${self:service}-list-circulation
+    events:
+      - http:
+          path: circulation
+          method: get
+          cors: true
+
+  borrower-loans:
+    handler: library-circulation-handler.loans
+    name: ${self:service}-borrower-loans
+    events:
+      - http:
+          path: borrowers/{type}/{id}/loans
+          method: get
+          cors: true
+
+  # ---- Fines ----
+  list-fines:
+    handler: library-fine-handler.list
+    name: ${self:service}-list-fines
+    events:
+      - http:
+          path: fines
+          method: get
+          cors: true
+
+  collect-fine:
+    handler: library-fine-handler.collect
+    name: ${self:service}-collect-fine
+    events:
+      - http:
+          path: fines/{id}/collect
+          method: post
+          cors: true
+
+  waive-fine:
+    handler: library-fine-handler.waive
+    name: ${self:service}-waive-fine
+    events:
+      - http:
+          path: fines/{id}/waive
+          method: post
+          cors: true
+
+  # ---- Policy ----
+  get-policy:
+    handler: library-policy-handler.get
+    name: ${self:service}-get-policy
+    events:
+      - http:
+          path: policy
+          method: get
+          cors: true
+
+  update-policy:
+    handler: library-policy-handler.update
+    name: ${self:service}-update-policy
+    events:
+      - http:
+          path: policy
+          method: put
+          cors: true
