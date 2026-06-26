@@ -1,22 +1,37 @@
-import { DB, singleLineString } from '../../shared/lib/db';
-import { BusinessErrorResult } from '../../shared/lib/errors';
-import { ErrorCode } from '../../shared/lib/error-codes';
-import { loadConfigForSolve } from './generation-data-loader';
-import { configService } from './config-service';
-import { wingService } from './wing-service';
-import { crossWingTeacherWarnings } from './cross-wing';
-import { buildLessons } from './solver/build-lessons';
-import { checkFeasibility } from './solver/feasibility';
-import { solve } from './solver/solve';
-import { SolverInput } from './solver/types';
-const { generateShortUuid } = require('../../shared/util/generate-uuid.js');
+import { DB, singleLineString } from "../../shared/lib/db";
+import { BusinessErrorResult } from "../../shared/lib/errors";
+import { ErrorCode } from "../../shared/lib/error-codes";
+import { loadConfigForSolve } from "./generation-data-loader";
+import { configService } from "./config-service";
+import { wingService } from "./wing-service";
+import { crossWingTeacherWarnings } from "./cross-wing";
+import { buildLessons } from "./solver/build-lessons";
+import { checkFeasibility } from "./solver/feasibility";
+import { solve } from "./solver/solve";
+import { SolverInput } from "./solver/types";
+import {
+  computeRegistrationEntries,
+  registrationClashMessages,
+  RegistrationEntry,
+} from "./registration";
+const { generateShortUuid } = require("../../shared/util/generate-uuid.js");
 
 const SOLVE_TIME_BUDGET_MS = 12000;
 
 class GenerationService {
   // Build the solver input for a config (shared by feasibility + processing).
   // wingClassIds (optional) scopes the solve to one wing's classes.
-  private async buildSolverInput(schoolId: string, configId: string, objectiveWeights: any, seed: number, wingClassIds?: string[] | null): Promise<{ input: SolverInput; warnings: string[] } | null> {
+  private async buildSolverInput(
+    schoolId: string,
+    configId: string,
+    objectiveWeights: any,
+    seed: number,
+    wingClassIds?: string[] | null,
+  ): Promise<{
+    input: SolverInput;
+    warnings: string[];
+    registrationEntries: RegistrationEntry[];
+  } | null> {
     const loaded = await loadConfigForSolve(schoolId, configId, wingClassIds);
     if (!loaded) return null;
     const { lessons, warnings } = buildLessons(loaded.buildInput);
@@ -29,31 +44,61 @@ class GenerationService {
       seed,
       timeBudgetMs: SOLVE_TIME_BUDGET_MS,
     };
-    return { input, warnings };
+    // Registration (0th period) entries are deterministic — computed here, not solved.
+    const registrationEntries = computeRegistrationEntries(
+      loaded.grid,
+      loaded.buildInput.classTeachers,
+      loaded.buildInput.classIds,
+    );
+    return { input, warnings, registrationEntries };
   }
 
   // Fast pre-check; never enqueues. wingId (optional) scopes to one wing.
-  public async feasibility(schoolId: string, configId: string, wingId?: string | null): Promise<any> {
-    const wingClassIds = wingId ? await wingService.getWingClassIds(schoolId, wingId) : null;
-    const built = await this.buildSolverInput(schoolId, configId, undefined, 1, wingClassIds);
-    if (!built) throw new BusinessErrorResult(ErrorCode.BusinessError, 'Config not found');
+  public async feasibility(
+    schoolId: string,
+    configId: string,
+    wingId?: string | null,
+  ): Promise<any> {
+    const wingClassIds = wingId
+      ? await wingService.getWingClassIds(schoolId, wingId)
+      : null;
+    const built = await this.buildSolverInput(
+      schoolId,
+      configId,
+      undefined,
+      1,
+      wingClassIds,
+    );
+    if (!built)
+      throw new BusinessErrorResult(
+        ErrorCode.BusinessError,
+        "Config not found",
+      );
     const report = checkFeasibility(built.input);
-    const wingWarnings = wingClassIds && wingClassIds.length > 0
-      ? await this.crossWingWarnings(schoolId, configId, wingClassIds)
-      : [];
+    const regClashes = registrationClashMessages(built.registrationEntries);
+    const wingWarnings =
+      wingClassIds && wingClassIds.length > 0
+        ? await this.crossWingWarnings(schoolId, configId, wingClassIds)
+        : [];
+    const issues = [...report.issues, ...regClashes];
     return {
-      feasible: report.feasible,
-      issues: report.issues,
+      feasible: issues.length === 0,
+      issues,
       warnings: [...report.warnings, ...built.warnings, ...wingWarnings],
       lessonCount: built.input.lessons.length,
       classCount: built.input.classIds.length,
+      registrationEntryCount: built.registrationEntries.length,
     };
   }
 
   // "Assume wings are teacher-disjoint, but warn" — flag any teacher who teaches
   // both inside and outside the wing (teaching assignments + elective offerings),
   // scoped to the config's academic year.
-  private async crossWingWarnings(schoolId: string, configId: string, wingClassIds: string[]): Promise<string[]> {
+  private async crossWingWarnings(
+    schoolId: string,
+    configId: string,
+    wingClassIds: string[],
+  ): Promise<string[]> {
     const cfg = await DB.query(
       singleLineString`select academic_year_id from timetable_config where uuid = $1 and school_id = $2`,
       [configId, schoolId],
@@ -79,12 +124,31 @@ class GenerationService {
 
   // Enqueue a run (the row IS the queue). Returns fast. wingId (optional) scopes
   // the run to one wing's classes; null = whole school.
-  public async enqueue(schoolId: string, configId: string, academicYearId: string, objectiveWeights: any, numCandidates: number, userId: string, wingId?: string | null): Promise<string> {
+  public async enqueue(
+    schoolId: string,
+    configId: string,
+    academicYearId: string,
+    objectiveWeights: any,
+    numCandidates: number,
+    userId: string,
+    wingId?: string | null,
+  ): Promise<string> {
     const configRows = await DB.query(
-      singleLineString`select academic_year_id from timetable_config where uuid = $1 and school_id = $2`,
+      singleLineString`select academic_year_id, locked_at from timetable_config where uuid = $1 and school_id = $2`,
       [configId, schoolId],
     );
-    if (configRows.length === 0) throw new BusinessErrorResult(ErrorCode.BusinessError, 'Config not found');
+    if (configRows.length === 0)
+      throw new BusinessErrorResult(
+        ErrorCode.BusinessError,
+        "Config not found",
+      );
+    // Only a locked (frozen) config may be generated, so candidates and published
+    // timetables can never desync from a later grid edit.
+    if (!configRows[0].lockedAt)
+      throw new BusinessErrorResult(
+        ErrorCode.BusinessError,
+        "Lock the grid config before generating timetables.",
+      );
     const yearId = academicYearId || configRows[0].academicYearId;
 
     const uuid = generateShortUuid(12);
@@ -94,7 +158,17 @@ class GenerationService {
         (uuid, school_id, academic_year_id, config_id, wing_id, status, objective_weights, num_candidates, progress, attempts, createdby_userid, created_at)
         values ($1, $2, $3, $4, $5, 'queued', $6, $7, 0, 0, $8, $9)
       `,
-      [uuid, schoolId, yearId, configId, wingId ?? null, objectiveWeights ?? null, numCandidates, userId, new Date()],
+      [
+        uuid,
+        schoolId,
+        yearId,
+        configId,
+        wingId ?? null,
+        objectiveWeights ?? null,
+        numCandidates,
+        userId,
+        new Date(),
+      ],
     );
     return uuid;
   }
@@ -130,7 +204,13 @@ class GenerationService {
 
   // Claim one queued run and solve it. Called by the worker poller.
   // Returns { claimed } so the worker knows whether to keep polling.
-  public async processNext(workerId: string): Promise<{ claimed: boolean; runId?: string; status?: string; candidateCount?: number; error?: string }> {
+  public async processNext(workerId: string): Promise<{
+    claimed: boolean;
+    runId?: string;
+    status?: string;
+    candidateCount?: number;
+    error?: string;
+  }> {
     const claimed = await DB.query(
       singleLineString`
         update generation_run
@@ -147,28 +227,62 @@ class GenerationService {
 
     const run = claimed[0];
     try {
-      const wingClassIds = run.wingId ? await wingService.getWingClassIds(run.schoolId, run.wingId) : null;
-      const built = await this.buildSolverInput(run.schoolId, run.configId, run.objectiveWeights, Number(String(run.uuid).replace(/\D/g, '').slice(0, 6) || '1') || 1, wingClassIds);
-      if (!built) throw new Error('Config not found for run');
+      const wingClassIds = run.wingId
+        ? await wingService.getWingClassIds(run.schoolId, run.wingId)
+        : null;
+      const built = await this.buildSolverInput(
+        run.schoolId,
+        run.configId,
+        run.objectiveWeights,
+        Number(String(run.uuid).replace(/\D/g, "").slice(0, 6) || "1") || 1,
+        wingClassIds,
+      );
+      if (!built) throw new Error("Config not found for run");
 
       const feas = checkFeasibility(built.input);
-      if (!feas.feasible) {
-        await this.markFailed(run.uuid, `Infeasible: ${feas.issues.join(' ')}`);
-        return { claimed: true, runId: run.uuid, status: 'failed', error: feas.issues.join(' ') };
+      const regClashes = registrationClashMessages(built.registrationEntries);
+      const allIssues = [...feas.issues, ...regClashes];
+      if (allIssues.length > 0) {
+        await this.markFailed(run.uuid, `Infeasible: ${allIssues.join(" ")}`);
+        return {
+          claimed: true,
+          runId: run.uuid,
+          status: "failed",
+          error: allIssues.join(" "),
+        };
       }
 
       const numCandidates = run.numCandidates || 3;
       const result = solve(built.input, numCandidates);
       if (!result.feasible) {
-        await this.markFailed(run.uuid, result.reason || 'No solution found');
-        return { claimed: true, runId: run.uuid, status: 'failed', error: result.reason };
+        await this.markFailed(run.uuid, result.reason || "No solution found");
+        return {
+          claimed: true,
+          runId: run.uuid,
+          status: "failed",
+          error: result.reason,
+        };
       }
 
-      await this.writeCandidates(run, result.candidates);
-      return { claimed: true, runId: run.uuid, status: 'completed', candidateCount: result.candidates.length };
+      await this.writeCandidates(
+        run,
+        result.candidates,
+        built.registrationEntries,
+      );
+      return {
+        claimed: true,
+        runId: run.uuid,
+        status: "completed",
+        candidateCount: result.candidates.length,
+      };
     } catch (err: any) {
       await this.markFailed(run.uuid, err.message || String(err));
-      return { claimed: true, runId: run.uuid, status: 'failed', error: err.message };
+      return {
+        claimed: true,
+        runId: run.uuid,
+        status: "failed",
+        error: err.message,
+      };
     }
   }
 
@@ -179,7 +293,11 @@ class GenerationService {
     );
   }
 
-  private async writeCandidates(run: any, candidates: any[]): Promise<void> {
+  private async writeCandidates(
+    run: any,
+    candidates: any[],
+    registrationEntries: RegistrationEntry[] = [],
+  ): Promise<void> {
     const queries: string[] = [];
     const params: any[][] = [];
     const now = new Date();
@@ -190,7 +308,16 @@ class GenerationService {
         insert into timetable_candidate (uuid, school_id, generation_run_id, rank, score, score_breakdown, createdby_userid, created_at)
         values ($1, $2, $3, $4, $5, $6, $7, $8)
       `);
-      params.push([candidateId, run.schoolId, run.uuid, idx + 1, cand.score, cand.breakdown ?? null, run.createdbyUserid ?? 'worker', now]);
+      params.push([
+        candidateId,
+        run.schoolId,
+        run.uuid,
+        idx + 1,
+        cand.score,
+        cand.breakdown ?? null,
+        run.createdbyUserid ?? "worker",
+        now,
+      ]);
 
       for (const p of cand.timetable.placements) {
         for (let k = 0; k < p.size; k++) {
@@ -202,9 +329,45 @@ class GenerationService {
               (uuid, school_id, candidate_id, class_id, subject_id, teacher_id, day_of_week, time_slot_id, block_group_id, band_id, createdby_userid, created_at)
               values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
             `);
-            params.push([generateShortUuid(12), run.schoolId, candidateId, p.classId, off.subjectId, off.teacherId, p.dayOfWeek, timeSlotId, blockGroupId, p.bandId ?? null, run.createdbyUserid ?? 'worker', now]);
+            params.push([
+              generateShortUuid(12),
+              run.schoolId,
+              candidateId,
+              p.classId,
+              off.subjectId,
+              off.teacherId,
+              p.dayOfWeek,
+              timeSlotId,
+              blockGroupId,
+              p.bandId ?? null,
+              run.createdbyUserid ?? "worker",
+              now,
+            ]);
           }
         }
+      }
+
+      // Registration (0th) entries: same for every candidate — class teacher, no subject.
+      for (const reg of registrationEntries) {
+        queries.push(singleLineString`
+          insert into timetable_entry
+          (uuid, school_id, candidate_id, class_id, subject_id, teacher_id, day_of_week, time_slot_id, block_group_id, band_id, createdby_userid, created_at)
+          values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+        `);
+        params.push([
+          generateShortUuid(12),
+          run.schoolId,
+          candidateId,
+          reg.classId,
+          null,
+          reg.teacherId,
+          reg.dayOfWeek,
+          reg.timeSlotId,
+          null,
+          null,
+          run.createdbyUserid ?? "worker",
+          now,
+        ]);
       }
     });
 
@@ -217,7 +380,12 @@ class GenerationService {
   }
 
   // Publish a candidate as the active master (archives any prior active master for the year).
-  public async publish(schoolId: string, candidateId: string, effectiveFrom: string | null, userId: string): Promise<any> {
+  public async publish(
+    schoolId: string,
+    candidateId: string,
+    effectiveFrom: string | null,
+    userId: string,
+  ): Promise<any> {
     const candRows = await DB.query(
       singleLineString`
         select c.uuid, c.generation_run_id, r.academic_year_id, r.wing_id
@@ -227,7 +395,11 @@ class GenerationService {
       `,
       [candidateId, schoolId],
     );
-    if (candRows.length === 0) throw new BusinessErrorResult(ErrorCode.BusinessError, 'Candidate not found');
+    if (candRows.length === 0)
+      throw new BusinessErrorResult(
+        ErrorCode.BusinessError,
+        "Candidate not found",
+      );
     const academicYearId = candRows[0].academicYearId;
     const wingId = candRows[0].wingId ?? null;
 
@@ -254,7 +426,16 @@ class GenerationService {
       insert into published_timetable (uuid, school_id, academic_year_id, wing_id, source_candidate_id, status, effective_from, createdby_userid, created_at)
       values ($1, $2, $3, $4, $5, 'active', $6, $7, $8)
     `);
-    params.push([publishedId, schoolId, academicYearId, wingId, candidateId, effectiveFrom, userId, now]);
+    params.push([
+      publishedId,
+      schoolId,
+      academicYearId,
+      wingId,
+      candidateId,
+      effectiveFrom,
+      userId,
+      now,
+    ]);
 
     for (const e of entries) {
       queries.push(singleLineString`
@@ -262,17 +443,39 @@ class GenerationService {
         (uuid, school_id, published_timetable_id, class_id, subject_id, teacher_id, day_of_week, time_slot_id, block_group_id, band_id, createdby_userid, created_at)
         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
       `);
-      params.push([generateShortUuid(12), schoolId, publishedId, e.classId, e.subjectId, e.teacherId, e.dayOfWeek, e.timeSlotId, e.blockGroupId ?? null, e.bandId ?? null, userId, now]);
+      params.push([
+        generateShortUuid(12),
+        schoolId,
+        publishedId,
+        e.classId,
+        e.subjectId,
+        e.teacherId,
+        e.dayOfWeek,
+        e.timeSlotId,
+        e.blockGroupId ?? null,
+        e.bandId ?? null,
+        userId,
+        now,
+      ]);
     }
 
     await DB.queriesInTransaction(queries, params);
-    return { publishedTimetableId: publishedId, academicYearId, wingId, entryCount: entries.length };
+    return {
+      publishedTimetableId: publishedId,
+      academicYearId,
+      wingId,
+      entryCount: entries.length,
+    };
   }
 
   // Active published master for an academic year + scope (wingId null = whole
   // school), plus the grid config it uses (so the UI can render the weekday×period
   // skeleton). Returns null when none.
-  public async getActivePublished(schoolId: string, academicYearId: string, wingId?: string | null): Promise<any | null> {
+  public async getActivePublished(
+    schoolId: string,
+    academicYearId: string,
+    wingId?: string | null,
+  ): Promise<any | null> {
     const pts = await DB.query(
       singleLineString`
         select * from published_timetable
@@ -306,7 +509,8 @@ class GenerationService {
         `,
         [pt.sourceCandidateId, schoolId],
       );
-      if (rows.length > 0) config = await configService.getConfigById(rows[0].configId, schoolId);
+      if (rows.length > 0)
+        config = await configService.getConfigById(rows[0].configId, schoolId);
     }
 
     return { publishedTimetable: pt, entries, config };
@@ -314,7 +518,10 @@ class GenerationService {
 
   // All active published masters for a year (whole-school + each wing), with the
   // wing name and entry count — drives the Published view's scope selector.
-  public async listActivePublished(schoolId: string, academicYearId: string): Promise<any[]> {
+  public async listActivePublished(
+    schoolId: string,
+    academicYearId: string,
+  ): Promise<any[]> {
     return DB.query(
       singleLineString`
         select pt.uuid, pt.wing_id, w.name as wing_name, pt.effective_from, pt.created_at,
@@ -330,27 +537,42 @@ class GenerationService {
 
   // Lightweight clash check for moving a published entry to a new day/slot.
   // Foundation for Phase-3 live editing.
-  public async validateMove(schoolId: string, publishedTimetableId: string, entryId: string, toDayOfWeek: number, toTimeSlotId: string): Promise<{ valid: boolean; issues: string[] }> {
+  public async validateMove(
+    schoolId: string,
+    publishedTimetableId: string,
+    entryId: string,
+    toDayOfWeek: number,
+    toTimeSlotId: string,
+  ): Promise<{ valid: boolean; issues: string[] }> {
     const entries = await DB.query(
       singleLineString`select * from published_entry where published_timetable_id = $1 and school_id = $2`,
       [publishedTimetableId, schoolId],
     );
     const moving = entries.find((e: any) => e.uuid === entryId);
-    if (!moving) return { valid: false, issues: ['Entry not found'] };
+    if (!moving) return { valid: false, issues: ["Entry not found"] };
 
     // band siblings move together; exclude them from clash comparison
     const siblingIds = new Set(
       moving.bandId
-        ? entries.filter((e: any) => e.bandId === moving.bandId).map((e: any) => e.uuid)
+        ? entries
+            .filter((e: any) => e.bandId === moving.bandId)
+            .map((e: any) => e.uuid)
         : [moving.uuid],
     );
 
     const issues: string[] = [];
     for (const e of entries) {
       if (siblingIds.has(e.uuid)) continue;
-      if (e.dayOfWeek !== toDayOfWeek || e.timeSlotId !== toTimeSlotId) continue;
-      if (e.classId === moving.classId) issues.push(`Class ${moving.classId} already has a class at the target slot`);
-      if (e.teacherId === moving.teacherId) issues.push(`Teacher ${moving.teacherId} is already booked at the target slot`);
+      if (e.dayOfWeek !== toDayOfWeek || e.timeSlotId !== toTimeSlotId)
+        continue;
+      if (e.classId === moving.classId)
+        issues.push(
+          `Class ${moving.classId} already has a class at the target slot`,
+        );
+      if (e.teacherId === moving.teacherId)
+        issues.push(
+          `Teacher ${moving.teacherId} is already booked at the target slot`,
+        );
     }
     return { valid: issues.length === 0, issues: [...new Set(issues)] };
   }

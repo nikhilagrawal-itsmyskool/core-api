@@ -1,4 +1,4 @@
-import { GridDay, GridSlot, SolverGrid } from './types';
+import { GridDay, GridSlot, SolverGrid } from "./types";
 
 // A concrete starting position for a lesson of a given size on a day: the
 // teaching slots it would occupy (already verified to be consecutive in real
@@ -10,7 +10,7 @@ export interface StartPosition {
 
 function teachingSlots(day: GridDay): GridSlot[] {
   return day.slots
-    .filter((s) => s.slotType === 'teaching')
+    .filter((s) => s.slotType === "teaching")
     .sort((a, b) => a.sequence - b.sequence);
 }
 
@@ -21,7 +21,10 @@ function teachingRuns(day: GridDay): GridSlot[][] {
   const runs: GridSlot[][] = [];
   let current: GridSlot[] = [];
   for (const slot of slots) {
-    if (current.length === 0 || slot.sequence === current[current.length - 1].sequence + 1) {
+    if (
+      current.length === 0 ||
+      slot.sequence === current[current.length - 1].sequence + 1
+    ) {
       current.push(slot);
     } else {
       runs.push(current);
@@ -32,13 +35,25 @@ function teachingRuns(day: GridDay): GridSlot[][] {
   return runs;
 }
 
-export function getDay(grid: SolverGrid, dayOfWeek: number): GridDay | undefined {
+export function getDay(
+  grid: SolverGrid,
+  dayOfWeek: number,
+): GridDay | undefined {
   return grid.days.find((d) => d.dayOfWeek === dayOfWeek);
 }
 
 // The first teaching slot of a day (smallest sequence) — the class-teacher pin slot.
 export function firstTeachingSlot(day: GridDay): GridSlot | undefined {
   return teachingSlots(day)[0];
+}
+
+// Registration (0th attendance period) slots of a day, in sequence order. These
+// are never filled by the solver; each is booked deterministically by the class
+// teacher of every class (no subject). Usually zero or one per day.
+export function registrationSlots(day: GridDay): GridSlot[] {
+  return day.slots
+    .filter((s) => s.slotType === "registration")
+    .sort((a, b) => a.sequence - b.sequence);
 }
 
 // All valid start positions for a lesson of `size` consecutive teaching slots.

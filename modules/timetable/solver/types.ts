@@ -1,7 +1,7 @@
 // Pure solver data model. These types are independent of the DB layer so the
 // solver can be unit-tested with hand-built inputs (no server / no Postgres).
 
-export type SlotType = 'teaching' | 'assembly' | 'break' | 'lunch' | 'reserved' | 'activity';
+export type SlotType = 'teaching' | 'assembly' | 'break' | 'lunch' | 'reserved' | 'activity' | 'registration';
 
 export interface GridSlot {
   slotId: string;

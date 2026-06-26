@@ -38,13 +38,29 @@ optional preference-capture/explanation and is not part of v1.
 - Teacher constraints are **per-teacher** and individually **hard or soft**.
   Default: `unavailable_slot`/`day_off` hard, `preferred_slot` soft.
 - **Class teacher (hard):** every class has a class teacher for the year
-  (`class_teacher`). The **first teaching slot of every day** for a class is
+  (`class_teacher`). The **first teaching slot of a day** for a class is
   pinned to its class teacher, teaching one of the subjects they're assigned to
-  that class. It counts toward that subject's weekly periods and doubles as
-  attendance. **Which** subject is admin-selectable (`first_period_subject_id`);
-  when unset it defaults to the class teacher's subject with the most periods/
-  week. An invalid choice (not taught by the class teacher) falls back to that
-  auto pick with a warning.
+  that class. It counts toward that subject's weekly periods. **Which** subject is
+  admin-selectable (`first_period_subject_id`); when unset it defaults to the class
+  teacher's subject with the most periods/week. An invalid choice (not taught by
+  the class teacher) falls back to that auto pick with a warning.
+  - **Per-weekday pin (`first_period_days`):** the first-period pin applies only on
+    the listed weekdays (1=Mon..7=Sun). `null` = all teaching days (the original
+    behavior); `[]` = the class teacher takes no first period (they float among
+    their normal periods). On a non-pinned day the first teaching slot is left open
+    for the solver to fill with any subject/teacher — this covers the real case
+    where a class teacher takes the first period most days but not all.
+- **Registration / 0th period (`slot_type = 'registration'`):** a pre-period
+  attendance slot that is **always** the class teacher, on **every** teaching day,
+  for every class with a class teacher. It carries **no subject** (does not consume
+  any subject's weekly periods) and is **not** solved — it is written
+  deterministically as `timetable_entry`/`published_entry` rows with
+  `subject_id = null, teacher_id = class teacher`. Because the grid is school-wide
+  and a slot sequence is unique per day, a registration slot never coincides with a
+  teaching slot, so it can never clash with the solved grid; the one config error
+  it can surface — a teacher who is class teacher of two classes sharing the slot —
+  is reported by feasibility. By convention assembly = sequence -1, registration =
+  sequence 0, teaching periods = 1..N (non-positive sequences are allowed).
 - **Teacher-less subjects:** a `class_subject` with **no** `teaching_assignment`
   is still scheduled — it books the class only (no teacher), e.g. a supervised
   study or library period. Its `timetable_entry.teacher_id` is null. Block rules
@@ -101,8 +117,10 @@ columns, `school_id` on every row, partial unique indexes `where status =
   `block_rules` (jsonb)
 - `teaching_assignment` — class_id, subject_id, teacher_id, academic_year_id,
   `period_share` (null = all periods of that class+subject)
-- `class_teacher` — class_id, academic_year_id, teacher_id (one per class/year);
-  drives the daily first-period pin
+- `class_teacher` — class_id, academic_year_id, teacher_id (one per class/year),
+  `first_period_subject_id` (nullable), `first_period_days` (jsonb weekday list,
+  null = all teaching days); drives the daily first-period pin and the registration
+  (0th-period) attendance booking
 - `elective_band` — class_id, academic_year_id, name, `periods_per_week`,
   `block_rules` (jsonb); a within-class parallel option block
 - `elective_offering` — band_id, subject_id, teacher_id; one choice in a band.
@@ -110,11 +128,23 @@ columns, `school_id` on every row, partial unique indexes `where status =
 - `class_group` — future cross-section banding; v1 solver ignores it
 
 **Grid (day-varying)**
-- `timetable_config` — name, academic_year_id, status (`active`|`archived`)
+- `timetable_config` — name, academic_year_id, status (`active`|`archived`),
+  `locked_at`/`lockedby_userid`. **Lock lifecycle:** a config is a **draft**
+  (`locked_at` null, freely editable) until **locked**; only a **locked** config can
+  be generated, and a locked config is **immutable** (day/slot edits rejected — rename
+  and archive still allowed). **Unlock** is permitted only while no `generation_run`
+  references it; once generated/published it's permanently locked and revision is via
+  **clone** (`POST /configs/{id}/clone` deep-copies days+slots into a new draft). This
+  guarantees published timetables never desync from a later grid edit.
 - `day_structure` — config_id, `day_of_week` (1=Mon … 7=Sun)
-- `time_slot` — day_structure_id, `sequence`, start/end time, `slot_type`
-  (`teaching`|`assembly`|`break`|`lunch`|`reserved`|`activity`), label.
-  `activity` = fixed, teacher-less, school-wide (e.g. last two Saturday slots)
+- `time_slot` — day_structure_id, `sequence` (any integer; non-positive allowed so
+  assembly = -1 and registration = 0 sit before period 1), start/end time,
+  `slot_type` (`teaching`|`assembly`|`break`|`lunch`|`reserved`|`activity`|
+  `registration`), label. Only `teaching` is filled by the solver; the rest are
+  fixed scaffolding (and barriers a double can't span). `activity` = fixed,
+  teacher-less, school-wide (e.g. last two Saturday slots). `registration` = the
+  0th attendance period, booked deterministically by each class's class teacher
+  (no subject); `timetable_entry.subject_id` is nullable to hold it.
 
 **Teacher rules (per-teacher, hard/soft each)**
 - `teacher_constraint` — teacher_id, academic_year_id, `constraint_type`
@@ -165,6 +195,7 @@ columns, `school_id` on every row, partial unique indexes `where status =
 - Class-teachers — CRUD
 - Elective-bands + nested elective-offerings — CRUD
 - Config / day-structures / time-slots — CRUD
+- `POST /timetable/configs/{id}/lock` · `/unlock` · `/clone` — config lock lifecycle
 - Teacher-constraints — CRUD
 - `POST /timetable/feasibility` — fast pre-check report
 - `POST /timetable/generate` — inserts a run, returns `{ runId }` immediately

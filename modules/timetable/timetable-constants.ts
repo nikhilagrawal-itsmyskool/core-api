@@ -16,6 +16,7 @@ export const SLOT_TYPES = [
   { value: 'lunch', label: 'Lunch' },
   { value: 'reserved', label: 'Reserved' },
   { value: 'activity', label: 'Activity' },
+  { value: 'registration', label: 'Registration (0th period)' },
 ] as const;
 
 export const CONSTRAINT_TYPES = [

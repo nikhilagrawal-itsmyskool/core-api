@@ -121,6 +121,11 @@ create unique index if not exists idx_class_teacher_unique on class_teacher(scho
 -- forward-compatible column for existing databases.
 alter table class_teacher add column if not exists first_period_subject_id varchar(12);
 
+-- first_period_days: jsonb array of weekdays (1=Mon..7=Sun) on which the class
+-- teacher takes the 1st (first teaching) period. null = all teaching days (the
+-- original behavior); [] = the class teacher takes no first period (floats).
+alter table class_teacher add column if not exists first_period_days jsonb;
+
 -- elective_band: a within-class parallel option block (XI/XII). Several subject
 -- offerings run in the SAME time slots; a student picks one. Shaped like
 -- class_subject (periods_per_week + block_rules, sum(size*count) == periods_per_week).
@@ -217,6 +222,12 @@ create table if not exists timetable_config (
 
 create index if not exists idx_timetable_config_school_year on timetable_config(school_id, academic_year_id, status);
 
+-- Lock lifecycle: locked_at null = draft (freely editable); non-null = locked
+-- (immutable, and the only state usable for generation). Unlock is allowed only
+-- while unused by any generation_run; otherwise clone to revise.
+alter table timetable_config add column if not exists locked_at timestamp(0);
+alter table timetable_config add column if not exists lockedby_userid varchar(12);
+
 -- day_structure: one row per active weekday of a config (1=Mon .. 7=Sun), so the
 -- grid can vary day to day (e.g. a half-day Saturday).
 create table if not exists day_structure (
@@ -245,7 +256,7 @@ create table if not exists time_slot (
     sequence integer not null,
     start_time time,
     end_time time,
-    slot_type varchar(16) not null check (slot_type in ('teaching', 'assembly', 'break', 'lunch', 'reserved', 'activity')),
+    slot_type varchar(16) not null check (slot_type in ('teaching', 'assembly', 'break', 'lunch', 'reserved', 'activity', 'registration')),
     label varchar(64),
     createdby_userid varchar(12),
     created_at timestamp(0),
@@ -255,6 +266,12 @@ create table if not exists time_slot (
 
 create index if not exists idx_time_slot_day on time_slot(day_structure_id);
 create unique index if not exists idx_time_slot_unique on time_slot(day_structure_id, sequence);
+
+-- forward-compatible: widen the slot_type CHECK to include 'registration' (the 0th
+-- attendance period) on existing databases. Idempotent — drops then re-adds.
+alter table time_slot drop constraint if exists time_slot_slot_type_check;
+alter table time_slot add constraint time_slot_slot_type_check
+    check (slot_type in ('teaching', 'assembly', 'break', 'lunch', 'reserved', 'activity', 'registration'));
 
 -- ---------------------------------------------------------------------------
 -- Teacher constraints (per-teacher, individually hard or soft)
@@ -355,6 +372,8 @@ create table if not exists timetable_entry (
 
 -- forward-compatible relax for existing databases.
 alter table timetable_entry alter column teacher_id drop not null;
+-- subject_id is null for a registration (0th attendance) entry: class teacher, no subject.
+alter table timetable_entry alter column subject_id drop not null;
 
 create index if not exists idx_timetable_entry_candidate on timetable_entry(candidate_id);
 create index if not exists idx_timetable_entry_class on timetable_entry(candidate_id, class_id);
@@ -405,6 +424,8 @@ create table if not exists published_entry (
 
 -- forward-compatible relax for existing databases.
 alter table published_entry alter column teacher_id drop not null;
+-- subject_id is null for a registration (0th attendance) entry: class teacher, no subject.
+alter table published_entry alter column subject_id drop not null;
 
 create index if not exists idx_published_entry_timetable on published_entry(published_timetable_id);
 create index if not exists idx_published_entry_class on published_entry(published_timetable_id, class_id);

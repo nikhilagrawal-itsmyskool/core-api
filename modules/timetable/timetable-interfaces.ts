@@ -1,6 +1,11 @@
 import {
-  SubjectKind, SlotType, ConstraintType, Hardness, StatusValue, ConfigStatus,
-} from './timetable-constants';
+  SubjectKind,
+  SlotType,
+  ConstraintType,
+  Hardness,
+  StatusValue,
+  ConfigStatus,
+} from "./timetable-constants";
 
 // Common audit fields on every row.
 export interface BaseEntity {
@@ -101,6 +106,9 @@ export interface ClassTeacher extends BaseEntity {
   teacherId: string;
   // null/undefined = auto-pick the class teacher's subject with the most periods/week.
   firstPeriodSubjectId?: string | null;
+  // Weekdays (1=Mon..7=Sun) the class teacher takes the 1st (first teaching) period.
+  // null/undefined = all teaching days; [] = takes no first period (floats).
+  firstPeriodDays?: number[] | null;
   status: StatusValue;
 }
 
@@ -109,11 +117,13 @@ export interface CreateClassTeacherRequest {
   classId: string;
   teacherId: string;
   firstPeriodSubjectId?: string | null;
+  firstPeriodDays?: number[] | null;
 }
 
 export interface UpdateClassTeacherRequest {
   teacherId?: string;
   firstPeriodSubjectId?: string | null;
+  firstPeriodDays?: number[] | null;
 }
 
 // ------------------------------------------------------------------------ wing
@@ -186,6 +196,10 @@ export interface TimetableConfig extends BaseEntity {
   academicYearId: string;
   name: string;
   status: ConfigStatus;
+  // Lock lifecycle: null = draft (editable); non-null = locked (immutable, the
+  // only state usable for generation).
+  lockedAt?: string | null;
+  lockedbyUserid?: string | null;
   days?: DayStructure[];
 }
 
@@ -197,6 +211,10 @@ export interface CreateConfigRequest {
 export interface UpdateConfigRequest {
   name?: string;
   status?: ConfigStatus;
+}
+
+export interface CloneConfigRequest {
+  name?: string;
 }
 
 // --------------------------------------------------------------- day_structure

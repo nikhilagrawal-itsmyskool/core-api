@@ -50,7 +50,7 @@ export async function loadConfigForSolve(schoolId: string, configId: string, win
     [schoolId, academicYearId],
   );
   const classTeachers = await DB.query(
-    singleLineString`select class_id, teacher_id, first_period_subject_id from class_teacher where school_id = $1 and academic_year_id = $2 and status = 'active'`,
+    singleLineString`select class_id, teacher_id, first_period_subject_id, first_period_days from class_teacher where school_id = $1 and academic_year_id = $2 and status = 'active'`,
     [schoolId, academicYearId],
   );
   const bands = await DB.query(
@@ -97,7 +97,7 @@ export async function loadConfigForSolve(schoolId: string, configId: string, win
     teachingDays,
     classSubjects: scopedClassSubjects.map((c: any) => ({ classId: c.classId, subjectId: c.subjectId, periodsPerWeek: c.periodsPerWeek, blockRules: c.blockRules })),
     teachingAssignments: scopedTeachingAssignments.map((a: any) => ({ classId: a.classId, subjectId: a.subjectId, teacherId: a.teacherId, periodShare: a.periodShare })),
-    classTeachers: scopedClassTeachers.map((c: any) => ({ classId: c.classId, teacherId: c.teacherId, firstPeriodSubjectId: c.firstPeriodSubjectId })),
+    classTeachers: scopedClassTeachers.map((c: any) => ({ classId: c.classId, teacherId: c.teacherId, firstPeriodSubjectId: c.firstPeriodSubjectId, firstPeriodDays: c.firstPeriodDays ?? null })),
     electiveBands: scopedElectiveBands,
   };
 

@@ -326,6 +326,30 @@
           path: configs/{id}
           method: delete
           cors: true
+  lock-config:
+    handler: config-handler.lock
+    name: ${self:service}-lock-config
+    events:
+      - http:
+          path: configs/{id}/lock
+          method: post
+          cors: true
+  unlock-config:
+    handler: config-handler.unlock
+    name: ${self:service}-unlock-config
+    events:
+      - http:
+          path: configs/{id}/unlock
+          method: post
+          cors: true
+  clone-config:
+    handler: config-handler.clone
+    name: ${self:service}-clone-config
+    events:
+      - http:
+          path: configs/{id}/clone
+          method: post
+          cors: true
 
   # Day structures
   create-day:
