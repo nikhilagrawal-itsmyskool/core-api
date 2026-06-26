@@ -1,0 +1,5 @@
+{
+  "httpPort": 6031,
+  "lambdaPort": 6032,
+  "prefix": "timetable"
+}

@@ -31,7 +31,7 @@ npx prettier --write .
 | `npm run stop:<module>` | Stop module |
 | `npm run test:<module>:full` | Full cycle: stop → start → test → stop |
 
-Available modules: `auth`, `medical`, `lab`, `sample`, `student`, `employee`, `class`, `academic-year`, `fine`, `uniform`, `shop`, `sports`, `asset`, `library`, `supplies`
+Available modules: `auth`, `medical`, `lab`, `sample`, `student`, `employee`, `class`, `academic-year`, `fine`, `uniform`, `shop`, `sports`, `asset`, `library`, `supplies`, `timetable`
 
 > These always run on `local` stage (hardcoded in `start-module.js`). Stage cannot be changed for individual module commands.
 
@@ -65,6 +65,7 @@ Each module in `modules/` is an independent Lambda microservice with its own `se
 - **asset/**: Physical asset register - a containment tree (room→fan/bench/almirah), per-school managed asset types, responsibility with inheritance/delegation, quantity buckets that individualize into coded items, and location-move logging
 - **library/**: Library catalog & circulation - three-level Work→Title→Copy model (FRBR-style), DDC classification with auto-derived call numbers (Cutter author mark), per-school lookups (color/age/location), ISBN auto-fill, QR/barcode labels resolving live location, issue/return/renew, and per-school overdue/lost fines
 - **supplies/**: General school consumables inventory (stationery, art/craft, cleaning, etc.) - user-defined per-school categories seeded with a curated item master (versioned seed-on-first-use), bulk-only purchases (one bill, many lines) with inline item creation guarded by exact-reuse + fuzzy near-match confirm + admin merge, plus issue and wastage logs
+- **timetable/**: Auto-generating school timetable - owns the academic backbone (subjects, class↔subject demand with weekly periods + block rules, teaching assignments, class teachers, co-scheduled XI/XII elective bands), the day-varying grid (config→day→slot, incl. teacher-less Saturday `activity` slots), per-teacher constraints, a Postgres-backed generation job queue, candidate timetables, and the published master. Foundation CRUD is built; solver + worker + generate/publish flow are the next phase. See `modules/timetable/DESIGN.md`.
 - **fine/**: Fine collection - incident tracking, workflow (open→under review→decision→closed), evidence upload, receipt generation
 - **student/**: Student search by name, class, and academic year
 - **employee/**: Employee search by name
@@ -95,6 +96,7 @@ Each module runs on dedicated ports to allow simultaneous local development:
 | asset         | 3025      | 3026        | /asset/*          |
 | library       | 3027      | 3028        | /library/*        |
 | supplies      | 3029      | 3030        | /supplies/*       |
+| timetable     | 3031      | 3032        | /timetable/*      |
 | gateway       | 3000      | -           | (routes all)      |
 
 #### Prod Stage
@@ -116,6 +118,7 @@ Each module runs on dedicated ports to allow simultaneous local development:
 | asset         | 6025      | 6026        |
 | library       | 6027      | 6028        |
 | supplies      | 6029      | 6030        |
+| timetable     | 6031      | 6032        |
 | gateway       | 6000      | -           |
 
 ### Scripts Organization
@@ -371,7 +374,7 @@ node scripts/local/kill-ports.js --all
 node scripts/local/health-all.js
 set GATEWAY_PORT=3000 && node node_modules/jest/bin/jest.js
 
-# Single module lifecycle (module = auth, medical, lab, sample, student, employee, class, academic-year, supplies)
+# Single module lifecycle (module = auth, medical, lab, sample, student, employee, class, academic-year, supplies, timetable)
 node scripts/local/start-module.js <module> --kill
 node scripts/local/kill-ports.js --<module>
 node scripts/local/health-module.js <module>

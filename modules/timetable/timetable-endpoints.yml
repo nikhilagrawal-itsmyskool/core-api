@@ -1,0 +1,496 @@
+  # Health check
+  health:
+    handler: health-handler.health
+    events:
+      - http:
+          path: health
+          method: get
+          cors: true
+
+  # Lookups (enum dropdowns)
+  get-lookups:
+    handler: lookup-handler.getAll
+    name: ${self:service}-get-lookups
+    events:
+      - http:
+          path: lookups
+          method: get
+          cors: true
+
+  # Subjects
+  list-subjects:
+    handler: subject-handler.list
+    name: ${self:service}-list-subjects
+    events:
+      - http:
+          path: subjects
+          method: get
+          cors: true
+  create-subject:
+    handler: subject-handler.create
+    name: ${self:service}-create-subject
+    events:
+      - http:
+          path: subjects
+          method: post
+          cors: true
+  get-subject:
+    handler: subject-handler.getById
+    name: ${self:service}-get-subject
+    events:
+      - http:
+          path: subjects/{id}
+          method: get
+          cors: true
+  update-subject:
+    handler: subject-handler.update
+    name: ${self:service}-update-subject
+    events:
+      - http:
+          path: subjects/{id}
+          method: put
+          cors: true
+  delete-subject:
+    handler: subject-handler.remove
+    name: ${self:service}-delete-subject
+    events:
+      - http:
+          path: subjects/{id}
+          method: delete
+          cors: true
+
+  # Class subjects
+  list-class-subjects:
+    handler: class-subject-handler.list
+    name: ${self:service}-list-class-subjects
+    events:
+      - http:
+          path: class-subjects
+          method: get
+          cors: true
+  create-class-subject:
+    handler: class-subject-handler.create
+    name: ${self:service}-create-class-subject
+    events:
+      - http:
+          path: class-subjects
+          method: post
+          cors: true
+  get-class-subject:
+    handler: class-subject-handler.getById
+    name: ${self:service}-get-class-subject
+    events:
+      - http:
+          path: class-subjects/{id}
+          method: get
+          cors: true
+  update-class-subject:
+    handler: class-subject-handler.update
+    name: ${self:service}-update-class-subject
+    events:
+      - http:
+          path: class-subjects/{id}
+          method: put
+          cors: true
+  delete-class-subject:
+    handler: class-subject-handler.remove
+    name: ${self:service}-delete-class-subject
+    events:
+      - http:
+          path: class-subjects/{id}
+          method: delete
+          cors: true
+
+  # Teaching assignments
+  list-teaching-assignments:
+    handler: teaching-assignment-handler.list
+    name: ${self:service}-list-teaching-assignments
+    events:
+      - http:
+          path: teaching-assignments
+          method: get
+          cors: true
+  create-teaching-assignment:
+    handler: teaching-assignment-handler.create
+    name: ${self:service}-create-teaching-assignment
+    events:
+      - http:
+          path: teaching-assignments
+          method: post
+          cors: true
+  get-teaching-assignment:
+    handler: teaching-assignment-handler.getById
+    name: ${self:service}-get-teaching-assignment
+    events:
+      - http:
+          path: teaching-assignments/{id}
+          method: get
+          cors: true
+  update-teaching-assignment:
+    handler: teaching-assignment-handler.update
+    name: ${self:service}-update-teaching-assignment
+    events:
+      - http:
+          path: teaching-assignments/{id}
+          method: put
+          cors: true
+  delete-teaching-assignment:
+    handler: teaching-assignment-handler.remove
+    name: ${self:service}-delete-teaching-assignment
+    events:
+      - http:
+          path: teaching-assignments/{id}
+          method: delete
+          cors: true
+
+  # Class teachers
+  list-class-teachers:
+    handler: class-teacher-handler.list
+    name: ${self:service}-list-class-teachers
+    events:
+      - http:
+          path: class-teachers
+          method: get
+          cors: true
+  create-class-teacher:
+    handler: class-teacher-handler.create
+    name: ${self:service}-create-class-teacher
+    events:
+      - http:
+          path: class-teachers
+          method: post
+          cors: true
+  get-class-teacher:
+    handler: class-teacher-handler.getById
+    name: ${self:service}-get-class-teacher
+    events:
+      - http:
+          path: class-teachers/{id}
+          method: get
+          cors: true
+  update-class-teacher:
+    handler: class-teacher-handler.update
+    name: ${self:service}-update-class-teacher
+    events:
+      - http:
+          path: class-teachers/{id}
+          method: put
+          cors: true
+  delete-class-teacher:
+    handler: class-teacher-handler.remove
+    name: ${self:service}-delete-class-teacher
+    events:
+      - http:
+          path: class-teachers/{id}
+          method: delete
+          cors: true
+
+  # Wings (named class sets)
+  list-wings:
+    handler: wing-handler.list
+    name: ${self:service}-list-wings
+    events:
+      - http:
+          path: wings
+          method: get
+          cors: true
+  create-wing:
+    handler: wing-handler.create
+    name: ${self:service}-create-wing
+    events:
+      - http:
+          path: wings
+          method: post
+          cors: true
+  get-wing:
+    handler: wing-handler.getById
+    name: ${self:service}-get-wing
+    events:
+      - http:
+          path: wings/{id}
+          method: get
+          cors: true
+  update-wing:
+    handler: wing-handler.update
+    name: ${self:service}-update-wing
+    events:
+      - http:
+          path: wings/{id}
+          method: put
+          cors: true
+  delete-wing:
+    handler: wing-handler.remove
+    name: ${self:service}-delete-wing
+    events:
+      - http:
+          path: wings/{id}
+          method: delete
+          cors: true
+
+  # Elective bands + offerings
+  list-elective-bands:
+    handler: elective-handler.listBands
+    name: ${self:service}-list-elective-bands
+    events:
+      - http:
+          path: elective-bands
+          method: get
+          cors: true
+  create-elective-band:
+    handler: elective-handler.createBand
+    name: ${self:service}-create-elective-band
+    events:
+      - http:
+          path: elective-bands
+          method: post
+          cors: true
+  get-elective-band:
+    handler: elective-handler.getBand
+    name: ${self:service}-get-elective-band
+    events:
+      - http:
+          path: elective-bands/{id}
+          method: get
+          cors: true
+  update-elective-band:
+    handler: elective-handler.updateBand
+    name: ${self:service}-update-elective-band
+    events:
+      - http:
+          path: elective-bands/{id}
+          method: put
+          cors: true
+  delete-elective-band:
+    handler: elective-handler.removeBand
+    name: ${self:service}-delete-elective-band
+    events:
+      - http:
+          path: elective-bands/{id}
+          method: delete
+          cors: true
+  add-elective-offering:
+    handler: elective-handler.addOffering
+    name: ${self:service}-add-elective-offering
+    events:
+      - http:
+          path: elective-bands/{id}/offerings
+          method: post
+          cors: true
+  delete-elective-offering:
+    handler: elective-handler.removeOffering
+    name: ${self:service}-delete-elective-offering
+    events:
+      - http:
+          path: elective-offerings/{offeringId}
+          method: delete
+          cors: true
+
+  # Timetable config (grid)
+  list-configs:
+    handler: config-handler.listConfigs
+    name: ${self:service}-list-configs
+    events:
+      - http:
+          path: configs
+          method: get
+          cors: true
+  create-config:
+    handler: config-handler.createConfig
+    name: ${self:service}-create-config
+    events:
+      - http:
+          path: configs
+          method: post
+          cors: true
+  get-config:
+    handler: config-handler.getConfig
+    name: ${self:service}-get-config
+    events:
+      - http:
+          path: configs/{id}
+          method: get
+          cors: true
+  update-config:
+    handler: config-handler.updateConfig
+    name: ${self:service}-update-config
+    events:
+      - http:
+          path: configs/{id}
+          method: put
+          cors: true
+  delete-config:
+    handler: config-handler.removeConfig
+    name: ${self:service}-delete-config
+    events:
+      - http:
+          path: configs/{id}
+          method: delete
+          cors: true
+
+  # Day structures
+  create-day:
+    handler: config-handler.createDay
+    name: ${self:service}-create-day
+    events:
+      - http:
+          path: configs/{id}/days
+          method: post
+          cors: true
+  update-day:
+    handler: config-handler.updateDay
+    name: ${self:service}-update-day
+    events:
+      - http:
+          path: days/{dayId}
+          method: put
+          cors: true
+  delete-day:
+    handler: config-handler.removeDay
+    name: ${self:service}-delete-day
+    events:
+      - http:
+          path: days/{dayId}
+          method: delete
+          cors: true
+
+  # Time slots
+  create-slot:
+    handler: config-handler.createSlot
+    name: ${self:service}-create-slot
+    events:
+      - http:
+          path: days/{dayId}/slots
+          method: post
+          cors: true
+  update-slot:
+    handler: config-handler.updateSlot
+    name: ${self:service}-update-slot
+    events:
+      - http:
+          path: slots/{slotId}
+          method: put
+          cors: true
+  delete-slot:
+    handler: config-handler.removeSlot
+    name: ${self:service}-delete-slot
+    events:
+      - http:
+          path: slots/{slotId}
+          method: delete
+          cors: true
+
+  # Generation (solver + job queue)
+  feasibility:
+    handler: generation-handler.feasibility
+    name: ${self:service}-feasibility
+    events:
+      - http:
+          path: feasibility
+          method: post
+          cors: true
+  generate:
+    handler: generation-handler.generate
+    name: ${self:service}-generate
+    events:
+      - http:
+          path: generate
+          method: post
+          cors: true
+  process-next-run:
+    handler: generation-handler.processNext
+    name: ${self:service}-process-next-run
+    events:
+      - http:
+          path: runs/process-next
+          method: post
+          cors: true
+  get-run:
+    handler: generation-handler.getRun
+    name: ${self:service}-get-run
+    events:
+      - http:
+          path: runs/{id}
+          method: get
+          cors: true
+  get-run-candidates:
+    handler: generation-handler.getCandidates
+    name: ${self:service}-get-run-candidates
+    events:
+      - http:
+          path: runs/{id}/candidates
+          method: get
+          cors: true
+  publish-timetable:
+    handler: generation-handler.publish
+    name: ${self:service}-publish-timetable
+    events:
+      - http:
+          path: publish
+          method: post
+          cors: true
+  get-published:
+    handler: generation-handler.getPublished
+    name: ${self:service}-get-published
+    events:
+      - http:
+          path: published
+          method: get
+          cors: true
+  list-published:
+    handler: generation-handler.listPublished
+    name: ${self:service}-list-published
+    events:
+      - http:
+          path: published-list
+          method: get
+          cors: true
+  validate-move:
+    handler: generation-handler.validateMove
+    name: ${self:service}-validate-move
+    events:
+      - http:
+          path: validate-move
+          method: post
+          cors: true
+
+  # Teacher constraints
+  list-teacher-constraints:
+    handler: teacher-constraint-handler.list
+    name: ${self:service}-list-teacher-constraints
+    events:
+      - http:
+          path: teacher-constraints
+          method: get
+          cors: true
+  create-teacher-constraint:
+    handler: teacher-constraint-handler.create
+    name: ${self:service}-create-teacher-constraint
+    events:
+      - http:
+          path: teacher-constraints
+          method: post
+          cors: true
+  get-teacher-constraint:
+    handler: teacher-constraint-handler.getById
+    name: ${self:service}-get-teacher-constraint
+    events:
+      - http:
+          path: teacher-constraints/{id}
+          method: get
+          cors: true
+  update-teacher-constraint:
+    handler: teacher-constraint-handler.update
+    name: ${self:service}-update-teacher-constraint
+    events:
+      - http:
+          path: teacher-constraints/{id}
+          method: put
+          cors: true
+  delete-teacher-constraint:
+    handler: teacher-constraint-handler.remove
+    name: ${self:service}-delete-teacher-constraint
+    events:
+      - http:
+          path: teacher-constraints/{id}
+          method: delete
+          cors: true

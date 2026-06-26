@@ -101,6 +101,21 @@ function startModule(name, config, stage) {
   });
 }
 
+function startTimetableWorker(gatewayPort) {
+  // Best-effort: drives the timetable generation queue. Polls the gateway, so it
+  // is harmless if the timetable module isn't running.
+  var workerPath = path.join(__dirname, 'timetable-worker.js');
+  var proc = spawn('node', [workerPath, '--port', gatewayPort.toString()], {
+    cwd: path.join(__dirname, '../..'),
+    shell: true,
+    stdio: 'inherit',
+  });
+  proc.on('error', function(err) {
+    colorLog('tt-worker', colors.red + 'Failed to start: ' + err.message + colors.reset);
+  });
+  return proc;
+}
+
 function startGateway(stage) {
   return new Promise(function(resolve) {
     var gatewayPath = path.join(__dirname, 'gateway.js');
@@ -164,6 +179,12 @@ async function main() {
   colorLog('gateway', 'Starting API Gateway...');
   var gatewayResult = await startGateway(stage);
   processes.push({ name: 'gateway', proc: gatewayResult.proc });
+
+  if (selectedModuleNames.indexOf('timetable') !== -1) {
+    colorLog('tt-worker', 'Starting timetable generation worker...');
+    var workerProc = startTimetableWorker(gatewayResult.port);
+    processes.push({ name: 'tt-worker', proc: workerProc });
+  }
 
   console.log('\n╔══════════════════════════════════════════════════════════════╗');
   console.log('║                    All Services Running                      ║');
