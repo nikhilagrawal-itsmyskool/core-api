@@ -20,11 +20,14 @@ class StudentHandler {
         return;
       }
 
-      const name = event.queryStringParameters?.name;
-      const classId = event.queryStringParameters?.classId;
-      const academicYearId = event.queryStringParameters?.academicYearId;
-
-      const results = await studentService.search(schoolId, name, classId, academicYearId);
+      const q = event.queryStringParameters || {};
+      const results = await studentService.search(schoolId, {
+        name: q.name,
+        classId: q.classId,
+        academicYearId: q.academicYearId,
+        admissionNumber: q.admissionNumber,
+        phone: q.phone,
+      });
       ResponseBuilder.ok(results, callback);
     } catch (err: any) {
       ResponseBuilder.handleError(err, callback);

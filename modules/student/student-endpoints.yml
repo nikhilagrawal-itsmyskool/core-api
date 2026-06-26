@@ -6,6 +6,7 @@
           method: get
           cors: true
 
+  # ---- Student search / list ----
   search-student:
     handler: student-handler.search
     name: ${self:service}-search-student
@@ -13,4 +14,199 @@
       - http:
           path: search
           method: get
+          cors: true
+
+  list-students:
+    handler: student-admin-handler.list
+    name: ${self:service}-list-students
+    events:
+      - http:
+          path: ''
+          method: get
+          cors: true
+
+  create-student:
+    handler: student-admin-handler.create
+    name: ${self:service}-create-student
+    events:
+      - http:
+          path: ''
+          method: post
+          cors: true
+
+  # ---- Houses (declared before students/{id} so the literal wins) ----
+  list-houses:
+    handler: house-handler.list
+    name: ${self:service}-list-houses
+    events:
+      - http:
+          path: houses
+          method: get
+          cors: true
+
+  create-house:
+    handler: house-handler.create
+    name: ${self:service}-create-house
+    events:
+      - http:
+          path: houses
+          method: post
+          cors: true
+
+  get-house:
+    handler: house-handler.getById
+    name: ${self:service}-get-house
+    events:
+      - http:
+          path: houses/{id}
+          method: get
+          cors: true
+
+  update-house:
+    handler: house-handler.update
+    name: ${self:service}-update-house
+    events:
+      - http:
+          path: houses/{id}
+          method: put
+          cors: true
+
+  delete-house:
+    handler: house-handler.remove
+    name: ${self:service}-delete-house
+    events:
+      - http:
+          path: houses/{id}
+          method: delete
+          cors: true
+
+  # ---- Photos (student | guardian) ----
+  upload-photo:
+    handler: student-photo-handler.upload
+    name: ${self:service}-upload-photo
+    events:
+      - http:
+          path: photos/{entityType}/{entityId}
+          method: post
+          cors: true
+
+  get-photo:
+    handler: student-photo-handler.get
+    name: ${self:service}-get-photo
+    events:
+      - http:
+          path: photos/{entityType}/{entityId}
+          method: get
+          cors: true
+
+  delete-photo:
+    handler: student-photo-handler.remove
+    name: ${self:service}-delete-photo
+    events:
+      - http:
+          path: photos/{entityType}/{entityId}
+          method: delete
+          cors: true
+
+  # ---- Promotion lifecycle ----
+  promote:
+    handler: promotion-handler.promote
+    name: ${self:service}-promote
+    events:
+      - http:
+          path: promote
+          method: post
+          cors: true
+
+  promote-class:
+    handler: promotion-handler.promoteClass
+    name: ${self:service}-promote-class
+    events:
+      - http:
+          path: promote-class
+          method: post
+          cors: true
+
+  graduate:
+    handler: promotion-handler.graduate
+    name: ${self:service}-graduate
+    events:
+      - http:
+          path: graduate
+          method: post
+          cors: true
+
+  # ---- Guardians (nested under a student) ----
+  list-guardians:
+    handler: student-guardian-handler.list
+    name: ${self:service}-list-guardians
+    events:
+      - http:
+          path: '{id}/guardians'
+          method: get
+          cors: true
+
+  create-guardian:
+    handler: student-guardian-handler.create
+    name: ${self:service}-create-guardian
+    events:
+      - http:
+          path: '{id}/guardians'
+          method: post
+          cors: true
+
+  update-guardian:
+    handler: student-guardian-handler.update
+    name: ${self:service}-update-guardian
+    events:
+      - http:
+          path: '{id}/guardians/{guardianId}'
+          method: put
+          cors: true
+
+  delete-guardian:
+    handler: student-guardian-handler.remove
+    name: ${self:service}-delete-guardian
+    events:
+      - http:
+          path: '{id}/guardians/{guardianId}'
+          method: delete
+          cors: true
+
+  # ---- House assignment for a student ----
+  assign-house:
+    handler: house-handler.assign
+    name: ${self:service}-assign-house
+    events:
+      - http:
+          path: '{id}/house'
+          method: put
+          cors: true
+
+  # ---- Student detail / update / delete (param routes last) ----
+  get-student:
+    handler: student-admin-handler.getById
+    name: ${self:service}-get-student
+    events:
+      - http:
+          path: '{id}'
+          method: get
+          cors: true
+
+  update-student:
+    handler: student-admin-handler.update
+    name: ${self:service}-update-student
+    events:
+      - http:
+          path: '{id}'
+          method: put
+          cors: true
+
+  delete-student:
+    handler: student-admin-handler.remove
+    name: ${self:service}-delete-student
+    events:
+      - http:
+          path: '{id}'
+          method: delete
           cors: true
