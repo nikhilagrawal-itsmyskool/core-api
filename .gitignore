@@ -12,3 +12,10 @@ node_modules
 lib
 !shared/*
 .local/
+
+# Local Claude Code settings (per-developer, not shared)
+.claude/settings.local.json
+
+# Tooling / session artifacts
+.playwright-mcp/
+*.stackdump
