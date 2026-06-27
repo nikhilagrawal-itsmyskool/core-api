@@ -206,6 +206,10 @@ columns, `school_id` on every row, partial unique indexes `where status =
   ignored). For near-identical sections (e.g. two VIII), set one up and clone the rest.
 - Elective-bands + nested elective-offerings — CRUD
 - Config / day-structures / time-slots — CRUD
+- `POST /timetable/days/{dayId}/clone-slots` — `{ sourceDayId }` copies every slot
+  from another day of the same config onto this day. Target must be empty (the UI
+  only offers it on a slot-less day); rejects a non-empty target, a locked config,
+  cross-config or self source. Lets an admin set one day up and clone it to the rest.
 - `POST /timetable/configs/{id}/lock` · `/unlock` · `/clone` — config lock lifecycle
 - Teacher-constraints — CRUD
 - `POST /timetable/feasibility` — fast pre-check report

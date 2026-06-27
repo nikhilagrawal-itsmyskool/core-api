@@ -245,6 +245,11 @@ export interface CloneConfigRequest {
   name?: string;
 }
 
+// Copy all time slots from one day onto another (empty) day of the same config.
+export interface CloneDaySlotsRequest {
+  sourceDayId: string;
+}
+
 // --------------------------------------------------------------- day_structure
 export interface DayStructure extends BaseEntity {
   configId: string;

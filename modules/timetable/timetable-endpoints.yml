@@ -388,6 +388,14 @@
           cors: true
 
   # Time slots
+  clone-day-slots:
+    handler: config-handler.cloneDaySlots
+    name: ${self:service}-clone-day-slots
+    events:
+      - http:
+          path: days/{dayId}/clone-slots
+          method: post
+          cors: true
   create-slot:
     handler: config-handler.createSlot
     name: ${self:service}-create-slot

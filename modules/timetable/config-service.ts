@@ -291,6 +291,82 @@ class ConfigService {
     return this.getConfigById(newConfigId, schoolId);
   }
 
+  // Copy every time slot from a source day onto a target day of the SAME config.
+  // The target must be empty (the UI only offers this on a slot-less day), so a
+  // clone never has to merge or renumber. New uuids throughout. Returns null only
+  // when the target day is missing (404); other problems throw a BusinessError.
+  public async cloneDaySlots(
+    targetDayId: string,
+    sourceDayId: string,
+    schoolId: string,
+    userId: string,
+  ): Promise<DayStructure | null> {
+    const target = await this.getDayById(targetDayId, schoolId);
+    if (!target) return null;
+    const source = await this.getDayById(sourceDayId, schoolId);
+    if (!source) {
+      throw new BusinessErrorResult(
+        ErrorCode.BusinessError,
+        "Source day not found",
+      );
+    }
+    if (source.uuid === target.uuid) {
+      throw new BusinessErrorResult(
+        ErrorCode.BusinessError,
+        "Source and target day must be different",
+      );
+    }
+    if (source.configId !== target.configId) {
+      throw new BusinessErrorResult(
+        ErrorCode.BusinessError,
+        "Both days must belong to the same config",
+      );
+    }
+    await this.assertEditable(target.configId, schoolId);
+
+    const targetSlots = await this.listSlots(targetDayId, schoolId);
+    if (targetSlots.length > 0) {
+      throw new BusinessErrorResult(
+        ErrorCode.BusinessError,
+        "This day already has slots; clone is only allowed onto an empty day.",
+      );
+    }
+    const sourceSlots = await this.listSlots(sourceDayId, schoolId);
+    if (sourceSlots.length === 0) {
+      throw new BusinessErrorResult(
+        ErrorCode.BusinessError,
+        "The source day has no slots to copy",
+      );
+    }
+
+    const now = new Date();
+    const queries: string[] = [];
+    const params: any[][] = [];
+    for (const slot of sourceSlots) {
+      queries.push(singleLineString`
+        insert into time_slot
+        (uuid, school_id, day_structure_id, sequence, start_time, end_time, slot_type, label, createdby_userid, created_at)
+        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      `);
+      params.push([
+        generateShortUuid(12),
+        schoolId,
+        targetDayId,
+        slot.sequence,
+        slot.startTime ?? null,
+        slot.endTime ?? null,
+        slot.slotType,
+        slot.label ?? null,
+        userId,
+        now,
+      ]);
+    }
+
+    await DB.queriesInTransaction(queries, params);
+    target.slots = await this.listSlots(targetDayId, schoolId);
+    return target;
+  }
+
   // ----- day structures -----
   public async listDays(
     configId: string,

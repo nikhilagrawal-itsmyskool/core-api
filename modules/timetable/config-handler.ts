@@ -11,6 +11,7 @@ import {
   CreateConfigRequest,
   UpdateConfigRequest,
   CloneConfigRequest,
+  CloneDaySlotsRequest,
   CreateDayStructureRequest,
   UpdateDayStructureRequest,
   CreateTimeSlotRequest,
@@ -360,6 +361,48 @@ class ConfigHandler {
     }
   };
 
+  // Clone every slot from another day onto this (empty) day of the same config.
+  public cloneDaySlots = async (
+    event: ApiEvent,
+    _context: ApiContext,
+    callback: ApiCallback,
+  ) => {
+    _context.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const ctx = await resolveSchool(event, callback);
+      if (!ctx) return;
+      const dayId = requireParam(event, "dayId", callback);
+      if (!dayId) return;
+      const body = parseBody<CloneDaySlotsRequest>(event, callback);
+      if (!body) return;
+      if (!body.sourceDayId) {
+        ResponseBuilder.badRequest(
+          ErrorCode.InvalidInput,
+          "sourceDayId is required",
+          callback,
+        );
+        return;
+      }
+      const day = await configService.cloneDaySlots(
+        dayId,
+        body.sourceDayId,
+        ctx.schoolId,
+        ctx.userId,
+      );
+      if (!day) {
+        ResponseBuilder.notFound(
+          ErrorCode.InvalidId,
+          "Day not found",
+          callback,
+        );
+        return;
+      }
+      ResponseBuilder.ok(day, callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
   // ----- time slots -----
   public createSlot = async (
     event: ApiEvent,
@@ -505,6 +548,7 @@ export const clone = handler.clone;
 export const createDay = handler.createDay;
 export const updateDay = handler.updateDay;
 export const removeDay = handler.removeDay;
+export const cloneDaySlots = handler.cloneDaySlots;
 export const createSlot = handler.createSlot;
 export const updateSlot = handler.updateSlot;
 export const removeSlot = handler.removeSlot;
