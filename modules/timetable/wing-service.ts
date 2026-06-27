@@ -17,7 +17,7 @@ class WingService {
         from timetable_wing_class wc
         left join class c on c.uuid = wc.class_id
         where wc.school_id = $1 and wc.status = 'active' and wc.wing_id in (${placeholders})
-        order by c.name
+        order by c.seq asc nulls last, c.name
       `,
       [schoolId, ...ids],
     );

@@ -43,6 +43,7 @@ create table class (
     uuid varchar(12) PRIMARY KEY,
     name VARCHAR(128),
     code VARCHAR(16),
+    seq INTEGER,
     school_id VARCHAR(12),
     createdby_userid varchar(12),
     created_at TIMESTAMP(0),

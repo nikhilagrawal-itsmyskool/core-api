@@ -14,10 +14,10 @@ class ClassService {
     const searchPattern = name && name.trim() ? `%${name.trim()}%` : '%';
 
     const query = singleLineString`
-      select uuid, name from class
+      select uuid, name, seq from class
       where school_id = $1
         and lower(name) like lower($2)
-      order by name
+      order by seq asc nulls last, name
     `;
 
     return DB.query(query, [schoolId, searchPattern]);
