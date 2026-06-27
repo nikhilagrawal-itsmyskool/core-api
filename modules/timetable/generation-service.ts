@@ -17,9 +17,11 @@ import {
 const { generateShortUuid } = require("../../shared/util/generate-uuid.js");
 
 // Wall-clock budget for the solver. Must stay below the process-next function
-// timeout (see timetable-endpoints.yml) so the solver returns a clean result
+// timeout (120s, see timetable-endpoints.yml) so the solver returns a clean result
 // instead of being hard-killed mid-solve (which would strand the run as 'running').
-const SOLVE_TIME_BUDGET_MS = 45000;
+// 60s gives a full-school (25-class) solve real margin — a stressed instance with
+// electives + teacher constraints solves in ~25-35s (see solver-scale.test.ts).
+const SOLVE_TIME_BUDGET_MS = 60000;
 
 class GenerationService {
   // Build the solver input for a config (shared by feasibility + processing).
