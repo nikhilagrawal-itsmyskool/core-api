@@ -9,6 +9,7 @@ import { buildLessons } from "./solver/build-lessons";
 import { checkFeasibility } from "./solver/feasibility";
 import { solve } from "./solver/solve";
 import { SolverInput } from "./solver/types";
+import { humanizeMessages, SolverLabels } from "./message-labels";
 import {
   computeRegistrationEntries,
   registrationClashMessages,
@@ -36,6 +37,7 @@ class GenerationService {
     input: SolverInput;
     warnings: string[];
     registrationEntries: RegistrationEntry[];
+    labels: SolverLabels;
   } | null> {
     const loaded = await loadConfigForSolve(schoolId, configId, wingClassIds);
     if (!loaded) return null;
@@ -58,7 +60,7 @@ class GenerationService {
       loaded.buildInput.classTeachers,
       loaded.buildInput.classIds,
     );
-    return { input, warnings, registrationEntries };
+    return { input, warnings, registrationEntries, labels: loaded.labels };
   }
 
   // Fast pre-check; never enqueues. wingId (optional) scopes to one wing.
@@ -89,10 +91,11 @@ class GenerationService {
         ? await this.crossWingWarnings(schoolId, configId, wingClassIds)
         : [];
     const issues = [...report.issues, ...regClashes];
+    const warnings = [...report.warnings, ...built.warnings, ...wingWarnings];
     return {
       feasible: issues.length === 0,
-      issues,
-      warnings: [...report.warnings, ...built.warnings, ...wingWarnings],
+      issues: humanizeMessages(issues, built.labels),
+      warnings: humanizeMessages(warnings, built.labels),
       lessonCount: built.input.lessons.length,
       classCount: built.input.classIds.length,
       registrationEntryCount: built.registrationEntries.length,
@@ -249,7 +252,10 @@ class GenerationService {
 
       const feas = checkFeasibility(built.input);
       const regClashes = registrationClashMessages(built.registrationEntries);
-      const allIssues = [...feas.issues, ...regClashes];
+      const allIssues = humanizeMessages(
+        [...feas.issues, ...regClashes],
+        built.labels,
+      );
       if (allIssues.length > 0) {
         await this.markFailed(run.uuid, `Infeasible: ${allIssues.join(" ")}`);
         return {

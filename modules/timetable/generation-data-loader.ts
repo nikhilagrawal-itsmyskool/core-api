@@ -1,6 +1,7 @@
 import { DB, singleLineString } from '../../shared/lib/db';
 import { SolverGrid, SolverTeacherConstraint } from './solver/types';
 import { BuildInput } from './solver/build-lessons';
+import { SolverLabels } from './message-labels';
 
 export interface LoadedConfig {
   configId: string;
@@ -10,6 +11,7 @@ export interface LoadedConfig {
   buildInput: BuildInput;
   constraints: SolverTeacherConstraint[];
   warnings: string[]; // e.g. class-subjects skipped because their subject is deleted
+  labels: SolverLabels; // id -> human label, for humanizing issue/warning messages
 }
 
 // Load all academic + grid data for a config into the shapes the solver needs.
@@ -122,5 +124,52 @@ export async function loadConfigForSolve(schoolId: string, configId: string, win
     .filter((r: any) => inScope(r.classId))
     .map((r: any) => `Class ${r.classId}: subject "${r.subjectName}" is deleted — skipped from generation.`);
 
-  return { configId, academicYearId, grid, teachingDays, buildInput, constraints, warnings };
+  // --- display labels (id -> human name) for humanizing messages ---
+  // Collect every id that can appear in an issue/warning string, then look up names.
+  const subjectIds = new Set<string>([
+    ...scopedClassSubjects.map((c: any) => c.subjectId),
+    ...scopedTeachingAssignments.map((a: any) => a.subjectId),
+    ...scopedElectiveBands.flatMap((b: any) => b.offerings.map((o: any) => o.subjectId)),
+  ]);
+  const teacherIds = new Set<string>([
+    ...scopedTeachingAssignments.map((a: any) => a.teacherId),
+    ...scopedClassTeachers.map((c: any) => c.teacherId),
+    ...scopedElectiveBands.flatMap((b: any) => b.offerings.map((o: any) => o.teacherId)),
+    ...constraints.map((c) => c.teacherId),
+  ]);
+
+  const labels = await loadLabels(schoolId, classIds, [...subjectIds], [...teacherIds]);
+
+  return { configId, academicYearId, grid, teachingDays, buildInput, constraints, warnings, labels };
+}
+
+// Look up display names for the ids in play. Each lookup is empty-safe (any($)
+// over [] simply returns no rows).
+async function loadLabels(
+  schoolId: string,
+  classIds: string[],
+  subjectIds: string[],
+  teacherIds: string[],
+): Promise<SolverLabels> {
+  const labels: SolverLabels = { class: new Map(), subject: new Map(), teacher: new Map() };
+
+  const classes = await DB.query(
+    singleLineString`select uuid, name from class where school_id = $1 and uuid = any($2)`,
+    [schoolId, classIds],
+  );
+  for (const c of classes) labels.class.set(c.uuid, c.name);
+
+  const subjects = await DB.query(
+    singleLineString`select uuid, name, code from subject where school_id = $1 and uuid = any($2)`,
+    [schoolId, subjectIds],
+  );
+  for (const s of subjects) labels.subject.set(s.uuid, `${s.name} (${s.code})`);
+
+  const teachers = await DB.query(
+    singleLineString`select uuid, name from employee where school_id = $1 and uuid = any($2)`,
+    [schoolId, teacherIds],
+  );
+  for (const t of teachers) labels.teacher.set(t.uuid, t.name);
+
+  return labels;
 }
