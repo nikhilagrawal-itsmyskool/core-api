@@ -7,3 +7,13 @@ POSTGRES_USERNAME: 'root'
 POSTGRES_PASSWORD: 'itsmyskool123'
 JWT_SECRET: 'itsmyskool-dev-secret-key-2024'
 JWT_ADMIN_EXPIRY_TIME: '24h'
+
+# Communication: base URL other modules use to call its REST endpoints (via the API domain).
+COMM_BASE_URL: 'https://api.dev.itsmyskool.com'
+
+# Messaging provider + MSG91 credentials (fill in per environment).
+COMM_PROVIDER: 'msg91'
+MSG91_AUTH_KEY: ''
+MSG91_SMS_SENDER: ''
+MSG91_WHATSAPP_NUMBER: ''
+MSG91_DEFAULT_COUNTRY_CODE: '91'

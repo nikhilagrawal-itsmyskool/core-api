@@ -1,0 +1,74 @@
+  # Health check
+  health:
+    handler: health-handler.health
+    events:
+      - http:
+          path: health
+          method: get
+          cors: true
+
+  # Roster for the marking screen
+  get-roster:
+    handler: attendance-handler.getRoster
+    name: ${self:service}-get-roster
+    events:
+      - http:
+          path: roster
+          method: get
+          cors: true
+
+  # Sessions
+  open-session:
+    handler: attendance-handler.openSession
+    name: ${self:service}-open-session
+    events:
+      - http:
+          path: sessions
+          method: post
+          cors: true
+
+  list-sessions:
+    handler: attendance-handler.listSessions
+    name: ${self:service}-list-sessions
+    events:
+      - http:
+          path: sessions
+          method: get
+          cors: true
+
+  save-marks:
+    handler: attendance-handler.saveMarks
+    name: ${self:service}-save-marks
+    events:
+      - http:
+          path: sessions/{id}/marks
+          method: put
+          cors: true
+
+  finalize-session:
+    handler: attendance-handler.finalize
+    name: ${self:service}-finalize-session
+    events:
+      - http:
+          path: sessions/{id}/finalize
+          method: post
+          cors: true
+
+  get-session:
+    handler: attendance-handler.getSession
+    name: ${self:service}-get-session
+    events:
+      - http:
+          path: sessions/{id}
+          method: get
+          cors: true
+
+  # Records
+  edit-record:
+    handler: attendance-handler.editRecord
+    name: ${self:service}-edit-record
+    events:
+      - http:
+          path: records/{id}
+          method: put
+          cors: true

@@ -1,0 +1,142 @@
+  # Health check
+  health:
+    handler: health-handler.health
+    events:
+      - http:
+          path: health
+          method: get
+          cors: true
+
+  # Lookup endpoints
+  get-channels:
+    handler: communication-lookup-handler.getChannels
+    name: ${self:service}-get-channels
+    events:
+      - http:
+          path: lookups/channels
+          method: get
+          cors: true
+
+  # Template endpoints
+  list-templates:
+    handler: template-handler.list
+    name: ${self:service}-list-templates
+    events:
+      - http:
+          path: templates
+          method: get
+          cors: true
+
+  create-template:
+    handler: template-handler.create
+    name: ${self:service}-create-template
+    events:
+      - http:
+          path: templates
+          method: post
+          cors: true
+
+  get-template:
+    handler: template-handler.getById
+    name: ${self:service}-get-template
+    events:
+      - http:
+          path: templates/{id}
+          method: get
+          cors: true
+
+  update-template:
+    handler: template-handler.update
+    name: ${self:service}-update-template
+    events:
+      - http:
+          path: templates/{id}
+          method: put
+          cors: true
+
+  delete-template:
+    handler: template-handler.remove
+    name: ${self:service}-delete-template
+    events:
+      - http:
+          path: templates/{id}
+          method: delete
+          cors: true
+
+  restore-template:
+    handler: template-handler.restore
+    name: ${self:service}-restore-template
+    events:
+      - http:
+          path: templates/{id}/restore
+          method: post
+          cors: true
+
+  # Message (send) endpoints
+  send-message:
+    handler: message-handler.send
+    name: ${self:service}-send-message
+    events:
+      - http:
+          path: messages
+          method: post
+          cors: true
+
+  preview-message:
+    handler: message-handler.preview
+    name: ${self:service}-preview-message
+    events:
+      - http:
+          path: messages/preview
+          method: post
+          cors: true
+
+  list-messages:
+    handler: message-handler.list
+    name: ${self:service}-list-messages
+    events:
+      - http:
+          path: messages
+          method: get
+          cors: true
+
+  # Internal: claim and process one due job. Called by the worker poller /
+  # EventBridge on AWS. Resolves the audience + sends, so it needs a longer
+  # timeout than the default 10s.
+  process-next-message:
+    handler: message-handler.processNext
+    name: ${self:service}-process-next-message
+    timeout: 120
+    events:
+      - http:
+          path: messages/process-next
+          method: post
+          cors: true
+
+  get-message:
+    handler: message-handler.getById
+    name: ${self:service}-get-message
+    events:
+      - http:
+          path: messages/{id}
+          method: get
+          cors: true
+
+  cancel-message:
+    handler: message-handler.cancel
+    name: ${self:service}-cancel-message
+    events:
+      - http:
+          path: messages/{id}/cancel
+          method: post
+          cors: true
+
+  # Provider delivery-status callback (authenticated by a provider secret, not the user JWT).
+  provider-webhook:
+    handler: message-handler.webhook
+    name: ${self:service}-provider-webhook
+    events:
+      - http:
+          path: webhooks/{provider}
+          method: post
+          cors: true

@@ -9,3 +9,13 @@ POSTGRES_SSL: 'false'
 
 JWT_SECRET: 'RgRX2tTs3hwcFGnJ*7zplHukK&opgdvxTzbucpP%*0BxV@E1'
 JWT_ADMIN_EXPIRY_TIME: '8h'
+
+# Communication: base URL other modules use to call its REST endpoints (via the API domain).
+COMM_BASE_URL: 'https://api.itsmyskool.com'
+
+# Messaging provider + MSG91 credentials (fill in for prod).
+COMM_PROVIDER: 'msg91'
+MSG91_AUTH_KEY: ''
+MSG91_SMS_SENDER: ''
+MSG91_WHATSAPP_NUMBER: ''
+MSG91_DEFAULT_COUNTRY_CODE: '91'

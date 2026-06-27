@@ -22,7 +22,7 @@ npx prettier --write .
 
 ## NPM Scripts
 
-### Module Commands (auth, medical, lab, student, employee, class, academic-year, fine, supplies)
+### Module Commands (auth, medical, lab, student, employee, class, academic-year, fine, supplies, attendance, communication)
 | Command | Description |
 |---------|-------------|
 | `npm run start:<module>` | Start module (auto-kills ports first) |
@@ -31,7 +31,7 @@ npx prettier --write .
 | `npm run stop:<module>` | Stop module |
 | `npm run test:<module>:full` | Full cycle: stop → start → test → stop |
 
-Available modules: `auth`, `medical`, `lab`, `sample`, `student`, `employee`, `class`, `academic-year`, `fine`, `uniform`, `shop`, `sports`, `asset`, `library`, `supplies`, `timetable`
+Available modules: `auth`, `medical`, `lab`, `sample`, `student`, `employee`, `class`, `academic-year`, `fine`, `uniform`, `shop`, `sports`, `asset`, `library`, `supplies`, `timetable`, `attendance`, `communication`
 
 > These always run on `local` stage (hardcoded in `start-module.js`). Stage cannot be changed for individual module commands.
 
@@ -67,6 +67,8 @@ Each module in `modules/` is an independent Lambda microservice with its own `se
 - **supplies/**: General school consumables inventory (stationery, art/craft, cleaning, etc.) - user-defined per-school categories seeded with a curated item master (versioned seed-on-first-use), bulk-only purchases (one bill, many lines) with inline item creation guarded by exact-reuse + fuzzy near-match confirm + admin merge, plus issue and wastage logs
 - **timetable/**: Auto-generating school timetable - owns the academic backbone (subjects, class↔subject demand with weekly periods + block rules, teaching assignments, class teachers, co-scheduled XI/XII elective bands), the day-varying grid (config→day→slot, incl. teacher-less Saturday `activity` slots), per-teacher constraints, a Postgres-backed generation job queue, candidate timetables, and the published master. Foundation CRUD is built; solver + worker + generate/publish flow are the next phase. See `modules/timetable/DESIGN.md`.
 - **fine/**: Fine collection - incident tracking, workflow (open→under review→decision→closed), evidence upload, receipt generation
+- **attendance/**: Daily roll-call attendance per class - one session per class/academic-year/date, mark-exceptions UX (default present, finalize fills the roster), back-dated entry, edits with an append-only audit trail, and absence notifications fired to the communication module on finalize
+- **communication/**: Independent SMS/WhatsApp notification service (other modules call it). References externally pre-approved templates (Meta/DLT) keyed by (key, channel, language); a DB-as-queue (`message_job`, same `for update skip locked` pattern as timetable) with lazy audience expansion; an ordered `role:channel` preference ladder (WhatsApp-first default) over student/employee contacts; provider-agnostic adapter (stub by default via `COMM_PROVIDER`). Worker: `scripts/local/communication-worker.js`
 - **student/**: Student search by name, class, and academic year
 - **employee/**: Employee search by name
 - **class/**: Class search for dropdowns (uuid + name)
@@ -97,6 +99,8 @@ Each module runs on dedicated ports to allow simultaneous local development:
 | library       | 3027      | 3028        | /library/*        |
 | supplies      | 3029      | 3030        | /supplies/*       |
 | timetable     | 3031      | 3032        | /timetable/*      |
+| attendance    | 3033      | 3034        | /attendance/*     |
+| communication | 3035      | 3036        | /communication/*  |
 | gateway       | 3000      | -           | (routes all)      |
 
 #### Prod Stage
@@ -119,6 +123,8 @@ Each module runs on dedicated ports to allow simultaneous local development:
 | library       | 6027      | 6028        |
 | supplies      | 6029      | 6030        |
 | timetable     | 6031      | 6032        |
+| attendance    | 6033      | 6034        |
+| communication | 6035      | 6036        |
 | gateway       | 6000      | -           |
 
 ### Scripts Organization

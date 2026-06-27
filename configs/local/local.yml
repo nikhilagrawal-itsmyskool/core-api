@@ -9,3 +9,16 @@ POSTGRES_SSL: 'false'
 
 JWT_SECRET: 'local-dev-secret-key'
 JWT_ADMIN_EXPIRY_TIME: '24h'
+
+# Communication module: base URL used by other modules (e.g. attendance absence
+# alerts) to call its REST endpoints. Locally this points straight at the
+# communication module's own http port so it works standalone and under start:all.
+COMM_BASE_URL: 'http://localhost:3035'
+
+# Messaging provider. 'stub' logs instead of sending (default for local + tests).
+# Flip to 'msg91' and fill the MSG91_* keys below to verify a real send from local.
+COMM_PROVIDER: 'stub'
+MSG91_AUTH_KEY: ''
+MSG91_SMS_SENDER: ''
+MSG91_WHATSAPP_NUMBER: ''
+MSG91_DEFAULT_COUNTRY_CODE: '91'

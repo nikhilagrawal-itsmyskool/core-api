@@ -116,6 +116,21 @@ function startTimetableWorker(gatewayPort) {
   return proc;
 }
 
+function startCommunicationWorker(gatewayPort) {
+  // Best-effort: drives the communication send queue. Polls the gateway, so it
+  // is harmless if the communication module isn't running.
+  var workerPath = path.join(__dirname, 'communication-worker.js');
+  var proc = spawn('node', [workerPath, '--port', gatewayPort.toString()], {
+    cwd: path.join(__dirname, '../..'),
+    shell: true,
+    stdio: 'inherit',
+  });
+  proc.on('error', function(err) {
+    colorLog('comm-worker', colors.red + 'Failed to start: ' + err.message + colors.reset);
+  });
+  return proc;
+}
+
 function startGateway(stage) {
   return new Promise(function(resolve) {
     var gatewayPath = path.join(__dirname, 'gateway.js');
@@ -184,6 +199,12 @@ async function main() {
     colorLog('tt-worker', 'Starting timetable generation worker...');
     var workerProc = startTimetableWorker(gatewayResult.port);
     processes.push({ name: 'tt-worker', proc: workerProc });
+  }
+
+  if (selectedModuleNames.indexOf('communication') !== -1) {
+    colorLog('comm-worker', 'Starting communication send worker...');
+    var commWorkerProc = startCommunicationWorker(gatewayResult.port);
+    processes.push({ name: 'comm-worker', proc: commWorkerProc });
   }
 
   console.log('\n╔══════════════════════════════════════════════════════════════╗');

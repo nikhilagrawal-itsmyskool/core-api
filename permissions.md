@@ -59,6 +59,35 @@ Notes:
 > god-only** — the established pattern in `LabPurchaseList`, `PurchaseList` (medical),
 > and `SportPurchaseList`.
 
+## Attendance module (`/attendance`)
+
+| Action                                   | god | admin | other (staff) |
+|------------------------------------------|:---:|:-----:|:-------------:|
+| View roster / sessions / history         | ✅  | ✅    | ✅            |
+| Take/mark attendance (while `open`)      | ✅  | ✅    | ✅            |
+| **Finalize**                             | ✅  | ✅    | —             |
+| **Edit after finalize** (record edit)    | ✅  | ✅    | —             |
+| Delete / restore a session               | ✅  | —     | —             |
+
+> Marking is the everyday teacher action (any authenticated staff). Finalizing and
+> editing a finalized record are admin/god only.
+
+## Communication module (`/communication`)
+
+| Action                                       | god | admin | other |
+|----------------------------------------------|:---:|:-----:|:-----:|
+| View jobs / delivery status / templates      | ✅  | ✅    | ✅    |
+| Ad-hoc send / schedule / preview / cancel    | ✅  | ✅    | —     |
+| Template create / edit / activate            | ✅  | ✅    | —     |
+| **Template delete / restore**                | ✅  | —     | —     |
+
+> **System-triggered** transactional sends (e.g. attendance absence alerts) are
+> authorized by the triggering action (attendance finalize = admin/god), not by a
+> communication user role — they go through the internal server-to-server send path.
+> Infra endpoints (`messages/process-next`, provider `webhooks/{provider}`) are not
+> on the user/UI path: `process-next` is driven by the worker/EventBridge, and
+> webhooks are authenticated by a provider shared-secret/signature.
+
 ## Everything else
 
 All other modules (inventory items, issues, breakages, fines, uniform, shop, assets,
