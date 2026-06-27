@@ -79,6 +79,21 @@ describe('Student admin API', () => {
     expect(byAdm.some((s: any) => s.admissionNumber === admissionNumber || s.admission_number === admissionNumber)).toBe(true);
   });
 
+  it('returns current class name in the unfiltered list', async () => {
+    const admissionNumber = `${f.tag}-CLS`;
+    await createStudent({
+      name: `${f.tag} Classy`,
+      admissionNumber,
+      academicYearId: f.yearFromId,
+      classId: f.classAId,
+    });
+    // Unfiltered search (no classId) must still carry the current class via the lateral join.
+    const rows = await (await fetch(`${BASE_URL}/search?name=${f.tag} Classy`, { headers })).json();
+    const row = rows.find((s: any) => s.admissionNumber === admissionNumber);
+    expect(row).toBeDefined();
+    expect(row.className).toBe(`${f.tag}-A`);
+  });
+
   it('updates a student name and status', async () => {
     const created = await createStudent({ name: `${f.tag} Editable`, admissionNumber: `${f.tag}-EDIT` });
     const res = await fetch(`${BASE_URL}/${created.uuid}`, {
