@@ -75,14 +75,25 @@ class StudentService {
     }
 
     const params: any[] = [schoolId, namePattern];
-    const extras = buildExtras('', params);
+    const extras = buildExtras('s.', params);
 
+    // Unfiltered list: join the latest enrollment so the grid shows the current
+    // class/year/roll (same lateral pattern as student-admin-service.getDetail).
     const query = singleLineString`
-      select * from student
-      where school_id = $1
-        and lower(name) like lower($2)
+      select s.*, cur.class_name, cur.academic_year_name, cur.roll_number
+      from student s
+      left join lateral (
+        select ay.name as academic_year_name, c.name as class_name, sc.roll_number
+        from student_class sc
+        join academic_year ay on sc.academic_year_id = ay.uuid
+        left join class c on sc.class_id = c.uuid
+        where sc.student_id = s.uuid and (sc.status is null or sc.status <> 'deleted')
+        order by ay.start_date desc nulls last limit 1
+      ) cur on true
+      where s.school_id = $1
+        and lower(s.name) like lower($2)
         ${extras}
-      order by name
+      order by s.name
     `;
 
     return DB.query(query, params);

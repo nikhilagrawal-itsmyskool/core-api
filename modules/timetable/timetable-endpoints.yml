@@ -423,6 +423,9 @@
   process-next-run:
     handler: generation-handler.processNext
     name: ${self:service}-process-next-run
+    # Generation runs the constraint solver synchronously; it needs far more than the
+    # default 10s function timeout. Keep this > SOLVE_TIME_BUDGET_MS in generation-service.
+    timeout: 120
     events:
       - http:
           path: runs/process-next

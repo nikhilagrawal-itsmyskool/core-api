@@ -16,7 +16,10 @@ import {
 } from "./registration";
 const { generateShortUuid } = require("../../shared/util/generate-uuid.js");
 
-const SOLVE_TIME_BUDGET_MS = 12000;
+// Wall-clock budget for the solver. Must stay below the process-next function
+// timeout (see timetable-endpoints.yml) so the solver returns a clean result
+// instead of being hard-killed mid-solve (which would strand the run as 'running').
+const SOLVE_TIME_BUDGET_MS = 45000;
 
 class GenerationService {
   // Build the solver input for a config (shared by feasibility + processing).
@@ -192,7 +195,7 @@ class GenerationService {
     for (const cand of candidates) {
       const entries = await DB.query(
         singleLineString`
-          select e.*, s.name as subject_name
+          select e.*, s.name as subject_name, s.code as subject_code
           from timetable_entry e
           left join subject s on s.uuid = e.subject_id
           where e.candidate_id = $1 and e.school_id = $2
@@ -492,7 +495,7 @@ class GenerationService {
 
     const entries = await DB.query(
       singleLineString`
-        select pe.*, s.name as subject_name
+        select pe.*, s.name as subject_name, s.code as subject_code
         from published_entry pe
         left join subject s on s.uuid = pe.subject_id
         where pe.published_timetable_id = $1 and pe.school_id = $2
