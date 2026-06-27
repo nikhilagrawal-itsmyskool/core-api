@@ -62,13 +62,14 @@ class EmployeeService {
 
     queries.push(singleLineString`
       insert into employee
-      (uuid, employee_number, name, gender, dob, family_unique_number, mobile, whatsapp, email, status, school_id, createdby_userid, created_at)
-      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+      (uuid, employee_number, name, code, gender, dob, family_unique_number, mobile, whatsapp, email, status, school_id, createdby_userid, created_at)
+      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
     `);
     params.push([
       employeeUuid,
       data.employeeNumber || null,
       data.name,
+      data.code || null,
       data.gender || null,
       data.dob || null,
       data.familyUniqueNumber,
@@ -142,6 +143,7 @@ class EmployeeService {
     if (data.name !== undefined) setField('name', data.name);
     if (data.familyUniqueNumber !== undefined) setField('family_unique_number', data.familyUniqueNumber);
     if (data.employeeNumber !== undefined) setField('employee_number', data.employeeNumber);
+    if (data.code !== undefined) setField('code', data.code);
     if (data.gender !== undefined) setField('gender', data.gender);
     if (data.dob !== undefined) setField('dob', data.dob);
     if (data.mobile !== undefined) setField('mobile', data.mobile);

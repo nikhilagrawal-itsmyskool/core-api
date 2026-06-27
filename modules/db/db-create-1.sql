@@ -112,6 +112,7 @@ create table employee (
     uuid varchar(12) PRIMARY KEY,
     employee_number VARCHAR(32),
     name VARCHAR(128),
+    code VARCHAR(16),
     gender CHAR(1),
     dob DATE,
     family_unique_number VARCHAR(20),
@@ -125,6 +126,9 @@ create table employee (
     updatedby_userid varchar(12),
     updated_at TIMESTAMP(0)
 );
+
+-- forward-compatible: short teacher code (e.g. "NKG") used in the master timetable.
+alter table employee add column if not exists code varchar(16);
 
 create unique index idx_employee_employee_number_school_id on employee (employee_number, school_id);
 create unique index idx_employee_family_unique_number_school_id on employee (family_unique_number, school_id);

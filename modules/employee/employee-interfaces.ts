@@ -8,6 +8,7 @@ export interface Employee {
   uuid: string;
   employeeNumber?: string;
   name: string;
+  code?: string; // short teacher code (e.g. "NKG") for the master timetable
   gender?: string;
   dob?: string;
   familyUniqueNumber: string;
@@ -28,6 +29,7 @@ export interface CreateEmployeeRequest {
   name: string;
   familyUniqueNumber: string;
   employeeNumber?: string;
+  code?: string;
   gender?: string;
   dob?: string;
   mobile?: string;
@@ -40,6 +42,7 @@ export interface UpdateEmployeeRequest {
   name?: string;
   familyUniqueNumber?: string;
   employeeNumber?: string;
+  code?: string;
   gender?: string;
   dob?: string;
   mobile?: string;
