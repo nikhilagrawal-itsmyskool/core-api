@@ -51,6 +51,9 @@ create table class (
     updated_at TIMESTAMP(0)
 );
 
+-- forward-compatible: ordering column for class dropdowns (search orders by seq).
+alter table class add column if not exists seq integer;
+
 create unique index idx_class_code_school_id on class (code, school_id);
 
 CREATE TABLE student (
