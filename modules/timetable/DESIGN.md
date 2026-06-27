@@ -299,12 +299,16 @@ that whatever `solve` returns passes the independent `validateTimetable`.
   teachers / 6×8 grid).
   - **Scale profile (`__tests__/solver-scale.test.ts`, opt-in via `RUN_SOLVER_SCALE=1`):**
     a feasible full-school instance — 25 classes / 50 teachers / 50 subjects /
-    6×10, 1200 lessons, 20% slack, no electives/teacher constraints. **Correctness
-    holds** (complete, clash-free, pins honored). **Performance is the constraint:**
-    time-to-first-solution is ~15–25s (infeasible at ≤15s); production
-    `SOLVE_TIME_BUDGET_MS` is 45s → only ~2× margin. A fuller/more-constrained
-    25-class school could exceed 45s and return blank — **revisit solver perf (or
-    raise the budget) before onboarding large schools.**
+    6×10, 1200 lessons, 20% slack. **Correctness holds** (complete, clash-free,
+    pins honored). **Performance is the constraint** (production `SOLVE_TIME_BUDGET_MS`
+    is 45s):
+    - *friendly* (no electives/constraints): solves ~15–25s → ~2× margin.
+    - *stressed* (5 elective bands + 22 hard teacher day-off/unavailable constraints):
+      solves ~25–35s → margin shrinks to ~1.3×.
+    Realistic electives + teacher constraints cost ~10s and eat most of the budget;
+    a bigger/more-constrained 25-class school would likely exceed 45s and return
+    blank — **revisit solver perf (or raise the budget) before onboarding large
+    schools.**
 - **Worker lifecycle:** enqueue → running → completed; failed path; stale-run
   reclaim.
 - **Acceptance:** seed the school's real timetable; generate; compare to their
