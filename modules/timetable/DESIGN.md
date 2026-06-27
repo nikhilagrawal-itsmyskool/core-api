@@ -69,8 +69,9 @@ optional preference-capture/explanation and is not part of v1.
   bands** (`elective_band` + `elective_offering`). Several subjects run in the
   **same** time slots, each with its own teacher; a student picks one, and the
   class books nothing else in those slots. This **supersedes** the earlier
-  "elective = own class" simplification. (`class_group` stays defined for future
-  cross-section banding; per-class bands cover v1.)
+  "elective = own class" simplification. (`class_group` is the hook for **composite
+  classes / cross-section co-scheduling** — see that section below; per-class bands
+  remain the v1 default.)
 - **Combined periods** are **doubles** (two consecutive same-subject slots) with
   an optional **soft** placement hint (`prefer` in `block_rules`): the solver
   tries the preferred day/slot but may override it.
@@ -90,6 +91,108 @@ optional preference-capture/explanation and is not part of v1.
 - Flow: candidate → published weekly **master** → (Phase 3) per-calendar-day
   **copies** that are individually editable. Substitute/absence cover is out of
   scope (the daily-copy layer is its future foundation).
+
+## Composite classes (cross-section co-scheduling)
+
+> Status: **built.** Captures a real senior-school case (XI-A) the original per-class
+> model could not express. The whole feature reduces to one primitive: **a lesson may
+> occupy more than one class** (book several classes' slots at the same time, booking
+> each teacher only once). Implemented as an optional `Lesson.classIds`/`Placement.classIds`
+> (`solver/types.ts` `classesOf()`); a cohort = `class_group` (member classes carry
+> `class.class_group_id`); an `elective_band.class_group_id` makes a band span the cohort.
+
+**The case (XI-A).** One class hosting two streams — **Science** + **Commerce** — that are
+partly taught together, partly split:
+
+- **Two class teachers** (one homeroom each, each with its own registration / first-period).
+- **Shared singles:** English (8) and Music/Dance (1) — one combined lesson, **one teacher**,
+  both streams in the room together.
+- **Cross-stream elective bands:** Maths/Bio/Accounting (9) and CS/Painting/Hindi (6) — three
+  parallel rooms each, any student of either stream opts into one room.
+- **Stream-specific subjects** with **unequal** weekly counts: Science = Physics 8 / Chem 8 /
+  PE 6; Commerce = Business 7 / Economics 7 / Applied Maths 8.
+
+Weekly structure — both streams total **46** periods (= the grid):
+
+| Together (24) | per | Science split (22) | per | Commerce split (22) | per |
+|---|---|---|---|---|---|
+| English (shared)       | 8 | Physics    | 8 | Business Studies | 7 |
+| Maths/Bio/Acc band     | 9 | Chemistry  | 8 | Economics        | 7 |
+| CS/Painting/Hindi band | 6 | PE         | 6 | Applied Maths    | 8 |
+| Music/Dance (shared)   | 1 |            |   |                  |   |
+
+**Why v1 can't do it:** one `class_teacher` per class (two homerooms ⇒ two classes); elective
+bands are single-class and equal-length (`build-lessons.ts`); a `Lesson`/`Placement` has a
+single `classId` and books only that class (`solve.ts` `classBusy` key
+`"${classId}|${day}|${seq}"`), so "taught together across two classes" has no representation;
+and the unequal stream parallels (Physics 8 ∥ Business 7) can't be equal-length bands.
+
+**Model:** two co-scheduled classes — `XI-A (Science)`, `XI-A (Commerce)` — grouped in a
+`class_group` cohort. Map the 24 "together" slots to **cross-class lessons attached to the
+cohort**; leave the stream subjects as ordinary per-class `class_subject`s:
+
+| XI-A element | Construct |
+|---|---|
+| English 8, Music 1 (together) | cross-class **shared single** (1 offering / 1 teacher, books both classes) |
+| Maths/Bio/Acc 9, CS/Painting/Hindi 6 | cross-class **elective band**, N offerings, spans both classes |
+| Physics/Chem/PE | per-class `class_subject` on `XI-A (Science)` |
+| Business/Econ/Applied-Maths | per-class `class_subject` on `XI-A (Commerce)` |
+
+**Why this also dissolves the unequal-parallel problem:** once the 24 together-slots are
+booked across both classes at **identical** positions, the remaining 22 slots are by
+construction the **same free window** in both classes — each stream then fills its own 22
+independently (Physics/Chem/PE vs Business/Econ/Applied-Maths). The unequal counts never need
+pairing; we co-lock the shared portion and let each stream fill the rest. The two homerooms
+stay in sync automatically.
+
+**Data-entry model** (split by *where* a thing is taught — never duplicated per class):
+
+| What | Entered against | Mechanism |
+|---|---|---|
+| Shared single (cohort together) | **Cohort** (once) | shared subject / band-of-one |
+| Cross-stream band (any student opts) | **Cohort** (once, N offerings) | `elective_band` with `class_group_id` |
+| Stream-specific subject | **Each member class** | `class_subject` + `teaching_assignment` |
+| Class teacher | **Each member class** | `class_teacher` |
+
+CS/Painting/Hindi = **one** band on the cohort, **6 combined periods**, three offerings
+(CS→A, Painting→B, Hindi→C): one entry reserves the **same 6 slots in both** classes, runs 3
+rooms in parallel, spends **6** of each class's 46-period budget — *not* 6×3, *not* entered
+twice. **Anti-pattern:** entering the three subjects separately in each class (two
+disconnected bands that won't co-locate and can't mix students/teachers across streams).
+Period accounting per member class: **24 shared + 22 own = 46**.
+
+**Capability outline (the build):**
+- *Data model (additive, no FKs):* tag member classes via the existing `class.class_group_id`;
+  add nullable `elective_band.class_group_id` (set ⇒ band spans the group's active classes;
+  `class_id` kept for v1 single-class bands — backward compatible). Shared singles reuse the
+  band mechanism (a one-offering band over the group) unless a dedicated "shared subject"
+  marker is preferred (decide at build). Constraint: a cohort's classes must share the **same
+  grid config + academic year**, enforced in feasibility.
+- *Solver:* `Lesson.classId`/`Placement.classId` → `classIds: string[]`; `solve.ts`
+  `apply`/`canPlace`/`undo` loop `classBusy` over every `classId` (teacher booking unchanged —
+  once per slot regardless of class count); `build-lessons.ts` emits one lesson carrying the
+  group's `classIds`; the loader expands a `class_group_id` band to its class ids.
+- *Validator:* class-double-book check loops `p.classIds`; the band exception (offerings share
+  `band_id`) is unaffected.
+- *Entry writing:* `writeCandidates` fans a cross-class lesson out to one `timetable_entry`
+  per **class × offering × slot** (sharing `band_id`/day/slot); `class_id` stays single-column.
+- *Feasibility:* per-class demand/capacity unchanged (a shared lesson counts once per class it
+  touches); add the same-config/same-year cohort check.
+
+**Rollout (sequenced after the build):** the school first entered XI-A as a single class. Do
+**not** re-model until the feature exists (else the solver schedules the two classes
+independently — English placed twice, bands not co-located). Migration = **reuse the existing
+row as Science** (the `class` table has no `status` column, so reuse/rename beats delete):
+rename `XI-A` → `XI-A (Science)` (keep uuid + class teacher + Physics/Chem/PE); create
+`XI-A (Commerce)` + its teacher + its subjects; create the `class_group` and tag both classes;
+move the shared items (English/Music/the two bands) onto the cohort. Items leaving the old
+single class are soft-deleted (`status='deleted'`) on `class_subject` / `teaching_assignment` /
+`class_teacher` / `elective_band` + `elective_offering`, scoped by
+`class_id + school_id + academic_year_id`, run via `scripts/run-sql.js`.
+
+**Verification (build):** a solver test reproducing XI-A (two classes in a cohort, two shared
+singles, two cross-class bands, the stream subjects) whose output passes `validateTimetable`,
+with the shared lessons at **identical** day/slot in both classes and no teacher double-booked.
 
 ## Build phases
 
@@ -125,7 +228,9 @@ columns, `school_id` on every row, partial unique indexes `where status =
   `block_rules` (jsonb); a within-class parallel option block
 - `elective_offering` — band_id, subject_id, teacher_id; one choice in a band.
   All offerings of a band are co-scheduled into the same slots
-- `class_group` — future cross-section banding; v1 solver ignores it
+- `class_group` — cohort of co-scheduled classes that powers **composite classes**
+  (see section below); member classes carry `class.class_group_id`, and an
+  `elective_band.class_group_id` makes a band span the whole group
 
 **Grid (day-varying)**
 - `timetable_config` — name, academic_year_id, status (`active`|`archived`),
@@ -204,7 +309,9 @@ columns, `school_id` on every row, partial unique indexes `where status =
   (which may already be set before cloning). Mints new uuids; **rejects** if the target
   already has any cloneable setup (class subjects / assignments / bands — class teacher
   ignored). For near-identical sections (e.g. two VIII), set one up and clone the rest.
-- Elective-bands + nested elective-offerings — CRUD
+- Class-groups (cohorts) — CRUD (`/class-groups`); membership is `class.class_group_id`
+- Elective-bands + nested elective-offerings — CRUD; a band targets **either** `classId`
+  **or** `classGroupId` (cohort band co-scheduled across the group)
 - Config / day-structures / time-slots — CRUD
 - `POST /timetable/days/{dayId}/clone-slots` — `{ sourceDayId }` copies every slot
   from another day of the same config onto this day. Target must be empty (the UI

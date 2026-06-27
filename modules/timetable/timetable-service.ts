@@ -29,6 +29,15 @@ class TimetableService {
     );
     return results.length > 0;
   }
+
+  // Does an active class group (cohort) exist for this school?
+  public async classGroupExists(classGroupId: string, schoolId: string): Promise<boolean> {
+    const results = await DB.query(
+      singleLineString`select 1 from class_group where uuid = $1 and school_id = $2 and status = 'active' limit 1`,
+      [classGroupId, schoolId],
+    );
+    return results.length > 0;
+  }
 }
 
 export const timetableService = new TimetableService();

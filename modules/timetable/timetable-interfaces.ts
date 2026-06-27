@@ -155,6 +155,32 @@ export interface UpdateWingRequest {
   classIds?: string[];
 }
 
+// ----------------------------------------------------------------- class_group
+// A cohort of co-scheduled classes (a composite class like XI-A whose Science +
+// Commerce streams share elective bands / shared subjects). Membership lives on
+// class.class_group_id (one cohort per class). An elective_band may target a group.
+export interface ClassGroup extends BaseEntity {
+  academicYearId: string;
+  name: string;
+  code?: string;
+  classIds: string[];
+  classes?: { classId: string; className?: string }[];
+  status: StatusValue;
+}
+
+export interface CreateClassGroupRequest {
+  academicYearId: string;
+  name: string;
+  code?: string;
+  classIds: string[];
+}
+
+export interface UpdateClassGroupRequest {
+  name?: string;
+  code?: string;
+  classIds?: string[];
+}
+
 // ------------------------------------------------------- elective band/offering
 export interface ElectiveOffering extends BaseEntity {
   bandId: string;
@@ -168,7 +194,10 @@ export interface ElectiveOffering extends BaseEntity {
 
 export interface ElectiveBand extends BaseEntity {
   academicYearId: string;
-  classId: string;
+  // Exactly one of classId / classGroupId is set: a single-class band vs a
+  // cohort band co-scheduled across every member of a class_group.
+  classId?: string | null;
+  classGroupId?: string | null;
   name: string;
   periodsPerWeek: number;
   blockRules?: BlockRules;
@@ -183,7 +212,9 @@ export interface ElectiveOfferingInput {
 
 export interface CreateElectiveBandRequest {
   academicYearId: string;
-  classId: string;
+  // Provide exactly one: classId (single-class band) or classGroupId (cohort band).
+  classId?: string;
+  classGroupId?: string;
   name: string;
   periodsPerWeek: number;
   blockRules?: BlockRules;

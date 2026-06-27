@@ -1,4 +1,5 @@
 import {
+  classesOf,
   Lesson,
   Placement,
   ScoredTimetable,
@@ -96,12 +97,12 @@ class Solver {
     pos: StartPosition,
     state: State,
   ): boolean {
-    // class free
-    for (let k = 0; k < lesson.size; k++) {
-      if (
-        state.classBusy.has(`${lesson.classId}|${day}|${pos.startSequence + k}`)
-      )
-        return false;
+    // every co-scheduled class free
+    for (const c of classesOf(lesson)) {
+      for (let k = 0; k < lesson.size; k++) {
+        if (state.classBusy.has(`${c}|${day}|${pos.startSequence + k}`))
+          return false;
+      }
     }
     // teachers free
     for (const t of lesson.teacherIds) {
@@ -150,9 +151,12 @@ class Solver {
     pos: StartPosition,
     state: State,
   ): Placement {
+    const classes = classesOf(lesson);
     for (let k = 0; k < lesson.size; k++) {
       const seq = pos.startSequence + k;
-      state.classBusy.add(`${lesson.classId}|${day}|${seq}`);
+      // every co-scheduled class is busy in this slot...
+      for (const c of classes) state.classBusy.add(`${c}|${day}|${seq}`);
+      // ...but each teacher is booked only once (one room, combined cohort).
       for (const t of lesson.teacherIds) {
         state.teacherBusy.add(`${t}|${day}|${seq}`);
         if (!state.teacherOcc.has(t)) state.teacherOcc.set(t, []);
@@ -178,6 +182,7 @@ class Solver {
     const placement: Placement = {
       lessonId: lesson.id,
       classId: lesson.classId,
+      classIds: lesson.classIds,
       dayOfWeek: day,
       startSequence: pos.startSequence,
       slotIds: pos.slotIds,
@@ -195,9 +200,10 @@ class Solver {
     pos: StartPosition,
     state: State,
   ): void {
+    const classes = classesOf(lesson);
     for (let k = 0; k < lesson.size; k++) {
       const seq = pos.startSequence + k;
-      state.classBusy.delete(`${lesson.classId}|${day}|${seq}`);
+      for (const c of classes) state.classBusy.delete(`${c}|${day}|${seq}`);
       for (const t of lesson.teacherIds) {
         state.teacherBusy.delete(`${t}|${day}|${seq}`);
         const occ = state.teacherOcc.get(t)!;
