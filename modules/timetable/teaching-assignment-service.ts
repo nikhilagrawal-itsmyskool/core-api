@@ -14,7 +14,7 @@ class TeachingAssignmentService {
     if (academicYearId) { params.push(academicYearId); where += ` and ta.academic_year_id = $${params.length}`; }
     return DB.query(
       singleLineString`
-        select ta.*, s.name as subject_name
+        select ta.*, s.name as subject_name, s.code as subject_code, s.status as subject_status
         from teaching_assignment ta
         left join subject s on s.uuid = ta.subject_id
         where ${where}

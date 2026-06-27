@@ -28,6 +28,10 @@ export interface BlockRule {
 
 export interface BlockRules {
   blocks: BlockRule[];
+  // Hard cap on periods of this subject per day (a double = 2). Default 2 (applied
+  // in the solver). The "aim for one slot/day" preference is soft (see score.ts).
+  maxPeriodsPerDay?: number;
+  // Deprecated (no longer set by the UI; kept for backward compatibility):
   maxPerDay?: number;
   notTwiceSameDay?: boolean;
 }
@@ -58,6 +62,8 @@ export interface ClassSubject extends BaseEntity {
   classId: string;
   subjectId: string;
   subjectName?: string;
+  subjectCode?: string;
+  subjectStatus?: StatusValue; // 'deleted' = orphaned reference (flagged in the UI)
   periodsPerWeek: number;
   blockRules?: BlockRules;
   status: StatusValue;
@@ -82,6 +88,8 @@ export interface TeachingAssignment extends BaseEntity {
   classId: string;
   subjectId: string;
   subjectName?: string;
+  subjectCode?: string;
+  subjectStatus?: StatusValue;
   teacherId: string;
   periodShare?: number;
   status: StatusValue;
@@ -152,6 +160,8 @@ export interface ElectiveOffering extends BaseEntity {
   bandId: string;
   subjectId: string;
   subjectName?: string;
+  subjectCode?: string;
+  subjectStatus?: StatusValue;
   teacherId: string;
   status: StatusValue;
 }

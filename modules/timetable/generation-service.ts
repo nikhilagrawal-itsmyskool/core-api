@@ -34,7 +34,10 @@ class GenerationService {
   } | null> {
     const loaded = await loadConfigForSolve(schoolId, configId, wingClassIds);
     if (!loaded) return null;
-    const { lessons, warnings } = buildLessons(loaded.buildInput);
+    const built = buildLessons(loaded.buildInput);
+    const lessons = built.lessons;
+    // Merge loader warnings (e.g. deleted-subject rows skipped) with build warnings.
+    const warnings = [...loaded.warnings, ...built.warnings];
     const input: SolverInput = {
       classIds: loaded.buildInput.classIds,
       grid: loaded.grid,

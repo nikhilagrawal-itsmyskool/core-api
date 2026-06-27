@@ -1,7 +1,14 @@
 // Pure solver data model. These types are independent of the DB layer so the
 // solver can be unit-tested with hand-built inputs (no server / no Postgres).
 
-export type SlotType = 'teaching' | 'assembly' | 'break' | 'lunch' | 'reserved' | 'activity' | 'registration';
+export type SlotType =
+  | "teaching"
+  | "assembly"
+  | "break"
+  | "lunch"
+  | "reserved"
+  | "activity"
+  | "registration";
 
 export interface GridSlot {
   slotId: string;
@@ -41,15 +48,22 @@ export interface Lesson {
   // Block-rule metadata shared by all lessons of the same class_subject / band.
   // groupKey ties them together (e.g. classId+subjectId, or bandId).
   groupKey?: string;
-  maxPerDay?: number; // hard: at most this many of the group per day
-  notTwiceSameDay?: boolean; // hard: at most one of the group per day
+  maxPeriodsPerDay?: number; // hard: at most this many PERIODS of the group per day (double counts as 2); default 2
+  maxPerDay?: number; // deprecated hard: at most this many placements of the group per day
+  notTwiceSameDay?: boolean; // deprecated hard: at most one placement of the group per day
 }
 
-export type Hardness = 'hard' | 'soft';
+export type Hardness = "hard" | "soft";
 
 export interface SolverTeacherConstraint {
   teacherId: string;
-  type: 'max_per_day' | 'max_consecutive' | 'weekly_max' | 'day_off' | 'unavailable_slot' | 'preferred_slot';
+  type:
+    | "max_per_day"
+    | "max_consecutive"
+    | "weekly_max"
+    | "day_off"
+    | "unavailable_slot"
+    | "preferred_slot";
   value: any; // shape depends on type (see constraint-checks)
   hardness: Hardness;
   weight?: number;

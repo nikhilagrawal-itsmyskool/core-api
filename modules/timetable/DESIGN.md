@@ -181,9 +181,13 @@ columns, `school_id` on every row, partial unique indexes `where status =
     { "size": 2, "count": 2, "prefer": [ { "day": 3, "slot": 1 } ] }, // doubles
     { "size": 1, "count": 6 }
   ], // 10/week
-  "maxPerDay": 2,
-  "notTwiceSameDay": true
+  "maxPeriodsPerDay": 2 // HARD cap on periods/day for this subject (a double = 2). Default 2 (applied in the solver).
+  // "maxPerDay" / "notTwiceSameDay": deprecated (still read for old data; no longer set by the UI)
 }
+// Per-day spread: "aim for one slot/day" is a SOFT preference, always on, via the
+// score.ts `spreadAcrossWeek` metric (a double counts as one placement). The hard
+// ceiling is maxPeriodsPerDay (default 2). A subject needing more than
+// maxPeriodsPerDay × teaching-days/week is reported infeasible.
 
 // generation_run.objective_weights — chosen per run
 { "minimizeTeacherGaps": 5, "honorSoftPreferences": 8, "evenDailyLoad": 3, "spreadAcrossWeek": 4 }

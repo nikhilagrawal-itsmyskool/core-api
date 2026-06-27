@@ -1,15 +1,27 @@
 import {
-  Lesson, Placement, ScoredTimetable, SolveResult, SolverInput, SolverTeacherConstraint, Timetable,
-} from './types';
-import { getDay, firstTeachingSlot, startPositions, StartPosition } from './grid';
-import { Occ, violationMessage } from './constraint-checks';
-import { scoreTimetable } from './score';
+  Lesson,
+  Placement,
+  ScoredTimetable,
+  SolveResult,
+  SolverInput,
+  SolverTeacherConstraint,
+  Timetable,
+} from "./types";
+import {
+  getDay,
+  firstTeachingSlot,
+  startPositions,
+  StartPosition,
+} from "./grid";
+import { Occ, violationMessage } from "./constraint-checks";
+import { scoreTimetable } from "./score";
 
 // Small deterministic PRNG so candidates are reproducible from a seed.
 function mulberry32(seed: number): () => number {
   let a = seed >>> 0;
   return () => {
-    a |= 0; a = (a + 0x6d2b79f5) | 0;
+    a |= 0;
+    a = (a + 0x6d2b79f5) | 0;
     let t = Math.imul(a ^ (a >>> 15), 1 | a);
     t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
@@ -29,6 +41,7 @@ interface State {
   classBusy: Set<string>;
   teacherBusy: Set<string>;
   groupDay: Map<string, number>;
+  groupDayPeriods: Map<string, number>;
   teacherOcc: Map<string, Occ[]>;
   placements: Placement[];
 }
@@ -42,8 +55,9 @@ class Solver {
     this.input = input;
     this.hardByTeacher = new Map();
     for (const c of input.constraints) {
-      if (c.hardness !== 'hard') continue;
-      if (!this.hardByTeacher.has(c.teacherId)) this.hardByTeacher.set(c.teacherId, []);
+      if (c.hardness !== "hard") continue;
+      if (!this.hardByTeacher.has(c.teacherId))
+        this.hardByTeacher.set(c.teacherId, []);
       this.hardByTeacher.get(c.teacherId)!.push(c);
     }
     this.deadline = Date.now() + (input.timeBudgetMs ?? 8000);
@@ -55,7 +69,13 @@ class Solver {
       if (!day) return [];
       const first = firstTeachingSlot(day);
       if (!first) return [];
-      return [{ startSequence: first.sequence, slotIds: [first.slotId], ...({ dayOfWeek: lesson.pinnedDay } as any) }];
+      return [
+        {
+          startSequence: first.sequence,
+          slotIds: [first.slotId],
+          ...({ dayOfWeek: lesson.pinnedDay } as any),
+        },
+      ];
     }
     const positions: StartPosition[] = [];
     for (const day of this.input.grid.days) {
@@ -70,22 +90,38 @@ class Solver {
     return (pos as any).dayOfWeek;
   }
 
-  private canPlace(lesson: Lesson, day: number, pos: StartPosition, state: State): boolean {
+  private canPlace(
+    lesson: Lesson,
+    day: number,
+    pos: StartPosition,
+    state: State,
+  ): boolean {
     // class free
     for (let k = 0; k < lesson.size; k++) {
-      if (state.classBusy.has(`${lesson.classId}|${day}|${pos.startSequence + k}`)) return false;
+      if (
+        state.classBusy.has(`${lesson.classId}|${day}|${pos.startSequence + k}`)
+      )
+        return false;
     }
     // teachers free
     for (const t of lesson.teacherIds) {
       for (let k = 0; k < lesson.size; k++) {
-        if (state.teacherBusy.has(`${t}|${day}|${pos.startSequence + k}`)) return false;
+        if (state.teacherBusy.has(`${t}|${day}|${pos.startSequence + k}`))
+          return false;
       }
     }
     // group block rules
     if (lesson.groupKey) {
-      const count = state.groupDay.get(`${lesson.groupKey}|${day}`) || 0;
+      const key = `${lesson.groupKey}|${day}`;
+      const count = state.groupDay.get(key) || 0;
       if (lesson.notTwiceSameDay && count >= 1) return false;
-      if (lesson.maxPerDay !== undefined && count + 1 > lesson.maxPerDay) return false;
+      if (lesson.maxPerDay !== undefined && count + 1 > lesson.maxPerDay)
+        return false;
+      // hard cap on PERIODS/day for this subject (a double = 2 periods)
+      if (lesson.maxPeriodsPerDay !== undefined) {
+        const periods = state.groupDayPeriods.get(key) || 0;
+        if (periods + lesson.size > lesson.maxPeriodsPerDay) return false;
+      }
     }
     // hard teacher constraints (re-check affected teachers with tentative occ)
     for (const t of lesson.teacherIds) {
@@ -93,7 +129,13 @@ class Solver {
       if (!constraints || constraints.length === 0) continue;
       const tentative: Occ[] = (state.teacherOcc.get(t) || []).slice();
       for (let k = 0; k < lesson.size; k++) {
-        tentative.push({ teacherId: t, classId: lesson.classId, day, sequence: pos.startSequence + k, slotId: pos.slotIds[k] });
+        tentative.push({
+          teacherId: t,
+          classId: lesson.classId,
+          day,
+          sequence: pos.startSequence + k,
+          slotId: pos.slotIds[k],
+        });
       }
       for (const c of constraints) {
         if (violationMessage(tentative, c)) return false;
@@ -102,29 +144,57 @@ class Solver {
     return true;
   }
 
-  private apply(lesson: Lesson, day: number, pos: StartPosition, state: State): Placement {
+  private apply(
+    lesson: Lesson,
+    day: number,
+    pos: StartPosition,
+    state: State,
+  ): Placement {
     for (let k = 0; k < lesson.size; k++) {
       const seq = pos.startSequence + k;
       state.classBusy.add(`${lesson.classId}|${day}|${seq}`);
       for (const t of lesson.teacherIds) {
         state.teacherBusy.add(`${t}|${day}|${seq}`);
         if (!state.teacherOcc.has(t)) state.teacherOcc.set(t, []);
-        state.teacherOcc.get(t)!.push({ teacherId: t, classId: lesson.classId, day, sequence: seq, slotId: pos.slotIds[k] });
+        state.teacherOcc
+          .get(t)!
+          .push({
+            teacherId: t,
+            classId: lesson.classId,
+            day,
+            sequence: seq,
+            slotId: pos.slotIds[k],
+          });
       }
     }
     if (lesson.groupKey) {
       const key = `${lesson.groupKey}|${day}`;
       state.groupDay.set(key, (state.groupDay.get(key) || 0) + 1);
+      state.groupDayPeriods.set(
+        key,
+        (state.groupDayPeriods.get(key) || 0) + lesson.size,
+      );
     }
     const placement: Placement = {
-      lessonId: lesson.id, classId: lesson.classId, dayOfWeek: day,
-      startSequence: pos.startSequence, slotIds: pos.slotIds, offerings: lesson.offerings, size: lesson.size, bandId: lesson.bandId,
+      lessonId: lesson.id,
+      classId: lesson.classId,
+      dayOfWeek: day,
+      startSequence: pos.startSequence,
+      slotIds: pos.slotIds,
+      offerings: lesson.offerings,
+      size: lesson.size,
+      bandId: lesson.bandId,
     };
     state.placements.push(placement);
     return placement;
   }
 
-  private undo(lesson: Lesson, day: number, pos: StartPosition, state: State): void {
+  private undo(
+    lesson: Lesson,
+    day: number,
+    pos: StartPosition,
+    state: State,
+  ): void {
     for (let k = 0; k < lesson.size; k++) {
       const seq = pos.startSequence + k;
       state.classBusy.delete(`${lesson.classId}|${day}|${seq}`);
@@ -137,12 +207,20 @@ class Solver {
     if (lesson.groupKey) {
       const key = `${lesson.groupKey}|${day}`;
       state.groupDay.set(key, (state.groupDay.get(key) || 0) - 1);
+      state.groupDayPeriods.set(
+        key,
+        (state.groupDayPeriods.get(key) || 0) - lesson.size,
+      );
     }
     state.placements.pop();
   }
 
   // Backtracking with MRV (fewest feasible positions first) + randomized tie-break.
-  private backtrack(remaining: Lesson[], state: State, rnd: () => number): boolean {
+  private backtrack(
+    remaining: Lesson[],
+    state: State,
+    rnd: () => number,
+  ): boolean {
     if (remaining.length === 0) return true;
     if (Date.now() > this.deadline) return false;
 
@@ -158,17 +236,23 @@ class Solver {
       }
       if (feasible.length === 0) return false; // dead end
       if (bestPositions === null || feasible.length < bestPositions.length) {
-        bestPositions = feasible; bestIdx = i;
+        bestPositions = feasible;
+        bestIdx = i;
         if (feasible.length === 1) break; // can't do better
       }
     }
 
     const lesson = remaining[bestIdx];
-    const rest = remaining.slice(0, bestIdx).concat(remaining.slice(bestIdx + 1));
+    const rest = remaining
+      .slice(0, bestIdx)
+      .concat(remaining.slice(bestIdx + 1));
 
     // Try preferred positions first, then a shuffled remainder.
     const preferred = bestPositions!.filter((c) =>
-      lesson.prefer?.some((p) => p.day === c.day && p.slot === c.pos.startSequence));
+      lesson.prefer?.some(
+        (p) => p.day === c.day && p.slot === c.pos.startSequence,
+      ),
+    );
     const others = bestPositions!.filter((c) => !preferred.includes(c));
     const ordered = [...shuffle(preferred, rnd), ...shuffle(others, rnd)];
 
@@ -184,11 +268,18 @@ class Solver {
   public solveOnce(seed: number): Timetable | null {
     const rnd = mulberry32(seed);
     const state: State = {
-      classBusy: new Set(), teacherBusy: new Set(), groupDay: new Map(), teacherOcc: new Map(), placements: [],
+      classBusy: new Set(),
+      teacherBusy: new Set(),
+      groupDay: new Map(),
+      groupDayPeriods: new Map(),
+      teacherOcc: new Map(),
+      placements: [],
     };
     // Pins first (fixed), then doubles, then singles; shuffle within tiers.
     const pins = this.input.lessons.filter((l) => l.pinnedDay);
-    const rest = this.input.lessons.filter((l) => !l.pinnedDay).sort((a, b) => b.size - a.size);
+    const rest = this.input.lessons
+      .filter((l) => !l.pinnedDay)
+      .sort((a, b) => b.size - a.size);
     const ordered = [...pins, ...shuffle(rest, rnd)];
     const ok = this.backtrack(ordered, state, rnd);
     if (!ok) return null;
@@ -210,18 +301,26 @@ export function solve(input: SolverInput, numCandidates = 3): SolveResult {
     const sig = tt.placements
       .map((p) => `${p.lessonId}@${p.dayOfWeek}:${p.startSequence}`)
       .sort()
-      .join('|');
+      .join("|");
     if (signatures.has(sig)) continue;
     signatures.add(sig);
     found.push(tt);
   }
 
   if (found.length === 0) {
-    return { feasible: false, candidates: [], reason: 'No timetable satisfied all hard constraints within the time budget.' };
+    return {
+      feasible: false,
+      candidates: [],
+      reason:
+        "No timetable satisfied all hard constraints within the time budget.",
+    };
   }
 
   const scored: ScoredTimetable[] = found
-    .map((tt) => { const s = scoreTimetable(input, tt); return { timetable: tt, score: s.score, breakdown: s.breakdown }; })
+    .map((tt) => {
+      const s = scoreTimetable(input, tt);
+      return { timetable: tt, score: s.score, breakdown: s.breakdown };
+    })
     .sort((a, b) => b.score - a.score)
     .slice(0, numCandidates);
 

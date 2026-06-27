@@ -8,6 +8,7 @@ export interface BuildBlockRules {
     count: number;
     prefer?: { day: number; slot: number }[];
   }[];
+  maxPeriodsPerDay?: number;
   maxPerDay?: number;
   notTwiceSameDay?: boolean;
 }
@@ -308,6 +309,27 @@ export function buildLessons(input: BuildInput): {
         notTwiceSameDay: band.blockRules?.notTwiceSameDay,
         prefer: unit.prefer,
       });
+    }
+  }
+
+  // Hard per-day period cap (default 2) for every lesson of a group — covers
+  // homeroom pins, singles, splits and bands centrally. A double (size 2) = 2 periods.
+  const capByGroup = new Map<string, number>();
+  for (const cs of input.classSubjects) {
+    capByGroup.set(
+      `cs:${cs.classId}:${cs.subjectId}`,
+      cs.blockRules?.maxPeriodsPerDay ?? 2,
+    );
+  }
+  for (const band of input.electiveBands) {
+    capByGroup.set(
+      `band:${band.bandId}`,
+      band.blockRules?.maxPeriodsPerDay ?? 2,
+    );
+  }
+  for (const l of lessons) {
+    if (l.maxPeriodsPerDay === undefined) {
+      l.maxPeriodsPerDay = (l.groupKey && capByGroup.get(l.groupKey)) ?? 2;
     }
   }
 

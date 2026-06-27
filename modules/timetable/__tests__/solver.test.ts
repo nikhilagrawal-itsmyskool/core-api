@@ -359,6 +359,135 @@ describe("solver — solve produces valid timetables", () => {
   });
 });
 
+describe("solver — max periods per day (hard cap, default 2)", () => {
+  it("never places more than 2 periods of a subject in a day (default cap)", () => {
+    const grid = makeGrid([1, 2, 3, 4, 5], 6);
+    const { lessons } = buildLessons({
+      classIds: ["C1"],
+      teachingDays: [1, 2, 3, 4, 5],
+      classSubjects: [
+        { classId: "C1", subjectId: "MATH", periodsPerWeek: 7 }, // 7 over 5 days → one day needs 2
+        { classId: "C1", subjectId: "ENG", periodsPerWeek: 5 },
+      ],
+      teachingAssignments: [
+        { classId: "C1", subjectId: "MATH", teacherId: "T1" },
+        { classId: "C1", subjectId: "ENG", teacherId: "T2" },
+      ],
+      classTeachers: [],
+      electiveBands: [],
+    });
+    expect(lessons.every((l) => l.maxPeriodsPerDay === 2)).toBe(true);
+    const input: SolverInput = {
+      classIds: ["C1"],
+      grid,
+      lessons,
+      constraints: [],
+      seed: 4,
+    };
+    const result = solve(input, 1);
+    expect(result.feasible).toBe(true);
+    const tt = result.candidates[0].timetable;
+    expect(validateTimetable(input, tt)).toEqual([]);
+    const perDay = new Map<number, number>();
+    for (const p of tt.placements.filter(
+      (x) => x.offerings[0].subjectId === "MATH",
+    )) {
+      perDay.set(p.dayOfWeek, (perDay.get(p.dayOfWeek) || 0) + p.size);
+    }
+    expect([...perDay.values()].every((n) => n <= 2)).toBe(true);
+  });
+
+  it("honors a double (size 2) under the default cap of 2", () => {
+    const grid = makeGrid([1, 2, 3, 4, 5], 6);
+    const { lessons } = buildLessons({
+      classIds: ["C1"],
+      teachingDays: [1, 2, 3, 4, 5],
+      classSubjects: [
+        {
+          classId: "C1",
+          subjectId: "PHY",
+          periodsPerWeek: 2,
+          blockRules: { blocks: [{ size: 2, count: 1 }] },
+        },
+      ],
+      teachingAssignments: [
+        { classId: "C1", subjectId: "PHY", teacherId: "T1" },
+      ],
+      classTeachers: [],
+      electiveBands: [],
+    });
+    const input: SolverInput = {
+      classIds: ["C1"],
+      grid,
+      lessons,
+      constraints: [],
+      seed: 2,
+    };
+    const result = solve(input, 1);
+    expect(result.feasible).toBe(true);
+    const tt = result.candidates[0].timetable;
+    expect(validateTimetable(input, tt)).toEqual([]);
+    expect(
+      tt.placements.find((p) => p.offerings[0].subjectId === "PHY")!.size,
+    ).toBe(2);
+  });
+
+  it("feasibility flags a subject that needs more than cap × teaching-days", () => {
+    const grid = makeGrid([1], 6); // a single teaching day
+    const { lessons } = buildLessons({
+      classIds: ["C1"],
+      teachingDays: [1],
+      classSubjects: [{ classId: "C1", subjectId: "MATH", periodsPerWeek: 3 }], // 3 > 2×1
+      teachingAssignments: [
+        { classId: "C1", subjectId: "MATH", teacherId: "T1" },
+      ],
+      classTeachers: [],
+      electiveBands: [],
+    });
+    const input: SolverInput = {
+      classIds: ["C1"],
+      grid,
+      lessons,
+      constraints: [],
+      seed: 1,
+    };
+    const feas = checkFeasibility(input);
+    expect(feas.feasible).toBe(false);
+    expect(feas.issues.join(" ")).toMatch(/cap of 2\/day/);
+  });
+
+  it("validator flags 3 periods of a subject on one day", () => {
+    const grid = makeGrid([1], 6);
+    const input: SolverInput = {
+      classIds: ["C1"],
+      grid,
+      constraints: [],
+      lessons: [0, 1, 2].map((i) => ({
+        id: `L${i}`,
+        classId: "C1",
+        size: 1,
+        offerings: [{ subjectId: "MATH", teacherId: "T1" }],
+        teacherIds: ["T1"],
+        groupKey: "cs:C1:MATH",
+        maxPeriodsPerDay: 2,
+      })) as Lesson[],
+    };
+    const broken = {
+      placements: [1, 2, 3].map((seq, i) => ({
+        lessonId: `L${i}`,
+        classId: "C1",
+        dayOfWeek: 1,
+        startSequence: seq,
+        slotIds: [`d1s${seq}`],
+        offerings: [{ subjectId: "MATH", teacherId: "T1" }],
+        size: 1,
+      })),
+    };
+    const issues = validateTimetable(input, broken, false);
+    expect(issues.some((i) => i.rule === "max_periods_per_day")).toBe(true);
+  });
+});
+
 describe("solver — infeasibility & constraints", () => {
   it("reports infeasible when demand exceeds capacity (clean reason, no hang)", () => {
     const grid = makeGrid([1], 2); // only 2 slots

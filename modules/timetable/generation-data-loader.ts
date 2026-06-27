@@ -9,6 +9,7 @@ export interface LoadedConfig {
   teachingDays: number[];
   buildInput: BuildInput;
   constraints: SolverTeacherConstraint[];
+  warnings: string[]; // e.g. class-subjects skipped because their subject is deleted
 }
 
 // Load all academic + grid data for a config into the shapes the solver needs.
@@ -41,12 +42,18 @@ export async function loadConfigForSolve(schoolId: string, configId: string, win
   }
 
   // --- academic backbone ---
+  // Exclude rows whose subject was soft-deleted — a deleted subject must never be
+  // scheduled. (The Class Setup UI flags such orphaned rows with "(deleted)".)
   const classSubjects = await DB.query(
-    singleLineString`select class_id, subject_id, periods_per_week, block_rules from class_subject where school_id = $1 and academic_year_id = $2 and status = 'active'`,
+    singleLineString`select class_id, subject_id, periods_per_week, block_rules from class_subject
+      where school_id = $1 and academic_year_id = $2 and status = 'active'
+      and exists (select 1 from subject sub where sub.uuid = class_subject.subject_id and sub.status = 'active')`,
     [schoolId, academicYearId],
   );
   const teachingAssignments = await DB.query(
-    singleLineString`select class_id, subject_id, teacher_id, period_share from teaching_assignment where school_id = $1 and academic_year_id = $2 and status = 'active'`,
+    singleLineString`select class_id, subject_id, teacher_id, period_share from teaching_assignment
+      where school_id = $1 and academic_year_id = $2 and status = 'active'
+      and exists (select 1 from subject sub where sub.uuid = teaching_assignment.subject_id and sub.status = 'active')`,
     [schoolId, academicYearId],
   );
   const classTeachers = await DB.query(
@@ -60,7 +67,9 @@ export async function loadConfigForSolve(schoolId: string, configId: string, win
   const electiveBands = [];
   for (const band of bands) {
     const offerings = await DB.query(
-      singleLineString`select subject_id, teacher_id from elective_offering where band_id = $1 and school_id = $2 and status = 'active'`,
+      singleLineString`select subject_id, teacher_id from elective_offering
+        where band_id = $1 and school_id = $2 and status = 'active'
+        and exists (select 1 from subject sub where sub.uuid = elective_offering.subject_id and sub.status = 'active')`,
       [band.uuid, schoolId],
     );
     electiveBands.push({
@@ -101,5 +110,17 @@ export async function loadConfigForSolve(schoolId: string, configId: string, win
     electiveBands: scopedElectiveBands,
   };
 
-  return { configId, academicYearId, grid, teachingDays, buildInput, constraints };
+  // Warn (don't fail) about active class-subjects whose subject is deleted — these
+  // were skipped above and won't be scheduled; the admin should fix them in Class Setup.
+  const deletedRefs = await DB.query(
+    singleLineString`select cs.class_id as class_id, s.name as subject_name
+      from class_subject cs join subject s on s.uuid = cs.subject_id
+      where cs.school_id = $1 and cs.academic_year_id = $2 and cs.status = 'active' and s.status = 'deleted'`,
+    [schoolId, academicYearId],
+  );
+  const warnings = deletedRefs
+    .filter((r: any) => inScope(r.classId))
+    .map((r: any) => `Class ${r.classId}: subject "${r.subjectName}" is deleted — skipped from generation.`);
+
+  return { configId, academicYearId, grid, teachingDays, buildInput, constraints, warnings };
 }

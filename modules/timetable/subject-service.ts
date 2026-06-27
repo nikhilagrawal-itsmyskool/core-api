@@ -91,6 +91,7 @@ class SubjectService {
           (select count(*) from class_subject where school_id = $1 and subject_id = $2 and status = 'active')
           + (select count(*) from teaching_assignment where school_id = $1 and subject_id = $2 and status = 'active')
           + (select count(*) from elective_offering where school_id = $1 and subject_id = $2 and status = 'active')
+          + (select count(*) from class_teacher where school_id = $1 and first_period_subject_id = $2 and status = 'active')
           as count
       `,
       [schoolId, subjectId],

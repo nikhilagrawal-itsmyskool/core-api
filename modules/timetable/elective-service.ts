@@ -113,7 +113,7 @@ class ElectiveService {
   public async listOfferings(bandId: string, schoolId: string): Promise<ElectiveOffering[]> {
     return DB.query(
       singleLineString`
-        select eo.*, s.name as subject_name
+        select eo.*, s.name as subject_name, s.code as subject_code, s.status as subject_status
         from elective_offering eo
         left join subject s on s.uuid = eo.subject_id
         where eo.band_id = $1 and eo.school_id = $2 and eo.status = 'active'

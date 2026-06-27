@@ -15,7 +15,7 @@ class ClassSubjectService {
     if (academicYearId) { params.push(academicYearId); where += ` and cs.academic_year_id = $${params.length}`; }
     return DB.query(
       singleLineString`
-        select cs.*, s.name as subject_name
+        select cs.*, s.name as subject_name, s.code as subject_code, s.status as subject_status
         from class_subject cs
         left join subject s on s.uuid = cs.subject_id
         where ${where}
