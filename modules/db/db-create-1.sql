@@ -132,6 +132,7 @@ alter table employee add column if not exists code varchar(16);
 
 create unique index idx_employee_employee_number_school_id on employee (employee_number, school_id);
 create unique index idx_employee_family_unique_number_school_id on employee (family_unique_number, school_id);
+create unique index idx_employee_code_school_id on employee (code, school_id) where code is not null;
 
 create table employee_role (
     uuid varchar(12) PRIMARY KEY,
