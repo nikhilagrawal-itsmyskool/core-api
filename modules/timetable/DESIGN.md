@@ -197,6 +197,13 @@ columns, `school_id` on every row, partial unique indexes `where status =
 
 - Subjects / class-subjects / teaching-assignments — CRUD
 - Class-teachers — CRUD
+- `POST /timetable/clone-class-setup` — `{ sourceClassId, targetClassId, academicYearId }`
+  deep-copies a section's academic setup (class subjects, teaching assignments,
+  elective bands+offerings) onto another section in the same year. The **class teacher
+  is not copied** — it is the per-section difference, so the admin sets it on the target
+  (which may already be set before cloning). Mints new uuids; **rejects** if the target
+  already has any cloneable setup (class subjects / assignments / bands — class teacher
+  ignored). For near-identical sections (e.g. two VIII), set one up and clone the rest.
 - Elective-bands + nested elective-offerings — CRUD
 - Config / day-structures / time-slots — CRUD
 - `POST /timetable/configs/{id}/lock` · `/unlock` · `/clone` — config lock lifecycle

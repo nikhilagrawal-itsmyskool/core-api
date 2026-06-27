@@ -101,6 +101,16 @@
           method: delete
           cors: true
 
+  # Clone a section's full setup (subjects + assignments + class teacher + electives)
+  clone-class-setup:
+    handler: clone-handler.cloneClassSetup
+    name: ${self:service}-clone-class-setup
+    events:
+      - http:
+          path: clone-class-setup
+          method: post
+          cors: true
+
   # Teaching assignments
   list-teaching-assignments:
     handler: teaching-assignment-handler.list

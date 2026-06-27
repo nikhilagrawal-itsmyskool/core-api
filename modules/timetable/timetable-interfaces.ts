@@ -201,6 +201,24 @@ export interface CreateElectiveOfferingRequest {
   teacherId: string;
 }
 
+// ------------------------------------------------------------- clone class setup
+// Deep-copy one section's academic setup (class subjects, teaching assignments,
+// and elective bands+offerings) onto another section in the same academic year.
+// The class teacher is NOT copied — it is the per-section difference, set on the
+// target afterward. New uuids are minted; the target must have no cloneable setup.
+export interface CloneClassSetupRequest {
+  sourceClassId: string;
+  targetClassId: string;
+  academicYearId: string;
+}
+
+export interface CloneClassSetupResult {
+  classSubjects: number;
+  teachingAssignments: number;
+  electiveBands: number;
+  electiveOfferings: number;
+}
+
 // ------------------------------------------------------------- timetable_config
 export interface TimetableConfig extends BaseEntity {
   academicYearId: string;
