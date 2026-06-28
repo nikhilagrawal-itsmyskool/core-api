@@ -14,7 +14,11 @@ import {
   startPositions,
   StartPosition,
 } from "./grid";
-import { Occ, violationMessage } from "./constraint-checks";
+import {
+  availableSlotsByTeacher,
+  Occ,
+  violationMessage,
+} from "./constraint-checks";
 import { scoreTimetable } from "./score";
 
 // Small deterministic PRNG so candidates are reproducible from a seed.
@@ -43,6 +47,9 @@ interface State {
   teacherBusy: Set<string>;
   groupDay: Map<string, number>;
   groupDayPeriods: Map<string, number>;
+  // Per group: how many placements start at each sequence (the group's "columns").
+  // Drives the column-consistency placement bias (keep a subject in one period column).
+  groupCol: Map<string, Map<number, number>>;
   teacherOcc: Map<string, Occ[]>;
   placements: Placement[];
 }
@@ -54,6 +61,12 @@ class Solver {
   // Cohort lockstep: each class -> its co-scheduled sibling classes. Used to bias
   // a member's own lessons toward slots where siblings are already busy.
   private siblingsByClass: Map<string, string[]>;
+  // Teacher availability whitelist: teacher -> allowed "day|sequence" set. When present,
+  // the teacher may ONLY be placed in those slots.
+  private allowedByTeacher: Map<string, Set<string>>;
+  // The "flex tail": last 2 teaching slots of each day ("day|seq"). Column-consistency
+  // prefers a subject's home column to be OUTSIDE this set (the tail absorbs overflow).
+  private flexSeqs: Set<string>;
 
   constructor(input: SolverInput) {
     this.input = input;
@@ -64,6 +77,7 @@ class Solver {
         this.hardByTeacher.set(c.teacherId, []);
       this.hardByTeacher.get(c.teacherId)!.push(c);
     }
+    this.allowedByTeacher = availableSlotsByTeacher(input.constraints);
     this.siblingsByClass = new Map();
     for (const group of input.cohorts ?? []) {
       for (const c of group) {
@@ -72,6 +86,15 @@ class Solver {
           group.filter((o) => o !== c),
         );
       }
+    }
+    this.flexSeqs = new Set();
+    for (const d of input.grid.days) {
+      const teaching = d.slots
+        .filter((s) => s.slotType === "teaching")
+        .map((s) => s.sequence)
+        .sort((a, b) => a - b);
+      for (const seq of teaching.slice(-2))
+        this.flexSeqs.add(`${d.dayOfWeek}|${seq}`);
     }
     this.deadline = Date.now() + (input.timeBudgetMs ?? 8000);
   }
@@ -145,6 +168,14 @@ class Solver {
           return false;
       }
     }
+    // teacher availability whitelist: a teacher with an allowed-set may ONLY teach there.
+    for (const t of lesson.teacherIds) {
+      const allowed = this.allowedByTeacher.get(t);
+      if (!allowed) continue;
+      for (let k = 0; k < lesson.size; k++) {
+        if (!allowed.has(`${day}|${pos.startSequence + k}`)) return false;
+      }
+    }
     // group block rules
     if (lesson.groupKey) {
       const key = `${lesson.groupKey}|${day}`;
@@ -212,6 +243,10 @@ class Solver {
         key,
         (state.groupDayPeriods.get(key) || 0) + lesson.size,
       );
+      if (!state.groupCol.has(lesson.groupKey))
+        state.groupCol.set(lesson.groupKey, new Map());
+      const cm = state.groupCol.get(lesson.groupKey)!;
+      cm.set(pos.startSequence, (cm.get(pos.startSequence) || 0) + 1);
     }
     const placement: Placement = {
       lessonId: lesson.id,
@@ -251,6 +286,8 @@ class Solver {
         key,
         (state.groupDayPeriods.get(key) || 0) - lesson.size,
       );
+      const cm = state.groupCol.get(lesson.groupKey);
+      if (cm) cm.set(pos.startSequence, (cm.get(pos.startSequence) || 0) - 1);
     }
     state.placements.pop();
   }
@@ -300,16 +337,31 @@ class Solver {
       bestPositions!.filter((c) => !preferred.includes(c)),
       rnd,
     );
-    // Cohort lockstep (soft): for a member's own lesson, prefer slots where its
-    // siblings are already busy. Stable sort keeps the shuffle as the tie-break, so
-    // restart diversity is preserved and non-cohort lessons are untouched.
-    if (
+    // Bias the candidate order (stable over the shuffle, so restart diversity is kept):
+    //  1) column consistency — cluster a group into the period-column it already uses,
+    //     and prefer a home column OUTSIDE the flex tail;
+    //  2) cohort lockstep — prefer slots where co-scheduled siblings are already busy.
+    const usesCohort =
       this.siblingsByClass.size > 0 &&
-      classesOf(lesson).some((c) => this.siblingsByClass.has(c))
-    ) {
+      classesOf(lesson).some((c) => this.siblingsByClass.has(c));
+    if (lesson.groupKey || usesCohort) {
+      const cols = lesson.groupKey
+        ? state.groupCol.get(lesson.groupKey)
+        : undefined;
       others = others
-        .map((c) => ({ c, a: this.siblingAlignment(lesson, c.day, c.pos, state) }))
-        .sort((x, y) => y.a - x.a)
+        .map((c) => {
+          const seq = c.pos.startSequence;
+          return {
+            c,
+            colAff: cols?.get(seq) || 0,
+            flexPen: this.flexSeqs.has(`${c.day}|${seq}`) ? 1 : 0,
+            sib: usesCohort ? this.siblingAlignment(lesson, c.day, c.pos, state) : 0,
+          };
+        })
+        .sort(
+          (x, y) =>
+            y.colAff - x.colAff || x.flexPen - y.flexPen || y.sib - x.sib,
+        )
         .map((x) => x.c);
     }
     const ordered = [...preferredShuffled, ...others];
@@ -330,6 +382,7 @@ class Solver {
       teacherBusy: new Set(),
       groupDay: new Map(),
       groupDayPeriods: new Map(),
+      groupCol: new Map(),
       teacherOcc: new Map(),
       placements: [],
     };

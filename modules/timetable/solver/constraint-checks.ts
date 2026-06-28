@@ -80,6 +80,21 @@ export function violationMessage(teacherOcc: Occ[], c: SolverTeacherConstraint):
   }
 }
 
+// Per-teacher allowed (day|sequence) set from `available_slot` constraints. A teacher
+// with ANY available_slot may ONLY teach in those pairs (a hard whitelist). `slot` is
+// already the grid sequence (the loader translates teaching-period index -> sequence).
+export function availableSlotsByTeacher(constraints: SolverTeacherConstraint[]): Map<string, Set<string>> {
+  const map = new Map<string, Set<string>>();
+  for (const c of constraints) {
+    if (c.type !== 'available_slot') continue;
+    const day = c.value?.day, slot = c.value?.slot;
+    if (day == null || slot == null) continue;
+    if (!map.has(c.teacherId)) map.set(c.teacherId, new Set());
+    map.get(c.teacherId)!.add(`${day}|${slot}`);
+  }
+  return map;
+}
+
 // Full re-check of all HARD teacher constraints against a complete placement set.
 export function checkHardTeacherConstraints(placements: Placement[], constraints: SolverTeacherConstraint[]): ValidationIssue[] {
   const byTeacher = groupByTeacher(expandOccupancy(placements));
@@ -89,6 +104,16 @@ export function checkHardTeacherConstraints(placements: Placement[], constraints
     const occ = byTeacher.get(c.teacherId) || [];
     const msg = violationMessage(occ, c);
     if (msg) issues.push({ rule: `teacher_constraint:${c.type}`, message: msg });
+  }
+  // Availability whitelist: any occupancy outside a teacher's allowed set is a violation.
+  for (const [teacherId, allowed] of availableSlotsByTeacher(constraints)) {
+    for (const o of byTeacher.get(teacherId) || []) {
+      if (!allowed.has(`${o.day}|${o.sequence}`))
+        issues.push({
+          rule: 'teacher_constraint:available_slot',
+          message: `teacher ${teacherId} is scheduled outside their available periods (day ${o.day}, period ${o.sequence})`,
+        });
+    }
   }
   return issues;
 }

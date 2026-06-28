@@ -33,6 +33,10 @@ export interface BuildClassTeacher {
 export interface BuildOffering {
   subjectId: string;
   teacherId: string;
+  // A band offering's subject may be split across teachers (like class_subject's
+  // period_share): several offerings with the same subjectId, each a share. null =
+  // that teacher takes all of the subject's band periods.
+  periodShare?: number | null;
 }
 export interface BuildElectiveBand {
   bandId: string;
@@ -58,6 +62,40 @@ export interface BuildInput {
 interface Unit {
   size: number;
   prefer?: { day: number; slot: number }[];
+}
+
+// Spread a subject's teachers across U band units. One teacher -> all units. Several
+// (a split) -> contiguous blocks sized by share (or evenly when shares are absent), e.g.
+// Bio ADS:6 / SP:3 over 9 units -> [ADS×6, SP×3]. The solver then arranges them across
+// days; teacherVariety nudges same-day repeats onto the other teacher.
+function assignTeachersPerUnit(
+  teachers: { teacherId: string; share?: number | null }[],
+  U: number,
+): string[] {
+  if (teachers.length <= 1)
+    return Array(U).fill(teachers[0]?.teacherId ?? null);
+  const allShares = teachers.every(
+    (t) => typeof t.share === "number" && t.share! > 0,
+  );
+  let counts: number[];
+  if (allShares) {
+    const total = teachers.reduce((s, t) => s + (t.share || 0), 0);
+    counts = teachers.map((t) => Math.round(((t.share || 0) / total) * U));
+  } else {
+    const base = Math.floor(U / teachers.length);
+    let extra = U % teachers.length;
+    counts = teachers.map(() => base + (extra-- > 0 ? 1 : 0));
+  }
+  // reconcile rounding so the counts sum to exactly U
+  let sum = counts.reduce((a, b) => a + b, 0);
+  for (let i = 0; sum < U; i = (i + 1) % counts.length) (counts[i]++, sum++);
+  for (let i = 0; sum > U; i = (i + 1) % counts.length)
+    if (counts[i] > 0) (counts[i]--, sum--);
+  const out: string[] = [];
+  teachers.forEach((t, ti) => {
+    for (let k = 0; k < counts[ti]; k++) out.push(t.teacherId);
+  });
+  return out;
 }
 
 function expandBlocks(
@@ -298,28 +336,43 @@ export function buildLessons(input: BuildInput): {
       warnings.push(`Elective band ${band.bandId} has no offerings — skipped.`);
       continue;
     }
-    const teacherIds = [...new Set(band.offerings.map((o) => o.teacherId))];
     const groupKey = `band:${band.bandId}`;
     // Member classes co-scheduled by this band (a composite-class band lists >1).
     const members =
       band.classIds && band.classIds.length > 0
         ? band.classIds
         : [band.classId];
-    for (const unit of expandBlocks(band.blockRules, band.periodsPerWeek)) {
+    const units = expandBlocks(band.blockRules, band.periodsPerWeek);
+    // Group offerings by subject; a subject split across teachers gets a teacher per unit.
+    const bySubject = new Map<string, { teacherId: string; share?: number | null }[]>();
+    for (const o of band.offerings) {
+      if (!bySubject.has(o.subjectId)) bySubject.set(o.subjectId, []);
+      bySubject.get(o.subjectId)!.push({ teacherId: o.teacherId, share: o.periodShare });
+    }
+    const teacherPerUnit = new Map<string, string[]>();
+    for (const [subjectId, teachers] of bySubject)
+      teacherPerUnit.set(subjectId, assignTeachersPerUnit(teachers, units.length));
+    const subjectIds = [...bySubject.keys()];
+
+    units.forEach((unit, i) => {
+      const offerings = subjectIds.map((subjectId) => ({
+        subjectId,
+        teacherId: teacherPerUnit.get(subjectId)![i],
+      }));
       lessons.push({
         id: nextId(),
         classId: members[0],
         classIds: members.length > 1 ? members : undefined,
         size: unit.size,
-        offerings: band.offerings.map((o) => ({ ...o })),
-        teacherIds,
+        offerings,
+        teacherIds: [...new Set(offerings.map((o) => o.teacherId))],
         bandId: band.bandId,
         groupKey,
         maxPerDay: band.blockRules?.maxPerDay,
         notTwiceSameDay: band.blockRules?.notTwiceSameDay,
         prefer: unit.prefer,
       });
-    }
+    });
   }
 
   // Hard per-day period cap (default 2) for every lesson of a group — covers

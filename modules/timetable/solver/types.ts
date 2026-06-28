@@ -68,7 +68,8 @@ export interface SolverTeacherConstraint {
     | "weekly_max"
     | "day_off"
     | "unavailable_slot"
-    | "preferred_slot";
+    | "preferred_slot"
+    | "available_slot";
   value: any; // shape depends on type (see constraint-checks)
   hardness: Hardness;
   weight?: number;
@@ -83,6 +84,14 @@ export interface ObjectiveWeights {
   // move in lockstep). Penalizes any teaching slot where some members are busy and
   // others free. Soft — never blocks a solution.
   cohortLockstep?: number;
+  // Keep a subject in the SAME period across days ("Chemistry is always 2nd period").
+  // Penalizes a group using more distinct period-columns than it needs; the last 2
+  // teaching periods of each day are exempt (the day-varying "flex tail"). Soft.
+  columnConsistency?: number;
+  // Anti-monotony: when a subject is split across two teachers, don't give the same
+  // class the same teacher for that subject twice in a day — penalize repeats so the
+  // solver alternates teachers. Soft.
+  teacherVariety?: number;
 }
 
 export interface SolverInput {

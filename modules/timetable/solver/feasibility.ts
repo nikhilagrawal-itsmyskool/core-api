@@ -1,4 +1,5 @@
 import { classesOf, SolverInput } from "./types";
+import { availableSlotsByTeacher } from "./constraint-checks";
 import {
   getDay,
   firstTeachingSlot,
@@ -104,6 +105,19 @@ export function checkFeasibility(input: SolverInput): FeasibilityReport {
     hardByTeacher.get(c.teacherId)!.push(c);
   }
 
+  // A teacher with an `available_slot` whitelist can teach ONLY there: capacity is the
+  // number of whitelisted slots that are actual teaching slots.
+  const allowedByTeacher = availableSlotsByTeacher(input.constraints);
+  const whitelistCapacity = (set: Set<string>): number => {
+    let n = 0;
+    for (const key of set) {
+      const [d, seq] = key.split("|").map(Number);
+      const day = getDay(input.grid, d);
+      if (day?.slots.some((s) => s.slotType === "teaching" && s.sequence === seq)) n++;
+    }
+    return n;
+  };
+
   for (const [teacherId, demand] of teacherDemand) {
     let available = totalSlots;
     let weeklyCap = Infinity;
@@ -120,7 +134,9 @@ export function checkFeasibility(input: SolverInput): FeasibilityReport {
       } else if (c.type === "weekly_max")
         weeklyCap = Math.min(weeklyCap, c.value?.max ?? Infinity);
     }
-    const effective = Math.min(available, weeklyCap);
+    const allowed = allowedByTeacher.get(teacherId);
+    let effective = Math.min(available, weeklyCap);
+    if (allowed) effective = Math.min(effective, whitelistCapacity(allowed));
     if (demand > effective) {
       issues.push(
         `Teacher ${teacherId} is assigned ${demand} periods but is only free for ${effective} after their hard constraints.`,
