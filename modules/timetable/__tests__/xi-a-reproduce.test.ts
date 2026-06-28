@@ -203,7 +203,8 @@ describe("XI-A reproduce (new solver vs the hand-made sheet)", () => {
       const ideal = Math.max(1, Math.ceil((groupPpw.get(gk) || cols.size) / DAYS.length));
       columnSpread += Math.max(0, cols.size - ideal);
     }
-    expect(columnSpread).toBeLessThanOrEqual(4);
+    // With the distinct-column bias this is essentially 0 — allow a small margin.
+    expect(columnSpread).toBeLessThanOrEqual(2);
 
     // 5) English (shared) sits in the SAME column for both streams (cohort + column).
     const engCols = new Set(

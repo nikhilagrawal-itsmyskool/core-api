@@ -50,6 +50,9 @@ interface State {
   // Per group: how many placements start at each sequence (the group's "columns").
   // Drives the column-consistency placement bias (keep a subject in one period column).
   groupCol: Map<string, Map<number, number>>;
+  // Per "class|sequence": how many placements sit there (across days). Lets a new
+  // subject claim a LESS-congested column so groups spread into distinct columns.
+  colUse: Map<string, number>;
   teacherOcc: Map<string, Occ[]>;
   placements: Placement[];
 }
@@ -220,7 +223,10 @@ class Solver {
     for (let k = 0; k < lesson.size; k++) {
       const seq = pos.startSequence + k;
       // every co-scheduled class is busy in this slot...
-      for (const c of classes) state.classBusy.add(`${c}|${day}|${seq}`);
+      for (const c of classes) {
+        state.classBusy.add(`${c}|${day}|${seq}`);
+        state.colUse.set(`${c}|${seq}`, (state.colUse.get(`${c}|${seq}`) || 0) + 1);
+      }
       // ...but each teacher is booked only once (one room, combined cohort).
       for (const t of lesson.teacherIds) {
         state.teacherBusy.add(`${t}|${day}|${seq}`);
@@ -272,7 +278,10 @@ class Solver {
     const classes = classesOf(lesson);
     for (let k = 0; k < lesson.size; k++) {
       const seq = pos.startSequence + k;
-      for (const c of classes) state.classBusy.delete(`${c}|${day}|${seq}`);
+      for (const c of classes) {
+        state.classBusy.delete(`${c}|${day}|${seq}`);
+        state.colUse.set(`${c}|${seq}`, (state.colUse.get(`${c}|${seq}`) || 0) - 1);
+      }
       for (const t of lesson.teacherIds) {
         state.teacherBusy.delete(`${t}|${day}|${seq}`);
         const occ = state.teacherOcc.get(t)!;
@@ -348,19 +357,37 @@ class Solver {
       const cols = lesson.groupKey
         ? state.groupCol.get(lesson.groupKey)
         : undefined;
+      // Does this group already own a column? If so, overflow should go to the flex
+      // tail rather than opening a SECOND fixed column.
+      const hasHome = cols ? [...cols.values()].some((v) => v > 0) : false;
+      const classes = classesOf(lesson);
       others = others
         .map((c) => {
           const seq = c.pos.startSequence;
+          const isFlex = this.flexSeqs.has(`${c.day}|${seq}`);
+          // Before a home column exists: prefer non-flex (claim a fixed column).
+          // After: prefer the flex tail for anything not in the home column.
+          const flexRank = isFlex ? (hasHome ? 0 : 1) : hasHome ? 1 : 0;
+          // How busy this column already is for the lesson's class(es) — claim a
+          // LESS-congested column so distinct subjects land in distinct columns.
+          let congestion = 0;
+          for (const cl of classes) congestion += state.colUse.get(`${cl}|${seq}`) || 0;
           return {
             c,
             colAff: cols?.get(seq) || 0,
-            flexPen: this.flexSeqs.has(`${c.day}|${seq}`) ? 1 : 0,
+            flexRank,
+            congestion,
             sib: usesCohort ? this.siblingAlignment(lesson, c.day, c.pos, state) : 0,
           };
         })
+        // 1. cluster into the home column; 2. route by flexRank; 3. claim a free
+        //    column (low congestion); 4. cohort align. Stable over the shuffle.
         .sort(
           (x, y) =>
-            y.colAff - x.colAff || x.flexPen - y.flexPen || y.sib - x.sib,
+            y.colAff - x.colAff ||
+            x.flexRank - y.flexRank ||
+            x.congestion - y.congestion ||
+            y.sib - x.sib,
         )
         .map((x) => x.c);
     }
@@ -383,6 +410,7 @@ class Solver {
       groupDay: new Map(),
       groupDayPeriods: new Map(),
       groupCol: new Map(),
+      colUse: new Map(),
       teacherOcc: new Map(),
       placements: [],
     };
