@@ -57,18 +57,21 @@ class ElectiveService {
       data.periodsPerWeek, toJsonb(data.blockRules), DEFAULTS.STATUS, userId, now,
     ]);
 
-    const seenSubjects = new Set<string>();
+    // A subject may repeat with a DIFFERENT teacher (a teacher split); reject only an
+    // exact (subject, teacher) duplicate.
+    const seenPairs = new Set<string>();
     for (const off of data.offerings || []) {
-      if (seenSubjects.has(off.subjectId)) {
-        throw new BusinessErrorResult(ErrorCode.BusinessError, 'Duplicate subject in band offerings');
+      const pair = `${off.subjectId}|${off.teacherId}`;
+      if (seenPairs.has(pair)) {
+        throw new BusinessErrorResult(ErrorCode.BusinessError, 'Duplicate subject+teacher in band offerings');
       }
-      seenSubjects.add(off.subjectId);
+      seenPairs.add(pair);
       queries.push(singleLineString`
         insert into elective_offering
-        (uuid, school_id, band_id, subject_id, teacher_id, status, createdby_userid, created_at)
-        values ($1, $2, $3, $4, $5, $6, $7, $8)
+        (uuid, school_id, band_id, subject_id, teacher_id, period_share, status, createdby_userid, created_at)
+        values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
       `);
-      params.push([generateShortUuid(12), schoolId, bandId, off.subjectId, off.teacherId, DEFAULTS.STATUS, userId, now]);
+      params.push([generateShortUuid(12), schoolId, bandId, off.subjectId, off.teacherId, off.periodShare ?? null, DEFAULTS.STATUS, userId, now]);
     }
 
     await DB.queriesInTransaction(queries, params);
@@ -134,20 +137,20 @@ class ElectiveService {
 
   public async addOffering(bandId: string, data: CreateElectiveOfferingRequest, schoolId: string, userId: string): Promise<ElectiveOffering> {
     const dup = await DB.query(
-      singleLineString`select 1 from elective_offering where band_id = $1 and subject_id = $2 and status = 'active' limit 1`,
-      [bandId, data.subjectId],
+      singleLineString`select 1 from elective_offering where band_id = $1 and subject_id = $2 and teacher_id = $3 and status = 'active' limit 1`,
+      [bandId, data.subjectId, data.teacherId],
     );
     if (dup.length > 0) {
-      throw new BusinessErrorResult(ErrorCode.BusinessError, 'This subject is already offered in the band');
+      throw new BusinessErrorResult(ErrorCode.BusinessError, 'This subject+teacher is already offered in the band');
     }
     const results = await DB.query(
       singleLineString`
         insert into elective_offering
-        (uuid, school_id, band_id, subject_id, teacher_id, status, createdby_userid, created_at)
-        values ($1, $2, $3, $4, $5, $6, $7, $8)
+        (uuid, school_id, band_id, subject_id, teacher_id, period_share, status, createdby_userid, created_at)
+        values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         returning *
       `,
-      [generateShortUuid(12), schoolId, bandId, data.subjectId, data.teacherId, DEFAULTS.STATUS, userId, new Date()],
+      [generateShortUuid(12), schoolId, bandId, data.subjectId, data.teacherId, data.periodShare ?? null, DEFAULTS.STATUS, userId, new Date()],
     );
     return results[0];
   }

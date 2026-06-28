@@ -94,14 +94,15 @@ export async function loadConfigForSolve(schoolId: string, configId: string, win
       continue;
     }
     const offerings = await DB.query(
-      singleLineString`select subject_id, teacher_id from elective_offering
+      singleLineString`select subject_id, teacher_id, period_share from elective_offering
         where band_id = $1 and school_id = $2 and status = 'active'
         and exists (select 1 from subject sub where sub.uuid = elective_offering.subject_id and sub.status = 'active')`,
       [band.uuid, schoolId],
     );
     electiveBands.push({
       bandId: band.uuid, classId: members[0], classIds: members, periodsPerWeek: band.periodsPerWeek,
-      blockRules: band.blockRules, offerings: offerings.map((o: any) => ({ subjectId: o.subjectId, teacherId: o.teacherId })),
+      blockRules: band.blockRules,
+      offerings: offerings.map((o: any) => ({ subjectId: o.subjectId, teacherId: o.teacherId, periodShare: o.periodShare ?? null })),
     });
   }
 
@@ -109,9 +110,50 @@ export async function loadConfigForSolve(schoolId: string, configId: string, win
     singleLineString`select teacher_id, constraint_type, value, hardness, weight from teacher_constraint where school_id = $1 and academic_year_id = $2 and status = 'active'`,
     [schoolId, academicYearId],
   );
-  const constraints: SolverTeacherConstraint[] = constraintRows.map((c: any) => ({
-    teacherId: c.teacherId, type: c.constraintType, value: c.value, hardness: c.hardness, weight: c.weight ?? undefined,
-  }));
+  // Per-day teaching sequences (sorted): teaching-period index (1-based) -> grid sequence.
+  // A constraint's `slot` is the Nth TEACHING period; translate to the real sequence so the
+  // solver (which compares raw sequence) honors what the admin meant. `days[]` (or a single
+  // `day`) is expanded into one solver constraint per day.
+  const teachingSeqByDay = new Map<number, number[]>();
+  for (const day of grid.days) {
+    teachingSeqByDay.set(
+      day.dayOfWeek,
+      day.slots.filter((s) => s.slotType === "teaching").map((s) => s.sequence).sort((a, b) => a - b),
+    );
+  }
+  const toSeq = (day: number, periodIndex: number): number | null => {
+    const seqs = teachingSeqByDay.get(day);
+    if (!seqs || !(periodIndex >= 1) || periodIndex > seqs.length) return null;
+    return seqs[periodIndex - 1];
+  };
+  const SLOT_TYPES = new Set(["unavailable_slot", "preferred_slot", "available_slot"]);
+  const DAY_TYPES = new Set(["day_off", "unavailable_slot", "preferred_slot", "available_slot"]);
+  const constraintWarnings: string[] = [];
+  const constraints: SolverTeacherConstraint[] = [];
+  for (const c of constraintRows) {
+    const type = c.constraintType;
+    const v = c.value || {};
+    const base = { teacherId: c.teacherId, type, hardness: c.hardness, weight: c.weight ?? undefined };
+    if (!DAY_TYPES.has(type)) {
+      constraints.push({ ...base, value: v });
+      continue;
+    }
+    const days: number[] = Array.isArray(v.days) ? v.days : v.day != null ? [v.day] : [];
+    for (const day of days) {
+      if (SLOT_TYPES.has(type)) {
+        const seq = toSeq(Number(day), Number(v.slot));
+        if (seq == null) {
+          constraintWarnings.push(
+            `Teacher ${c.teacherId} ${type}: teaching period ${v.slot} doesn't exist on day ${day} — skipped.`,
+          );
+          continue;
+        }
+        constraints.push({ ...base, value: { day, slot: seq } });
+      } else {
+        constraints.push({ ...base, value: { day } });
+      }
+    }
+  }
 
   // Scope to a wing's classes when requested (else whole school).
   const wingSet = wingClassIds && wingClassIds.length > 0 ? new Set(wingClassIds) : null;
@@ -162,6 +204,7 @@ export async function loadConfigForSolve(schoolId: string, configId: string, win
   );
   const warnings = [
     ...bandWarnings,
+    ...constraintWarnings,
     ...deletedRefs
       .filter((r: any) => inScope(r.classId))
       .map((r: any) => `Class ${r.classId}: subject "${r.subjectName}" is deleted — skipped from generation.`),

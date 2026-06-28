@@ -176,6 +176,12 @@ create table if not exists elective_offering (
 create index if not exists idx_elective_offering_band on elective_offering(band_id, status);
 create unique index if not exists idx_elective_offering_unique on elective_offering(band_id, subject_id) where status = 'active';
 
+-- A band offering's subject may be split across teachers (period_share, like
+-- class_subject). Relax uniqueness to allow the same subject with different teachers.
+alter table elective_offering add column if not exists period_share integer;
+drop index if exists idx_elective_offering_unique;
+create unique index if not exists idx_elective_offering_unique on elective_offering(band_id, subject_id, teacher_id) where status = 'active';
+
 -- timetable_wing: a named set of classes (e.g. primary / middle / senior) for an
 -- academic year. Lives entirely in the timetable module — the core class table is
 -- untouched. Generation/publish can target the whole school (no wing) or one wing
@@ -291,7 +297,7 @@ create table if not exists teacher_constraint (
     school_id varchar(12) not null,
     academic_year_id varchar(12) not null,
     teacher_id varchar(12) not null,
-    constraint_type varchar(24) not null check (constraint_type in ('max_per_day', 'max_consecutive', 'weekly_max', 'day_off', 'unavailable_slot', 'preferred_slot')),
+    constraint_type varchar(24) not null check (constraint_type in ('max_per_day', 'max_consecutive', 'weekly_max', 'day_off', 'unavailable_slot', 'preferred_slot', 'available_slot')),
     value jsonb,
     hardness varchar(8) not null check (hardness in ('hard', 'soft')),
     weight integer,
@@ -303,6 +309,10 @@ create table if not exists teacher_constraint (
 );
 
 create index if not exists idx_teacher_constraint_teacher on teacher_constraint(school_id, academic_year_id, teacher_id, status);
+
+-- forward-compatible: widen the constraint_type CHECK to include 'available_slot'.
+alter table teacher_constraint drop constraint if exists teacher_constraint_constraint_type_check;
+alter table teacher_constraint add constraint teacher_constraint_constraint_type_check check (constraint_type in ('max_per_day', 'max_consecutive', 'weekly_max', 'day_off', 'unavailable_slot', 'preferred_slot', 'available_slot'));
 
 -- ---------------------------------------------------------------------------
 -- Generation job queue + candidate timetables

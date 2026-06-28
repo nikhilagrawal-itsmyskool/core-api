@@ -24,8 +24,9 @@ export const CONSTRAINT_TYPES = [
   { value: 'max_consecutive', label: 'Max consecutive periods' },
   { value: 'weekly_max', label: 'Weekly maximum' },
   { value: 'day_off', label: 'Day off' },
-  { value: 'unavailable_slot', label: 'Unavailable slot' },
-  { value: 'preferred_slot', label: 'Preferred slot' },
+  { value: 'available_slot', label: 'Available periods (only here)' },
+  { value: 'unavailable_slot', label: 'Unavailable periods' },
+  { value: 'preferred_slot', label: 'Preferred period (soft)' },
 ] as const;
 
 export const HARDNESS_VALUES = ['hard', 'soft'] as const;

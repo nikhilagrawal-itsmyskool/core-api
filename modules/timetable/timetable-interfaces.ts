@@ -189,6 +189,9 @@ export interface ElectiveOffering extends BaseEntity {
   subjectCode?: string;
   subjectStatus?: StatusValue;
   teacherId: string;
+  // A subject split across teachers: several offerings, same subjectId, each a share.
+  // null = the teacher takes all of the subject's band periods.
+  periodShare?: number | null;
   status: StatusValue;
 }
 
@@ -208,6 +211,7 @@ export interface ElectiveBand extends BaseEntity {
 export interface ElectiveOfferingInput {
   subjectId: string;
   teacherId: string;
+  periodShare?: number | null;
 }
 
 export interface CreateElectiveBandRequest {
@@ -230,6 +234,7 @@ export interface UpdateElectiveBandRequest {
 export interface CreateElectiveOfferingRequest {
   subjectId: string;
   teacherId: string;
+  periodShare?: number | null;
 }
 
 // ------------------------------------------------------------- clone class setup
