@@ -40,6 +40,23 @@ class GenerationHandler {
     }
   };
 
+  public listRuns = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
+    _context.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const ctx = await resolveSchool(event, callback);
+      if (!ctx) return;
+      const qp = event.queryStringParameters || {};
+      const runs = await generationService.listRuns(ctx.schoolId, {
+        academicYearId: qp.academicYearId,
+        configId: qp.configId,
+        status: qp.status,
+      });
+      ResponseBuilder.ok({ runs }, callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
   public getRun = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
     _context.callbackWaitsForEmptyEventLoop = false;
     try {
@@ -148,6 +165,7 @@ class GenerationHandler {
 const handler = new GenerationHandler();
 export const feasibility = handler.feasibility;
 export const generate = handler.generate;
+export const listRuns = handler.listRuns;
 export const getRun = handler.getRun;
 export const getCandidates = handler.getCandidates;
 export const processNext = handler.processNext;

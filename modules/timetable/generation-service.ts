@@ -193,6 +193,50 @@ class GenerationService {
     return rows.length > 0 ? rows[0] : null;
   }
 
+  // Run history for the school: most recent first, with config/scope labels, a
+  // candidate count and the best (rank-1) score, so a run is findable after the
+  // user navigates away. Optional filters: academicYearId, configId, status.
+  public async listRuns(
+    schoolId: string,
+    filters: {
+      academicYearId?: string;
+      configId?: string;
+      status?: string;
+    } = {},
+  ): Promise<any[]> {
+    const params: any[] = [schoolId];
+    let where = `r.school_id = $1`;
+    if (filters.academicYearId) {
+      params.push(filters.academicYearId);
+      where += ` and r.academic_year_id = $${params.length}`;
+    }
+    if (filters.configId) {
+      params.push(filters.configId);
+      where += ` and r.config_id = $${params.length}`;
+    }
+    if (filters.status) {
+      params.push(filters.status);
+      where += ` and r.status = $${params.length}`;
+    }
+    return DB.query(
+      singleLineString`
+        select r.uuid, r.status, r.config_id, r.academic_year_id, r.wing_id,
+               r.num_candidates, r.progress, r.error, r.attempts,
+               r.created_at, r.started_at, r.finished_at, r.heartbeat_at,
+               c.name as config_name, w.name as wing_name,
+               (select count(*) from timetable_candidate tc where tc.generation_run_id = r.uuid) as candidate_count,
+               (select tc.score from timetable_candidate tc where tc.generation_run_id = r.uuid order by tc.rank limit 1) as best_score
+        from generation_run r
+        left join timetable_config c on c.uuid = r.config_id
+        left join timetable_wing w on w.uuid = r.wing_id
+        where ${where}
+        order by r.created_at desc
+        limit 50
+      `,
+      params,
+    );
+  }
+
   public async getCandidates(runId: string, schoolId: string): Promise<any[]> {
     const candidates = await DB.query(
       singleLineString`select * from timetable_candidate where generation_run_id = $1 and school_id = $2 order by rank`,

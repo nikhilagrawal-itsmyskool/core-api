@@ -491,6 +491,14 @@
           path: runs/process-next
           method: post
           cors: true
+  list-runs:
+    handler: generation-handler.listRuns
+    name: ${self:service}-list-runs
+    events:
+      - http:
+          path: runs
+          method: get
+          cors: true
   get-run:
     handler: generation-handler.getRun
     name: ${self:service}-get-run
