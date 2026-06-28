@@ -35,6 +35,11 @@ export interface Offering {
 export interface Lesson {
   id: string;
   classId: string;
+  // Classes co-scheduled by this one lesson. Absent/empty = just [classId] (the
+  // normal single-class case). Set to >1 class only for a cross-class group band
+  // or shared single (a cohort/composite class like XI-A): the lesson books every
+  // listed class at the same slot, while each teacher is still booked only once.
+  classIds?: string[];
   size: number; // consecutive teaching slots required (1 = single, 2 = double)
   offerings: Offering[];
   teacherIds: string[]; // distinct teachers this lesson occupies
@@ -90,12 +95,20 @@ export interface SolverInput {
 export interface Placement {
   lessonId: string;
   classId: string;
+  // All classes this placement occupies (mirrors Lesson.classIds). Absent = [classId].
+  classIds?: string[];
   dayOfWeek: number;
   startSequence: number;
   slotIds: string[];
   offerings: Offering[];
   size: number;
   bandId?: string;
+}
+
+// The set of classes a lesson/placement occupies: its classIds when present,
+// else just [classId]. Single-class is the universal default.
+export function classesOf(x: { classId: string; classIds?: string[] }): string[] {
+  return x.classIds && x.classIds.length > 0 ? x.classIds : [x.classId];
 }
 
 export interface Timetable {

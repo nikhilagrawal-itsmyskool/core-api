@@ -62,12 +62,36 @@ export async function loadConfigForSolve(schoolId: string, configId: string, win
     singleLineString`select class_id, teacher_id, first_period_subject_id, first_period_days from class_teacher where school_id = $1 and academic_year_id = $2 and status = 'active'`,
     [schoolId, academicYearId],
   );
+  // Member classes of each class_group (composite cohorts). A band pointing at a
+  // group co-schedules across all its members; a plain band targets one class_id.
+  const groupMemberRows = await DB.query(
+    singleLineString`select uuid, class_group_id from class where school_id = $1 and class_group_id is not null`,
+    [schoolId],
+  );
+  const groupMembers = new Map<string, string[]>();
+  for (const r of groupMemberRows) {
+    if (!groupMembers.has(r.classGroupId)) groupMembers.set(r.classGroupId, []);
+    groupMembers.get(r.classGroupId)!.push(r.uuid);
+  }
+
   const bands = await DB.query(
-    singleLineString`select uuid, class_id, periods_per_week, block_rules from elective_band where school_id = $1 and academic_year_id = $2 and status = 'active'`,
+    singleLineString`select uuid, class_id, class_group_id, periods_per_week, block_rules from elective_band where school_id = $1 and academic_year_id = $2 and status = 'active'`,
     [schoolId, academicYearId],
   );
+  const bandWarnings: string[] = [];
   const electiveBands = [];
   for (const band of bands) {
+    const members = band.classGroupId
+      ? groupMembers.get(band.classGroupId) ?? []
+      : band.classId
+        ? [band.classId]
+        : [];
+    if (members.length === 0) {
+      bandWarnings.push(
+        `Elective band ${band.uuid} has no classes (empty cohort or unset class) — skipped.`,
+      );
+      continue;
+    }
     const offerings = await DB.query(
       singleLineString`select subject_id, teacher_id from elective_offering
         where band_id = $1 and school_id = $2 and status = 'active'
@@ -75,7 +99,7 @@ export async function loadConfigForSolve(schoolId: string, configId: string, win
       [band.uuid, schoolId],
     );
     electiveBands.push({
-      bandId: band.uuid, classId: band.classId, periodsPerWeek: band.periodsPerWeek,
+      bandId: band.uuid, classId: members[0], classIds: members, periodsPerWeek: band.periodsPerWeek,
       blockRules: band.blockRules, offerings: offerings.map((o: any) => ({ subjectId: o.subjectId, teacherId: o.teacherId })),
     });
   }
@@ -94,12 +118,19 @@ export async function loadConfigForSolve(schoolId: string, configId: string, win
   const scopedClassSubjects = classSubjects.filter((c: any) => inScope(c.classId));
   const scopedTeachingAssignments = teachingAssignments.filter((a: any) => inScope(a.classId));
   const scopedClassTeachers = classTeachers.filter((c: any) => inScope(c.classId));
-  const scopedElectiveBands = electiveBands.filter((b: any) => inScope(b.classId));
+  // A band stays if any member is in scope; its member list is narrowed to in-scope
+  // classes (so a wing solve co-schedules only the wing's members of a cohort band).
+  const scopedElectiveBands = electiveBands
+    .map((b: any) => {
+      const ids = b.classIds.filter(inScope);
+      return { ...b, classIds: ids, classId: ids[0] ?? b.classId };
+    })
+    .filter((b: any) => b.classIds.length > 0);
 
   // classes in play
   const classIds = [...new Set<string>([
     ...scopedClassSubjects.map((c: any) => c.classId),
-    ...scopedElectiveBands.map((b: any) => b.classId),
+    ...scopedElectiveBands.flatMap((b: any) => b.classIds),
     ...scopedClassTeachers.map((c: any) => c.classId),
   ])];
 
@@ -120,9 +151,12 @@ export async function loadConfigForSolve(schoolId: string, configId: string, win
       where cs.school_id = $1 and cs.academic_year_id = $2 and cs.status = 'active' and s.status = 'deleted'`,
     [schoolId, academicYearId],
   );
-  const warnings = deletedRefs
-    .filter((r: any) => inScope(r.classId))
-    .map((r: any) => `Class ${r.classId}: subject "${r.subjectName}" is deleted — skipped from generation.`);
+  const warnings = [
+    ...bandWarnings,
+    ...deletedRefs
+      .filter((r: any) => inScope(r.classId))
+      .map((r: any) => `Class ${r.classId}: subject "${r.subjectName}" is deleted — skipped from generation.`),
+  ];
 
   // --- display labels (id -> human name) for humanizing messages ---
   // Collect every id that can appear in an issue/warning string, then look up names.

@@ -1,4 +1,5 @@
 import {
+  classesOf,
   Lesson,
   Placement,
   SolverInput,
@@ -71,17 +72,20 @@ export function validateTimetable(
   }
 
   // 2. No class double-booked: at most one placement per (class, day, sequence).
+  // A cross-class lesson occupies every class in classesOf — check each.
   const classSlot = new Map<string, string>();
   for (const p of placements) {
-    for (let k = 0; k < p.size; k++) {
-      const key = `${p.classId}|${p.dayOfWeek}|${p.startSequence + k}`;
-      if (classSlot.has(key)) {
-        issues.push({
-          rule: "class_double_book",
-          message: `class ${p.classId} double-booked at day ${p.dayOfWeek} seq ${p.startSequence + k}`,
-        });
-      } else {
-        classSlot.set(key, p.lessonId);
+    for (const c of classesOf(p)) {
+      for (let k = 0; k < p.size; k++) {
+        const key = `${c}|${p.dayOfWeek}|${p.startSequence + k}`;
+        if (classSlot.has(key)) {
+          issues.push({
+            rule: "class_double_book",
+            message: `class ${c} double-booked at day ${p.dayOfWeek} seq ${p.startSequence + k}`,
+          });
+        } else {
+          classSlot.set(key, p.lessonId);
+        }
       }
     }
   }

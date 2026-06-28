@@ -1,4 +1,4 @@
-import { SolverInput } from "./types";
+import { classesOf, SolverInput } from "./types";
 import {
   getDay,
   firstTeachingSlot,
@@ -35,10 +35,10 @@ export function checkFeasibility(input: SolverInput): FeasibilityReport {
   const classDemand = new Map<string, number>();
   const teacherDemand = new Map<string, number>();
   for (const lesson of input.lessons) {
-    classDemand.set(
-      lesson.classId,
-      (classDemand.get(lesson.classId) || 0) + lesson.size,
-    );
+    // A cross-class lesson consumes one slot in EACH class it co-schedules.
+    for (const c of classesOf(lesson)) {
+      classDemand.set(c, (classDemand.get(c) || 0) + lesson.size);
+    }
     for (const t of lesson.teacherIds) {
       teacherDemand.set(t, (teacherDemand.get(t) || 0) + lesson.size);
     }

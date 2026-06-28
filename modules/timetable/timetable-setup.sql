@@ -29,8 +29,10 @@ create table if not exists subject (
 create index if not exists idx_subject_school_status on subject(school_id, status);
 create unique index if not exists idx_subject_code_unique on subject(school_id, lower(code)) where status = 'active';
 
--- class_group: future "banding" of classes (e.g. a grade whose sections share an
--- elective block). Defined now for forward-compatibility; the v1 solver ignores it.
+-- class_group: a cohort of co-scheduled classes (e.g. a composite class like XI-A
+-- whose Science + Commerce streams study some subjects together / share elective
+-- bands). Member classes carry class.class_group_id; an elective_band pointing at a
+-- class_group co-schedules across every member. See DESIGN.md "Composite classes".
 create table if not exists class_group (
     uuid varchar(12) primary key,
     school_id varchar(12) not null,
@@ -126,15 +128,18 @@ alter table class_teacher add column if not exists first_period_subject_id varch
 -- original behavior); [] = the class teacher takes no first period (floats).
 alter table class_teacher add column if not exists first_period_days jsonb;
 
--- elective_band: a within-class parallel option block (XI/XII). Several subject
--- offerings run in the SAME time slots; a student picks one. Shaped like
--- class_subject (periods_per_week + block_rules, sum(size*count) == periods_per_week).
--- Cross-section sharing via class_group is a later extension; band is per-class for v1.
+-- elective_band: a parallel option block. Several subject offerings run in the SAME
+-- time slots; a student picks one. Shaped like class_subject (periods_per_week +
+-- block_rules, sum(size*count) == periods_per_week).
+-- Scope is EITHER a single class (class_id) OR a cohort (class_group_id): when
+-- class_group_id is set the band co-schedules across every member class of the group
+-- (a composite class like XI-A). Exactly one of the two is populated.
 create table if not exists elective_band (
     uuid varchar(12) primary key,
     school_id varchar(12) not null,
     academic_year_id varchar(12) not null,
-    class_id varchar(12) not null,
+    class_id varchar(12),
+    class_group_id varchar(12),
     name varchar(128) not null,
     periods_per_week integer not null,
     block_rules jsonb,
@@ -147,6 +152,10 @@ create table if not exists elective_band (
 
 create index if not exists idx_elective_band_school_year on elective_band(school_id, academic_year_id, status);
 create index if not exists idx_elective_band_class on elective_band(class_id);
+
+-- forward-compatible for existing databases: cohort-scoped bands.
+alter table elective_band add column if not exists class_group_id varchar(12);
+alter table elective_band alter column class_id drop not null;
 
 -- elective_offering: one subject choice inside a band, with its own teacher. All
 -- offerings of a band are co-scheduled into the same slots, and each offering's

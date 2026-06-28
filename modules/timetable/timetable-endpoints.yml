@@ -237,6 +237,48 @@
           method: delete
           cors: true
 
+  # Class groups (cohorts of co-scheduled classes, e.g. a composite class)
+  list-class-groups:
+    handler: class-group-handler.list
+    name: ${self:service}-list-class-groups
+    events:
+      - http:
+          path: class-groups
+          method: get
+          cors: true
+  create-class-group:
+    handler: class-group-handler.create
+    name: ${self:service}-create-class-group
+    events:
+      - http:
+          path: class-groups
+          method: post
+          cors: true
+  get-class-group:
+    handler: class-group-handler.getById
+    name: ${self:service}-get-class-group
+    events:
+      - http:
+          path: class-groups/{id}
+          method: get
+          cors: true
+  update-class-group:
+    handler: class-group-handler.update
+    name: ${self:service}-update-class-group
+    events:
+      - http:
+          path: class-groups/{id}
+          method: put
+          cors: true
+  delete-class-group:
+    handler: class-group-handler.remove
+    name: ${self:service}-delete-class-group
+    events:
+      - http:
+          path: class-groups/{id}
+          method: delete
+          cors: true
+
   # Elective bands + offerings
   list-elective-bands:
     handler: elective-handler.listBands

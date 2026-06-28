@@ -13,7 +13,7 @@ class ElectiveHandler {
       const ctx = await resolveSchool(event, callback);
       if (!ctx) return;
       const qp = event.queryStringParameters || {};
-      const bands = await electiveService.listBands(ctx.schoolId, qp.classId, qp.academicYearId);
+      const bands = await electiveService.listBands(ctx.schoolId, qp.classId, qp.academicYearId, qp.classGroupId);
       ResponseBuilder.ok({ bands }, callback);
     } catch (err: any) {
       ResponseBuilder.handleError(err, callback);
@@ -42,14 +42,23 @@ class ElectiveHandler {
       if (!ctx) return;
       const body = parseBody<CreateElectiveBandRequest>(event, callback);
       if (!body) return;
-      if (!body.academicYearId || !body.classId || !body.name || !body.name.trim()) {
-        ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'academicYearId, classId and name are required', callback); return;
+      const hasClass = !!body.classId;
+      const hasGroup = !!body.classGroupId;
+      if (!body.academicYearId || !body.name || !body.name.trim()) {
+        ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'academicYearId and name are required', callback); return;
+      }
+      // Exactly one scope: a single class or a cohort (class group), never both/neither.
+      if (hasClass === hasGroup) {
+        ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'Provide exactly one of classId or classGroupId', callback); return;
       }
       if (!Number.isInteger(body.periodsPerWeek) || body.periodsPerWeek < 1) {
         ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'periodsPerWeek must be a positive integer', callback); return;
       }
-      if (!(await timetableService.classExists(body.classId, ctx.schoolId))) {
+      if (hasClass && !(await timetableService.classExists(body.classId!, ctx.schoolId))) {
         ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'Invalid classId', callback); return;
+      }
+      if (hasGroup && !(await timetableService.classGroupExists(body.classGroupId!, ctx.schoolId))) {
+        ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'Invalid classGroupId', callback); return;
       }
       const band = await electiveService.createBand(body, ctx.schoolId, ctx.userId);
       ResponseBuilder.ok(band, callback);

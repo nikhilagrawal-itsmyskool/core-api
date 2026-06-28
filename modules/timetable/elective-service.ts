@@ -11,10 +11,11 @@ const { generateShortUuid } = require('../../shared/util/generate-uuid.js');
 
 class ElectiveService {
   // ----- bands -----
-  public async listBands(schoolId: string, classId?: string, academicYearId?: string): Promise<ElectiveBand[]> {
+  public async listBands(schoolId: string, classId?: string, academicYearId?: string, classGroupId?: string): Promise<ElectiveBand[]> {
     const params: any[] = [schoolId];
     let where = `school_id = $1 and status = 'active'`;
     if (classId) { params.push(classId); where += ` and class_id = $${params.length}`; }
+    if (classGroupId) { params.push(classGroupId); where += ` and class_group_id = $${params.length}`; }
     if (academicYearId) { params.push(academicYearId); where += ` and academic_year_id = $${params.length}`; }
     const bands: ElectiveBand[] = await DB.query(
       singleLineString`select * from elective_band where ${where} order by name`,
@@ -48,11 +49,11 @@ class ElectiveService {
 
     queries.push(singleLineString`
       insert into elective_band
-      (uuid, school_id, academic_year_id, class_id, name, periods_per_week, block_rules, status, createdby_userid, created_at)
-      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      (uuid, school_id, academic_year_id, class_id, class_group_id, name, periods_per_week, block_rules, status, createdby_userid, created_at)
+      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
     `);
     params.push([
-      bandId, schoolId, data.academicYearId, data.classId, data.name.trim(),
+      bandId, schoolId, data.academicYearId, data.classId ?? null, data.classGroupId ?? null, data.name.trim(),
       data.periodsPerWeek, toJsonb(data.blockRules), DEFAULTS.STATUS, userId, now,
     ]);
 

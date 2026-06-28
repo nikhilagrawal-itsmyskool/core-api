@@ -8,7 +8,7 @@ import { crossWingTeacherWarnings } from "./cross-wing";
 import { buildLessons } from "./solver/build-lessons";
 import { checkFeasibility } from "./solver/feasibility";
 import { solve } from "./solver/solve";
-import { SolverInput } from "./solver/types";
+import { classesOf, SolverInput } from "./solver/types";
 import { humanizeMessages, SolverLabels } from "./message-labels";
 import {
   computeRegistrationEntries,
@@ -337,26 +337,30 @@ class GenerationService {
         for (let k = 0; k < p.size; k++) {
           const timeSlotId = p.slotIds[k];
           const blockGroupId = p.size > 1 ? p.lessonId : null;
-          for (const off of p.offerings) {
-            queries.push(singleLineString`
-              insert into timetable_entry
-              (uuid, school_id, candidate_id, class_id, subject_id, teacher_id, day_of_week, time_slot_id, block_group_id, band_id, createdby_userid, created_at)
-              values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-            `);
-            params.push([
-              generateShortUuid(12),
-              run.schoolId,
-              candidateId,
-              p.classId,
-              off.subjectId,
-              off.teacherId,
-              p.dayOfWeek,
-              timeSlotId,
-              blockGroupId,
-              p.bandId ?? null,
-              run.createdbyUserid ?? "worker",
-              now,
-            ]);
+          // A cross-class lesson fans out to one row per class it co-schedules; the
+          // shared band_id ties them (and each offering) together at the same slot.
+          for (const cls of classesOf(p)) {
+            for (const off of p.offerings) {
+              queries.push(singleLineString`
+                insert into timetable_entry
+                (uuid, school_id, candidate_id, class_id, subject_id, teacher_id, day_of_week, time_slot_id, block_group_id, band_id, createdby_userid, created_at)
+                values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+              `);
+              params.push([
+                generateShortUuid(12),
+                run.schoolId,
+                candidateId,
+                cls,
+                off.subjectId,
+                off.teacherId,
+                p.dayOfWeek,
+                timeSlotId,
+                blockGroupId,
+                p.bandId ?? null,
+                run.createdbyUserid ?? "worker",
+                now,
+              ]);
+            }
           }
         }
       }

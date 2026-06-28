@@ -37,6 +37,10 @@ export interface BuildOffering {
 export interface BuildElectiveBand {
   bandId: string;
   classId: string;
+  // Cross-class (cohort) band: every class co-scheduled into the same slots.
+  // Absent/empty = a normal single-class band on [classId]. Set with >1 class for
+  // a composite class like XI-A (Science + Commerce share the band's rooms/slots).
+  classIds?: string[];
   periodsPerWeek: number;
   blockRules?: BuildBlockRules;
   offerings: BuildOffering[];
@@ -296,10 +300,16 @@ export function buildLessons(input: BuildInput): {
     }
     const teacherIds = [...new Set(band.offerings.map((o) => o.teacherId))];
     const groupKey = `band:${band.bandId}`;
+    // Member classes co-scheduled by this band (a composite-class band lists >1).
+    const members =
+      band.classIds && band.classIds.length > 0
+        ? band.classIds
+        : [band.classId];
     for (const unit of expandBlocks(band.blockRules, band.periodsPerWeek)) {
       lessons.push({
         id: nextId(),
-        classId: band.classId,
+        classId: members[0],
+        classIds: members.length > 1 ? members : undefined,
         size: unit.size,
         offerings: band.offerings.map((o) => ({ ...o })),
         teacherIds,
