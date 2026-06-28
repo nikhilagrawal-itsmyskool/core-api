@@ -22,11 +22,15 @@ const { generateShortUuid } = require("../../shared/util/generate-uuid.js");
 // instead of being hard-killed mid-solve (which would strand the run as 'running').
 // 60s gives a full-school (25-class) solve real margin — a stressed instance with
 // electives + teacher constraints solves in ~25-35s (see solver-scale.test.ts).
-// Raised to 100s for whole-school (~40 classes, shared teachers): the 60s budget
-// timed out on a full Class 1–XI solve, so give it more of the 120s ceiling while
-// leaving ~20s for scoring + candidate writes. If 100s still times out, the problem
-// is algorithmic (search), not time — revisit solver perf rather than the budget.
-const SOLVE_TIME_BUDGET_MS = 100000;
+// Raised to 5 minutes for whole-school generation. The full Class 1–XI solve (20
+// classes / 832 lessons — within proven-solvable size) timed out at 60s: the hard
+// availability whitelists make the backtracking search thrash, and more restarts =
+// more chances to escape a bad region. Generation runs ~once a term, so a multi-minute
+// wait is acceptable. The process-next function timeout (timetable-endpoints.yml) is
+// raised in lockstep to exceed this so the solver returns cleanly instead of being
+// hard-killed mid-solve. If 5 min still times out, the bottleneck is algorithmic —
+// pre-restrict whitelisted teachers' domains before search rather than add more time.
+const SOLVE_TIME_BUDGET_MS = 300000;
 
 class GenerationService {
   // Build the solver input for a config (shared by feasibility + processing).
