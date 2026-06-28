@@ -51,6 +51,9 @@ class Solver {
   private input: SolverInput;
   private hardByTeacher: Map<string, SolverTeacherConstraint[]>;
   private deadline: number;
+  // Cohort lockstep: each class -> its co-scheduled sibling classes. Used to bias
+  // a member's own lessons toward slots where siblings are already busy.
+  private siblingsByClass: Map<string, string[]>;
 
   constructor(input: SolverInput) {
     this.input = input;
@@ -61,7 +64,38 @@ class Solver {
         this.hardByTeacher.set(c.teacherId, []);
       this.hardByTeacher.get(c.teacherId)!.push(c);
     }
+    this.siblingsByClass = new Map();
+    for (const group of input.cohorts ?? []) {
+      for (const c of group) {
+        this.siblingsByClass.set(
+          c,
+          group.filter((o) => o !== c),
+        );
+      }
+    }
     this.deadline = Date.now() + (input.timeBudgetMs ?? 8000);
+  }
+
+  // How many (sibling, slot) pairs a candidate position would line up with — i.e.
+  // place this lesson where its cohort siblings are already busy (keeps them in sync).
+  private siblingAlignment(
+    lesson: Lesson,
+    day: number,
+    pos: StartPosition,
+    state: State,
+  ): number {
+    let score = 0;
+    for (const c of classesOf(lesson)) {
+      const sibs = this.siblingsByClass.get(c);
+      if (!sibs) continue;
+      for (const sib of sibs) {
+        for (let k = 0; k < lesson.size; k++) {
+          if (state.classBusy.has(`${sib}|${day}|${pos.startSequence + k}`))
+            score++;
+        }
+      }
+    }
+    return score;
   }
 
   private positionsFor(lesson: Lesson): StartPosition[] {
@@ -259,8 +293,26 @@ class Solver {
         (p) => p.day === c.day && p.slot === c.pos.startSequence,
       ),
     );
-    const others = bestPositions!.filter((c) => !preferred.includes(c));
-    const ordered = [...shuffle(preferred, rnd), ...shuffle(others, rnd)];
+    // Keep the original PRNG call order (preferred shuffled, then others) so
+    // non-cohort solves are byte-for-byte unchanged.
+    const preferredShuffled = shuffle(preferred, rnd);
+    let others = shuffle(
+      bestPositions!.filter((c) => !preferred.includes(c)),
+      rnd,
+    );
+    // Cohort lockstep (soft): for a member's own lesson, prefer slots where its
+    // siblings are already busy. Stable sort keeps the shuffle as the tie-break, so
+    // restart diversity is preserved and non-cohort lessons are untouched.
+    if (
+      this.siblingsByClass.size > 0 &&
+      classesOf(lesson).some((c) => this.siblingsByClass.has(c))
+    ) {
+      others = others
+        .map((c) => ({ c, a: this.siblingAlignment(lesson, c.day, c.pos, state) }))
+        .sort((x, y) => y.a - x.a)
+        .map((x) => x.c);
+    }
+    const ordered = [...preferredShuffled, ...others];
 
     for (const choice of ordered) {
       this.apply(lesson, choice.day, choice.pos, state);

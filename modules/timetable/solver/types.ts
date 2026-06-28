@@ -79,6 +79,10 @@ export interface ObjectiveWeights {
   honorSoftPreferences?: number;
   evenDailyLoad?: number;
   spreadAcrossWeek?: number;
+  // Keep a cohort's member classes busy/free at the same slots (composite classes
+  // move in lockstep). Penalizes any teaching slot where some members are busy and
+  // others free. Soft — never blocks a solution.
+  cohortLockstep?: number;
 }
 
 export interface SolverInput {
@@ -89,6 +93,9 @@ export interface SolverInput {
   objectiveWeights?: ObjectiveWeights;
   seed?: number;
   timeBudgetMs?: number;
+  // Groups of class ids that should run in lockstep (a cohort / composite class).
+  // Drives the placement bias + cohortLockstep score. Each group has >= 2 classes.
+  cohorts?: string[][];
 }
 
 // A placed lesson: occupies `slotIds` (length === lesson.size) on `dayOfWeek`.

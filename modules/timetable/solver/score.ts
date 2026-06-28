@@ -1,4 +1,4 @@
-import { Lesson, ObjectiveWeights, Placement, SolverInput, Timetable } from './types';
+import { classesOf, Lesson, ObjectiveWeights, Placement, SolverInput, Timetable } from './types';
 import { expandOccupancy, groupByTeacher } from './constraint-checks';
 
 const DEFAULT_WEIGHTS: Required<ObjectiveWeights> = {
@@ -6,6 +6,7 @@ const DEFAULT_WEIGHTS: Required<ObjectiveWeights> = {
   honorSoftPreferences: 8,
   evenDailyLoad: 3,
   spreadAcrossWeek: 4,
+  cohortLockstep: 6,
 };
 
 // Higher score = better. Soft metrics only; hard rules are enforced elsewhere.
@@ -58,11 +59,34 @@ export function scoreTimetable(input: SolverInput, timetable: Timetable): { scor
     duplicates += days.length - new Set(days).size;
   }
 
+  // --- cohort lockstep (member classes busy/free in sync) ---
+  let cohortMismatch = 0;
+  if (input.cohorts && input.cohorts.length > 0) {
+    const busy = new Set<string>();
+    for (const p of placements) {
+      for (const c of classesOf(p)) {
+        for (let k = 0; k < p.size; k++) busy.add(`${c}|${p.dayOfWeek}|${p.startSequence + k}`);
+      }
+    }
+    for (const group of input.cohorts) {
+      for (const day of input.grid.days) {
+        for (const slot of day.slots) {
+          if (slot.slotType !== 'teaching') continue;
+          let on = 0;
+          for (const c of group) if (busy.has(`${c}|${day.dayOfWeek}|${slot.sequence}`)) on++;
+          // a slot busy in some members but free in others is a mismatch
+          if (on > 0 && on < group.length) cohortMismatch += group.length - on;
+        }
+      }
+    }
+  }
+
   const breakdown: Record<string, number> = {
     teacherGaps: -w.minimizeTeacherGaps * totalGaps,
     softPreferences: w.honorSoftPreferences * honored,
     evenDailyLoad: -w.evenDailyLoad * variance,
     spreadAcrossWeek: -w.spreadAcrossWeek * duplicates,
+    cohortLockstep: -w.cohortLockstep * cohortMismatch,
   };
   const score = Object.values(breakdown).reduce((a, b) => a + b, 0);
   return { score: Math.round(score * 1000) / 1000, breakdown };

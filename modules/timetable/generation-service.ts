@@ -53,6 +53,7 @@ class GenerationService {
       objectiveWeights,
       seed,
       timeBudgetMs: SOLVE_TIME_BUDGET_MS,
+      cohorts: loaded.cohorts,
     };
     // Registration (0th period) entries are deterministic — computed here, not solved.
     const registrationEntries = computeRegistrationEntries(

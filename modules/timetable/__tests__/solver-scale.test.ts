@@ -347,6 +347,7 @@ function buildCohortInput(): SolverInput {
     constraints: [],
     seed: 7,
     timeBudgetMs: 60000,
+    cohorts: [COHORT.members], // exercise the lockstep bias at scale
   };
 }
 

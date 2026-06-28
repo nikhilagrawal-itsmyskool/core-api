@@ -12,6 +12,7 @@ export interface LoadedConfig {
   constraints: SolverTeacherConstraint[];
   warnings: string[]; // e.g. class-subjects skipped because their subject is deleted
   labels: SolverLabels; // id -> human label, for humanizing issue/warning messages
+  cohorts: string[][]; // class_group memberships in scope (composite classes), >= 2 each
 }
 
 // Load all academic + grid data for a config into the shapes the solver needs.
@@ -134,6 +135,14 @@ export async function loadConfigForSolve(schoolId: string, configId: string, win
     ...scopedClassTeachers.map((c: any) => c.classId),
   ])];
 
+  // Cohorts (composite classes) for lockstep: each class_group's in-scope members,
+  // kept only when 2+ members are in scope.
+  const cohorts: string[][] = [];
+  for (const members of groupMembers.values()) {
+    const inScopeMembers = [...new Set(members.filter(inScope))];
+    if (inScopeMembers.length >= 2) cohorts.push(inScopeMembers);
+  }
+
   const buildInput: BuildInput = {
     classIds,
     teachingDays,
@@ -174,7 +183,7 @@ export async function loadConfigForSolve(schoolId: string, configId: string, win
 
   const labels = await loadLabels(schoolId, classIds, [...subjectIds], [...teacherIds]);
 
-  return { configId, academicYearId, grid, teachingDays, buildInput, constraints, warnings, labels };
+  return { configId, academicYearId, grid, teachingDays, buildInput, constraints, warnings, labels, cohorts };
 }
 
 // Look up display names for the ids in play. Each lookup is empty-safe (any($)

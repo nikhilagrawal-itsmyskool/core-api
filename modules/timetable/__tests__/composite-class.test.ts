@@ -3,10 +3,39 @@ import {
   validateTimetable,
   checkFeasibility,
   buildLessons,
+  scoreTimetable,
   classesOf,
   SolverGrid,
   SolverInput,
 } from "../solver";
+
+// Count cohort lockstep mismatches: teaching slots busy in some members but not all.
+function cohortMismatch(
+  tt: { placements: any[] },
+  grid: SolverGrid,
+  cohorts: string[][],
+): number {
+  const busy = new Set<string>();
+  for (const p of tt.placements) {
+    for (const c of classesOf(p)) {
+      for (let k = 0; k < p.size; k++)
+        busy.add(`${c}|${p.dayOfWeek}|${p.startSequence + k}`);
+    }
+  }
+  let m = 0;
+  for (const g of cohorts) {
+    for (const day of grid.days) {
+      for (const slot of day.slots) {
+        if (slot.slotType !== "teaching") continue;
+        let on = 0;
+        for (const c of g)
+          if (busy.has(`${c}|${day.dayOfWeek}|${slot.sequence}`)) on++;
+        if (on > 0 && on < g.length) m += g.length - on;
+      }
+    }
+  }
+  return m;
+}
 
 // Uniform grid: `days` weekdays × `periods` teaching slots (sequences 1..periods).
 function makeGrid(days: number[], periods: number): SolverGrid {
@@ -171,5 +200,102 @@ describe("composite class — cross-class co-scheduling", () => {
     };
     const issues = validateTimetable(input, broken, false);
     expect(issues.some((i) => i.rule === "class_double_book")).toBe(true);
+  });
+});
+
+describe("cohort lockstep (soft)", () => {
+  it("scores a slot busy in some members but not all as a lockstep penalty", () => {
+    const input: SolverInput = {
+      classIds: ["A", "B"],
+      grid: makeGrid([1], 2),
+      lessons: [],
+      constraints: [],
+      cohorts: [["A", "B"]],
+    };
+    // A is busy at d1s1, B is free everywhere → 1 mismatch.
+    const tt = {
+      placements: [
+        {
+          lessonId: "L1",
+          classId: "A",
+          dayOfWeek: 1,
+          startSequence: 1,
+          slotIds: ["d1s1"],
+          offerings: [{ subjectId: "X", teacherId: null }],
+          size: 1,
+        },
+      ],
+    };
+    // default cohortLockstep weight = 6, so 6 × 1 mismatch.
+    expect(scoreTimetable(input, tt).breakdown.cohortLockstep).toBe(-6);
+  });
+
+  it("no penalty when a shared (cross-class) lesson books all members together", () => {
+    const input: SolverInput = {
+      classIds: ["A", "B"],
+      grid: makeGrid([1], 2),
+      lessons: [],
+      constraints: [],
+      cohorts: [["A", "B"]],
+    };
+    const tt = {
+      placements: [
+        {
+          lessonId: "L1",
+          classId: "A",
+          classIds: ["A", "B"],
+          dayOfWeek: 1,
+          startSequence: 1,
+          slotIds: ["d1s1"],
+          offerings: [{ subjectId: "X", teacherId: "T" }],
+          size: 1,
+        },
+      ],
+    };
+    // === 0 (handles JS -0 from -weight * 0)
+    expect(scoreTimetable(input, tt).breakdown.cohortLockstep === 0).toBe(true);
+  });
+
+  it("nudges cohort members into lockstep when the grid has slack", () => {
+    // 4×3 = 12 slots. Cohort [XS, XC] share a 4-period band; each has 4 own periods.
+    // Per class: 4 shared + 4 own = 8 used, 4 free → lockstep means the free 4 coincide.
+    const { lessons } = buildLessons({
+      classIds: ["XS", "XC"],
+      teachingDays: [1, 2, 3, 4],
+      classSubjects: [
+        { classId: "XS", subjectId: "PHY", periodsPerWeek: 4 },
+        { classId: "XC", subjectId: "BUS", periodsPerWeek: 4 },
+      ],
+      teachingAssignments: [
+        { classId: "XS", subjectId: "PHY", teacherId: "Tp" },
+        { classId: "XC", subjectId: "BUS", teacherId: "Tb" },
+      ],
+      classTeachers: [],
+      electiveBands: [
+        {
+          bandId: "ENG",
+          classId: "XS",
+          classIds: ["XS", "XC"],
+          periodsPerWeek: 4,
+          offerings: [{ subjectId: "ENG", teacherId: "T1" }],
+        },
+      ],
+    });
+    const grid = makeGrid([1, 2, 3, 4], 3);
+    const cohorts = [["XS", "XC"]];
+    const input: SolverInput = {
+      classIds: ["XS", "XC"],
+      grid,
+      lessons,
+      constraints: [],
+      cohorts,
+      seed: 7,
+    };
+    const result = solve(input, 1);
+    expect(result.feasible).toBe(true);
+    const tt = result.candidates[0].timetable;
+    expect(validateTimetable(input, tt)).toEqual([]);
+    // With the lockstep bias the two streams align: zero mismatch.
+    expect(cohortMismatch(tt, grid, cohorts)).toBe(0);
   });
 });
