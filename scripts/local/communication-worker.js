@@ -11,16 +11,20 @@
 //   node scripts/local/communication-worker.js [--port 3000] [--interval 2000] [--worker-id w1]
 //
 // Defaults to the gateway port (3000) so it works against /communication/*
-// whether the module runs standalone or behind the gateway.
+// whether the module runs standalone or behind the gateway. Uses http.request
+// instead of fetch: Node's built-in fetch (Undici) blocks port 6000 as a
+// WHATWG "bad port" (X11), which breaks prod-stage usage.
 
 const fs = require('fs');
+const http = require('http');
 const path = require('path');
 
 function parseArgs() {
   const args = process.argv.slice(2);
-  const out = { port: null, interval: 2000, workerId: `comm-worker-${process.pid}` };
+  const out = { port: null, host: '127.0.0.1', interval: 2000, workerId: `comm-worker-${process.pid}` };
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--port') { out.port = parseInt(args[++i], 10); }
+    else if (args[i] === '--host') { out.host = args[++i]; }
     else if (args[i] === '--interval') { out.interval = parseInt(args[++i], 10); }
     else if (args[i] === '--worker-id') { out.workerId = args[++i]; }
   }
@@ -41,37 +45,47 @@ function resolvePort(explicit) {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+function httpPost(host, port, path, body) {
+  return new Promise((resolve, reject) => {
+    const payload = JSON.stringify(body);
+    const req = http.request({ host, port, path, method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) } }, (res) => {
+      let raw = '';
+      res.on('data', (c) => { raw += c; });
+      res.on('end', () => {
+        try { resolve(JSON.parse(raw)); } catch (e) { reject(new Error(`bad JSON: ${raw}`)); }
+      });
+    });
+    req.on('error', reject);
+    req.write(payload);
+    req.end();
+  });
+}
+
 async function main() {
   const opts = parseArgs();
   const port = resolvePort(opts.port);
-  const url = `http://localhost:${port}/communication/messages/process-next`;
+  const url = `http://${opts.host}:${port}/communication/messages/process-next`;
   console.log(`[communication-worker] ${opts.workerId} polling ${url} every ${opts.interval}ms`);
 
   let running = true;
+  let lastErr = null;
   process.on('SIGINT', () => { running = false; });
   process.on('SIGTERM', () => { running = false; });
 
   while (running) {
     try {
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ workerId: opts.workerId }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.claimed) {
-          const c = data.counts || {};
-          console.log(`[communication-worker] processed job ${data.jobId}: ${data.status}` +
-            (data.counts ? ` (sent=${c.sent || 0} failed=${c.failed || 0} skipped=${c.skipped || 0})` : '') +
-            (data.error ? ` — ${data.error}` : ''));
-          continue; // immediately try the next due job
-        }
-      } else {
-        console.error(`[communication-worker] process-next HTTP ${res.status}`);
+      const data = await httpPost(opts.host, port, '/communication/messages/process-next', { workerId: opts.workerId });
+      lastErr = null;
+      if (data.claimed) {
+        const c = data.counts || {};
+        console.log(`[communication-worker] processed job ${data.jobId}: ${data.status}` +
+          (data.counts ? ` (sent=${c.sent || 0} failed=${c.failed || 0} skipped=${c.skipped || 0})` : '') +
+          (data.error ? ` — ${data.error}` : ''));
+        continue; // immediately try the next due job
       }
     } catch (err) {
-      // module not up yet / transient — keep polling quietly
+      const msg = (err && err.message) || String(err);
+      if (msg !== lastErr) { console.error(`[communication-worker] poll error: ${msg}`); lastErr = msg; }
     }
     await sleep(opts.interval);
   }

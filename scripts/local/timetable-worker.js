@@ -10,11 +10,12 @@
 //   node scripts/local/timetable-worker.js [--port 3000] [--host 127.0.0.1] [--interval 2000] [--worker-id w1]
 //
 // Defaults to the gateway port (3000) so it works against /timetable/* whether
-// the module runs standalone or behind the gateway. Host defaults to 127.0.0.1:
-// Node's fetch resolves "localhost" to IPv6 (::1) first, which fails on Windows
-// when the server listens on IPv4 only — so we use the IPv4 literal by default.
+// the module runs standalone or behind the gateway. Uses http.request instead of
+// fetch: Node's built-in fetch (Undici) blocks port 6000 as a WHATWG "bad port"
+// (X11), which breaks prod-stage usage. http.request has no such restriction.
 
 const fs = require('fs');
+const http = require('http');
 const path = require('path');
 
 function parseArgs() {
@@ -43,6 +44,22 @@ function resolvePort(explicit) {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+function httpPost(host, port, path, body) {
+  return new Promise((resolve, reject) => {
+    const payload = JSON.stringify(body);
+    const req = http.request({ host, port, path, method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) } }, (res) => {
+      let raw = '';
+      res.on('data', (c) => { raw += c; });
+      res.on('end', () => {
+        try { resolve(JSON.parse(raw)); } catch (e) { reject(new Error(`bad JSON: ${raw}`)); }
+      });
+    });
+    req.on('error', reject);
+    req.write(payload);
+    req.end();
+  });
+}
+
 async function main() {
   const opts = parseArgs();
   const port = resolvePort(opts.port);
@@ -56,24 +73,13 @@ async function main() {
 
   while (running) {
     try {
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ workerId: opts.workerId }),
-      });
+      const data = await httpPost(opts.host, port, '/timetable/runs/process-next', { workerId: opts.workerId });
       lastErr = null;
-      if (res.ok) {
-        const data = await res.json();
-        if (data.claimed) {
-          console.log(`[timetable-worker] processed run ${data.runId}: ${data.status}` + (data.candidateCount != null ? ` (${data.candidateCount} candidates)` : '') + (data.error ? ` — ${data.error}` : ''));
-          continue; // immediately try the next queued run
-        }
-      } else {
-        console.error(`[timetable-worker] process-next HTTP ${res.status}`);
+      if (data.claimed) {
+        console.log(`[timetable-worker] processed run ${data.runId}: ${data.status}` + (data.candidateCount != null ? ` (${data.candidateCount} candidates)` : '') + (data.error ? ` — ${data.error}` : ''));
+        continue; // immediately try the next queued run
       }
     } catch (err) {
-      // module not up yet / transient — surface the error once (deduped) so a
-      // wrong host/port or a down module isn't an invisible no-op.
       const msg = (err && err.message) || String(err);
       if (msg !== lastErr) { console.error(`[timetable-worker] poll error: ${msg}`); lastErr = msg; }
     }
