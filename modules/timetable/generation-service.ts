@@ -22,7 +22,11 @@ const { generateShortUuid } = require("../../shared/util/generate-uuid.js");
 // instead of being hard-killed mid-solve (which would strand the run as 'running').
 // 60s gives a full-school (25-class) solve real margin — a stressed instance with
 // electives + teacher constraints solves in ~25-35s (see solver-scale.test.ts).
-const SOLVE_TIME_BUDGET_MS = 60000;
+// Raised to 100s for whole-school (~40 classes, shared teachers): the 60s budget
+// timed out on a full Class 1–XI solve, so give it more of the 120s ceiling while
+// leaving ~20s for scoring + candidate writes. If 100s still times out, the problem
+// is algorithmic (search), not time — revisit solver perf rather than the budget.
+const SOLVE_TIME_BUDGET_MS = 100000;
 
 class GenerationService {
   // Build the solver input for a config (shared by feasibility + processing).
