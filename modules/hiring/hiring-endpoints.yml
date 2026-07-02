@@ -1,0 +1,120 @@
+  # Health check
+  health:
+    handler: health-handler.health
+    events:
+      - http:
+          path: health
+          method: get
+          cors: true
+
+  # Lookups (all dropdown catalogs)
+  get-lookups:
+    handler: hiring-lookup-handler.getLookups
+    name: ${self:service}-get-lookups
+    events:
+      - http:
+          path: lookups
+          method: get
+          cors: true
+
+  # Candidate endpoints
+  create-candidate:
+    handler: hiring-candidate-handler.create
+    name: ${self:service}-create-candidate
+    events:
+      - http:
+          path: candidates
+          method: post
+          cors: true
+
+  list-candidates:
+    handler: hiring-candidate-handler.list
+    name: ${self:service}-list-candidates
+    events:
+      - http:
+          path: candidates
+          method: get
+          cors: true
+
+  get-candidate:
+    handler: hiring-candidate-handler.getById
+    name: ${self:service}-get-candidate
+    events:
+      - http:
+          path: candidates/{id}
+          method: get
+          cors: true
+
+  update-candidate:
+    handler: hiring-candidate-handler.update
+    name: ${self:service}-update-candidate
+    events:
+      - http:
+          path: candidates/{id}
+          method: put
+          cors: true
+
+  delete-candidate:
+    handler: hiring-candidate-handler.remove
+    name: ${self:service}-delete-candidate
+    events:
+      - http:
+          path: candidates/{id}
+          method: delete
+          cors: true
+
+  # Stage endpoints
+  create-stage:
+    handler: hiring-stage-handler.create
+    name: ${self:service}-create-stage
+    events:
+      - http:
+          path: candidates/{id}/stages
+          method: post
+          cors: true
+
+  update-stage:
+    handler: hiring-stage-handler.update
+    name: ${self:service}-update-stage
+    events:
+      - http:
+          path: candidates/{id}/stages/{stageId}
+          method: put
+          cors: true
+
+  delete-stage:
+    handler: hiring-stage-handler.remove
+    name: ${self:service}-delete-stage
+    events:
+      - http:
+          path: candidates/{id}/stages/{stageId}
+          method: delete
+          cors: true
+
+  # File endpoints (photo / resume)
+  upload-file:
+    handler: hiring-file-handler.upload
+    name: ${self:service}-upload-file
+    events:
+      - http:
+          path: candidates/{id}/files
+          method: post
+          cors: true
+
+  delete-file:
+    handler: hiring-file-handler.remove
+    name: ${self:service}-delete-file
+    events:
+      - http:
+          path: candidates/{id}/files/{kind}
+          method: delete
+          cors: true
+
+  get-file:
+    handler: hiring-file-handler.get
+    name: ${self:service}-get-file
+    events:
+      - http:
+          path: files/{fileId}
+          method: get
+          cors: true
