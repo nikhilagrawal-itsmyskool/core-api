@@ -493,6 +493,26 @@
           path: runs/process-next
           method: post
           cors: true
+  # CP-SAT pipeline, stage 1: claim a queued run and dump its SolverInput to the run's
+  # artifact folder for the Python solver. No synchronous solve -> default timeout is fine.
+  claim-and-dump-run:
+    handler: generation-handler.claimAndDump
+    name: ${self:service}-claim-and-dump-run
+    events:
+      - http:
+          path: runs/claim-and-dump
+          method: post
+          cors: true
+  # CP-SAT pipeline, stage 3: import a solved run's solution (or failure marker) into the
+  # DB via the shared candidate writer. No synchronous solve -> default timeout is fine.
+  import-solution-run:
+    handler: generation-handler.importSolution
+    name: ${self:service}-import-solution-run
+    events:
+      - http:
+          path: runs/import-solution
+          method: post
+          cors: true
   list-runs:
     handler: generation-handler.listRuns
     name: ${self:service}-list-runs
@@ -515,6 +535,15 @@
     events:
       - http:
           path: runs/{id}/candidates
+          method: get
+          cors: true
+  # Download a run's rendered timetable export (?format=xlsx|pdf), base64 JSON.
+  export-run:
+    handler: generation-handler.exportRun
+    name: ${self:service}-export-run
+    events:
+      - http:
+          path: runs/{id}/export
           method: get
           cors: true
   publish-timetable:

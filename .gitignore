@@ -19,3 +19,7 @@ lib
 # Tooling / session artifacts
 .playwright-mcp/
 *.stackdump
+
+# CP-SAT per-run artifact folders (solver-input/solution/etc.); keep the root assets
+# (*.py, *.ts, HANDOFF.md, jest.config.js) tracked.
+modules/timetable/cpsat/*/

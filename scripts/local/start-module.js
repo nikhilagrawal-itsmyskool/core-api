@@ -9,14 +9,19 @@ function parseArgs() {
   var args = process.argv.slice(2);
 
   if (args.length === 0) {
-    console.log('Usage: node start-module.js <module-name> [--kill]');
+    console.log('Usage: node start-module.js <module-name> [--kill] [--stage local|prod]');
     process.exit(1);
   }
+
+  var stage = 'local';
+  var stageIdx = args.indexOf('--stage');
+  if (stageIdx === -1) stageIdx = args.indexOf('-s');
+  if (stageIdx !== -1 && args[stageIdx + 1]) stage = args[stageIdx + 1];
 
   return {
     moduleName: args[0],
     killFirst: args.indexOf('--kill') !== -1,
-    stage: 'local',
+    stage: stage,
   };
 }
 
@@ -50,10 +55,10 @@ function main() {
   var killFirst = parsed.killFirst;
   var stage = parsed.stage;
 
-  var config = moduleLoader.getModule(moduleName);
+  var config = moduleLoader.getModule(moduleName, stage);
   if (!config) {
     console.error('Unknown module: ' + moduleName);
-    console.error('Make sure the module has a local.config.json file');
+    console.error('Make sure the module has a ' + (stage === 'prod' ? 'prod' : 'local') + '.config.json file');
     process.exit(1);
   }
 

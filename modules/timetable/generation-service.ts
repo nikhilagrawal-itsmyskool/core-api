@@ -1,5 +1,5 @@
 import { DB, singleLineString } from "../../shared/lib/db";
-import { BusinessErrorResult } from "../../shared/lib/errors";
+import { BusinessErrorResult, NotFoundResult } from "../../shared/lib/errors";
 import { ErrorCode } from "../../shared/lib/error-codes";
 import { loadConfigForSolve } from "./generation-data-loader";
 import { configService } from "./config-service";
@@ -8,7 +8,16 @@ import { crossWingTeacherWarnings } from "./cross-wing";
 import { buildLessons } from "./solver/build-lessons";
 import { checkFeasibility } from "./solver/feasibility";
 import { solve } from "./solver/solve";
-import { classesOf, SolverInput } from "./solver/types";
+import { scoreTimetable } from "./solver/score";
+import { classesOf, Placement, SolverInput, Timetable } from "./solver/types";
+import {
+  writeInputArtifacts,
+  readInput,
+  readSolution,
+  readRegistration,
+  readSolveError,
+  readExport,
+} from "./cpsat/cpsat-artifacts";
 import { humanizeMessages, SolverLabels } from "./message-labels";
 import {
   computeRegistrationEntries,
@@ -351,6 +360,184 @@ class GenerationService {
         error: err.message,
       };
     }
+  }
+
+  // CP-SAT pipeline — STAGE 1 (claim + dump). Atomically claims the next queued run
+  // (queued -> running) exactly like processNext, but instead of solving in-TS it
+  // builds the SolverInput and writes it to the run's artifact folder for the Python
+  // CP-SAT solver to pick up. Called by the cpsat-dump-worker poller (an EventBridge
+  // -triggered Lambda in AWS). Does NOT solve.
+  public async claimAndDump(workerId: string): Promise<{
+    claimed: boolean;
+    runId?: string;
+    classCount?: number;
+    lessonCount?: number;
+    error?: string;
+  }> {
+    const claimed = await DB.query(
+      singleLineString`
+        update generation_run
+        set status = 'running', worker_id = $1, heartbeat_at = now(), started_at = now(),
+            attempts = coalesce(attempts, 0) + 1, updated_at = now()
+        where uuid = (
+          select uuid from generation_run where status = 'queued' order by created_at limit 1 for update skip locked
+        )
+        returning *
+      `,
+      [workerId],
+    );
+    if (claimed.length === 0) return { claimed: false };
+
+    const run = claimed[0];
+    try {
+      const wingClassIds = run.wingId
+        ? await wingService.getWingClassIds(run.schoolId, run.wingId)
+        : null;
+      const built = await this.buildSolverInput(
+        run.schoolId,
+        run.configId,
+        run.objectiveWeights,
+        Number(String(run.uuid).replace(/\D/g, "").slice(0, 6) || "1") || 1,
+        wingClassIds,
+      );
+      if (!built) throw new Error("Config not found for run");
+
+      // Serialize the id->label Maps and assemble meta identical to the manual dumper
+      // (dump-solver-input.test.ts) so solve_cpsat.py reads the folder unchanged.
+      const labels = {
+        class: Object.fromEntries(built.labels.class),
+        subject: Object.fromEntries(built.labels.subject),
+        teacher: Object.fromEntries(built.labels.teacher),
+      };
+      const meta = {
+        runId: run.uuid,
+        schoolId: run.schoolId,
+        configId: run.configId,
+        wingId: run.wingId ?? null,
+        academicYearId: run.academicYearId,
+        numCandidates: run.numCandidates ?? 1,
+        objectiveWeights: run.objectiveWeights ?? null,
+        createdbyUserid: run.createdbyUserid ?? null,
+        dumpedAt: new Date().toISOString(),
+        classCount: built.input.classIds.length,
+        lessonCount: built.input.lessons.length,
+        constraintCount: built.input.constraints.length,
+        registrationEntryCount: built.registrationEntries.length,
+      };
+      writeInputArtifacts(run.uuid, {
+        meta,
+        input: built.input,
+        labels,
+        warnings: built.warnings,
+        registrationEntries: built.registrationEntries,
+      });
+      return {
+        claimed: true,
+        runId: run.uuid,
+        classCount: built.input.classIds.length,
+        lessonCount: built.input.lessons.length,
+      };
+    } catch (err: any) {
+      await this.markFailed(run.uuid, err.message || String(err));
+      return {
+        claimed: true,
+        runId: run.uuid,
+        error: err.message || String(err),
+      };
+    }
+  }
+
+  // CP-SAT pipeline — STAGE 3 (import). Reads what the Python solver wrote into the
+  // run's artifact folder and pushes it into the DB via the shared writeCandidates
+  // path (which also flips the run to 'completed'). Called by the cpsat-import-worker
+  // poller (an S3-triggered Lambda in AWS). Idempotent: a run already completed/failed
+  // is left as-is.
+  public async importSolution(runId: string): Promise<{
+    runId: string;
+    status: string;
+    candidateCount?: number;
+    score?: number;
+    error?: string;
+  }> {
+    const runs = await DB.query(
+      "select * from generation_run where uuid = $1",
+      [runId],
+    );
+    if (runs.length === 0)
+      throw new BusinessErrorResult(
+        ErrorCode.BusinessError,
+        `generation_run ${runId} not found`,
+      );
+    const run = runs[0];
+    if (run.status === "completed" || run.status === "failed")
+      return { runId, status: run.status };
+
+    // A solver-failure marker takes precedence: mark the run failed, write no candidate.
+    const solveError = readSolveError(runId);
+    if (solveError) {
+      const reason =
+        solveError.reason || solveError.status || "CP-SAT found no solution";
+      await this.markFailed(runId, reason);
+      return { runId, status: "failed", error: reason };
+    }
+
+    const placements = readSolution<Placement>(runId);
+    if (!placements)
+      throw new BusinessErrorResult(
+        ErrorCode.BusinessError,
+        `solution.json not found for run ${runId}`,
+      );
+    const input = readInput<SolverInput>(runId);
+    if (!input)
+      throw new BusinessErrorResult(
+        ErrorCode.BusinessError,
+        `solver-input.json not found for run ${runId}`,
+      );
+    const registrationEntries = (readRegistration<RegistrationEntry>(runId) ||
+      []) as RegistrationEntry[];
+
+    // One optimal candidate: score the solved grid and reuse the entry fan-out writer.
+    const timetable: Timetable = { placements };
+    const { score, breakdown } = scoreTimetable(input, timetable);
+    await this.writeCandidates(
+      run,
+      [{ score, breakdown, timetable }],
+      registrationEntries,
+    );
+    return { runId, status: "completed", candidateCount: 1, score };
+  }
+
+  // Download a run's rendered export (xlsx/pdf) produced by the solver poller.
+  // Returned as base64 JSON (the codebase's file-transfer convention — see
+  // fine-evidence). Throws NotFound if the run isn't this school's, or if the
+  // file hasn't been rendered yet (openpyxl/reportlab missing, or still solving).
+  public async getRunExport(
+    schoolId: string,
+    runId: string,
+    format: "xlsx" | "pdf",
+  ): Promise<{ fileName: string; mimeType: string; data: string }> {
+    const runs = await DB.query(
+      "select uuid, school_id from generation_run where uuid = $1",
+      [runId],
+    );
+    if (runs.length === 0 || runs[0].schoolId !== schoolId)
+      throw new NotFoundResult(ErrorCode.InvalidId, `Run ${runId} not found`);
+
+    const buf = readExport(runId, format);
+    if (!buf)
+      throw new NotFoundResult(
+        ErrorCode.InvalidId,
+        `No ${format} export for run ${runId} yet — it may still be rendering.`,
+      );
+    const mimeType =
+      format === "pdf"
+        ? "application/pdf"
+        : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+    return {
+      fileName: `timetable-${runId}.${format}`,
+      mimeType,
+      data: buf.toString("base64"),
+    };
   }
 
   private async markFailed(runId: string, error: string): Promise<void> {

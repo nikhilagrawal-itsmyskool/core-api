@@ -100,6 +100,53 @@ class GenerationHandler {
     }
   };
 
+  // Internal (CP-SAT pipeline, stage 1): claim one queued run and dump its SolverInput
+  // to the run's artifact folder. Not school-scoped (operates across all queues).
+  public claimAndDump = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
+    _context.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const body = event.body ? JSON.parse(event.body) : {};
+      const workerId = (body.workerId || 'cpsat-dump-worker').toString().slice(0, 64);
+      const result = await generationService.claimAndDump(workerId);
+      ResponseBuilder.ok(result, callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
+  // Internal (CP-SAT pipeline, stage 3): import a solved run's solution (or failure
+  // marker) from its artifact folder into the DB. Not school-scoped.
+  public importSolution = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
+    _context.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const body = event.body ? JSON.parse(event.body) : {};
+      const runId = (body.runId || '').toString();
+      if (!runId) { ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'runId is required', callback); return; }
+      const result = await generationService.importSolution(runId);
+      ResponseBuilder.ok(result, callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
+  // Download a run's rendered timetable export (?format=xlsx|pdf) as base64 JSON
+  // (the codebase's file-transfer convention). School-scoped.
+  public exportRun = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
+    _context.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const ctx = await resolveSchool(event, callback);
+      if (!ctx) return;
+      const id = requireParam(event, 'id', callback);
+      if (!id) return;
+      const format = (event.queryStringParameters?.format || 'xlsx').toLowerCase();
+      if (format !== 'xlsx' && format !== 'pdf') { ResponseBuilder.badRequest(ErrorCode.InvalidInput, "format must be 'xlsx' or 'pdf'", callback); return; }
+      const file = await generationService.getRunExport(ctx.schoolId, id, format);
+      ResponseBuilder.ok(file, callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
   public publish = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
     _context.callbackWaitsForEmptyEventLoop = false;
     try {
@@ -169,6 +216,9 @@ export const listRuns = handler.listRuns;
 export const getRun = handler.getRun;
 export const getCandidates = handler.getCandidates;
 export const processNext = handler.processNext;
+export const claimAndDump = handler.claimAndDump;
+export const importSolution = handler.importSolution;
+export const exportRun = handler.exportRun;
 export const publish = handler.publish;
 export const getPublished = handler.getPublished;
 export const listPublished = handler.listPublished;
