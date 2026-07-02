@@ -31,7 +31,7 @@ npx prettier --write .
 | `npm run stop:<module>` | Stop module |
 | `npm run test:<module>:full` | Full cycle: stop → start → test → stop |
 
-Available modules: `auth`, `medical`, `lab`, `sample`, `student`, `employee`, `class`, `academic-year`, `fine`, `uniform`, `shop`, `sports`, `asset`, `library`, `supplies`, `timetable`, `attendance`, `communication`
+Available modules: `auth`, `medical`, `lab`, `sample`, `student`, `employee`, `class`, `academic-year`, `fine`, `uniform`, `shop`, `sports`, `asset`, `library`, `supplies`, `timetable`, `attendance`, `communication`, `transport`
 
 > These always run on `local` stage (hardcoded in `start-module.js`). Stage cannot be changed for individual module commands.
 
@@ -68,6 +68,7 @@ Each module in `modules/` is an independent Lambda microservice with its own `se
 - **timetable/**: Auto-generating school timetable - owns the academic backbone (subjects, class↔subject demand with weekly periods + block rules, teaching assignments, class teachers, co-scheduled XI/XII elective bands), the day-varying grid (config→day→slot, incl. teacher-less Saturday `activity` slots), per-teacher constraints, a Postgres-backed generation job queue, candidate timetables, and the published master. Foundation CRUD is built; solver + worker + generate/publish flow are the next phase. See `modules/timetable/DESIGN.md`.
 - **fine/**: Fine collection - incident tracking, workflow (open→under review→decision→closed), evidence upload, receipt generation
 - **attendance/**: Daily roll-call attendance per class - one session per class/academic-year/date, mark-exceptions UX (default present, finalize fills the roster), back-dated entry, edits with an append-only audit trail, and absence notifications fired to the communication module on finalize
+- **transport/**: School bus/van transport - a school-wide stop master (km-tagged, deduped, entered via a grid/bulk upsert), a vehicle registry (owned/contract; free-text make-model; driver+conductor name/phone), routes that run in one direction (separate morning-pickup and evening-drop rows) with an ordered de-duplicated stop list + employee staff (accompanying teacher/helper/incharge) and a driver/conductor snapshot prefilled from the vehicle, per-direction student route+stop assignment (one morning + one evening per student per year), and per-route attendance (open→mark→finalize + append-only audit, mirrors the attendance module) firing absence notifications to communication. Fees deferred. See `modules/transport/DESIGN.md`.
 - **communication/**: Independent SMS/WhatsApp notification service (other modules call it). References externally pre-approved templates (Meta/DLT) keyed by (key, channel, language); a DB-as-queue (`message_job`, same `for update skip locked` pattern as timetable) with lazy audience expansion; an ordered `role:channel` preference ladder (WhatsApp-first default) over student/employee contacts; provider-agnostic adapter (stub by default via `COMM_PROVIDER`). Worker: `scripts/local/communication-worker.js`
 - **student/**: Student search by name, class, and academic year
 - **employee/**: Employee search by name
@@ -101,6 +102,7 @@ Each module runs on dedicated ports to allow simultaneous local development:
 | timetable     | 3031      | 3032        | /timetable/*      |
 | attendance    | 3033      | 3034        | /attendance/*     |
 | communication | 3035      | 3036        | /communication/*  |
+| transport     | 3039      | 3040        | /transport/*      |
 | gateway       | 3000      | -           | (routes all)      |
 
 #### Prod Stage
@@ -125,6 +127,7 @@ Each module runs on dedicated ports to allow simultaneous local development:
 | timetable     | 6031      | 6032        |
 | attendance    | 6033      | 6034        |
 | communication | 6035      | 6036        |
+| transport     | 6039      | 6040        |
 | gateway       | 6000      | -           |
 
 ### Scripts Organization
@@ -380,7 +383,7 @@ node scripts/local/kill-ports.js --all
 node scripts/local/health-all.js
 set GATEWAY_PORT=3000 && node node_modules/jest/bin/jest.js
 
-# Single module lifecycle (module = auth, medical, lab, sample, student, employee, class, academic-year, supplies, timetable)
+# Single module lifecycle (module = auth, medical, lab, sample, student, employee, class, academic-year, supplies, timetable, attendance, communication, transport)
 node scripts/local/start-module.js <module> --kill
 node scripts/local/kill-ports.js --<module>
 node scripts/local/health-module.js <module>

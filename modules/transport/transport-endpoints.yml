@@ -1,0 +1,311 @@
+  # Health check
+  health:
+    handler: health-handler.health
+    events:
+      - http:
+          path: health
+          method: get
+          cors: true
+
+  # Lookups (all dropdown catalogs)
+  get-lookups:
+    handler: transport-lookup-handler.getLookups
+    name: ${self:service}-get-lookups
+    events:
+      - http:
+          path: lookups
+          method: get
+          cors: true
+
+  # ── Vehicles ──────────────────────────────────────────────────────────────
+  create-vehicle:
+    handler: transport-vehicle-handler.create
+    name: ${self:service}-create-vehicle
+    events:
+      - http:
+          path: vehicles
+          method: post
+          cors: true
+
+  list-vehicles:
+    handler: transport-vehicle-handler.list
+    name: ${self:service}-list-vehicles
+    events:
+      - http:
+          path: vehicles
+          method: get
+          cors: true
+
+  get-vehicle:
+    handler: transport-vehicle-handler.getById
+    name: ${self:service}-get-vehicle
+    events:
+      - http:
+          path: vehicles/{id}
+          method: get
+          cors: true
+
+  update-vehicle:
+    handler: transport-vehicle-handler.update
+    name: ${self:service}-update-vehicle
+    events:
+      - http:
+          path: vehicles/{id}
+          method: put
+          cors: true
+
+  delete-vehicle:
+    handler: transport-vehicle-handler.remove
+    name: ${self:service}-delete-vehicle
+    events:
+      - http:
+          path: vehicles/{id}
+          method: delete
+          cors: true
+
+  # ── Stops ─────────────────────────────────────────────────────────────────
+  bulk-upsert-stops:
+    handler: transport-stop-handler.bulkUpsert
+    name: ${self:service}-bulk-upsert-stops
+    events:
+      - http:
+          path: stops/bulk
+          method: post
+          cors: true
+
+  create-stop:
+    handler: transport-stop-handler.create
+    name: ${self:service}-create-stop
+    events:
+      - http:
+          path: stops
+          method: post
+          cors: true
+
+  list-stops:
+    handler: transport-stop-handler.list
+    name: ${self:service}-list-stops
+    events:
+      - http:
+          path: stops
+          method: get
+          cors: true
+
+  get-stop:
+    handler: transport-stop-handler.getById
+    name: ${self:service}-get-stop
+    events:
+      - http:
+          path: stops/{id}
+          method: get
+          cors: true
+
+  update-stop:
+    handler: transport-stop-handler.update
+    name: ${self:service}-update-stop
+    events:
+      - http:
+          path: stops/{id}
+          method: put
+          cors: true
+
+  delete-stop:
+    handler: transport-stop-handler.remove
+    name: ${self:service}-delete-stop
+    events:
+      - http:
+          path: stops/{id}
+          method: delete
+          cors: true
+
+  # ── Routes ────────────────────────────────────────────────────────────────
+  create-route:
+    handler: transport-route-handler.create
+    name: ${self:service}-create-route
+    events:
+      - http:
+          path: routes
+          method: post
+          cors: true
+
+  list-routes:
+    handler: transport-route-handler.list
+    name: ${self:service}-list-routes
+    events:
+      - http:
+          path: routes
+          method: get
+          cors: true
+
+  get-route:
+    handler: transport-route-handler.getById
+    name: ${self:service}-get-route
+    events:
+      - http:
+          path: routes/{id}
+          method: get
+          cors: true
+
+  update-route:
+    handler: transport-route-handler.update
+    name: ${self:service}-update-route
+    events:
+      - http:
+          path: routes/{id}
+          method: put
+          cors: true
+
+  delete-route:
+    handler: transport-route-handler.remove
+    name: ${self:service}-delete-route
+    events:
+      - http:
+          path: routes/{id}
+          method: delete
+          cors: true
+
+  add-route-stops:
+    handler: transport-route-handler.addStops
+    name: ${self:service}-add-route-stops
+    events:
+      - http:
+          path: routes/{id}/stops
+          method: post
+          cors: true
+
+  reorder-route-stops:
+    handler: transport-route-handler.reorderStops
+    name: ${self:service}-reorder-route-stops
+    events:
+      - http:
+          path: routes/{id}/stops/order
+          method: put
+          cors: true
+
+  remove-route-stop:
+    handler: transport-route-handler.removeStop
+    name: ${self:service}-remove-route-stop
+    events:
+      - http:
+          path: routes/{id}/stops/{stopId}
+          method: delete
+          cors: true
+
+  route-roster:
+    handler: transport-assignment-handler.routeRoster
+    name: ${self:service}-route-roster
+    events:
+      - http:
+          path: routes/{id}/students
+          method: get
+          cors: true
+
+  # ── Student assignments + reports ─────────────────────────────────────────
+  create-assignment:
+    handler: transport-assignment-handler.create
+    name: ${self:service}-create-assignment
+    events:
+      - http:
+          path: assignments
+          method: post
+          cors: true
+
+  list-assignments:
+    handler: transport-assignment-handler.list
+    name: ${self:service}-list-assignments
+    events:
+      - http:
+          path: assignments
+          method: get
+          cors: true
+
+  update-assignment:
+    handler: transport-assignment-handler.update
+    name: ${self:service}-update-assignment
+    events:
+      - http:
+          path: assignments/{id}
+          method: put
+          cors: true
+
+  delete-assignment:
+    handler: transport-assignment-handler.remove
+    name: ${self:service}-delete-assignment
+    events:
+      - http:
+          path: assignments/{id}
+          method: delete
+          cors: true
+
+  student-report:
+    handler: transport-assignment-handler.studentReport
+    name: ${self:service}-student-report
+    events:
+      - http:
+          path: reports/student/{studentId}
+          method: get
+          cors: true
+
+  # ── Attendance ────────────────────────────────────────────────────────────
+  attendance-roster:
+    handler: transport-attendance-handler.getRoster
+    name: ${self:service}-attendance-roster
+    events:
+      - http:
+          path: attendance/roster
+          method: get
+          cors: true
+
+  open-attendance-session:
+    handler: transport-attendance-handler.openSession
+    name: ${self:service}-open-attendance-session
+    events:
+      - http:
+          path: attendance/sessions
+          method: post
+          cors: true
+
+  list-attendance-sessions:
+    handler: transport-attendance-handler.listSessions
+    name: ${self:service}-list-attendance-sessions
+    events:
+      - http:
+          path: attendance/sessions
+          method: get
+          cors: true
+
+  get-attendance-session:
+    handler: transport-attendance-handler.getSession
+    name: ${self:service}-get-attendance-session
+    events:
+      - http:
+          path: attendance/sessions/{id}
+          method: get
+          cors: true
+
+  save-attendance-marks:
+    handler: transport-attendance-handler.saveMarks
+    name: ${self:service}-save-attendance-marks
+    events:
+      - http:
+          path: attendance/sessions/{id}/marks
+          method: post
+          cors: true
+
+  finalize-attendance-session:
+    handler: transport-attendance-handler.finalize
+    name: ${self:service}-finalize-attendance-session
+    events:
+      - http:
+          path: attendance/sessions/{id}/finalize
+          method: post
+          cors: true
+
+  edit-attendance-record:
+    handler: transport-attendance-handler.editRecord
+    name: ${self:service}-edit-attendance-record
+    events:
+      - http:
+          path: attendance/records/{id}
+          method: put
+          cors: true

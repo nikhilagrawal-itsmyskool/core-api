@@ -1,0 +1,5 @@
+{
+  "httpPort": 6039,
+  "lambdaPort": 6040,
+  "prefix": "transport"
+}
