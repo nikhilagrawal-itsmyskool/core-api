@@ -120,6 +120,10 @@ class ElectiveHandler {
       if (!(await timetableService.subjectExists(body.subjectId, ctx.schoolId))) {
         ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'Invalid subjectId', callback); return;
       }
+      // A parallel cohort band scopes an offering to one member stream — validate it.
+      if (body.classId && !(await timetableService.classExists(body.classId, ctx.schoolId))) {
+        ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'Invalid classId', callback); return;
+      }
       const offering = await electiveService.addOffering(bandId, body, ctx.schoolId, ctx.userId);
       ResponseBuilder.ok(offering, callback);
     } catch (err: any) {

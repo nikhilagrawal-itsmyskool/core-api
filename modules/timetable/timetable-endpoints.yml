@@ -579,6 +579,33 @@
           method: post
           cors: true
 
+  movePublishedEntry:
+    handler: generation-handler.moveEntry
+    name: ${self:service}-move-entry
+    events:
+      - http:
+          path: published/entries/{id}/move
+          method: put
+          cors: true
+
+  editPublishedEntry:
+    handler: generation-handler.editEntry
+    name: ${self:service}-edit-entry
+    events:
+      - http:
+          path: published/entries/{id}
+          method: put
+          cors: true
+
+  swapPublishedEntries:
+    handler: generation-handler.swapEntries
+    name: ${self:service}-swap-entries
+    events:
+      - http:
+          path: published/swap
+          method: post
+          cors: true
+
   # Teacher constraints
   list-teacher-constraints:
     handler: teacher-constraint-handler.list

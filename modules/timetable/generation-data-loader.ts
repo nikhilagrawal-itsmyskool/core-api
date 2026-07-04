@@ -76,7 +76,7 @@ export async function loadConfigForSolve(schoolId: string, configId: string, win
   }
 
   const bands = await DB.query(
-    singleLineString`select uuid, class_id, class_group_id, periods_per_week, block_rules from elective_band where school_id = $1 and academic_year_id = $2 and status = 'active'`,
+    singleLineString`select uuid, class_id, class_group_id, periods_per_week, block_rules, co_schedule from elective_band where school_id = $1 and academic_year_id = $2 and status = 'active'`,
     [schoolId, academicYearId],
   );
   const bandWarnings: string[] = [];
@@ -94,7 +94,7 @@ export async function loadConfigForSolve(schoolId: string, configId: string, win
       continue;
     }
     const offerings = await DB.query(
-      singleLineString`select subject_id, teacher_id, period_share from elective_offering
+      singleLineString`select subject_id, teacher_id, period_share, class_id from elective_offering
         where band_id = $1 and school_id = $2 and status = 'active'
         and exists (select 1 from subject sub where sub.uuid = elective_offering.subject_id and sub.status = 'active')`,
       [band.uuid, schoolId],
@@ -102,7 +102,8 @@ export async function loadConfigForSolve(schoolId: string, configId: string, win
     electiveBands.push({
       bandId: band.uuid, classId: members[0], classIds: members, periodsPerWeek: band.periodsPerWeek,
       blockRules: band.blockRules,
-      offerings: offerings.map((o: any) => ({ subjectId: o.subjectId, teacherId: o.teacherId, periodShare: o.periodShare ?? null })),
+      coSchedule: band.coSchedule ?? null,
+      offerings: offerings.map((o: any) => ({ subjectId: o.subjectId, teacherId: o.teacherId, periodShare: o.periodShare ?? null, classId: o.classId ?? null })),
     });
   }
 

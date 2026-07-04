@@ -192,6 +192,9 @@ export interface ElectiveOffering extends BaseEntity {
   // A subject split across teachers: several offerings, same subjectId, each a share.
   // null = the teacher takes all of the subject's band periods.
   periodShare?: number | null;
+  // For a PARALLEL cohort band, which member stream this offering belongs to. Null =
+  // shared by all members (pooled bands, or a "both streams" offering).
+  classId?: string | null;
   status: StatusValue;
 }
 
@@ -204,6 +207,9 @@ export interface ElectiveBand extends BaseEntity {
   name: string;
   periodsPerWeek: number;
   blockRules?: BlockRules;
+  // Cohort band only: true/null = pooled (co-scheduled, students regroup); false =
+  // parallel (each stream runs its own offerings at its own slots, soft-aligned).
+  coSchedule?: boolean | null;
   status: StatusValue;
   offerings?: ElectiveOffering[];
 }
@@ -212,6 +218,7 @@ export interface ElectiveOfferingInput {
   subjectId: string;
   teacherId: string;
   periodShare?: number | null;
+  classId?: string | null;
 }
 
 export interface CreateElectiveBandRequest {
@@ -222,6 +229,7 @@ export interface CreateElectiveBandRequest {
   name: string;
   periodsPerWeek: number;
   blockRules?: BlockRules;
+  coSchedule?: boolean;
   offerings?: ElectiveOfferingInput[];
 }
 
@@ -229,12 +237,15 @@ export interface UpdateElectiveBandRequest {
   name?: string;
   periodsPerWeek?: number;
   blockRules?: BlockRules;
+  coSchedule?: boolean;
 }
 
 export interface CreateElectiveOfferingRequest {
   subjectId: string;
   teacherId: string;
   periodShare?: number | null;
+  // For a parallel cohort band: which member stream this offering is for (null = shared).
+  classId?: string | null;
 }
 
 // ------------------------------------------------------------- clone class setup

@@ -793,8 +793,51 @@ class GenerationService {
     );
   }
 
-  // Lightweight clash check for moving a published entry to a new day/slot.
-  // Foundation for Phase-3 live editing.
+  // ---- Manual editing of the PUBLISHED master (Phase-3 live editing) --------------
+  // A grid "cell" = every published_entry row at the same (class, day, slot). A band's
+  // parallel offerings for one class share a cell and move/edit together; the shared
+  // band_id no longer forces cross-stream co-scheduling here (parallel is allowed).
+  private cellGroup(entries: any[], moving: any): any[] {
+    return entries.filter(
+      (e) =>
+        e.classId === moving.classId &&
+        e.dayOfWeek === moving.dayOfWeek &&
+        e.timeSlotId === moving.timeSlotId,
+    );
+  }
+
+  // Clash issues if `group` were placed at (day, slot). Rows already in `group` (or in
+  // `alsoIgnore`, e.g. a swap partner) are excluded from the comparison.
+  private clashesAt(
+    entries: any[],
+    group: any[],
+    day: number,
+    slot: string,
+    alsoIgnore: Set<string> = new Set(),
+  ): string[] {
+    const ignore = new Set([...group.map((g) => g.uuid), ...alsoIgnore]);
+    const classId = group[0].classId;
+    const teachers = new Set(group.map((g) => g.teacherId).filter(Boolean));
+    const issues: string[] = [];
+    for (const e of entries) {
+      if (ignore.has(e.uuid)) continue;
+      if (e.dayOfWeek !== day || e.timeSlotId !== slot) continue;
+      if (e.classId === classId)
+        issues.push(`Class already has a class at the target slot`);
+      if (e.teacherId && teachers.has(e.teacherId))
+        issues.push(`Teacher ${e.teacherId} is already booked at the target slot`);
+    }
+    return [...new Set(issues)];
+  }
+
+  private async loadPublished(publishedTimetableId: string, schoolId: string) {
+    return DB.query(
+      singleLineString`select * from published_entry where published_timetable_id = $1 and school_id = $2`,
+      [publishedTimetableId, schoolId],
+    );
+  }
+
+  // Preview: would moving the entry's cell to (toDay, toSlot) clash? (UI calls this.)
   public async validateMove(
     schoolId: string,
     publishedTimetableId: string,
@@ -802,37 +845,112 @@ class GenerationService {
     toDayOfWeek: number,
     toTimeSlotId: string,
   ): Promise<{ valid: boolean; issues: string[] }> {
-    const entries = await DB.query(
-      singleLineString`select * from published_entry where published_timetable_id = $1 and school_id = $2`,
-      [publishedTimetableId, schoolId],
-    );
+    const entries = await this.loadPublished(publishedTimetableId, schoolId);
     const moving = entries.find((e: any) => e.uuid === entryId);
     if (!moving) return { valid: false, issues: ["Entry not found"] };
-
-    // band siblings move together; exclude them from clash comparison
-    const siblingIds = new Set(
-      moving.bandId
-        ? entries
-            .filter((e: any) => e.bandId === moving.bandId)
-            .map((e: any) => e.uuid)
-        : [moving.uuid],
+    const issues = this.clashesAt(
+      entries,
+      this.cellGroup(entries, moving),
+      toDayOfWeek,
+      toTimeSlotId,
     );
+    return { valid: issues.length === 0, issues };
+  }
 
-    const issues: string[] = [];
-    for (const e of entries) {
-      if (siblingIds.has(e.uuid)) continue;
-      if (e.dayOfWeek !== toDayOfWeek || e.timeSlotId !== toTimeSlotId)
-        continue;
-      if (e.classId === moving.classId)
-        issues.push(
-          `Class ${moving.classId} already has a class at the target slot`,
-        );
-      if (e.teacherId === moving.teacherId)
-        issues.push(
-          `Teacher ${moving.teacherId} is already booked at the target slot`,
+  // Move a whole cell (the class's rows at that slot) to a new day/slot.
+  public async movePublishedEntry(
+    schoolId: string,
+    publishedTimetableId: string,
+    entryId: string,
+    toDayOfWeek: number,
+    toTimeSlotId: string,
+    userId: string,
+  ): Promise<{ moved: number }> {
+    const entries = await this.loadPublished(publishedTimetableId, schoolId);
+    const moving = entries.find((e: any) => e.uuid === entryId);
+    if (!moving) throw new NotFoundResult(ErrorCode.InvalidId, "Entry not found");
+    const group = this.cellGroup(entries, moving);
+    const issues = this.clashesAt(entries, group, toDayOfWeek, toTimeSlotId);
+    if (issues.length)
+      throw new BusinessErrorResult(ErrorCode.BusinessError, issues.join("; "));
+    await DB.query(
+      singleLineString`update published_entry set day_of_week = $1, time_slot_id = $2, updatedby_userid = $3, updated_at = $4 where uuid = any($5) and school_id = $6`,
+      [toDayOfWeek, toTimeSlotId, userId, new Date(), group.map((g) => g.uuid), schoolId],
+    );
+    return { moved: group.length };
+  }
+
+  // Change what's taught in a single cell row (subject and/or teacher).
+  public async editPublishedEntry(
+    schoolId: string,
+    publishedTimetableId: string,
+    entryId: string,
+    changes: { subjectId?: string | null; teacherId?: string | null },
+    userId: string,
+  ): Promise<{ updated: boolean }> {
+    const entries = await this.loadPublished(publishedTimetableId, schoolId);
+    const row = entries.find((e: any) => e.uuid === entryId);
+    if (!row) throw new NotFoundResult(ErrorCode.InvalidId, "Entry not found");
+    const subjectId = changes.subjectId !== undefined ? changes.subjectId : row.subjectId;
+    const teacherId = changes.teacherId !== undefined ? changes.teacherId : row.teacherId;
+    // if the teacher changed, it must be free at this slot (ignore this same cell)
+    if (teacherId && teacherId !== row.teacherId) {
+      const group = this.cellGroup(entries, row);
+      const clash = entries.some(
+        (e: any) =>
+          !group.some((g) => g.uuid === e.uuid) &&
+          e.dayOfWeek === row.dayOfWeek &&
+          e.timeSlotId === row.timeSlotId &&
+          e.teacherId === teacherId,
+      );
+      if (clash)
+        throw new BusinessErrorResult(
+          ErrorCode.BusinessError,
+          `Teacher ${teacherId} is already booked at that slot`,
         );
     }
-    return { valid: issues.length === 0, issues: [...new Set(issues)] };
+    await DB.query(
+      singleLineString`update published_entry set subject_id = $1, teacher_id = $2, updatedby_userid = $3, updated_at = $4 where uuid = $5 and school_id = $6`,
+      [subjectId, teacherId, userId, new Date(), entryId, schoolId],
+    );
+    return { updated: true };
+  }
+
+  // Swap two cells' day/slot (avoids the transient clash two separate moves would cause).
+  public async swapPublishedEntries(
+    schoolId: string,
+    publishedTimetableId: string,
+    entryIdA: string,
+    entryIdB: string,
+    userId: string,
+  ): Promise<{ swapped: boolean }> {
+    const entries = await this.loadPublished(publishedTimetableId, schoolId);
+    const a = entries.find((e: any) => e.uuid === entryIdA);
+    const b = entries.find((e: any) => e.uuid === entryIdB);
+    if (!a || !b) throw new NotFoundResult(ErrorCode.InvalidId, "Entry not found");
+    const groupA = this.cellGroup(entries, a);
+    const groupB = this.cellGroup(entries, b);
+    const idsB = new Set(groupB.map((g) => g.uuid));
+    const idsA = new Set(groupA.map((g) => g.uuid));
+    // A takes B's slot (ignoring B's rows), and B takes A's slot (ignoring A's rows).
+    const issues = [
+      ...this.clashesAt(entries, groupA, b.dayOfWeek, b.timeSlotId, idsB),
+      ...this.clashesAt(entries, groupB, a.dayOfWeek, a.timeSlotId, idsA),
+    ];
+    if (issues.length)
+      throw new BusinessErrorResult(ErrorCode.BusinessError, [...new Set(issues)].join("; "));
+    const now = new Date();
+    await DB.queriesInTransaction(
+      [
+        singleLineString`update published_entry set day_of_week = $1, time_slot_id = $2, updatedby_userid = $3, updated_at = $4 where uuid = any($5) and school_id = $6`,
+        singleLineString`update published_entry set day_of_week = $1, time_slot_id = $2, updatedby_userid = $3, updated_at = $4 where uuid = any($5) and school_id = $6`,
+      ],
+      [
+        [b.dayOfWeek, b.timeSlotId, userId, now, [...idsA], schoolId],
+        [a.dayOfWeek, a.timeSlotId, userId, now, [...idsB], schoolId],
+      ],
+    );
+    return { swapped: true };
   }
 }
 

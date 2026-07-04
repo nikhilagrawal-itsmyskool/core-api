@@ -37,6 +37,8 @@ export interface BuildOffering {
   // period_share): several offerings with the same subjectId, each a share. null =
   // that teacher takes all of the subject's band periods.
   periodShare?: number | null;
+  // Parallel cohort band: which member stream owns this offering (null = shared/all).
+  classId?: string | null;
 }
 export interface BuildElectiveBand {
   bandId: string;
@@ -45,6 +47,9 @@ export interface BuildElectiveBand {
   // Absent/empty = a normal single-class band on [classId]. Set with >1 class for
   // a composite class like XI-A (Science + Commerce share the band's rooms/slots).
   classIds?: string[];
+  // Cohort band mode: true/undefined = pooled (co-scheduled, one lesson over classIds);
+  // false = parallel (each member stream gets its own lessons, soft-aligned only).
+  coSchedule?: boolean | null;
   periodsPerWeek: number;
   blockRules?: BuildBlockRules;
   offerings: BuildOffering[];
@@ -336,43 +341,72 @@ export function buildLessons(input: BuildInput): {
       warnings.push(`Elective band ${band.bandId} has no offerings — skipped.`);
       continue;
     }
-    const groupKey = `band:${band.bandId}`;
-    // Member classes co-scheduled by this band (a composite-class band lists >1).
+    // Member classes of this band (a composite-class band lists >1).
     const members =
       band.classIds && band.classIds.length > 0
         ? band.classIds
         : [band.classId];
-    const units = expandBlocks(band.blockRules, band.periodsPerWeek);
-    // Group offerings by subject; a subject split across teachers gets a teacher per unit.
-    const bySubject = new Map<string, { teacherId: string; share?: number | null }[]>();
-    for (const o of band.offerings) {
-      if (!bySubject.has(o.subjectId)) bySubject.set(o.subjectId, []);
-      bySubject.get(o.subjectId)!.push({ teacherId: o.teacherId, share: o.periodShare });
-    }
-    const teacherPerUnit = new Map<string, string[]>();
-    for (const [subjectId, teachers] of bySubject)
-      teacherPerUnit.set(subjectId, assignTeachersPerUnit(teachers, units.length));
-    const subjectIds = [...bySubject.keys()];
+    // Parallel mode: a cohort band (>1 member) with co_schedule === false. Each member
+    // stream runs its OWN offerings at its OWN slots (soft-aligned only via cohortLockstep);
+    // pooled (default) co-schedules all members into one lesson with every offering.
+    const parallel = members.length > 1 && band.coSchedule === false;
 
-    units.forEach((unit, i) => {
-      const offerings = subjectIds.map((subjectId) => ({
-        subjectId,
-        teacherId: teacherPerUnit.get(subjectId)![i],
-      }));
-      lessons.push({
-        id: nextId(),
-        classId: members[0],
-        classIds: members.length > 1 ? members : undefined,
-        size: unit.size,
-        offerings,
-        teacherIds: [...new Set(offerings.map((o) => o.teacherId))],
-        bandId: band.bandId,
-        groupKey,
-        maxPerDay: band.blockRules?.maxPerDay,
-        notTwiceSameDay: band.blockRules?.notTwiceSameDay,
-        prefer: unit.prefer,
+    // Build the lessons for one lesson-group (a subject-set placed over `units` slots) on a
+    // given class scope + group key. In pooled mode this runs once over all members (one
+    // shared groupKey); in parallel mode once per member, each with its OWN groupKey so the
+    // per-day period cap applies per stream, not summed across streams.
+    const emit = (
+      offeringsForScope: BuildOffering[],
+      classScope: string[],
+      groupKey: string,
+    ): void => {
+      if (offeringsForScope.length === 0) return;
+      const units = expandBlocks(band.blockRules, band.periodsPerWeek);
+      const bySubject = new Map<
+        string,
+        { teacherId: string; share?: number | null }[]
+      >();
+      for (const o of offeringsForScope) {
+        if (!bySubject.has(o.subjectId)) bySubject.set(o.subjectId, []);
+        bySubject.get(o.subjectId)!.push({ teacherId: o.teacherId, share: o.periodShare });
+      }
+      const teacherPerUnit = new Map<string, string[]>();
+      for (const [subjectId, teachers] of bySubject)
+        teacherPerUnit.set(subjectId, assignTeachersPerUnit(teachers, units.length));
+      const subjectIds = [...bySubject.keys()];
+      units.forEach((unit, i) => {
+        const offerings = subjectIds.map((subjectId) => ({
+          subjectId,
+          teacherId: teacherPerUnit.get(subjectId)![i],
+        }));
+        lessons.push({
+          id: nextId(),
+          classId: classScope[0],
+          classIds: classScope.length > 1 ? classScope : undefined,
+          size: unit.size,
+          offerings,
+          teacherIds: [...new Set(offerings.map((o) => o.teacherId))],
+          bandId: band.bandId,
+          groupKey,
+          maxPerDay: band.blockRules?.maxPerDay,
+          notTwiceSameDay: band.blockRules?.notTwiceSameDay,
+          prefer: unit.prefer,
+        });
       });
-    });
+    };
+
+    if (parallel) {
+      // one independent single-class lesson-set per stream: its own offerings (classId ===
+      // member) plus any shared offerings (classId null). Per-stream groupKey.
+      for (const m of members as string[]) {
+        const forMember = band.offerings.filter(
+          (o) => o.classId == null || o.classId === m,
+        );
+        emit(forMember, [m], `band:${band.bandId}:${m}`);
+      }
+    } else {
+      emit(band.offerings, members as string[], `band:${band.bandId}`);
+    }
   }
 
   // Hard per-day period cap (default 2) for every lesson of a group — covers
@@ -385,10 +419,15 @@ export function buildLessons(input: BuildInput): {
     );
   }
   for (const band of input.electiveBands) {
-    capByGroup.set(
-      `band:${band.bandId}`,
-      band.blockRules?.maxPeriodsPerDay ?? 2,
-    );
+    const cap = band.blockRules?.maxPeriodsPerDay ?? 2;
+    const members =
+      band.classIds && band.classIds.length > 0 ? band.classIds : [band.classId];
+    if (members.length > 1 && band.coSchedule === false) {
+      // parallel: each stream has its own groupKey band:<id>:<class>
+      for (const m of members) capByGroup.set(`band:${band.bandId}:${m}`, cap);
+    } else {
+      capByGroup.set(`band:${band.bandId}`, cap);
+    }
   }
   for (const l of lessons) {
     if (l.maxPeriodsPerDay === undefined) {

@@ -7,6 +7,9 @@ import { generationService } from './generation-service';
 interface GenerateBody { configId: string; academicYearId?: string; objectiveWeights?: any; numCandidates?: number; wingId?: string | null; }
 interface PublishBody { candidateId: string; effectiveFrom?: string; }
 interface ValidateMoveBody { publishedTimetableId: string; entryId: string; toDayOfWeek: number; toTimeSlotId: string; }
+interface MoveEntryBody { publishedTimetableId: string; toDayOfWeek: number; toTimeSlotId: string; }
+interface EditEntryBody { publishedTimetableId: string; subjectId?: string | null; teacherId?: string | null; }
+interface SwapEntriesBody { publishedTimetableId: string; entryIdA: string; entryIdB: string; }
 
 class GenerationHandler {
   public feasibility = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
@@ -207,6 +210,64 @@ class GenerationHandler {
       ResponseBuilder.handleError(err, callback);
     }
   };
+
+  // Move a published cell to a new day/slot.
+  public moveEntry = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
+    _context.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const ctx = await resolveSchool(event, callback);
+      if (!ctx) return;
+      const entryId = requireParam(event, 'id', callback);
+      if (!entryId) return;
+      const body = parseBody<MoveEntryBody>(event, callback);
+      if (!body) return;
+      if (!body.publishedTimetableId || !body.toTimeSlotId || !Number.isInteger(body.toDayOfWeek)) {
+        ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'publishedTimetableId, toDayOfWeek and toTimeSlotId are required', callback); return;
+      }
+      const result = await generationService.movePublishedEntry(ctx.schoolId, body.publishedTimetableId, entryId, body.toDayOfWeek, body.toTimeSlotId, ctx.userId);
+      ResponseBuilder.ok(result, callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
+  // Change the subject/teacher of a published cell row.
+  public editEntry = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
+    _context.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const ctx = await resolveSchool(event, callback);
+      if (!ctx) return;
+      const entryId = requireParam(event, 'id', callback);
+      if (!entryId) return;
+      const body = parseBody<EditEntryBody>(event, callback);
+      if (!body) return;
+      if (!body.publishedTimetableId) {
+        ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'publishedTimetableId is required', callback); return;
+      }
+      const result = await generationService.editPublishedEntry(ctx.schoolId, body.publishedTimetableId, entryId, { subjectId: body.subjectId, teacherId: body.teacherId }, ctx.userId);
+      ResponseBuilder.ok(result, callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
+  // Swap two published cells' day/slot.
+  public swapEntries = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
+    _context.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const ctx = await resolveSchool(event, callback);
+      if (!ctx) return;
+      const body = parseBody<SwapEntriesBody>(event, callback);
+      if (!body) return;
+      if (!body.publishedTimetableId || !body.entryIdA || !body.entryIdB) {
+        ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'publishedTimetableId, entryIdA and entryIdB are required', callback); return;
+      }
+      const result = await generationService.swapPublishedEntries(ctx.schoolId, body.publishedTimetableId, body.entryIdA, body.entryIdB, ctx.userId);
+      ResponseBuilder.ok(result, callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
 }
 
 const handler = new GenerationHandler();
@@ -223,3 +284,6 @@ export const publish = handler.publish;
 export const getPublished = handler.getPublished;
 export const listPublished = handler.listPublished;
 export const validateMove = handler.validateMove;
+export const moveEntry = handler.moveEntry;
+export const editEntry = handler.editEntry;
+export const swapEntries = handler.swapEntries;

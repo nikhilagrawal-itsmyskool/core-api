@@ -157,6 +157,13 @@ create index if not exists idx_elective_band_class on elective_band(class_id);
 alter table elective_band add column if not exists class_group_id varchar(12);
 alter table elective_band alter column class_id drop not null;
 
+-- co_schedule: for a cohort band (class_group_id set), whether the block runs TOGETHER
+-- (true = pooled: one lesson books every member at the identical slot, students regroup) or
+-- in PARALLEL (false = each member stream runs its own offerings at its own slots, kept only
+-- soft-aligned via cohortLockstep). Null/true = pooled (back-compat). Ignored for single-class
+-- bands.
+alter table elective_band add column if not exists co_schedule boolean;
+
 -- elective_offering: one subject choice inside a band, with its own teacher. All
 -- offerings of a band are co-scheduled into the same slots, and each offering's
 -- teacher is booked for those slots.
@@ -181,6 +188,14 @@ create unique index if not exists idx_elective_offering_unique on elective_offer
 alter table elective_offering add column if not exists period_share integer;
 drop index if exists idx_elective_offering_unique;
 create unique index if not exists idx_elective_offering_unique on elective_offering(band_id, subject_id, teacher_id) where status = 'active';
+
+-- class_id: for a PARALLEL cohort band, which member stream this offering belongs to
+-- (Science does Bio/Maths, Commerce does Accountancy). Null = shared by all members (pooled
+-- bands, or a "both streams" offering). Uniqueness now includes class_id so each stream can
+-- carry the same subject independently.
+alter table elective_offering add column if not exists class_id varchar(12);
+drop index if exists idx_elective_offering_unique;
+create unique index if not exists idx_elective_offering_unique on elective_offering(band_id, subject_id, teacher_id, coalesce(class_id, '')) where status = 'active';
 
 -- timetable_wing: a named set of classes (e.g. primary / middle / senior) for an
 -- academic year. Lives entirely in the timetable module — the core class table is
