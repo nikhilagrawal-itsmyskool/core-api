@@ -20,7 +20,7 @@ describe('Hiring Stage API', () => {
     const res = await fetch(candidatesUrl, {
       method: 'POST',
       headers,
-      body: JSON.stringify({ name: 'Stage Test Candidate', positionType: 'tgt', subject: 'english' }),
+      body: JSON.stringify({ name: 'Stage Test Candidate', positionType: 'tgt', subjects: ['english'] }),
     });
     const data = await res.json();
     candidateId = data.uuid;

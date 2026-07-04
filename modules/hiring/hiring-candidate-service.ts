@@ -29,7 +29,7 @@ class HiringCandidateService {
 
     const query = singleLineString`
       insert into hiring_candidate
-      (uuid, school_id, name, father_husband_name, position_type, subject,
+      (uuid, school_id, name, father_husband_name, position_type, subjects,
        mobile, email, status, createdby_userid, created_at)
       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
       returning *
@@ -41,7 +41,7 @@ class HiringCandidateService {
       data.name,
       data.fatherHusbandName || null,
       data.positionType,
-      data.subject || null,
+      data.subjects && data.subjects.length > 0 ? data.subjects : null,
       data.mobile || null,
       data.email || null,
       DEFAULTS.STATUS,
@@ -75,7 +75,7 @@ class HiringCandidateService {
     if (data.name !== undefined) setField('name', data.name);
     if (data.fatherHusbandName !== undefined) setField('father_husband_name', data.fatherHusbandName || null);
     if (data.positionType !== undefined) setField('position_type', data.positionType);
-    if (data.subject !== undefined) setField('subject', data.subject || null);
+    if (data.subjects !== undefined) setField('subjects', data.subjects && data.subjects.length > 0 ? data.subjects : null);
     if (data.mobile !== undefined) setField('mobile', data.mobile || null);
     if (data.email !== undefined) setField('email', data.email || null);
     if (data.finalComments !== undefined) setField('final_comments', data.finalComments || null);
@@ -179,7 +179,8 @@ class HiringCandidateService {
       queryParams.push(params.positionType);
     }
     if (params.subject) {
-      query += ` and subject = $${paramIndex++}`;
+      // Matches candidates tagged with the given subject (array containment).
+      query += ` and subjects @> ARRAY[$${paramIndex++}]::text[]`;
       queryParams.push(params.subject);
     }
     if (params.search && params.search.trim()) {

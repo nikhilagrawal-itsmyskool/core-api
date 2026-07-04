@@ -21,7 +21,7 @@ export interface HiringCandidate extends BaseEntity {
   name: string;
   fatherHusbandName?: string;
   positionType: PositionType;
-  subject?: string;
+  subjects?: string[];
   mobile?: string;
   email?: string;
   photoFileId?: string;
@@ -41,7 +41,7 @@ export interface CreateCandidateRequest {
   name: string;
   fatherHusbandName?: string;
   positionType: PositionType;
-  subject?: string;
+  subjects?: string[];
   mobile?: string;
   email?: string;
 }
@@ -50,7 +50,7 @@ export interface UpdateCandidateRequest {
   name?: string;
   fatherHusbandName?: string;
   positionType?: PositionType;
-  subject?: string;
+  subjects?: string[];
   mobile?: string;
   email?: string;
   status?: CandidateStatus; // manual override

@@ -1,38 +1,45 @@
 // Hiring module constants (dropdown catalogs + pipeline logic).
 // value/label(/description) arrays mirror the pattern in fine-constants.ts.
 
+// Sorted alphabetically by label; the catch-all "Others" is kept last.
 export const POSITION_TYPES = [
-  { value: 'tgt', label: 'TGT', description: 'Trained Graduate Teacher' },
+  { value: 'ntt', label: 'NTT', description: 'Nursery Teacher Trainer' },
+  { value: 'office', label: 'Office Position', description: 'Administrative / office staff' },
   { value: 'pgt', label: 'PGT', description: 'Post Graduate Teacher' },
+  { value: 'pre_primary', label: 'Pre Primary Teacher', description: 'Pre-primary teacher' },
+  { value: 'principal', label: 'Principal', description: 'Principal / head of school' },
   { value: 'prt', label: 'PRT', description: 'Primary Teacher' },
-  { value: 'ntt', label: 'NTT / Non-teaching', description: 'Nursery Teacher Trainer / non-teaching staff' },
+  { value: 'tgt', label: 'TGT', description: 'Trained Graduate Teacher' },
+  { value: 'others', label: 'Others', description: 'Any other position' },
 ] as const;
 
-// Suggested subjects for the dropdown. Not enforced by the DB/handler so an
-// "Other" free-text value is also accepted.
+// Suggested subjects for the dropdown, sorted alphabetically by label with the
+// "General / Multiple" and "Other" catch-alls kept last. Not enforced by the
+// DB/handler so an "Other" free-text value is also accepted. A candidate may be
+// tagged with multiple subjects.
 export const HIRING_SUBJECTS = [
-  { value: 'english', label: 'English' },
-  { value: 'hindi', label: 'Hindi' },
-  { value: 'sanskrit', label: 'Sanskrit' },
-  { value: 'mathematics', label: 'Mathematics' },
-  { value: 'science', label: 'Science' },
-  { value: 'physics', label: 'Physics' },
-  { value: 'chemistry', label: 'Chemistry' },
-  { value: 'biology', label: 'Biology' },
-  { value: 'social_studies', label: 'Social Studies' },
-  { value: 'history', label: 'History' },
-  { value: 'geography', label: 'Geography' },
-  { value: 'economics', label: 'Economics' },
-  { value: 'political_science', label: 'Political Science' },
-  { value: 'commerce', label: 'Commerce' },
   { value: 'accountancy', label: 'Accountancy' },
-  { value: 'business_studies', label: 'Business Studies' },
-  { value: 'computer_science', label: 'Computer Science' },
-  { value: 'physical_education', label: 'Physical Education' },
   { value: 'art', label: 'Art' },
-  { value: 'music', label: 'Music' },
+  { value: 'biology', label: 'Biology' },
+  { value: 'business_studies', label: 'Business Studies' },
+  { value: 'chemistry', label: 'Chemistry' },
+  { value: 'commerce', label: 'Commerce' },
+  { value: 'computer_science', label: 'Computer Science' },
   { value: 'dance', label: 'Dance' },
+  { value: 'economics', label: 'Economics' },
+  { value: 'english', label: 'English' },
   { value: 'evs', label: 'Environmental Studies (EVS)' },
+  { value: 'geography', label: 'Geography' },
+  { value: 'hindi', label: 'Hindi' },
+  { value: 'history', label: 'History' },
+  { value: 'mathematics', label: 'Mathematics' },
+  { value: 'music', label: 'Music' },
+  { value: 'physical_education', label: 'Physical Education' },
+  { value: 'physics', label: 'Physics' },
+  { value: 'political_science', label: 'Political Science' },
+  { value: 'sanskrit', label: 'Sanskrit' },
+  { value: 'science', label: 'Science' },
+  { value: 'social_studies', label: 'Social Studies' },
   { value: 'general', label: 'General / Multiple' },
   { value: 'other', label: 'Other' },
 ] as const;

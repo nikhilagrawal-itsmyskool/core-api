@@ -10,9 +10,9 @@ create table if not exists hiring_candidate (
     name varchar(128) not null,
     father_husband_name varchar(128),
     position_type varchar(16) not null check (position_type in (
-        'tgt', 'pgt', 'prt', 'ntt'
+        'tgt', 'pgt', 'prt', 'ntt', 'principal', 'pre_primary', 'office', 'others'
     )),
-    subject varchar(64),
+    subjects text[],
     mobile varchar(20),
     email varchar(128),
     photo_file_id varchar(12),
@@ -36,7 +36,7 @@ create table if not exists hiring_candidate (
 create index if not exists idx_hiring_candidate_school_id on hiring_candidate(school_id);
 create index if not exists idx_hiring_candidate_status on hiring_candidate(school_id, status);
 create index if not exists idx_hiring_candidate_position on hiring_candidate(school_id, position_type);
-create index if not exists idx_hiring_candidate_subject on hiring_candidate(school_id, subject);
+create index if not exists idx_hiring_candidate_subjects on hiring_candidate using gin (subjects);
 
 -- Table 2: hiring_stage (0..N interview pipeline stages per candidate)
 create table if not exists hiring_stage (

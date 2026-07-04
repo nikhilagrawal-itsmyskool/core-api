@@ -24,7 +24,7 @@ describe('Hiring Candidate API', () => {
           name: 'Anita Sharma',
           fatherHusbandName: 'Ramesh Sharma',
           positionType: 'pgt',
-          subject: 'physics',
+          subjects: ['physics', 'mathematics'],
           mobile: '9876500011',
           email: 'anita.sharma@example.com',
         }),
@@ -35,6 +35,7 @@ describe('Hiring Candidate API', () => {
       expect(data).toHaveProperty('uuid');
       expect(data.name).toBe('Anita Sharma');
       expect(data.positionType).toBe('pgt');
+      expect(data.subjects).toEqual(['physics', 'mathematics']);
       expect(data.status).toBe('applied');
 
       createdId = data.uuid;
@@ -53,7 +54,7 @@ describe('Hiring Candidate API', () => {
       const response = await fetch(candidatesUrl, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ name: 'X', positionType: 'principal' }),
+        body: JSON.stringify({ name: 'X', positionType: 'director' }),
       });
       expect(response.status).toBe(400);
     });
