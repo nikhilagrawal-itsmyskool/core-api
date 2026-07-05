@@ -118,9 +118,33 @@ function expandBlocks(
   return units;
 }
 
+// Remove up to `n` size-1 units from a block list, preserving doubles (and every block's
+// prefer). Used when class-teacher first-period pins consume the homeroom subject's
+// singles, leaving its remaining blocks (e.g. a preferred double) to be placed normally.
+// Returns the remaining blocks, or null when there aren't `n` singles to remove.
+function removeSingles(
+  blocks: { size: number; count: number; prefer?: { day: number; slot: number }[] }[] | undefined,
+  n: number,
+): { size: number; count: number; prefer?: { day: number; slot: number }[] }[] | null {
+  if (!blocks) return null;
+  let toRemove = n;
+  const out: typeof blocks = [];
+  for (const b of blocks) {
+    if (b.size === 1 && toRemove > 0) {
+      const rm = Math.min(b.count, toRemove);
+      toRemove -= rm;
+      if (b.count - rm > 0) out.push({ ...b, count: b.count - rm });
+    } else {
+      out.push({ ...b });
+    }
+  }
+  return toRemove === 0 ? out : null;
+}
+
 // Convert academic config into placeable lessons. Documented v1 behavior:
 //  - Class teacher's "homeroom subject" gets one pin per teaching day (first
-//    period); its remaining periods become singles (block rules ignored for it).
+//    period); its REMAINING periods are built from the block rules (a configured
+//    double + prefer is honored), falling back to singles if unreconcilable.
 //  - A class_subject with one teacher expands per its block rules.
 //  - A class_subject split across teachers (period_share) becomes singles split
 //    by share (block rules ignored for splits).
@@ -238,11 +262,6 @@ export function buildLessons(input: BuildInput): {
           `Class ${cs.classId} homeroom subject has ${cs.periodsPerWeek} periods but ${eligibleDays.length} days pin the class teacher to the first period — only ${pinCount} will be the class teacher's.`,
         );
       }
-      if (cs.blockRules?.blocks?.some((b) => b.size > 1)) {
-        warnings.push(
-          `Class ${cs.classId} homeroom subject has double blocks configured — ignored (homeroom periods are placed as singles).`,
-        );
-      }
       const pinDays = [...eligibleDays]
         .sort((a, b) => a - b)
         .slice(0, pinCount);
@@ -258,15 +277,40 @@ export function buildLessons(input: BuildInput): {
         });
       }
       const remaining = cs.periodsPerWeek - pinCount;
-      for (let i = 0; i < remaining; i++) {
-        lessons.push({
-          id: nextId(),
-          classId: cs.classId,
-          size: 1,
-          offerings: [{ subjectId: cs.subjectId, teacherId: classTeacher }],
-          teacherIds: [classTeacher],
-          groupKey,
-        });
+      // The first-period pins consume `pinCount` of the subject's single periods; place
+      // the REMAINING periods per the block rules so a configured double (and its prefer)
+      // is still honored. Falls back to plain singles if the blocks can't be reconciled.
+      const leftover = removeSingles(cs.blockRules?.blocks, pinCount);
+      if (remaining > 0 && leftover && leftover.length > 0) {
+        for (const unit of expandBlocks({ ...cs.blockRules, blocks: leftover }, remaining)) {
+          lessons.push({
+            id: nextId(),
+            classId: cs.classId,
+            size: unit.size,
+            offerings: [{ subjectId: cs.subjectId, teacherId: classTeacher }],
+            teacherIds: [classTeacher],
+            groupKey,
+            maxPerDay,
+            notTwiceSameDay,
+            prefer: unit.prefer,
+          });
+        }
+      } else {
+        if (remaining > 0 && cs.blockRules?.blocks?.some((b) => b.size > 1)) {
+          warnings.push(
+            `Class ${cs.classId} homeroom subject: block rules can't be reconciled with ${pinCount} first-period pin(s) — leftover placed as singles.`,
+          );
+        }
+        for (let i = 0; i < remaining; i++) {
+          lessons.push({
+            id: nextId(),
+            classId: cs.classId,
+            size: 1,
+            offerings: [{ subjectId: cs.subjectId, teacherId: classTeacher }],
+            teacherIds: [classTeacher],
+            groupKey,
+          });
+        }
       }
       continue;
     }

@@ -45,6 +45,14 @@ provider:
       - tests/**
 
 custom:
+  customDomains:
+    - rest:
+        domainName: api-prod.itsmyskool.com
+        certificateName: api-prod.itsmyskool.com
+        createRoute53Record: false     # DNS is on Cloudflare; add the CNAME manually
+        endpointType: regional
+        securityPolicy: tls_1_2
+        basePath: 'sample'
   webpack:
     webpackConfig: '../../webpack.config.js'
     includeModules:

@@ -156,6 +156,31 @@ export async function loadConfigForSolve(schoolId: string, configId: string, win
     }
   }
 
+  // Block-rules `prefer.slot` is entered as the Nth TEACHING period (same as a teacher
+  // constraint's slot) — translate it to the real grid sequence so the solver, which
+  // compares raw sequence, honors what the admin meant. Applied to class_subjects and
+  // elective bands alike.
+  const translateBlockPrefer = (br: any): any => {
+    if (!br || !Array.isArray(br.blocks)) return br;
+    const blocks = br.blocks.map((b: any) => {
+      if (!Array.isArray(b.prefer) || b.prefer.length === 0) return b;
+      const prefer = b.prefer
+        .map((p: any) => {
+          const seq = toSeq(Number(p.day), Number(p.slot));
+          if (seq == null)
+            constraintWarnings.push(
+              `Block prefer: teaching period ${p.slot} doesn't exist on day ${p.day} — hint dropped.`,
+            );
+          return seq == null ? null : { day: p.day, slot: seq };
+        })
+        .filter(Boolean);
+      return { ...b, prefer: prefer.length > 0 ? prefer : undefined };
+    });
+    return { ...br, blocks };
+  };
+  for (const cs of classSubjects) cs.blockRules = translateBlockPrefer(cs.blockRules);
+  for (const b of electiveBands) b.blockRules = translateBlockPrefer(b.blockRules);
+
   // Scope to a wing's classes when requested (else whole school).
   const wingSet = wingClassIds && wingClassIds.length > 0 ? new Set(wingClassIds) : null;
   const inScope = (classId: string) => !wingSet || wingSet.has(classId);

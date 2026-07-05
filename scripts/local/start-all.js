@@ -195,17 +195,17 @@ async function main() {
   var gatewayResult = await startGateway(stage);
   processes.push({ name: 'gateway', proc: gatewayResult.proc });
 
-  if (selectedModuleNames.indexOf('timetable') !== -1) {
-    colorLog('tt-worker', 'Starting timetable generation worker...');
-    var workerProc = startTimetableWorker(gatewayResult.port);
-    processes.push({ name: 'tt-worker', proc: workerProc });
-  }
+  // if (selectedModuleNames.indexOf('timetable') !== -1) {
+  //   colorLog('tt-worker', 'Starting timetable generation worker...');
+  //   var workerProc = startTimetableWorker(gatewayResult.port);
+  //   processes.push({ name: 'tt-worker', proc: workerProc });
+  // }
 
-  if (selectedModuleNames.indexOf('communication') !== -1) {
-    colorLog('comm-worker', 'Starting communication send worker...');
-    var commWorkerProc = startCommunicationWorker(gatewayResult.port);
-    processes.push({ name: 'comm-worker', proc: commWorkerProc });
-  }
+  // if (selectedModuleNames.indexOf('communication') !== -1) {
+  //   colorLog('comm-worker', 'Starting communication send worker...');
+  //   var commWorkerProc = startCommunicationWorker(gatewayResult.port);
+  //   processes.push({ name: 'comm-worker', proc: commWorkerProc });
+  // }
 
   console.log('\n╔══════════════════════════════════════════════════════════════╗');
   console.log('║                    All Services Running                      ║');
