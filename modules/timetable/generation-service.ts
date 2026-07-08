@@ -19,12 +19,34 @@ import {
   readExport,
 } from "./cpsat/cpsat-artifacts";
 import { humanizeMessages, SolverLabels } from "./message-labels";
+import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
 import {
   computeRegistrationEntries,
   registrationClashMessages,
   RegistrationEntry,
 } from "./registration";
 const { generateShortUuid } = require("../../shared/util/generate-uuid.js");
+
+const cpsatS3 = new S3Client({});
+// Read a rendered export (pdf/xlsx) from the cpsat S3 bucket. Used in prod, where the
+// Lambda cannot see the local disk the solver poller renders into. Objects live at
+// runs/<runId>/timetable.<ext>; the local worker uploads them after import.
+async function readExportFromS3(
+  runId: string,
+  format: "xlsx" | "pdf",
+): Promise<Buffer | null> {
+  const bucket = process.env.CPSAT_S3_BUCKET;
+  if (!bucket) return null;
+  const key = `runs/${runId}/timetable.${format}`;
+  try {
+    const obj = await cpsatS3.send(
+      new GetObjectCommand({ Bucket: bucket, Key: key }),
+    );
+    return Buffer.from(await (obj.Body as any).transformToByteArray());
+  } catch {
+    return null;
+  }
+}
 
 // Wall-clock budget for the solver. Must stay below the process-next function
 // timeout (120s, see timetable-endpoints.yml) so the solver returns a clean result
@@ -523,7 +545,8 @@ class GenerationService {
     if (runs.length === 0 || runs[0].schoolId !== schoolId)
       throw new NotFoundResult(ErrorCode.InvalidId, `Run ${runId} not found`);
 
-    const buf = readExport(runId, format);
+    let buf = readExport(runId, format);
+    if (!buf) buf = await readExportFromS3(runId, format);
     if (!buf)
       throw new NotFoundResult(
         ErrorCode.InvalidId,

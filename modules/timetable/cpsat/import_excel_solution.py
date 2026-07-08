@@ -488,10 +488,21 @@ def build(res, blocks, slot_at):
                         continue
                     band_placed[(cid, bid)] += 1
                     band_slots[bid][cid].add(key)
+                    # A band offering may carry a per-cell teacher override
+                    # (teacherBySlot, keyed "day:period_idx") for subjects taught by a
+                    # different teacher in specific cells — e.g. XI-A Sci Biology is
+                    # Akashdeep everywhere EXCEPT Fri/Sat period II, where it is Shruti
+                    # Pandey. Keying by (day, period) — not day alone — keeps other
+                    # same-day Biology cells (e.g. Fri period VII) with their own teacher.
+                    slot_key = f"{day}:{e['period_idx']}"
+                    day_offs = [{
+                        "subjectId": o["subjectId"],
+                        "teacherId": (o.get("teacherBySlot") or {}).get(slot_key) or o.get("teacherId"),
+                    } for o in boffs]
                     placements.append({
                         "lessonId": new_id(), "classId": cid, "classIds": None,
                         "dayOfWeek": day, "startSequence": slot[1], "slotIds": [slot[0]],
-                        "offerings": boffs, "size": 1, "bandId": bid,
+                        "offerings": day_offs, "size": 1, "bandId": bid,
                     })
                     continue
                 # per-class subject

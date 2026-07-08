@@ -504,10 +504,12 @@
           method: post
           cors: true
   # CP-SAT pipeline, stage 3: import a solved run's solution (or failure marker) into the
-  # DB via the shared candidate writer. No synchronous solve -> default timeout is fine.
+  # DB via the shared candidate writer. Raised timeout: the entry fan-out writes many rows,
+  # which can exceed the default when run against a remote DB (e.g. local offline -> RDS).
   import-solution-run:
     handler: generation-handler.importSolution
     name: ${self:service}-import-solution-run
+    timeout: 300
     events:
       - http:
           path: runs/import-solution

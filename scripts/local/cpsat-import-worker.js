@@ -17,6 +17,42 @@
 const fs = require('fs');
 const http = require('http');
 const path = require('path');
+const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
+
+// Optional: when CPSAT_S3_BUCKET is set, upload each imported run's rendered exports
+// (timetable.pdf / .xlsx) to s3://<bucket>/runs/<runId>/ so the prod getRunExport Lambda
+// can serve them (it can't read this local disk). Needs AWS creds in the environment
+// (e.g. AWS_PROFILE). No-op when the bucket isn't configured.
+const CPSAT_S3_BUCKET = process.env.CPSAT_S3_BUCKET;
+const s3 = CPSAT_S3_BUCKET ? new S3Client({ region: process.env.AWS_REGION || 'ap-south-1' }) : null;
+
+async function uploadExports(runId, dir) {
+  if (!s3) return;
+  // Normalize whatever the renderer named the files to the fixed keys the Lambda reads
+  // (runs/<runId>/timetable.<ext>). The renderer may use a human name (e.g.
+  // "Time Table 2026-27.pdf"); we just take the first matching extension.
+  const targets = [
+    { ext: '.pdf', key: 'timetable.pdf', type: 'application/pdf' },
+    { ext: '.xlsx', key: 'timetable.xlsx', type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' },
+  ];
+  let entries;
+  try { entries = fs.readdirSync(dir); } catch { return; }
+  for (const t of targets) {
+    const match = entries.find((n) => n.toLowerCase().endsWith(t.ext));
+    if (!match) continue;
+    try {
+      await s3.send(new PutObjectCommand({
+        Bucket: CPSAT_S3_BUCKET,
+        Key: `runs/${runId}/${t.key}`,
+        Body: fs.readFileSync(path.join(dir, match)),
+        ContentType: t.type,
+      }));
+      console.log(`[cpsat-import-worker] uploaded ${match} -> s3://${CPSAT_S3_BUCKET}/runs/${runId}/${t.key}`);
+    } catch (e) {
+      console.error(`[cpsat-import-worker] S3 upload failed for ${runId}/${t.key}: ${(e && e.message) || e}`);
+    }
+  }
+}
 
 const DEFAULT_ROOT = path.join(__dirname, '../../modules/timetable/cpsat');
 
@@ -95,6 +131,7 @@ async function main() {
         // status is the source of truth for the outcome.
         fs.writeFileSync(path.join(dir, '.imported'), new Date().toISOString());
         console.log(`[cpsat-import-worker] imported run ${runId}: ${data.status}` + (data.score != null ? ` (score ${data.score})` : '') + (data.error ? ` — ${data.error}` : ''));
+        await uploadExports(runId, dir);
       } catch (err) {
         console.error(`[cpsat-import-worker] import error for run ${runId}: ${(err && err.message) || err}`);
       }

@@ -1,5 +1,6 @@
 provider:
   name: aws
+  region: ap-south-1
   stage: ${opt:stage, 'dev'}
   environment:
     ${file(../../configs/${self:provider.stage}/${self:provider.stage}.yml)}
@@ -20,6 +21,8 @@ plugins:
   - ../../plugins/serverless-merge-config.js
   - serverless-webpack
   - serverless-offline
+  - serverless-domain-manager
+  - ../../plugins/serverless-cors-defaults.js
 
 functions: ${file(supply-endpoints.yml)}
 

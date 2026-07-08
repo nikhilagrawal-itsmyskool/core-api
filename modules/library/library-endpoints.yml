@@ -266,7 +266,7 @@
     name: ${self:service}-list-lookups-by-type
     events:
       - http:
-          path: lookups/{type}
+          path: lookups/{id}
           method: get
           cors: true
 

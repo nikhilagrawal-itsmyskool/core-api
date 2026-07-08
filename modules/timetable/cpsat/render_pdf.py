@@ -128,7 +128,7 @@ def main():
     # ---- fill lookups -------------------------------------------------------
     # class view: (class, day, seq) -> text ; teacher view: (teacher, day, seq) -> text
     by_class = {}
-    by_teacher = {}
+    by_teacher = defaultdict(list)   # (teacher, day, seq) -> [booking text, ...] (deliberate double-bookings stack)
     active_teachers = set()
     for p in placements:
         d = p["dayOfWeek"]
@@ -149,7 +149,7 @@ def main():
                     continue
                 active_teachers.add(tid)
                 cnames = ", ".join(cls_l.get(c, c) for c in classes_of(p))
-                by_teacher[(tid, d, seq)] = f"{short_subject(sub_l, o['subjectId'])}\n{cnames}"
+                by_teacher[(tid, d, seq)].append(f"{short_subject(sub_l, o['subjectId'])}\n{cnames}")
 
     # registration (per class): class teacher, no subject
     for e in registration:
@@ -160,7 +160,12 @@ def main():
         tid = e["teacherId"]
         by_class[(e["classId"], d, seq)] = f"REG\n{short_teacher(tch_l, tid)}"
         active_teachers.add(tid)
-        by_teacher[(tid, d, seq)] = f"REG\n{cls_l.get(e['classId'], e['classId'])}"
+        by_teacher[(tid, d, seq)].append(f"REG\n{cls_l.get(e['classId'], e['classId'])}")
+
+    # Flatten the per-teacher accumulators: single booking renders as before; two or
+    # more deliberate bookings at one slot stack, separated by a blank line so each is
+    # explicit (e.g. Music & Dance III-A / Music & Dance III-B).
+    by_teacher = {k: "\n\n".join(v) for k, v in by_teacher.items()}
 
     # ---- render -------------------------------------------------------------
     story = []

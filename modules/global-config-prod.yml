@@ -1,16 +1,10 @@
 provider:
   name: aws
   runtime: nodejs22.x
-  logs:
-    restApi:
-      level: INFO
-      accessLogging: true
-      format: '{"requestTime":"$context.requestTime","requestId":"$context.requestId","httpMethod":"$context.httpMethod","path":"$context.path","resourcePath":"$context.resourcePath","status":$context.status,"responseLatency":$context.responseLatency}'
-      executionLogging: false
-    websocket:
-      level: ERROR
-      accessLogging: true
-      fullExecutionData: false
+  # API Gateway access logging removed: it forces SF's CustomApiGatewayAccountCloudWatchRole
+  # custom resource, which fails on this account. The account-level CloudWatch role is
+  # managed in IaC (live/prod/apigateway-account) instead; re-add per-stage access logging
+  # via IaC later if needed. Lambda execution logs still go to CloudWatch regardless.
   tracing:
     apiGateway: false
     lambda: false
@@ -24,18 +18,12 @@ provider:
     minimumCompressionSize: 1024
     shouldStartNameWithService: true
   stackName: ${self:service}
-  iamRoleStatements:
-    - Effect: Allow
-      Action:
-        - SNS:Publish
-        - s3:PutObject
-        - s3:GetObject
-        - s3:PutObjectAcl
-      Resource: '*'
-    - Effect: Allow
-      Action:
-        - SQS:SendMessage
-      Resource: '*'
+  # Use a single shared execution role (managed in IaC: live/prod/lambda-execution-role)
+  # instead of a Serverless-generated per-service role. The generated role's per-function
+  # inline policy exceeds IAM's 10 KB limit on modules with many functions (library,
+  # timetable). This role grants the same SNS/S3/SQS + CloudWatch Logs permissions.
+  iam:
+    role: arn:aws:iam::264318271546:role/prod-itsmyskool-lambda-execution
   package:
     excludeDevDependencies: true
     exclude:
@@ -48,9 +36,8 @@ custom:
   customDomains:
     - rest:
         domainName: api-prod.itsmyskool.com
-        certificateName: api-prod.itsmyskool.com
-        createRoute53Record: false     # DNS is on Cloudflare; add the CNAME manually
-        endpointType: regional
+        certificateName: api-prod.itsmyskool.com   # edge domain -> cert looked up in us-east-1
+        createRoute53Record: false                 # DNS is on Cloudflare; add the CNAME manually
         securityPolicy: tls_1_2
         basePath: 'sample'
   webpack:

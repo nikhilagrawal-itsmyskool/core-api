@@ -4,27 +4,50 @@ v22.21.0
 npm --version
 10.9.4
 
-# School data management
+# Serverless
+```bash
+$env:AWS_PROFILE = 'prod-itsmyskool-nikhil.agrawal'
+& "H:\github\itsmyskool\core-api\node_modules\.bin\serverless.cmd" create_domain --stage prod --region ap-south-1
+& "H:\github\itsmyskool\core-api\node_modules\.bin\serverless.cmd" deploy --stage prod --verbose --region ap-south-1
+```
 
-Key features
+# Module start/stop
+node scripts/local/start-module.js timetable --stage prod --kill
+node scripts/local/kill-ports.js --timetable --stage prod
 
-1. **Student Information Management**
-   Stores and manages comprehensive student records including personal details, academic performance, attendance, disciplinary history, and health records. This ensures easy access and centralized data handling.
-2. **Attendance Tracking**
-   Automates attendance for students and staff. Reports can be generated instantly for analysis and communication with parents.
-3. **Timetable Scheduling**
-   Allows creation and management of class schedules, teacher assignments, and room allocations.
-4. **Fee Management**
-   Handles all aspects of fee collection, including invoicing, payment tracking, late fees, and online payments. Automates reminders and integrates with payment gateways for smooth transactions.
-5. **Examination and Grading**
-   Simplifies exam scheduling, grading, and report card generation. Teachers can input marks, calculate averages, and produce result sheets with customizable formats.
-6. **Parent-Teacher Communication**
-   Enables direct messaging, notifications, and announcements between school and parents. Supports sharing of homework, grades, and important updates via mobile or web apps.
-7. **Library Management**
-   Tracks book inventory, lending history, due dates, and fines. Students and staff can search, reserve, and renew books online.
-8. **Transport Management**
-   Manages bus routes, driver details and attendance on board.
-9. **HR and Payroll**
-   Manages recruitment, staff records, attendance, leave, and payroll processing. Generates salary slips and handles tax and compliance tasks.
-10. **Report and Analytics**
-    Generates customizable reports and dashboards for performance, finance, and administration, aiding in informed decision-making and transparency.
+# CPSAT with out starting local gateway at port 6000
+```bash
+-- Powershell #1
+node scripts/local/cpsat-dump-worker.js --port 6031
+-- Powershell #2
+$env:CPSAT_S3_BUCKET='prod-itsmyskool-cpsat'; $env:AWS_PROFILE='prod-itsmyskool-nikhil.agrawal'; $env:AWS_REGION='ap-south-1'
+node scripts/local/cpsat-import-worker.js --port 6031
+-- WSL
+uv run /mnt/h/github/itsmyskool/core-api/modules/timetable/cpsat/poller.py
+```
+
+# Import xlsx solution to a run id folder
+```bash
+uv run /mnt/h/github/itsmyskool/core-api/modules/timetable/cpsat/import_excel_solution.py --run-dir /mnt/h/github/itsmyskool/core-api/modules/timetable/cpsat/vgbevigu1fa1/ --xls /mnt/h/Time\ Table\ 2026-27.xlsx --dry-run
+
+uv run /mnt/h/github/itsmyskool/core-api/modules/timetable/cpsat/import_excel_solution.py --run-dir /mnt/h/github/itsmyskool/core-api/modules/timetable/cpsat/vgbevigu1fa1/ --xls /mnt/h/Time\ Table\ 2026-27.xlsx --force
+
+uv run /mnt/h/github/itsmyskool/core-api/modules/timetable/cpsat/render_pdf.py --run-dir /mnt/h/github/itsmyskool/core-api/modules/timetable/cpsat/vgbevigu1fa1/
+
+Copy the provided xlsx
+```
+# Copy the files to bucket location:
+```bash
+export AWS_PROFILE=prod-itsmyskool-nikhil.agrawal
+aws sts get-caller-identity
+cd /mnt/h/github/itsmyskool/core-api/modules/timetable/cpsat/vgbevigu1fa1
+aws s3 cp timetable.pdf  s3://prod-itsmyskool-cpsat/runs/vgbevigu1fa1/timetable.pdf  --profile prod-itsmyskool-nikhil.agrawal --region ap-south-1
+aws s3 cp timetable.xlsx s3://prod-itsmyskool-cpsat/runs/vgbevigu1fa1/timetable.xlsx --profile prod-itsmyskool-nikhil.agrawal --region ap-south-1
+```
+
+# CPSAT with local gateway at port 6000
+node scripts/local/cpsat-dump-worker.js --port 6000
+node scripts/local/cpsat-import-worker.js --port 6000
+uv run /mnt/h/github/itsmyskool/core-api/modules/timetable/cpsat/poller.py
+
+

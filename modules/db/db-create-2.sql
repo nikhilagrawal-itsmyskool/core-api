@@ -8,7 +8,8 @@ create table if not exists file_storage (
     file_name varchar(256) not null,
     mime_type varchar(128) not null,
     size_bytes integer not null,
-    data text not null,
+    data text,                    -- nullable: object bytes live in S3 once migrated (see db-create-4)
+    storage_key varchar(512),     -- S3 object key; null = legacy row still stored in the data column
     entity_type varchar(64) not null,
     entity_id varchar(12) not null,
     school_id varchar(12) not null,
@@ -18,3 +19,4 @@ create table if not exists file_storage (
 
 create index if not exists idx_file_storage_entity on file_storage(entity_type, entity_id);
 create index if not exists idx_file_storage_school on file_storage(school_id);
+create index if not exists idx_file_storage_storage_key on file_storage(storage_key);

@@ -5,13 +5,21 @@ POSTGRES_DATABASE: 'itsmyskool_prod'
 POSTGRES_USERNAME: 'postgres'
 POSTGRES_PASSWORD: 'DCmBQd9aHVXOxNGJwzLvCXfUKWoc'
 POSTGRES_PORT: '5432'
-POSTGRES_SSL: 'false'
+POSTGRES_SSL: 'true'
+
+# Object storage: file_storage objects go to this S3 bucket (see shared/lib/file-storage.ts).
+# Presence of this var switches the service from Postgres to S3.
+FILE_STORAGE_BUCKET: 'prod-itsmyskool-file-storage'
+
+# CP-SAT timetable run artifacts (rendered pdf/xlsx). getRunExport falls back to reading
+# runs/<runId>/timetable.<ext> from here when the file isn't on local disk (i.e. in Lambda).
+CPSAT_S3_BUCKET: 'prod-itsmyskool-cpsat'
 
 JWT_SECRET: 'RgRX2tTs3hwcFGnJ*7zplHukK&opgdvxTzbucpP%*0BxV@E1'
 JWT_ADMIN_EXPIRY_TIME: '8h'
 
 # Communication: base URL other modules use to call its REST endpoints (via the API domain).
-COMM_BASE_URL: 'https://api.itsmyskool.com'
+COMM_BASE_URL: 'https://api-prod.itsmyskool.com'
 
 # Messaging provider + MSG91 credentials (fill in for prod).
 COMM_PROVIDER: 'msg91'

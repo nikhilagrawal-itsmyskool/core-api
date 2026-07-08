@@ -35,7 +35,10 @@ class LookupHandler {
     try {
       const schoolId = await resolveSchoolId(event, callback);
       if (!schoolId) return;
-      const type = event.pathParameters?.type as LookupType | undefined;
+      // Route is lookups/{id}; the segment carries the lookup type. Fall back to
+      // {type} for compatibility. Single var name avoids API Gateway's "one variable
+      // path part per parent" limit (sibling of lookups/{id} used by update/delete).
+      const type = (event.pathParameters?.id ?? event.pathParameters?.type) as LookupType | undefined;
       const result = await lookupService.list(type, schoolId, userIdOf(event));
       ResponseBuilder.ok({ lookups: result }, callback);
     } catch (err: any) {
