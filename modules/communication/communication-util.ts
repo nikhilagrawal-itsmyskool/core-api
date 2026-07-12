@@ -101,6 +101,22 @@ export function employeeNumbers(row: any): Record<string, string | null | undefi
   };
 }
 
+// Per-recipient context the worker auto-injects from a student/employee row.
+// These variables are filled by the system, NOT supplied by the sender — so the
+// Compose UI subtracts them from a template's variables and only prompts for the
+// rest. `AUTO_CONTEXT_KEYS` is the authoritative list (exposed via the lookups
+// endpoint); `autoContext` builds the actual values. Keep the two in sync.
+export const AUTO_CONTEXT_KEYS: Record<RecipientType, string[]> = {
+  student: ['recipientName', 'studentName', 'admissionNumber'],
+  employee: ['recipientName', 'employeeName'],
+};
+
+export function autoContext(type: RecipientType, row: any): Record<string, string> {
+  return type === 'student'
+    ? { recipientName: row.name, studentName: row.name, admissionNumber: row.admissionNumber }
+    : { recipientName: row.name, employeeName: row.name };
+}
+
 // Resolve a template's ordered variables from a context object. Returns the
 // ordered values plus any names that were missing/empty (so the caller can skip
 // a recipient before sending an under-filled template).

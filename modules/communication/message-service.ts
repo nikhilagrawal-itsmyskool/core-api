@@ -6,7 +6,7 @@ import {
   AudienceSpec, AudienceTarget, MessageJob, MessageRecipient,
   SendMessageRequest, PreviewRequest,
 } from './communication-interfaces';
-import { resolveLadder, resolveVariables, studentNumbers, employeeNumbers } from './communication-util';
+import { resolveLadder, resolveVariables, studentNumbers, employeeNumbers, autoContext } from './communication-util';
 import { templateService } from './template-service';
 import { getProvider } from './providers';
 const { generateShortUuid } = require('../../shared/util/generate-uuid.js');
@@ -326,7 +326,7 @@ class MessageService {
         name: row.name,
         preference: row.communicationPreference,
         numbers: studentNumbers(row),
-        context: { studentName: row.name, admissionNumber: row.admissionNumber, recipientName: row.name },
+        context: autoContext('student', row),
       });
     }
 
@@ -365,7 +365,7 @@ class MessageService {
         name: row.name,
         preference: row.communicationPreference,
         numbers: employeeNumbers(row),
-        context: { employeeName: row.name, recipientName: row.name },
+        context: autoContext('employee', row),
       });
     }
 

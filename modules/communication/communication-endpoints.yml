@@ -17,6 +17,17 @@
           method: get
           cors: true
 
+  # Auto-injected per-recipient variables (by audience type + union). The Compose
+  # UI subtracts these from a template's `variables` to decide which values to prompt.
+  get-variables:
+    handler: communication-lookup-handler.getVariables
+    name: ${self:service}-get-variables
+    events:
+      - http:
+          path: lookups/variables
+          method: get
+          cors: true
+
   # Template endpoints
   list-templates:
     handler: template-handler.list
