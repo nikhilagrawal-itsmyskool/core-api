@@ -87,12 +87,12 @@ class StudentAdminService {
         insert into student
         (uuid, admission_number, name, gender, dob, family_unique_number,
          communication_preference, old_admission_number, house_id,
-         student_email, student_mobile, category_code, nationality_code,
+         student_email, student_mobile, student_whatsapp, category_code, nationality_code,
          mother_tongue_code, blood_group_code, aadhaar_number, previous_school,
          admission_date, withdrawal_date, withdrawal_remarks, status,
          school_id, createdby_userid, created_at)
         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
-                $16, $17, $18, $19, $20, $21, $22, $23, $24)
+                $16, $17, $18, $19, $20, $21, $22, $23, $24, $25)
       `,
       [
         uuid,
@@ -106,6 +106,7 @@ class StudentAdminService {
         data.houseId || null,
         data.studentEmail || null,
         data.studentMobile || null,
+        data.studentWhatsapp || null,
         data.categoryCode || null,
         data.nationalityCode || null,
         data.motherTongueCode || null,
@@ -199,6 +200,7 @@ class StudentAdminService {
     if (data.houseId !== undefined) set('house_id', data.houseId);
     if (data.studentEmail !== undefined) set('student_email', data.studentEmail);
     if (data.studentMobile !== undefined) set('student_mobile', data.studentMobile);
+    if (data.studentWhatsapp !== undefined) set('student_whatsapp', data.studentWhatsapp);
     if (data.categoryCode !== undefined) set('category_code', data.categoryCode);
     if (data.nationalityCode !== undefined) set('nationality_code', data.nationalityCode);
     if (data.motherTongueCode !== undefined) set('mother_tongue_code', data.motherTongueCode);
@@ -242,7 +244,7 @@ class StudentAdminService {
           s.uuid, s.admission_number, s.name, s.gender, s.dob, s.family_unique_number,
           s.communication_preference, s.old_admission_number, s.status, s.school_id,
           s.house_id, h.name as house_name, h.color as house_color,
-          s.student_email, s.student_mobile, s.category_code, s.nationality_code,
+          s.student_email, s.student_mobile, s.student_whatsapp, s.category_code, s.nationality_code,
           s.mother_tongue_code, s.blood_group_code, s.aadhaar_number, s.previous_school,
           s.admission_date, s.withdrawal_date, s.withdrawal_remarks,
           cur.academic_year_id as current_academic_year_id,

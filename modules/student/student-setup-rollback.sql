@@ -19,6 +19,7 @@ alter table student_class drop column if exists join_date;
 
 alter table student drop column if exists student_email;
 alter table student drop column if exists student_mobile;
+alter table student drop column if exists student_whatsapp;
 alter table student drop column if exists category_code;
 alter table student drop column if exists nationality_code;
 alter table student drop column if exists mother_tongue_code;

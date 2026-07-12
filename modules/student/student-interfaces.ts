@@ -30,6 +30,7 @@ export interface StudentCoreFields {
   // extended demographics
   studentEmail?: string;
   studentMobile?: string;
+  studentWhatsapp?: string;
   categoryCode?: string;
   nationalityCode?: string;
   motherTongueCode?: string;
@@ -78,6 +79,7 @@ export interface StudentDetail {
   // extended demographics
   studentEmail?: string;
   studentMobile?: string;
+  studentWhatsapp?: string;
   categoryCode?: string;
   nationalityCode?: string;
   motherTongueCode?: string;

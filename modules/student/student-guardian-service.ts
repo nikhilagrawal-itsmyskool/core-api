@@ -6,6 +6,29 @@ import { GUARDIAN_RELATIONS, DEFAULTS } from './student-constants';
 const { generateShortUuid } = require('../../shared/util/generate-uuid.js');
 
 class StudentGuardianService {
+  // Only one active guardian per student may be the primary contact — clear the
+  // flag on the others when a new primary is set.
+  private async demoteOtherPrimaries(
+    studentId: string,
+    schoolId: string,
+    exceptUuid: string | null,
+    userId: string
+  ): Promise<void> {
+    const params: any[] = [userId, new Date(), studentId, schoolId];
+    let exclude = '';
+    if (exceptUuid) {
+      params.push(exceptUuid);
+      exclude = `and uuid <> $${params.length}`;
+    }
+    await DB.query(
+      singleLineString`
+        update student_guardian set is_primary_contact = false, updatedby_userid = $1, updated_at = $2
+        where student_id = $3 and school_id = $4 and status = 'active' and is_primary_contact = true ${exclude}
+      `,
+      params
+    );
+  }
+
   public async list(studentId: string, schoolId: string): Promise<Guardian[]> {
     return DB.query(
       singleLineString`
@@ -84,6 +107,7 @@ class StudentGuardianService {
         now,
       ]
     );
+    if (data.isPrimaryContact) await this.demoteOtherPrimaries(studentId, schoolId, uuid, userId);
     return rows[0];
   }
 
@@ -132,6 +156,9 @@ class StudentGuardianService {
        returning *`,
       params
     );
+    if (rows.length > 0 && data.isPrimaryContact) {
+      await this.demoteOtherPrimaries(rows[0].studentId, schoolId, id, userId);
+    }
     return rows.length > 0 ? rows[0] : null;
   }
 

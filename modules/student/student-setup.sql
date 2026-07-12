@@ -77,6 +77,7 @@ create index if not exists idx_student_guardian_student on student_guardian(scho
 -- student — new demographic / identity / lifecycle columns.
 alter table student add column if not exists student_email varchar(255);
 alter table student add column if not exists student_mobile varchar(20);
+alter table student add column if not exists student_whatsapp varchar(20);
 alter table student add column if not exists category_code varchar(32);       -- lookup: category
 alter table student add column if not exists nationality_code varchar(32);     -- lookup: nationality
 alter table student add column if not exists mother_tongue_code varchar(32);   -- lookup: mother_tongue
