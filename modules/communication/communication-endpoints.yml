@@ -113,6 +113,22 @@
           method: post
           cors: true
 
+  # The AWS "worker": an EventBridge schedule drains the queue every minute,
+  # looping processNext until empty or ~50s spent. Replaces the local Node poller
+  # (scripts/local/communication-worker.js) in deployed stages. Correctness under
+  # overlapping ticks is guaranteed by `for update skip locked`; the drain is also
+  # time-boxed under its timeout and exits when the queue is empty, so overlaps are
+  # unlikely and harmless. (No reservedConcurrency: it would drop the account's
+  # unreserved concurrency pool below AWS's minimum of 10.)
+  drain-messages:
+    handler: message-handler.drain
+    name: ${self:service}-drain-messages
+    timeout: 60
+    events:
+      - schedule:
+          rate: rate(1 minute)
+          enabled: true
+
   get-message:
     handler: message-handler.getById
     name: ${self:service}-get-message

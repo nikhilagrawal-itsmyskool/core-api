@@ -1,7 +1,7 @@
 import { DB, singleLineString } from '../../shared/lib/db';
 import { BusinessErrorResult } from '../../shared/lib/errors';
 import { ErrorCode } from '../../shared/lib/error-codes';
-import { Channel, DEFAULTS } from './communication-constants';
+import { Channel, DEFAULTS, RETRY } from './communication-constants';
 import {
   AudienceSpec, AudienceTarget, MessageJob, MessageRecipient,
   SendMessageRequest, PreviewRequest,
@@ -128,8 +128,9 @@ class MessageService {
       const counts = await this.expandAndSend(job);
       return { claimed: true, jobId: job.uuid, status: 'completed', counts };
     } catch (err: any) {
-      await this.markFailed(job.uuid, err.message || String(err));
-      return { claimed: true, jobId: job.uuid, status: 'failed', error: err.message || String(err) };
+      const message = err.message || String(err);
+      const outcome = await this.markFailedOrRetry(job, err);
+      return { claimed: true, jobId: job.uuid, status: outcome, error: message };
     }
   }
 
@@ -229,6 +230,37 @@ class MessageService {
       `,
       [String(error).slice(0, 2000), jobId],
     );
+  }
+
+  // Decide a failed job's fate. `attempts` was already incremented when the job
+  // was claimed, so it reflects the attempt that just failed. A BusinessErrorResult
+  // is a permanent config problem (e.g. no active template) — no point retrying,
+  // so fail immediately. Otherwise (transient/unexpected) we requeue with
+  // exponential backoff until the cap, then fail terminally. Returns the resulting
+  // status for the worker log.
+  private async markFailedOrRetry(job: MessageJob, err: any): Promise<'retry' | 'failed'> {
+    const message = err?.message || String(err);
+    const permanent = err instanceof BusinessErrorResult;
+    const attempts = job.attempts || 0;
+    if (permanent || attempts >= RETRY.MAX_ATTEMPTS) {
+      await this.markFailed(job.uuid, message);
+      return 'failed';
+    }
+    const backoffSeconds = Math.min(
+      RETRY.MAX_BACKOFF_SECONDS,
+      RETRY.BASE_BACKOFF_SECONDS * Math.pow(2, attempts - 1),
+    );
+    const nextAt = new Date(Date.now() + backoffSeconds * 1000);
+    await DB.query(
+      singleLineString`
+        update message_job
+        set status = 'queued', scheduled_at = $1, worker_id = null, started_at = null,
+            error = $2, updated_at = now()
+        where uuid = $3
+      `,
+      [nextAt, String(message).slice(0, 2000), job.uuid],
+    );
+    return 'retry';
   }
 
   // ------------------------------------------------------------- webhook

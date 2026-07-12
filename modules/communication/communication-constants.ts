@@ -31,6 +31,17 @@ export const DEFAULTS = {
   PROVIDER: process.env.COMM_PROVIDER || 'stub',
 } as const;
 
+// Job-level retry policy. A job that throws (e.g. no active template, DB blip,
+// audience-resolution error) is requeued with exponential backoff until
+// MAX_ATTEMPTS is exhausted, then marked terminally failed. Note: this governs
+// whole-job failures only; a single recipient's send failure is recorded on its
+// message_recipient row and does not retry.
+export const RETRY = {
+  MAX_ATTEMPTS: 5,
+  BASE_BACKOFF_SECONDS: 30,
+  MAX_BACKOFF_SECONDS: 900,
+} as const;
+
 export type TemplateStatus = typeof TEMPLATE_STATUSES[number];
 export type HeaderType = typeof HEADER_TYPES[number];
 export type JobStatus = typeof JOB_STATUSES[number];

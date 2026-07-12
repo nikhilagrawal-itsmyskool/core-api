@@ -91,6 +91,32 @@ class MessageHandler {
     }
   };
 
+  // Internal: drain the queue. The AWS worker — invoked by an EventBridge
+  // schedule (rate(1 minute)) rather than an HTTP request. Loops processNext
+  // until the queue is empty or a time budget (kept under the function timeout)
+  // is spent, so a burst clears in one tick instead of one job per minute.
+  // Concurrency-safe via `for update skip locked`; reservedConcurrency:1 avoids
+  // overlapping drains piling up.
+  public drain = async (_event: ApiEvent, context: ApiContext, callback: ApiCallback) => {
+    context.callbackWaitsForEmptyEventLoop = false;
+    const workerId = `drain-${(context as any).awsRequestId || Date.now()}`.slice(0, 64);
+    const deadline = Date.now() + 50_000; // stay under the 60s function timeout
+    const tally = { processed: 0, completed: 0, retried: 0, failed: 0 };
+    try {
+      while (Date.now() < deadline) {
+        const r = await messageService.processNext(workerId);
+        if (!r.claimed) break; // queue drained
+        tally.processed++;
+        if (r.status === 'completed') tally.completed++;
+        else if (r.status === 'retry') tally.retried++;
+        else if (r.status === 'failed') tally.failed++;
+      }
+      ResponseBuilder.ok(tally, callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
   // Provider delivery-status callback. Authenticated by a provider secret in real
   // adapters; the stub never calls it. Generic payload: { providerMessageId, status }.
   public webhook = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
@@ -115,4 +141,5 @@ export const list = handler.list;
 export const getById = handler.getById;
 export const cancel = handler.cancel;
 export const processNext = handler.processNext;
+export const drain = handler.drain;
 export const webhook = handler.webhook;
