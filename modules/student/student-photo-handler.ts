@@ -33,6 +33,7 @@ class StudentPhotoHandler {
       if (!event.body) { ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'Request body is required', callback); return; }
 
       const body: UploadPhotoRequest = JSON.parse(event.body);
+      body.variant = event.queryStringParameters?.variant || body.variant;
       const result = await studentPhotoService.upload(entityType, entityId, body, schoolId, userId(event));
       ResponseBuilder.ok(result, callback);
     } catch (err: any) {
@@ -50,7 +51,8 @@ class StudentPhotoHandler {
       const entityId = event.pathParameters?.entityId;
       if (!entityType || !entityId) { ResponseBuilder.badRequest(ErrorCode.MissingId, 'entityType and entityId are required', callback); return; }
 
-      const result = await studentPhotoService.getLatestWithData(entityType, entityId, schoolId);
+      const variant = event.queryStringParameters?.variant || 'original';
+      const result = await studentPhotoService.getLatestWithData(entityType, entityId, schoolId, variant);
       if (!result) { ResponseBuilder.notFound(ErrorCode.InvalidId, 'Photo not found', callback); return; }
       ResponseBuilder.ok(result, callback);
     } catch (err: any) {
@@ -68,7 +70,10 @@ class StudentPhotoHandler {
       const entityId = event.pathParameters?.entityId;
       if (!entityType || !entityId) { ResponseBuilder.badRequest(ErrorCode.MissingId, 'entityType and entityId are required', callback); return; }
 
-      const count = await studentPhotoService.deleteAll(entityType, entityId, schoolId);
+      const variant = event.queryStringParameters?.variant;
+      const count = variant
+        ? await studentPhotoService.deleteVariant(entityType, entityId, schoolId, variant)
+        : await studentPhotoService.deleteAll(entityType, entityId, schoolId);
       ResponseBuilder.ok({ message: 'Photo deleted', deleted: count }, callback);
     } catch (err: any) {
       ResponseBuilder.handleError(err, callback);

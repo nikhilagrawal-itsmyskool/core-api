@@ -12,7 +12,12 @@ class StudentGuardianService {
         select g.*,
           (select fs.uuid from file_storage fs
              where fs.entity_type = 'guardian' and fs.entity_id = g.uuid and fs.school_id = g.school_id
-             order by fs.created_at desc limit 1) as photo_id
+               and (fs.variant = 'original' or fs.variant is null)
+             order by fs.created_at desc limit 1) as photo_id,
+          (select fs.uuid from file_storage fs
+             where fs.entity_type = 'guardian' and fs.entity_id = g.uuid and fs.school_id = g.school_id
+               and fs.variant = 'thumb'
+             order by fs.created_at desc limit 1) as photo_thumb_id
         from student_guardian g
         where g.student_id = $1 and g.school_id = $2 and g.status = 'active'
         order by
@@ -52,9 +57,10 @@ class StudentGuardianService {
     const rows = await DB.query(
       singleLineString`
         insert into student_guardian
-        (uuid, school_id, student_id, relation, name, occupation, address,
+        (uuid, school_id, student_id, relation, relationship, name, occupation,
+         designation, organisation, education, address,
          mobile, whatsapp, email, is_primary_contact, status, createdby_userid, created_at)
-        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
         returning *
       `,
       [
@@ -62,8 +68,12 @@ class StudentGuardianService {
         schoolId,
         studentId,
         data.relation,
+        data.relationship || null,
         data.name || null,
         data.occupation || null,
+        data.designation || null,
+        data.organisation || null,
+        data.education || null,
         data.address || null,
         data.mobile || null,
         data.whatsapp || null,
@@ -98,8 +108,12 @@ class StudentGuardianService {
     };
 
     if (data.relation !== undefined) set('relation', data.relation);
+    if (data.relationship !== undefined) set('relationship', data.relationship);
     if (data.name !== undefined) set('name', data.name);
     if (data.occupation !== undefined) set('occupation', data.occupation);
+    if (data.designation !== undefined) set('designation', data.designation);
+    if (data.organisation !== undefined) set('organisation', data.organisation);
+    if (data.education !== undefined) set('education', data.education);
     if (data.address !== undefined) set('address', data.address);
     if (data.mobile !== undefined) set('mobile', data.mobile);
     if (data.whatsapp !== undefined) set('whatsapp', data.whatsapp);

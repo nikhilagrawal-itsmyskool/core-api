@@ -1,0 +1,46 @@
+  # Health check
+  health:
+    handler: health-handler.health
+    events:
+      - http:
+          path: health
+          method: get
+          cors: true
+
+  # School-wide TC list / search
+  list-all-tc:
+    handler: transfer-handler.listAll
+    name: ${self:service}-list-all-tc
+    events:
+      - http:
+          path: tc
+          method: get
+          cors: true
+
+  # ── Transfer Certificates (per student) ───────────────────────────────────
+  list-tc:
+    handler: transfer-handler.list
+    name: ${self:service}-list-tc
+    events:
+      - http:
+          path: students/{id}/tc
+          method: get
+          cors: true
+
+  create-tc:
+    handler: transfer-handler.create
+    name: ${self:service}-create-tc
+    events:
+      - http:
+          path: students/{id}/tc
+          method: post
+          cors: true
+
+  update-tc:
+    handler: transfer-handler.update
+    name: ${self:service}-update-tc
+    events:
+      - http:
+          path: students/{id}/tc/{tcId}
+          method: put
+          cors: true

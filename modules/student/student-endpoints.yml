@@ -80,6 +80,52 @@
           method: delete
           cors: true
 
+  # ---- Lookups (per-school reference data) ----
+  list-lookups:
+    handler: student-lookup-handler.list
+    name: ${self:service}-list-lookups
+    events:
+      - http:
+          path: lookups
+          method: get
+          cors: true
+
+  create-lookup:
+    handler: student-lookup-handler.create
+    name: ${self:service}-create-lookup
+    events:
+      - http:
+          path: lookups
+          method: post
+          cors: true
+
+  suggest-pincode:
+    handler: student-lookup-handler.suggestByPincode
+    name: ${self:service}-suggest-pincode
+    events:
+      - http:
+          path: lookups/pincode/{pincode}
+          method: get
+          cors: true
+
+  update-lookup:
+    handler: student-lookup-handler.update
+    name: ${self:service}-update-lookup
+    events:
+      - http:
+          path: lookups/{id}
+          method: put
+          cors: true
+
+  delete-lookup:
+    handler: student-lookup-handler.remove
+    name: ${self:service}-delete-lookup
+    events:
+      - http:
+          path: lookups/{id}
+          method: delete
+          cors: true
+
   # ---- Photos (student | guardian) ----
   upload-photo:
     handler: student-photo-handler.upload
@@ -170,6 +216,71 @@
     events:
       - http:
           path: '{id}/guardians/{guardianId}'
+          method: delete
+          cors: true
+
+  # ---- Addresses (nested under a student) ----
+  list-addresses:
+    handler: student-address-handler.list
+    name: ${self:service}-list-addresses
+    events:
+      - http:
+          path: '{id}/addresses'
+          method: get
+          cors: true
+
+  create-address:
+    handler: student-address-handler.create
+    name: ${self:service}-create-address
+    events:
+      - http:
+          path: '{id}/addresses'
+          method: post
+          cors: true
+
+  update-address:
+    handler: student-address-handler.update
+    name: ${self:service}-update-address
+    events:
+      - http:
+          path: '{id}/addresses/{addressId}'
+          method: put
+          cors: true
+
+  delete-address:
+    handler: student-address-handler.remove
+    name: ${self:service}-delete-address
+    events:
+      - http:
+          path: '{id}/addresses/{addressId}'
+          method: delete
+          cors: true
+
+  # ---- Siblings (nested under a student) ----
+  list-siblings:
+    handler: student-sibling-handler.list
+    name: ${self:service}-list-siblings
+    events:
+      - http:
+          path: '{id}/siblings'
+          method: get
+          cors: true
+
+  create-sibling:
+    handler: student-sibling-handler.create
+    name: ${self:service}-create-sibling
+    events:
+      - http:
+          path: '{id}/siblings'
+          method: post
+          cors: true
+
+  delete-sibling:
+    handler: student-sibling-handler.remove
+    name: ${self:service}-delete-sibling
+    events:
+      - http:
+          path: '{id}/siblings/{siblingId}'
           method: delete
           cors: true
 

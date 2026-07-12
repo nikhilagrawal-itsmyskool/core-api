@@ -11,6 +11,7 @@ export interface FileUploadInput {
   entityId: string;
   schoolId: string;
   userId: string;
+  variant?: string; // 'original' (default) | 'thumb'
 }
 
 export interface StoredFile {
@@ -20,6 +21,7 @@ export interface StoredFile {
   sizeBytes: number;
   entityType: string;
   entityId: string;
+  variant?: string;
   schoolId: string;
   createdbyUserid: string;
   createdAt: Date;
@@ -44,8 +46,8 @@ class PostgresFileStorageService implements IFileStorageService {
 
     const query = singleLineString`
       insert into file_storage
-      (uuid, file_name, mime_type, size_bytes, data, entity_type, entity_id, school_id, createdby_userid, created_at)
-      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      (uuid, file_name, mime_type, size_bytes, data, entity_type, entity_id, variant, school_id, createdby_userid, created_at)
+      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
     `;
 
     const params = [
@@ -56,6 +58,7 @@ class PostgresFileStorageService implements IFileStorageService {
       input.base64Data,
       input.entityType,
       input.entityId,
+      input.variant || 'original',
       input.schoolId,
       input.userId,
       now,
@@ -67,7 +70,7 @@ class PostgresFileStorageService implements IFileStorageService {
 
   public async getMetadata(uuid: string, schoolId: string): Promise<StoredFile | null> {
     const query = singleLineString`
-      select uuid, file_name, mime_type, size_bytes, entity_type, entity_id, school_id, createdby_userid, created_at
+      select uuid, file_name, mime_type, size_bytes, entity_type, entity_id, variant, school_id, createdby_userid, created_at
       from file_storage
       where uuid = $1 and school_id = $2
     `;
@@ -77,7 +80,7 @@ class PostgresFileStorageService implements IFileStorageService {
 
   public async getWithData(uuid: string, schoolId: string): Promise<StoredFileWithData | null> {
     const query = singleLineString`
-      select uuid, file_name, mime_type, size_bytes, data, entity_type, entity_id, school_id, createdby_userid, created_at
+      select uuid, file_name, mime_type, size_bytes, data, entity_type, entity_id, variant, school_id, createdby_userid, created_at
       from file_storage
       where uuid = $1 and school_id = $2
     `;
@@ -98,13 +101,13 @@ class PostgresFileStorageService implements IFileStorageService {
 const s3 = new S3Client({});
 const FILE_STORAGE_BUCKET = process.env.FILE_STORAGE_BUCKET as string;
 
-// S3 key scheme: {schoolId}/{entityType}/{entityId}/{uuid}{ext}
+// S3 key scheme: {schoolId}/{entityType}/{entityId}/{variant}/{uuid}{ext}
 // IMPORTANT: keep this in sync with scripts/migrate-file-storage-to-s3.js
 export function buildStorageKey(f: {
-  schoolId: string; entityType: string; entityId: string; uuid: string; fileName: string;
+  schoolId: string; entityType: string; entityId: string; uuid: string; fileName: string; variant?: string;
 }): string {
   const ext = extname(f.fileName || '');
-  return `${f.schoolId}/${f.entityType}/${f.entityId}/${f.uuid}${ext}`;
+  return `${f.schoolId}/${f.entityType}/${f.entityId}/${f.variant || 'original'}/${f.uuid}${ext}`;
 }
 
 class S3FileStorageService implements IFileStorageService {
@@ -124,13 +127,13 @@ class S3FileStorageService implements IFileStorageService {
 
     const query = singleLineString`
       insert into file_storage
-      (uuid, file_name, mime_type, size_bytes, data, storage_key, entity_type, entity_id, school_id, createdby_userid, created_at)
-      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      (uuid, file_name, mime_type, size_bytes, data, storage_key, entity_type, entity_id, variant, school_id, createdby_userid, created_at)
+      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
     `;
     const params = [
       uuid, input.fileName, input.mimeType, sizeBytes,
       null, storageKey,
-      input.entityType, input.entityId, input.schoolId, input.userId, now,
+      input.entityType, input.entityId, input.variant || 'original', input.schoolId, input.userId, now,
     ];
     await DB.query(query, params);
     return this.getMetadata(uuid, input.schoolId) as Promise<StoredFile>;
@@ -138,7 +141,7 @@ class S3FileStorageService implements IFileStorageService {
 
   public async getMetadata(uuid: string, schoolId: string): Promise<StoredFile | null> {
     const query = singleLineString`
-      select uuid, file_name, mime_type, size_bytes, entity_type, entity_id, school_id, createdby_userid, created_at
+      select uuid, file_name, mime_type, size_bytes, entity_type, entity_id, variant, school_id, createdby_userid, created_at
       from file_storage
       where uuid = $1 and school_id = $2
     `;
@@ -148,7 +151,7 @@ class S3FileStorageService implements IFileStorageService {
 
   public async getWithData(uuid: string, schoolId: string): Promise<StoredFileWithData | null> {
     const query = singleLineString`
-      select uuid, file_name, mime_type, size_bytes, data, storage_key, entity_type, entity_id, school_id, createdby_userid, created_at
+      select uuid, file_name, mime_type, size_bytes, data, storage_key, entity_type, entity_id, variant, school_id, createdby_userid, created_at
       from file_storage
       where uuid = $1 and school_id = $2
     `;

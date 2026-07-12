@@ -19,32 +19,45 @@ export interface StudentWithClass extends Student {
 
 // ---- Admin: full student record ----
 
-export interface CreateStudentRequest {
-  name: string;
-  admissionNumber: string;
-  gender?: string;
-  dob?: string;
-  familyUniqueNumber?: string;
-  oldAdmissionNumber?: string;
-  communicationPreference?: string;
-  houseId?: string;
-  // Optional initial enrollment
-  academicYearId?: string;
-  classId?: string;
-  rollNumber?: number;
-  // Optional inline guardians
-  guardians?: CreateGuardianRequest[];
-}
-
-export interface UpdateStudentRequest {
-  name?: string;
-  admissionNumber?: string;
+// Demographic / identity / lifecycle fields shared by create & update.
+export interface StudentCoreFields {
   gender?: string;
   dob?: string;
   familyUniqueNumber?: string;
   oldAdmissionNumber?: string;
   communicationPreference?: string;
   houseId?: string | null;
+  // extended demographics
+  studentEmail?: string;
+  studentMobile?: string;
+  categoryCode?: string;
+  nationalityCode?: string;
+  motherTongueCode?: string;
+  bloodGroupCode?: string;
+  aadhaarNumber?: string;
+  previousSchool?: string;
+  // lifecycle
+  admissionDate?: string;
+  withdrawalDate?: string;
+  withdrawalRemarks?: string;
+}
+
+export interface CreateStudentRequest extends StudentCoreFields {
+  name: string;
+  admissionNumber: string;
+  // Optional initial enrollment
+  academicYearId?: string;
+  classId?: string;
+  rollNumber?: number;
+  joinDate?: string;
+  // Optional inline guardians / addresses
+  guardians?: CreateGuardianRequest[];
+  addresses?: CreateAddressRequest[];
+}
+
+export interface UpdateStudentRequest extends StudentCoreFields {
+  name?: string;
+  admissionNumber?: string;
   status?: string;
 }
 
@@ -62,6 +75,18 @@ export interface StudentDetail {
   houseId?: string;
   houseName?: string;
   houseColor?: string;
+  // extended demographics
+  studentEmail?: string;
+  studentMobile?: string;
+  categoryCode?: string;
+  nationalityCode?: string;
+  motherTongueCode?: string;
+  bloodGroupCode?: string;
+  aadhaarNumber?: string;
+  previousSchool?: string;
+  admissionDate?: string;
+  withdrawalDate?: string;
+  withdrawalRemarks?: string;
   currentAcademicYearId?: string;
   currentAcademicYearName?: string;
   currentClassId?: string;
@@ -69,7 +94,10 @@ export interface StudentDetail {
   currentRollNumber?: number;
   guardians: Guardian[];
   enrollments: EnrollmentRow[];
+  addresses: StudentAddress[];
+  siblings: SiblingRef[];
   photoId?: string;
+  photoThumbId?: string;
 }
 
 export interface EnrollmentRow {
@@ -79,7 +107,72 @@ export interface EnrollmentRow {
   classId?: string;
   className?: string;
   rollNumber?: number;
+  joinDate?: string;
   status?: string;
+}
+
+// ---- Addresses ----
+
+export interface StudentAddress {
+  uuid: string;
+  studentId: string;
+  schoolId: string;
+  isPermanent?: boolean;
+  isCommunication?: boolean;
+  line?: string;
+  localityCode?: string;
+  cityCode?: string;
+  stateCode?: string;
+  countryCode?: string;
+  pincode?: string;
+  status: string;
+}
+
+export interface CreateAddressRequest {
+  isPermanent?: boolean;
+  isCommunication?: boolean;
+  line?: string;
+  localityCode?: string;
+  cityCode?: string;
+  stateCode?: string;
+  countryCode?: string;
+  pincode?: string;
+}
+
+export interface UpdateAddressRequest extends Partial<CreateAddressRequest> {}
+
+// ---- Siblings ----
+
+export interface SiblingRef {
+  uuid: string;            // student_sibling row uuid
+  siblingStudentId: string;
+  admissionNumber?: string;
+  name?: string;
+  className?: string;
+}
+
+// ---- Lookups ----
+
+export interface StudentLookup {
+  uuid: string;
+  schoolId: string;
+  lookupType: string;
+  code: string;
+  label?: string;
+  extra?: any;
+  status: string;
+}
+
+export interface CreateLookupRequest {
+  lookupType: string;
+  code: string;
+  label?: string;
+  extra?: any;
+}
+
+export interface UpdateLookupRequest {
+  label?: string;
+  extra?: any;
 }
 
 // ---- Guardians ----
@@ -89,8 +182,12 @@ export interface Guardian {
   studentId: string;
   schoolId: string;
   relation: string;
+  relationship?: string;
   name?: string;
   occupation?: string;
+  designation?: string;
+  organisation?: string;
+  education?: string;
   address?: string;
   mobile?: string;
   whatsapp?: string;
@@ -98,12 +195,17 @@ export interface Guardian {
   isPrimaryContact?: boolean;
   status: string;
   photoId?: string;
+  photoThumbId?: string;
 }
 
 export interface CreateGuardianRequest {
   relation: string;
+  relationship?: string;
   name?: string;
   occupation?: string;
+  designation?: string;
+  organisation?: string;
+  education?: string;
   address?: string;
   mobile?: string;
   whatsapp?: string;
@@ -141,6 +243,7 @@ export interface UploadPhotoRequest {
   fileName: string;
   mimeType: string;
   base64Data: string;
+  variant?: string; // 'original' (default) | 'thumb'
 }
 
 // ---- Promotion lifecycle ----

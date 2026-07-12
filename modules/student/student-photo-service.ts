@@ -54,18 +54,20 @@ class StudentPhotoService {
         `Image too large (max ${Math.round(PHOTO_MAX_BYTES / (1024 * 1024))} MB)`
       );
     }
+    const variant = data.variant === 'thumb' ? 'thumb' : 'original';
 
     await this.assertEntityExists(entityType, entityId, schoolId);
 
-    // One photo per entity: remove any prior photos first.
-    await this.deleteAll(entityType, entityId, schoolId);
+    // One photo per entity per variant: remove any prior photo of this variant.
+    await this.deleteVariant(entityType, entityId, schoolId, variant);
 
     return fileStorageService.upload({
-      fileName: data.fileName || `${entityType}-${entityId}.img`,
+      fileName: data.fileName || `${entityType}-${entityId}-${variant}.img`,
       mimeType: data.mimeType,
       base64Data: data.base64Data,
       entityType,
       entityId,
+      variant,
       schoolId,
       userId,
     });
@@ -74,19 +76,43 @@ class StudentPhotoService {
   public async getLatestWithData(
     entityType: string,
     entityId: string,
-    schoolId: string
+    schoolId: string,
+    variant: string = 'original'
   ): Promise<StoredFileWithData | null> {
     this.assertValidType(entityType);
     const rows = await DB.query(
       singleLineString`
         select uuid from file_storage
         where entity_type = $1 and entity_id = $2 and school_id = $3
+          and (variant = $4 or (variant is null and $4 = 'original'))
         order by created_at desc limit 1
       `,
-      [entityType, entityId, schoolId]
+      [entityType, entityId, schoolId, variant]
     );
     if (rows.length === 0) return null;
     return fileStorageService.getWithData(rows[0].uuid, schoolId);
+  }
+
+  // Delete a single variant (null variant counts as 'original').
+  public async deleteVariant(
+    entityType: string,
+    entityId: string,
+    schoolId: string,
+    variant: string
+  ): Promise<number> {
+    this.assertValidType(entityType);
+    const rows = await DB.query(
+      singleLineString`
+        select uuid from file_storage
+        where entity_type = $1 and entity_id = $2 and school_id = $3
+          and (variant = $4 or (variant is null and $4 = 'original'))
+      `,
+      [entityType, entityId, schoolId, variant]
+    );
+    for (const r of rows) {
+      await fileStorageService.delete(r.uuid, schoolId);
+    }
+    return rows.length;
   }
 
   public async deleteAll(

@@ -68,3 +68,100 @@ create table if not exists student_guardian (
 );
 
 create index if not exists idx_student_guardian_student on student_guardian(school_id, student_id, status);
+
+-- =====================================================================
+-- Phase 2 — full student record (demographics, addresses, lookups,
+-- siblings, photo variants). All additive; safe to re-run.
+-- =====================================================================
+
+-- student — new demographic / identity / lifecycle columns.
+alter table student add column if not exists student_email varchar(255);
+alter table student add column if not exists student_mobile varchar(20);
+alter table student add column if not exists category_code varchar(32);       -- lookup: category
+alter table student add column if not exists nationality_code varchar(32);     -- lookup: nationality
+alter table student add column if not exists mother_tongue_code varchar(32);   -- lookup: mother_tongue
+alter table student add column if not exists blood_group_code varchar(8);      -- lookup: blood_group
+alter table student add column if not exists aadhaar_number varchar(20);
+alter table student add column if not exists previous_school varchar(256);
+alter table student add column if not exists admission_date date;              -- lifelong first admission
+alter table student add column if not exists withdrawal_date date;
+alter table student add column if not exists withdrawal_remarks varchar(512);
+
+-- student_class.join_date — "Date Of Joining" for that enrollment.
+alter table student_class add column if not exists join_date date;
+
+-- student_guardian — parent/guardian extended attributes.
+alter table student_guardian add column if not exists relationship varchar(64);  -- specific label: uncle/sister/...
+alter table student_guardian add column if not exists designation varchar(128);
+alter table student_guardian add column if not exists organisation varchar(128);
+alter table student_guardian add column if not exists education varchar(128);
+
+-- Table 3: student_lookup (per-school coded reference data).
+create table if not exists student_lookup (
+    uuid varchar(12) primary key,
+    school_id varchar(12) not null,
+    lookup_type varchar(32) not null,
+    code varchar(64) not null,
+    label varchar(256),
+    extra jsonb,
+    status varchar(16) check (status in ('active', 'deleted')),
+    createdby_userid varchar(12),
+    created_at timestamp(0),
+    updatedby_userid varchar(12),
+    updated_at timestamp(0)
+);
+
+create index if not exists idx_student_lookup_school_type on student_lookup(school_id, lookup_type, status);
+create unique index if not exists idx_student_lookup_code_unique
+    on student_lookup(school_id, lookup_type, lower(code)) where status = 'active';
+
+-- Table 4: student_address (household addresses; is_permanent / is_communication flags).
+create table if not exists student_address (
+    uuid varchar(12) primary key,
+    school_id varchar(12) not null,
+    student_id varchar(12) not null,
+    is_permanent boolean,
+    is_communication boolean,
+    line varchar(512),
+    locality_code varchar(64),   -- lookup: locality
+    city_code varchar(64),       -- lookup: city
+    state_code varchar(64),      -- lookup: state
+    country_code varchar(64),    -- lookup: country
+    pincode varchar(10),
+    status varchar(16) check (status in ('active', 'deleted')),
+    createdby_userid varchar(12),
+    created_at timestamp(0),
+    updatedby_userid varchar(12),
+    updated_at timestamp(0)
+);
+
+create index if not exists idx_student_address_student on student_address(school_id, student_id, status);
+
+-- Table 5: student_sibling (explicit links between enrolled students).
+create table if not exists student_sibling (
+    uuid varchar(12) primary key,
+    school_id varchar(12) not null,
+    student_id varchar(12) not null,
+    sibling_student_id varchar(12) not null,
+    status varchar(16) check (status in ('active', 'deleted')),
+    createdby_userid varchar(12),
+    created_at timestamp(0),
+    updatedby_userid varchar(12),
+    updated_at timestamp(0)
+);
+
+create index if not exists idx_student_sibling_student on student_sibling(school_id, student_id, status);
+create unique index if not exists idx_student_sibling_pair_unique
+    on student_sibling(school_id, student_id, sibling_student_id) where status = 'active';
+
+-- Widen code columns for tables created by an earlier revision (idempotent):
+-- long state / auto-created city & locality codes need more than 32 chars.
+alter table student_lookup alter column code type varchar(64);
+alter table student_address alter column locality_code type varchar(64);
+alter table student_address alter column city_code type varchar(64);
+alter table student_address alter column state_code type varchar(64);
+alter table student_address alter column country_code type varchar(64);
+
+-- Shared file_storage gains a photo variant ('original' | 'thumb').
+-- Null is treated as 'original' for legacy rows.
+alter table file_storage add column if not exists variant varchar(16);
