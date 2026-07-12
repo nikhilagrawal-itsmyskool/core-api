@@ -16,6 +16,15 @@
           method: get
           cors: true
 
+  omni-search:
+    handler: student-handler.omni
+    name: ${self:service}-omni-search
+    events:
+      - http:
+          path: omni-search
+          method: get
+          cors: true
+
   list-students:
     handler: student-admin-handler.list
     name: ${self:service}-list-students

@@ -98,6 +98,55 @@ class StudentService {
 
     return DB.query(query, params);
   }
+
+  // Unified "type anything" search for the command palette: matches across student
+  // name, admission number, father/mother/guardian names, and any phone. Returns
+  // enough to render a rich row (class, parents, photo) and ranks exact-admission /
+  // name-prefix matches first.
+  public async omniSearch(schoolId: string, q: string, limit = 15): Promise<any[]> {
+    const term = (q || '').trim();
+    if (!term) return [];
+    const like = `%${term}%`;
+    const prefix = `${term}%`;
+    const params: any[] = [schoolId, like, term, prefix, Math.min(Math.max(limit, 1), 30)];
+    const query = singleLineString`
+      select s.uuid, s.name, s.admission_number, s.gender, s.status,
+        cur.class_name,
+        gf.name as father_name, gm.name as mother_name,
+        ph.uuid as photo_id, ph.storage_key as photo_storage_key
+      from student s
+      left join lateral (
+        select fs.uuid, fs.storage_key from file_storage fs
+        where fs.entity_type = 'student' and fs.entity_id = s.uuid and fs.school_id = s.school_id
+          and (fs.variant = 'original' or fs.variant is null)
+        order by fs.created_at desc limit 1
+      ) ph on true
+      left join lateral (
+        select c.name as class_name
+        from student_class sc
+        join academic_year ay on sc.academic_year_id = ay.uuid
+        left join class c on sc.class_id = c.uuid
+        where sc.student_id = s.uuid and (sc.status is null or sc.status <> 'deleted')
+        order by ay.start_date desc nulls last limit 1
+      ) cur on true
+      left join lateral (select name from student_guardian where student_id = s.uuid and relation = 'father' and status = 'active' order by created_at limit 1) gf on true
+      left join lateral (select name from student_guardian where student_id = s.uuid and relation = 'mother' and status = 'active' order by created_at limit 1) gm on true
+      where s.school_id = $1 and s.status <> 'deleted'
+        and (
+          s.name ilike $2 or s.admission_number ilike $2
+          or s.student_mobile ilike $2 or s.father_mobile ilike $2 or s.mother_mobile ilike $2 or s.guardian_mobile ilike $2
+          or exists (select 1 from student_guardian g where g.student_id = s.uuid and g.status = 'active'
+                       and (g.name ilike $2 or g.mobile ilike $2 or g.whatsapp ilike $2))
+        )
+      order by
+        case when lower(s.admission_number) = lower($3) then 0
+             when s.name ilike $4 then 1
+             else 2 end,
+        s.name
+      limit $5
+    `;
+    return DB.query(query, params);
+  }
 }
 
 export const studentService = new StudentService();

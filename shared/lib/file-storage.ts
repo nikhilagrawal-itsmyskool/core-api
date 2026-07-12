@@ -101,6 +101,15 @@ class PostgresFileStorageService implements IFileStorageService {
 const s3 = new S3Client({});
 const FILE_STORAGE_BUCKET = process.env.FILE_STORAGE_BUCKET as string;
 
+// Short-lived presigned GET URL for a stored object, so clients (e.g. the command
+// palette) can render an <img> straight from S3 without base64. Returns null when
+// S3 isn't configured (local/Postgres mode) or there's no key.
+export async function getSignedPhotoUrl(storageKey: string | null | undefined, expiresIn = 300): Promise<string | null> {
+  if (!storageKey || !FILE_STORAGE_BUCKET) return null;
+  const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
+  return getSignedUrl(s3, new GetObjectCommand({ Bucket: FILE_STORAGE_BUCKET, Key: storageKey }), { expiresIn });
+}
+
 // S3 key scheme: {schoolId}/{entityType}/{entityId}/{variant}/{uuid}{ext}
 // IMPORTANT: keep this in sync with scripts/migrate-file-storage-to-s3.js
 export function buildStorageKey(f: {
