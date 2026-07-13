@@ -6,6 +6,17 @@ import { DEFAULTS } from './communication-constants';
 import { MessageTemplate, CreateTemplateRequest, UpdateTemplateRequest } from './communication-interfaces';
 const { generateShortUuid } = require('../../shared/util/generate-uuid.js');
 
+// Normalize a variables array: strip stray quotes/brackets and surrounding
+// whitespace from each name, drop empties. Guards against JSON-ish input pasted
+// into the template form (e.g. `"recipientName"`), which would otherwise store a
+// quoted name that never resolves against the (clean) context keys at send time.
+function sanitizeVariables(vars: any): string[] | null {
+  if (!Array.isArray(vars)) return null;
+  return vars
+    .map((v) => String(v).trim().replace(/^["'[\]]+/, '').replace(/["'[\]]+$/, '').trim())
+    .filter(Boolean);
+}
+
 class TemplateService {
   public async list(schoolId: string): Promise<MessageTemplate[]> {
     return DB.query(
@@ -78,7 +89,7 @@ class TemplateService {
         uuid, schoolId, data.key.trim(), data.name || null, data.channel, language,
         data.provider || DEFAULTS.PROVIDER, data.providerTemplateId || null, data.category || null,
         data.headerType || 'none', data.bodyPreview || null,
-        data.variables ? JSON.stringify(data.variables) : null,
+        sanitizeVariables(data.variables) ? JSON.stringify(sanitizeVariables(data.variables)) : null,
         DEFAULTS.STATUS, userId, now,
       ],
     );
@@ -104,7 +115,7 @@ class TemplateService {
         data.name !== undefined ? data.name : existing.name,
         data.language || null, data.provider || null, data.providerTemplateId || null,
         data.category || null, data.headerType || null, data.bodyPreview || null,
-        data.variables ? JSON.stringify(data.variables) : null,
+        sanitizeVariables(data.variables) ? JSON.stringify(sanitizeVariables(data.variables)) : null,
         data.status || null, userId, new Date(), id, schoolId,
       ],
     );
