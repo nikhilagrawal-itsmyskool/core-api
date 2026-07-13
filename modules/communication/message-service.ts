@@ -6,7 +6,7 @@ import {
   AudienceSpec, AudienceTarget, MessageJob, MessageRecipient,
   SendMessageRequest, PreviewRequest,
 } from './communication-interfaces';
-import { resolveLadder, resolveVariables, studentNumbers, employeeNumbers, autoContext } from './communication-util';
+import { resolveLadder, resolveVariables, studentNumbers, employeeNumbers, autoContext, schoolContext } from './communication-util';
 import { templateService } from './template-service';
 import { getProvider } from './providers';
 const { generateShortUuid } = require('../../shared/util/generate-uuid.js');
@@ -82,6 +82,7 @@ class MessageService {
     const templates = await templateService.getActiveByKey(schoolId, req.templateKey, language);
     const availableChannels = new Set<Channel>(templates.keys());
     const targets = await this.resolveTargets(schoolId, req.audience);
+    const schoolCtx = schoolContext(await this.getSchool(schoolId));
 
     const recipients = targets.map((t) => {
       const match = resolveLadder(t, availableChannels, req.forceChannel);
@@ -89,7 +90,7 @@ class MessageService {
         return { recipientType: t.recipientType, recipientId: t.recipientId, name: t.name, status: 'skipped', reason: 'no reachable channel with an approved template' };
       }
       const template = templates.get(match.channel)!;
-      const ctx = { ...(req.context || {}), ...t.context };
+      const ctx = { ...(req.context || {}), ...t.context, ...schoolCtx };
       const { missing } = resolveVariables(template.variables, ctx);
       if (missing.length > 0) {
         return { recipientType: t.recipientType, recipientId: t.recipientId, name: t.name, role: match.role, channel: match.channel, status: 'skipped', reason: `missing variables: ${missing.join(', ')}` };
@@ -144,6 +145,7 @@ class MessageService {
 
     const targets = await this.resolveTargets(job.schoolId, job.audience);
     const provider = getProvider();
+    const schoolCtx = schoolContext(await this.getSchool(job.schoolId));
     const counts = { sent: 0, failed: 0, skipped: 0 };
 
     for (const t of targets) {
@@ -154,7 +156,7 @@ class MessageService {
         continue;
       }
       const template = templates.get(match.channel)!;
-      const ctx = { ...(job.context || {}), ...t.context };
+      const ctx = { ...(job.context || {}), ...t.context, ...schoolCtx };
       const { values, missing } = resolveVariables(template.variables, ctx);
       if (missing.length > 0) {
         await this.insertRecipient(job, t, match, template.uuid, ctx, 'skipped', { error: `missing variables: ${missing.join(', ')}` });
@@ -283,6 +285,15 @@ class MessageService {
   // --------------------------------------------------------- audience resolve
   // Resolve an audience spec to a deduped list of targets, each carrying its
   // contact numbers + auto-derived per-recipient variable context. Supports
+  // The school's public code + name, for job-level auto context (e.g. signatures).
+  private async getSchool(schoolId: string): Promise<any> {
+    const rows = await DB.query(
+      singleLineString`select code, name from school where uuid = $1`,
+      [schoolId],
+    );
+    return rows[0] || {};
+  }
+
   // student ids/classes/all and employee ids/roles/all. (wingId is reserved.)
   private async resolveTargets(schoolId: string, audience?: AudienceSpec): Promise<AudienceTarget[]> {
     const byKey = new Map<string, AudienceTarget>();

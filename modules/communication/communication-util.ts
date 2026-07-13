@@ -101,20 +101,30 @@ export function employeeNumbers(row: any): Record<string, string | null | undefi
   };
 }
 
-// Per-recipient context the worker auto-injects from a student/employee row.
-// These variables are filled by the system, NOT supplied by the sender — so the
-// Compose UI subtracts them from a template's variables and only prompts for the
-// rest. `AUTO_CONTEXT_KEYS` is the authoritative list (exposed via the lookups
-// endpoint); `autoContext` builds the actual values. Keep the two in sync.
-export const AUTO_CONTEXT_KEYS: Record<RecipientType, string[]> = {
+// Context the worker auto-injects, so it's filled by the system NOT the sender —
+// the Compose UI subtracts these from a template's variables and only prompts for
+// the rest. `AUTO_CONTEXT_KEYS` is the authoritative list (exposed via the lookups
+// endpoint); the builders below produce the values. Keep the two in sync.
+//   common   — job-level, same for every recipient (from the school record)
+//   student  — per-recipient (from the student row)
+//   employee — per-recipient (from the employee row)
+export const AUTO_CONTEXT_KEYS = {
+  common: ['schoolCode', 'schoolName'],
   student: ['recipientName', 'studentName', 'admissionNumber'],
   employee: ['recipientName', 'employeeName'],
-};
+} as const;
 
 export function autoContext(type: RecipientType, row: any): Record<string, string> {
   return type === 'student'
     ? { recipientName: row.name, studentName: row.name, admissionNumber: row.admissionNumber }
     : { recipientName: row.name, employeeName: row.name };
+}
+
+// Job-level context resolved once per job from the school record — keeps a single
+// template usable across schools (e.g. a {{schoolName}} signature). Keys must
+// match AUTO_CONTEXT_KEYS.common.
+export function schoolContext(school: any): Record<string, string> {
+  return { schoolCode: school?.code || '', schoolName: school?.name || '' };
 }
 
 // Resolve a template's ordered variables from a context object. Returns the
