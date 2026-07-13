@@ -57,11 +57,18 @@ class StudentService {
       const extras = buildExtras('s.', params);
 
       const query = singleLineString`
-        select s.*, sc.class_id, c.name as class_name, sc.academic_year_id, ay.name as academic_year_name, sc.roll_number
+        select s.*, sc.class_id, c.name as class_name, sc.academic_year_id, ay.name as academic_year_name, sc.roll_number,
+               ph.uuid as photo_id, ph.storage_key as photo_storage_key
         from student s
         inner join student_class sc on s.uuid = sc.student_id and s.school_id = sc.school_id
         left join class c on sc.class_id = c.uuid
         left join academic_year ay on sc.academic_year_id = ay.uuid
+        left join lateral (
+          select fs.uuid, fs.storage_key from file_storage fs
+          where fs.entity_type = 'student' and fs.entity_id = s.uuid and fs.school_id = s.school_id
+            and (fs.variant = 'original' or fs.variant is null)
+          order by fs.created_at desc limit 1
+        ) ph on true
         where s.school_id = $1
           and sc.class_id = $2
           and (sc.status is null or sc.status <> 'deleted')
@@ -80,7 +87,8 @@ class StudentService {
     // Unfiltered list: join the latest enrollment so the grid shows the current
     // class/year/roll (same lateral pattern as student-admin-service.getDetail).
     const query = singleLineString`
-      select s.*, cur.class_name, cur.academic_year_name, cur.roll_number
+      select s.*, cur.class_name, cur.academic_year_name, cur.roll_number,
+             ph.uuid as photo_id, ph.storage_key as photo_storage_key
       from student s
       left join lateral (
         select ay.name as academic_year_name, c.name as class_name, sc.roll_number
@@ -90,6 +98,12 @@ class StudentService {
         where sc.student_id = s.uuid and (sc.status is null or sc.status <> 'deleted')
         order by ay.start_date desc nulls last limit 1
       ) cur on true
+      left join lateral (
+        select fs.uuid, fs.storage_key from file_storage fs
+        where fs.entity_type = 'student' and fs.entity_id = s.uuid and fs.school_id = s.school_id
+          and (fs.variant = 'original' or fs.variant is null)
+        order by fs.created_at desc limit 1
+      ) ph on true
       where s.school_id = $1
         and lower(s.name) like lower($2)
         ${extras}

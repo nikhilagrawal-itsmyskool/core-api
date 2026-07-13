@@ -29,6 +29,16 @@ class StudentHandler {
         admissionNumber: q.admissionNumber,
         phone: q.phone,
       });
+      // Presign a photo URL per row only when the caller asks (the grid does; the
+      // dropdown/search dialogs don't, so they skip the presign cost).
+      if (q.withPhotos === 'true') {
+        await Promise.all(
+          (results as any[]).map(async (r: any) => {
+            if (r.photoStorageKey) r.photoUrl = await getSignedPhotoUrl(r.photoStorageKey);
+          })
+        );
+      }
+      (results as any[]).forEach((r: any) => delete r.photoStorageKey);
       ResponseBuilder.ok(results, callback);
     } catch (err: any) {
       ResponseBuilder.handleError(err, callback);
