@@ -64,7 +64,14 @@ class StudentHandler {
       }
       const q = event.queryStringParameters || {};
       const limit = parseInt(q.limit || '15', 10) || 15;
-      const results = await studentService.omniSearch(schoolId, q.q || '', limit);
+      // Pin to the current session: current-year students rank first, the rest
+      // follow as a greyed "not in <year>" block. Callers may override the scope
+      // by passing academicYearId (or clear it entirely with academicYearId=all).
+      const scope =
+        q.academicYearId === 'all'
+          ? null
+          : q.academicYearId || (await studentService.getCurrentAcademicYearId(schoolId));
+      const results = await studentService.omniSearch(schoolId, q.q || '', limit, scope);
       // Attach a short-lived presigned photo URL per row (so the palette renders
       // <img> straight from S3), then drop the internal storage key.
       await Promise.all(
@@ -78,8 +85,34 @@ class StudentHandler {
       ResponseBuilder.handleError(err, callback);
     }
   };
+
+  // Class strength board: GET /student/class-strength?academicYearId=
+  // Defaults to the current session when academicYearId is omitted. Returns per
+  // class the active head-count and the last admission (max admission_date).
+  public classStrength = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
+    _context.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const schoolCode = validateSchoolCodeHeader(event);
+      const schoolId = await studentService.getSchoolIdByCode(schoolCode);
+      if (!schoolId) {
+        ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'Invalid school code', callback);
+        return;
+      }
+      const q = event.queryStringParameters || {};
+      const academicYearId = q.academicYearId || (await studentService.getCurrentAcademicYearId(schoolId));
+      if (!academicYearId) {
+        ResponseBuilder.ok({ academicYearId: null, classes: [] }, callback);
+        return;
+      }
+      const classes = await studentService.classStrength(schoolId, academicYearId);
+      ResponseBuilder.ok({ academicYearId, classes }, callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
 }
 
 const handler = new StudentHandler();
 export const search = handler.search;
 export const omni = handler.omni;
+export const classStrength = handler.classStrength;

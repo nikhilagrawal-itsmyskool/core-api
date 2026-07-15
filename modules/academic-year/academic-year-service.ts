@@ -11,10 +11,23 @@ class AcademicYearService {
   }
 
   public async search(schoolId: string): Promise<AcademicYearDropdownItem[]> {
+    // `isCurrent` marks the canonical "current" session: the year whose date
+    // range contains today, falling back to the latest-starting year when today
+    // sits in a gap between sessions. Search UIs pin their default to this row.
     const query = singleLineString`
-      select uuid, name from academic_year
-      where school_id = $1
-      order by start_date desc
+      with picked as (
+        select uuid from academic_year
+        where school_id = $1
+        order by
+          (case when current_date between start_date and end_date then 0 else 1 end),
+          start_date desc nulls last
+        limit 1
+      )
+      select ay.uuid, ay.name,
+             (ay.uuid = (select uuid from picked)) as is_current
+      from academic_year ay
+      where ay.school_id = $1
+      order by ay.start_date desc nulls last
     `;
 
     return DB.query(query, [schoolId]);

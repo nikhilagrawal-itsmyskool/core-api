@@ -18,6 +18,25 @@ class StudentService {
     return results.length > 0 ? results[0].uuid : null;
   }
 
+  // Resolve the school's canonical "current" academic year: the session whose
+  // date range contains today, else the latest-starting year. Mirrors the
+  // isCurrent flag exposed by the academic-year dropdown. Returns null when the
+  // school has no academic years yet.
+  public async getCurrentAcademicYearId(schoolId: string): Promise<string | null> {
+    const rows = await DB.query(
+      singleLineString`
+        select uuid from academic_year
+        where school_id = $1
+        order by
+          (case when current_date between start_date and end_date then 0 else 1 end),
+          start_date desc nulls last
+        limit 1
+      `,
+      [schoolId]
+    );
+    return rows.length > 0 ? rows[0].uuid : null;
+  }
+
   public async search(
     schoolId: string,
     filters: StudentSearchFilters = {}
@@ -45,10 +64,19 @@ class StudentService {
       return parts.join(' ');
     };
 
-    if (classId) {
-      const params: any[] = [schoolId, classId, namePattern];
-      let academicYearCondition = '';
+    // Enrollment-scoped search: triggered by EITHER a class or an academic-year
+    // filter. A year filter alone (no class) is what pins the list to the current
+    // session — students not enrolled that year drop out via the inner join.
+    if (classId || academicYearId) {
+      const params: any[] = [schoolId, namePattern];
 
+      let classCondition = '';
+      if (classId) {
+        params.push(classId);
+        classCondition = `and sc.class_id = $${params.length}`;
+      }
+
+      let academicYearCondition = '';
       if (academicYearId) {
         params.push(academicYearId);
         academicYearCondition = `and sc.academic_year_id = $${params.length}`;
@@ -70,9 +98,9 @@ class StudentService {
           order by fs.created_at desc limit 1
         ) ph on true
         where s.school_id = $1
-          and sc.class_id = $2
           and (sc.status is null or sc.status <> 'deleted')
-          and lower(s.name) like lower($3)
+          and lower(s.name) like lower($2)
+          ${classCondition}
           ${academicYearCondition}
           ${extras}
         order by sc.roll_number nulls last, s.name
@@ -117,15 +145,25 @@ class StudentService {
   // name, admission number, father/mother/guardian names, and any phone. Returns
   // enough to render a rich row (class, parents, photo) and ranks exact-admission /
   // name-prefix matches first.
-  public async omniSearch(schoolId: string, q: string, limit = 15): Promise<any[]> {
+  public async omniSearch(
+    schoolId: string,
+    q: string,
+    limit = 15,
+    currentYearId: string | null = null
+  ): Promise<any[]> {
     const term = (q || '').trim();
     if (!term) return [];
     const like = `%${term}%`;
     const prefix = `${term}%`;
-    const params: any[] = [schoolId, like, term, prefix, Math.min(Math.max(limit, 1), 30)];
+    // $6 = current academic year (nullable). Rows enrolled in it are flagged
+    // `inCurrentYear` and sorted first, so the palette can render a "current
+    // session" block and a greyed "not in <year>" block below — a withdrawn or
+    // alumni student still surfaces without a scope switch.
+    const params: any[] = [schoolId, like, term, prefix, Math.min(Math.max(limit, 1), 30), currentYearId];
     const query = singleLineString`
       select s.uuid, s.name, s.admission_number, s.gender, s.status,
         cur.class_name,
+        (cur.academic_year_id is not null and cur.academic_year_id = $6) as in_current_year,
         gf.name as father_name, gm.name as mother_name,
         ph.uuid as photo_id, ph.storage_key as photo_storage_key
       from student s
@@ -136,12 +174,12 @@ class StudentService {
         order by fs.created_at desc limit 1
       ) ph on true
       left join lateral (
-        select c.name as class_name
+        select sc.academic_year_id, c.name as class_name
         from student_class sc
         join academic_year ay on sc.academic_year_id = ay.uuid
         left join class c on sc.class_id = c.uuid
         where sc.student_id = s.uuid and (sc.status is null or sc.status <> 'deleted')
-        order by ay.start_date desc nulls last limit 1
+        order by (sc.academic_year_id = $6) desc, ay.start_date desc nulls last limit 1
       ) cur on true
       left join lateral (select name from student_guardian where student_id = s.uuid and relation = 'father' and status = 'active' order by created_at limit 1) gf on true
       left join lateral (select name from student_guardian where student_id = s.uuid and relation = 'mother' and status = 'active' order by created_at limit 1) gm on true
@@ -153,6 +191,7 @@ class StudentService {
                        and (g.name ilike $2 or g.mobile ilike $2 or g.whatsapp ilike $2))
         )
       order by
+        (cur.academic_year_id is not null and cur.academic_year_id = $6) desc,
         case when lower(s.admission_number) = lower($3) then 0
              when s.name ilike $4 then 1
              else 2 end,
@@ -160,6 +199,41 @@ class StudentService {
       limit $5
     `;
     return DB.query(query, params);
+  }
+
+  // Class strength board for an academic year: per class, the active head-count
+  // plus the "last admission" that landed in it — the enrolled student with the
+  // most recent admission_date (prod-verified as fully populated & accurate for
+  // DBPASN; created_at breaks same-day ties). The admission_number is returned
+  // for display only, never sorted on (two parallel J/S serial series make the
+  // raw number non-monotonic across history).
+  public async classStrength(schoolId: string, academicYearId: string): Promise<any[]> {
+    const query = singleLineString`
+      select c.uuid as class_id, c.name as class_name, c.seq as class_seq,
+             count(*) as active_strength,
+             la.student_id as last_admission_student_id,
+             la.name as last_admission_name,
+             la.admission_number as last_admission_number,
+             la.admission_date as last_admission_date
+      from student_class sc
+      join class c on sc.class_id = c.uuid
+      join student s on sc.student_id = s.uuid and s.school_id = sc.school_id and s.status <> 'deleted'
+      left join lateral (
+        select s2.uuid as student_id, s2.name, s2.admission_number, s2.admission_date
+        from student_class sc2
+        join student s2 on sc2.student_id = s2.uuid and s2.school_id = sc2.school_id and s2.status <> 'deleted'
+        where sc2.school_id = $1 and sc2.class_id = c.uuid and sc2.academic_year_id = $2
+          and (sc2.status is null or sc2.status <> 'deleted')
+        order by s2.admission_date desc nulls last, s2.created_at desc nulls last
+        limit 1
+      ) la on true
+      where sc.school_id = $1 and sc.academic_year_id = $2
+        and (sc.status is null or sc.status <> 'deleted')
+      group by c.uuid, c.name, c.seq,
+               la.student_id, la.name, la.admission_number, la.admission_date
+      order by c.seq nulls last, c.name
+    `;
+    return DB.query(query, [schoolId, academicYearId]);
   }
 }
 

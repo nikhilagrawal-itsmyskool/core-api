@@ -29,6 +29,16 @@
           method: get
           cors: true
 
+  # Per-class active strength + last admission for an academic year (default: current)
+  class-strength:
+    handler: student-handler.classStrength
+    name: ${self:service}-class-strength
+    events:
+      - http:
+          path: class-strength
+          method: get
+          cors: true
+
   list-students:
     handler: student-admin-handler.list
     name: ${self:service}-list-students
@@ -297,6 +307,25 @@
           method: delete
           cors: true
 
+  # ---- Student login credentials (god/admin, gated in UI) ----
+  get-student-credentials:
+    handler: student-admin-handler.getCredentials
+    name: ${self:service}-get-student-credentials
+    events:
+      - http:
+          path: '{id}/credentials'
+          method: get
+          cors: true
+
+  reset-student-password:
+    handler: student-admin-handler.resetPassword
+    name: ${self:service}-reset-student-password
+    events:
+      - http:
+          path: '{id}/reset-password'
+          method: post
+          cors: true
+
   # ---- House assignment for a student ----
   assign-house:
     handler: house-handler.assign
@@ -305,6 +334,16 @@
       - http:
           path: '{id}/house'
           method: put
+          cors: true
+
+  # ---- Parent app (family token + X-Student-Id) — literal 'me' before '{id}' ----
+  get-me:
+    handler: student-me-handler.getMe
+    name: ${self:service}-get-me
+    events:
+      - http:
+          path: me
+          method: get
           cors: true
 
   # ---- Student detail / update / delete (param routes last) ----
