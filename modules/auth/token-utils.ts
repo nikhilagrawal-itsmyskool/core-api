@@ -8,6 +8,9 @@ export interface DecodedToken {
   school_code: string;
   type: string;
   roles: string[];
+  // Family login only: the sibling id/name allowlist embedded at login time.
+  // Absent on employee tokens.
+  students?: Array<{ id: string; name: string }>;
 }
 
 export function extractAndVerifyToken(authorizationHeader: string | undefined): DecodedToken | null {
@@ -34,6 +37,7 @@ export function extractAndVerifyToken(authorizationHeader: string | undefined): 
       school_code: decoded.school_code,
       type: decoded.type,
       roles: decoded.roles,
+      students: decoded.students,
     };
   } catch (err) {
     return null;

@@ -1,5 +1,7 @@
-import { ApiEvent } from '../../shared/lib/api.interfaces';
+import { ApiCallback, ApiEvent } from '../../shared/lib/api.interfaces';
 import { ErrorCode } from '../../shared/lib/error-codes';
+import { ResponseBuilder } from '../../shared/lib/response-builder';
+import { DecodedToken, extractAndVerifyToken } from './token-utils';
 
 export function getSchoolCodeFromHeader(event: ApiEvent): string | null {
   const headers = event.headers || {};
@@ -50,5 +52,60 @@ export function assertStudentInToken(
     return false;
   }
   return token.students.some((s) => s && s.id === studentId);
+}
+
+export function getAuthorizationHeader(event: ApiEvent): string | undefined {
+  const headers = event.headers || {};
+  return headers['Authorization'] || headers['authorization'] || undefined;
+}
+
+export interface ActiveStudentAuth {
+  token: DecodedToken;
+  activeStudentId: string;
+}
+
+// Why each failure is distinct: the app reacts differently to each — re-login on
+// 'unauthenticated', prompt a child pick on 'missing-student', hard-stop on 'forbidden'.
+export type StudentAuthFailure =
+  | { reason: 'unauthenticated'; message: string } // no/invalid token, or not a student token → 401
+  | { reason: 'missing-student'; message: string } // token ok but no X-Student-Id → 400
+  | { reason: 'forbidden'; message: string }; //     X-Student-Id not in the family → 403
+
+// The single guard every student-app data endpoint calls first. Verifies the
+// bearer token, reads X-Student-Id, and asserts the child belongs to the family
+// login — all in-token, no DB round-trip. On success the handler proceeds with
+// `auth.activeStudentId` (already authorized) and `auth.token` (school_id etc.).
+export function resolveActiveStudent(
+  event: ApiEvent
+): { ok: true; auth: ActiveStudentAuth } | { ok: false; failure: StudentAuthFailure } {
+  const token = extractAndVerifyToken(getAuthorizationHeader(event));
+  if (!token || token.type !== 'student') {
+    return { ok: false, failure: { reason: 'unauthenticated', message: 'Invalid or missing student token' } };
+  }
+
+  const studentId = getActiveStudentIdFromHeader(event);
+  if (!studentId) {
+    return { ok: false, failure: { reason: 'missing-student', message: 'X-Student-Id header is required' } };
+  }
+
+  if (!assertStudentInToken(studentId, token)) {
+    return { ok: false, failure: { reason: 'forbidden', message: 'Student is not part of this family login' } };
+  }
+
+  return { ok: true, auth: { token, activeStudentId: studentId } };
+}
+
+// Maps a guard failure onto the matching HTTP response. Handlers do:
+//   const a = resolveActiveStudent(event);
+//   if (!a.ok) return respondStudentAuthFailure(a.failure, callback);
+export function respondStudentAuthFailure(failure: StudentAuthFailure, callback: ApiCallback): void {
+  switch (failure.reason) {
+    case 'unauthenticated':
+      return ResponseBuilder.unauthorizedRequest(ErrorCode.GeneralError, failure.message, callback);
+    case 'missing-student':
+      return ResponseBuilder.badRequest(ErrorCode.InvalidInput, failure.message, callback);
+    case 'forbidden':
+      return ResponseBuilder.forbidden(ErrorCode.GeneralError, failure.message, callback);
+  }
 }
 
