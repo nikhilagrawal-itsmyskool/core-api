@@ -31,7 +31,7 @@ const { generateShortUuid } = require('../../../shared/util/generate-uuid.js');
 
 // ---------- args ----------
 function parseArgs(argv) {
-  const a = { stage: null, schoolCode: null, file: null, session: null, dryRun: false, photos: true, photosOnly: false, limit: 0 };
+  const a = { stage: null, schoolCode: null, file: null, session: null, dryRun: false, photos: true, photosOnly: false, limit: 0, addressFillOnly: false, insertsInactive: false, linkOldAdmissions: false };
   for (let i = 0; i < argv.length; i++) {
     const v = argv[i];
     if (v === '--stage' || v === '-s') a.stage = argv[++i];
@@ -41,6 +41,9 @@ function parseArgs(argv) {
     else if (v === '--dry-run') a.dryRun = true;
     else if (v === '--no-photos') a.photos = false;
     else if (v === '--photos-only') a.photosOnly = true;
+    else if (v === '--address-fill-only') a.addressFillOnly = true;
+    else if (v === '--inserts-inactive') a.insertsInactive = true;
+    else if (v === '--link-old-admissions') a.linkOldAdmissions = true;
     else if (v === '--limit') a.limit = parseInt(argv[++i], 10) || 0;
   }
   return a;
@@ -73,13 +76,23 @@ const parseDate = (raw) => {
   if (m) return `${m[3]}-${m[2]}-${m[1]}`;
   return /^\d{4}-\d{2}-\d{2}/.test(s) ? s.slice(0, 10) : null;
 };
+// Format a DB date value using LOCAL components. pg returns `date` as a local-midnight
+// Date; toISOString() would shift it back a day under IST (+5:30) and break name+DOB keys.
+const dbDateLocal = (d) => {
+  if (!d) return '';
+  const x = new Date(d);
+  return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
+};
+const dobIsBad = (d) => !d || d < '1950-01-01'; // 0001-11-30 sentinel etc.
 
 const stats = {
   insert: 0, update: 0, skipDup: 0, guardians: 0, addresses: 0, siblingsLinked: 0,
   siblingsUnresolved: 0, tc: 0, photosUploaded: 0, photosSkipped: 0, photosFailed: 0, errors: 0,
+  linked: 0, linkAmbiguous: 0,
 };
 const byClass = {}; // class -> {insert, update, skip}
 const suspected = [];
+const linkAmbiguousList = [];
 const unresolvedSib = [];
 const lookupCreated = {}; // type -> Set(code)
 
@@ -131,38 +144,56 @@ async function main() {
     if (sch.rows.length === 0) throw new Error(`School ${args.schoolCode} not found`);
     const schoolId = sch.rows[0].uuid;
 
-    // Academic year (create if missing)
-    let ayId;
+    // Academic year (create if missing). Always derive start/end from the session
+    // code (Apr 1 – Mar 31) so join_date can distinguish admission-year vs promotion.
+    let ayId, ayStart, ayEnd;
     {
+      const m = args.session.match(/^(\d{4})-(\d{2})$/);
+      ayStart = `${m[1]}-04-01`;
+      ayEnd = `${Math.floor(+m[1] / 100) * 100 + +m[2]}-03-31`;
       const r = await c0.query('select uuid from academic_year where lower(code)=lower($1) and school_id=$2', [args.session, schoolId]);
       if (r.rows.length) ayId = r.rows[0].uuid;
       else {
-        const m = args.session.match(/^(\d{4})-(\d{2})$/);
-        const start = `${m[1]}-04-01`, end = `${Math.floor(+m[1] / 100) * 100 + +m[2]}-03-31`;
         ayId = generateShortUuid(12);
         if (!args.dryRun) await c0.query(
           `insert into academic_year (uuid,name,code,start_date,end_date,school_id,createdby_userid,created_at)
            values ($1,$2,$3,$4,$5,$6,'0',now()) on conflict (code,school_id) do nothing`,
-          [ayId, args.session, args.session, start, end, schoolId]);
+          [ayId, args.session, args.session, ayStart, ayEnd, schoolId]);
         console.log(`Academic year ${args.session}: ${args.dryRun ? 'would create' : 'ready'}`);
       }
     }
 
-    // Preload existing students
-    const ex = await c0.query("select uuid, admission_number, name, dob from student where school_id=$1 and status<>'deleted'", [schoolId]);
+    // Preload existing students. byNameDob/byNameFather map to the full row so a
+    // matched student can be linked (old_admission_number) — used for detecting an
+    // admission number that was reassigned on promotion (old UKG # -> new Class-I #).
+    const ex = await c0.query("select uuid, admission_number, name, dob, status from student where school_id=$1 and status<>'deleted'", [schoolId]);
     const byAdm = new Map();
     const byNameDob = new Map();
     for (const r of ex.rows) {
       byAdm.set(String(r.admission_number || '').trim().toLowerCase(), r);
-      const dob = r.dob ? new Date(r.dob).toISOString().slice(0, 10) : '';
-      const k = norm(r.name) + '|' + dob;
+      const k = norm(r.name) + '|' + dbDateLocal(r.dob); // local date — no TZ shift
       if (!byNameDob.has(k)) byNameDob.set(k, []);
-      byNameDob.get(k).push(String(r.admission_number || '').trim());
+      byNameDob.get(k).push(r);
+    }
+    // Father-name index (fallback match when DOB is missing/garbage).
+    const byNameFather = new Map();
+    {
+      const fr = await c0.query("select student_id, name from student_guardian where school_id=$1 and relation='father' and status='active'", [schoolId]);
+      const fatherByStudent = new Map();
+      for (const r of fr.rows) if (!fatherByStudent.has(r.student_id)) fatherByStudent.set(r.student_id, r.name);
+      for (const r of ex.rows) {
+        const fn = fatherByStudent.get(r.uuid);
+        if (!fn) continue;
+        const k = norm(r.name) + '|' + norm(fn);
+        if (!byNameFather.has(k)) byNameFather.set(k, []);
+        byNameFather.get(k).push(r);
+      }
     }
     const csvAdmSet = new Set(records.map((r) => clean(r['Adm. No.']).toLowerCase()));
     c0.release();
 
     const classCache = {};
+    const houseCache = {}; // code -> house uuid
     const lookupCache = {}; // `${type}|${code}` -> true (exists or created)
     const admToUuid = new Map(); // admLower -> uuid
     const guardianRefs = []; // { record, studentId, guardians: {father,mother,guardian} }
@@ -198,6 +229,22 @@ async function main() {
       return (classCache[key] = uuid);
     }
 
+    // House — per-school lifelong assignment. Upsert into the `house` table.
+    async function resolveHouse(client, value) {
+      const val = clean(value);
+      if (!val) return null;
+      const code = normalizeCode(val);
+      if (houseCache[code]) return houseCache[code];
+      const r = await client.query("select uuid from house where school_id=$1 and lower(code)=lower($2) and status='active' limit 1", [schoolId, code]);
+      if (r.rows.length) return (houseCache[code] = r.rows[0].uuid);
+      const uuid = generateShortUuid(12);
+      (lookupCreated['house'] = lookupCreated['house'] || new Set()).add(code);
+      if (!args.dryRun) await client.query(
+        `insert into house (uuid,school_id,name,code,status,createdby_userid,created_at) values ($1,$2,$3,$4,'active','0',now())`,
+        [uuid, schoolId, val, code]);
+      return (houseCache[code] = uuid);
+    }
+
     // ---- PASS 1: students + guardians + addresses + enrollment ----
     if (!args.photosOnly) for (let i = 0; i < records.length; i++) {
       const row = records[i];
@@ -211,22 +258,41 @@ async function main() {
         if (!args.dryRun) await client.query('BEGIN');
         const dob = parseDate(row['D.O.B']);
         let studentId, isInsert;
+        let linkTarget = null; // existing student this (old) admission superseded
         const existing = byAdm.get(adm.toLowerCase());
         if (existing) {
           studentId = existing.uuid; isInsert = false;
         } else {
-          const k = norm(row['Student Name']) + '|' + (dob || '');
-          const hit = byNameDob.get(k);
-          if (hit && hit.some((a) => a.toLowerCase() !== adm.toLowerCase())) {
-            stats.skipDup++; byClass[cls].skip++;
-            suspected.push({ name: clean(row['Student Name']), father: clean(row["Father's Name"]), newAdm: adm, existing: hit.join(', '), cls });
-            if (!args.dryRun) await client.query('ROLLBACK');
-            client.release();
-            continue;
+          // Admission number not in DB. Look for the same child under a different
+          // (newer) admission number: name+DOB, then name+father as a fallback.
+          const ndHits = (byNameDob.get(norm(row['Student Name']) + '|' + (dob || '')) || [])
+            .filter((s) => String(s.admission_number || '').toLowerCase() !== adm.toLowerCase());
+          if (!args.linkOldAdmissions) {
+            // Default (forward runs): guard against accidental double-admission.
+            if (dob && ndHits.length) {
+              stats.skipDup++; byClass[cls].skip++;
+              suspected.push({ name: clean(row['Student Name']), father: clean(row["Father's Name"]), newAdm: adm, existing: ndHits.map((s) => s.admission_number).join(', '), cls });
+              if (!args.dryRun) await client.query('ROLLBACK');
+              client.release();
+              continue;
+            }
+          } else {
+            // Link mode (back-year): insert this old record AND backlink the newer one.
+            if (dob && !dobIsBad(dob) && ndHits.length) linkTarget = ndHits[0];
+            else {
+              const fn = norm(row["Father's Name"]);
+              const nfHits = fn ? (byNameFather.get(norm(row['Student Name']) + '|' + fn) || [])
+                .filter((s) => String(s.admission_number || '').toLowerCase() !== adm.toLowerCase()) : [];
+              if (nfHits.length === 1) linkTarget = nfHits[0];
+              else if (nfHits.length > 1) { stats.linkAmbiguous++; linkAmbiguousList.push({ name: clean(row['Student Name']), father: clean(row["Father's Name"]), adm, cands: nfHits.map((s) => s.admission_number).join(', '), cls }); }
+            }
+            if (linkTarget) stats.linked++;
           }
           studentId = generateShortUuid(12); isInsert = true;
         }
         admToUuid.set(adm.toLowerCase(), studentId);
+        // Garbage DOB on the old record → backfill the real DOB from the linked student.
+        const effDob = (linkTarget && dobIsBad(dob)) ? dbDateLocal(linkTarget.dob) : dob;
 
         // lookups
         const categoryCode = await resolveLookup(client, 'category', row['Category']);
@@ -237,8 +303,22 @@ async function main() {
         const cityCode = await resolveLookup(client, 'city', row['City']);
         const localityCode = await resolveLookup(client, 'locality', row['Locality']);
         const countryCode = await resolveLookup(client, 'country', row['Country']);
+        const houseId = await resolveHouse(client, row['House']);
 
-        const statusVal = clean(row['Status']).toLowerCase() === 'inactive' ? 'inactive' : 'active';
+        // A withdrawal date means the student has left, regardless of the export's
+        // Status column (older exports leave Status='Active' on withdrawn students).
+        const statusVal = (clean(row['Status']).toLowerCase() === 'inactive' || parseDate(row['Date Of Withdrawal']))
+          ? 'inactive' : 'active';
+        // Back-year run: a student who appears only in an old export and is absent
+        // from every newer year already loaded is, by definition, not currently
+        // enrolled — force inserts inactive so they never show in the live roster.
+        // A linked (superseded) old admission is always inactive: the child graduated
+        // onto the newer admission number.
+        const insertStatus = (args.insertsInactive || linkTarget) ? 'inactive' : statusVal;
+        // Back-year runs must never RESURRECT a student: the current (newest) status is
+        // authoritative, so an old export that still says 'Active' can't reactivate
+        // someone already inactive. Preserve the existing status on update in that mode.
+        const updateStatus = (args.insertsInactive && existing) ? existing.status : statusVal;
         const fatherMobile = orNull(row['Father Mobile No.']);
         const motherMobile = orNull(row['Mother Mobile No.']);
         const guardianMobile = orNull(row['Guardian Mobile No.']);
@@ -246,7 +326,7 @@ async function main() {
         const vals = {
           name: clean(row['Student Name']) || null,
           gender: clean(row['Gender']) || null,
-          dob,
+          dob: effDob,
           admissionDate: parseDate(row['Date Of Admission']),
           withdrawalDate: parseDate(row['Date Of Withdrawal']),
           withdrawalRemarks: orNull(row['Withdrawal Remarks']),
@@ -265,12 +345,12 @@ async function main() {
                 (uuid, admission_number, name, gender, dob, status, school_id,
                  student_email, student_mobile, category_code, nationality_code, mother_tongue_code,
                  blood_group_code, aadhaar_number, previous_school, admission_date, withdrawal_date, withdrawal_remarks,
-                 father_mobile, mother_mobile, guardian_mobile, createdby_userid, created_at)
-               values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,'0',now())`,
-              [studentId, adm, vals.name, vals.gender, vals.dob, statusVal, schoolId,
+                 father_mobile, mother_mobile, guardian_mobile, house_id, createdby_userid, created_at)
+               values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,'0',now())`,
+              [studentId, adm, vals.name, vals.gender, vals.dob, insertStatus, schoolId,
                vals.studentEmail, vals.studentMobile, vals.categoryCode, vals.nationalityCode, vals.motherTongueCode,
                vals.bloodCode, vals.aadhaar, vals.previousSchool, vals.admissionDate, vals.withdrawalDate, vals.withdrawalRemarks,
-               vals.fatherMobile, vals.motherMobile, vals.guardianMobile]);
+               vals.fatherMobile, vals.motherMobile, vals.guardianMobile, houseId]);
           } else {
             // Non-destructive: only fill fields when the CSV has a value (coalesce),
             // but name/gender/dob/status are authoritative from the export.
@@ -284,26 +364,40 @@ async function main() {
                  admission_date=coalesce($14,admission_date), withdrawal_date=coalesce($15,withdrawal_date),
                  withdrawal_remarks=coalesce($16,withdrawal_remarks),
                  father_mobile=coalesce($17,father_mobile), mother_mobile=coalesce($18,mother_mobile),
-                 guardian_mobile=coalesce($19,guardian_mobile), updatedby_userid='0', updated_at=now()
-               where uuid=$1 and school_id=$20`,
-              [studentId, vals.name, vals.gender, vals.dob, statusVal, vals.studentEmail, vals.studentMobile,
+                 guardian_mobile=coalesce($19,guardian_mobile), house_id=coalesce($20,house_id),
+                 updatedby_userid='0', updated_at=now()
+               where uuid=$1 and school_id=$21`,
+              [studentId, vals.name, vals.gender, vals.dob, updateStatus, vals.studentEmail, vals.studentMobile,
                vals.categoryCode, vals.nationalityCode, vals.motherTongueCode, vals.bloodCode, vals.aadhaar,
                vals.previousSchool, vals.admissionDate, vals.withdrawalDate, vals.withdrawalRemarks,
-               vals.fatherMobile, vals.motherMobile, vals.guardianMobile, schoolId]);
+               vals.fatherMobile, vals.motherMobile, vals.guardianMobile, houseId, schoolId]);
+          }
+
+          // Backlink: record the superseded (old) admission number on the newer,
+          // still-current student so the two admissions are connected.
+          if (linkTarget) {
+            await client.query("update student set old_admission_number=coalesce(old_admission_number,$1), updatedby_userid='0', updated_at=now() where uuid=$2 and school_id=$3",
+              [adm, linkTarget.uuid, schoolId]);
           }
 
           // Enrollment: one row per (student, AY) -> the CSV class.
+          // join_date = date the student entered THIS class: the real Date Of Joining
+          // if it falls within this academic year (their admission year, incl. mid-year
+          // joiners), else the AY start (a promotion into the year). Authoritative.
           const classId = await resolveClass(client, cls);
-          const joinDate = parseDate(row['Date Of Joining']);
+          const rawJoin = parseDate(row['Date Of Joining']);
+          const joinDate = (rawJoin && rawJoin >= ayStart && rawJoin <= ayEnd) ? rawJoin : ayStart;
+          const rollRaw = intOrNull(row['Roll No']); // per-year; only some exports carry it
+          const rollNumber = rollRaw && rollRaw > 0 ? rollRaw : null; // 0 = unassigned sentinel
           const en = await client.query('select uuid, class_id from student_class where student_id=$1 and academic_year_id=$2 and school_id=$3 limit 1', [studentId, ayId, schoolId]);
           if (en.rows.length) {
-            await client.query('update student_class set class_id=$1, join_date=coalesce($2,join_date), status=coalesce(status,$3), updatedby_userid=$4, updated_at=now() where uuid=$5',
-              [classId, joinDate, 'active', '0', en.rows[0].uuid]);
+            await client.query('update student_class set class_id=$1, join_date=$2, status=coalesce(status,$3), roll_number=coalesce($4,roll_number), updatedby_userid=$5, updated_at=now() where uuid=$6',
+              [classId, joinDate, 'active', rollNumber, '0', en.rows[0].uuid]);
           } else {
             await client.query(
-              `insert into student_class (uuid,student_id,academic_year_id,class_id,join_date,status,school_id,createdby_userid,created_at)
-               values ($1,$2,$3,$4,$5,'active',$6,'0',now()) on conflict (student_id,academic_year_id,class_id,school_id) do nothing`,
-              [generateShortUuid(12), studentId, ayId, classId, joinDate, schoolId]);
+              `insert into student_class (uuid,student_id,academic_year_id,class_id,join_date,roll_number,status,school_id,createdby_userid,created_at)
+               values ($1,$2,$3,$4,$5,$6,'active',$7,'0',now()) on conflict (student_id,academic_year_id,class_id,school_id) do nothing`,
+              [generateShortUuid(12), studentId, ayId, classId, joinDate, rollNumber, schoolId]);
           }
 
           // Guardians (father/mother/guardian) — upsert by (student, relation)
@@ -317,10 +411,17 @@ async function main() {
           }
           guardianRefs.push({ studentId, row, guardians: gmap });
 
-          // Addresses — replace only when a permanent line is present
+          // Addresses — replace only when a permanent line is present.
+          // In --address-fill-only mode (back-year sync) keep whatever the student
+          // already has and only fill from this file when they have none.
           const permLine = orNull(row['Permanent Address']);
           const corrLine = orNull(row['Correspondence Address']);
-          if (permLine || corrLine) {
+          let addrFilled = false;
+          if (args.addressFillOnly && (permLine || corrLine)) {
+            const has = await client.query("select 1 from student_address where student_id=$1 and school_id=$2 and status='active' limit 1", [studentId, schoolId]);
+            if (has.rows.length) addrFilled = true; // already has an address — leave it
+          }
+          if ((permLine || corrLine) && !addrFilled) {
             await client.query("update student_address set status='deleted', updatedby_userid='0', updated_at=now() where student_id=$1 and school_id=$2 and status='active'", [studentId, schoolId]);
             const hasCorr = !!corrLine;
             await insertAddress(client, schoolId, studentId, { line: permLine || corrLine, isPermanent: true, isCommunication: !hasCorr, localityCode, cityCode, stateCode, countryCode, pincode: orNull(row['Pincode']) });
@@ -534,6 +635,7 @@ function printReport(args, total) {
   console.log(`TOTAL        ${String(stats.insert).padStart(6)} ${String(stats.update).padStart(7)} ${String(stats.skipDup).padStart(6)}`);
   console.log(`\nGuardians: ${stats.guardians}  Addresses: ${stats.addresses}  TC: ${stats.tc}`);
   console.log(`Siblings linked: ${stats.siblingsLinked}  unresolved refs: ${stats.siblingsUnresolved}`);
+  if (args.linkOldAdmissions) console.log(`Old-admission links (old #->existing student): ${stats.linked}  father-name ambiguous: ${stats.linkAmbiguous}`);
   if (!args.dryRun && args.photos) console.log(`Photos uploaded: ${stats.photosUploaded}  skipped(existing): ${stats.photosSkipped}  failed: ${stats.photosFailed}`);
   console.log(`Errors: ${stats.errors}`);
   console.log('\nLookups that would be/were created:');
@@ -541,6 +643,10 @@ function printReport(args, total) {
   if (suspected.length) {
     console.log(`\nSUSPECTED DUPLICATES (skipped): ${suspected.length}`);
     for (const s of suspected.slice(0, 50)) console.log(`  • ${s.name} (father ${s.father}) new=${s.newAdm} vs existing=${s.existing} [${s.cls}]`);
+  }
+  if (linkAmbiguousList.length) {
+    console.log(`\nFATHER-NAME AMBIGUOUS (not linked — review): ${linkAmbiguousList.length}`);
+    for (const s of linkAmbiguousList.slice(0, 50)) console.log(`  • ${s.name} (father ${s.father}) old=${s.adm} vs candidates=${s.cands} [${s.cls}]`);
   }
   if (unresolvedSib.length) {
     console.log(`\nUNRESOLVED SIBLING REFS: ${unresolvedSib.length}`);

@@ -1,0 +1,6 @@
+class_2022_23,match_method,old_admission,student_name,father_name,dob_in_file,matched_admission,matched_name,matched_dob,matched_status
+"II-A","name+DOB","293/S/2K21","Anurag Pratap Singh","Mr. Ritesh Kumar","2015-12-09","982/2K26","Anurag Pratap Singh","2015-12-09","active"
+"UKG-A","name+DOB","174/J/2K21","Aradhya Katiyar","Mr. Sanjeev Katiyar","2016-10-13","643/S/2K24","Aradhya Katiyar","2016-10-13","active"
+"I-A","name+DOB","446/S/2K22","Atharv Kasodhan","Mr. Gaurav Gupta","2016-09-01","961/2K26","Atharv Kasodhan","2016-09-01","active"
+"II-A","name+father","281/S/2K21","Devansh Rajput","Mr. Asheesh Chandra","0001-11-30","676/S/2K24","Devansh Rajput","2014-04-26","active"
+"I-A","name+DOB","483/S/2K22","Shaurya Gupta","Mr. Ujjwal Gupta","2015-07-14","760/S/2K24","Shaurya Gupta","2015-07-14","active"

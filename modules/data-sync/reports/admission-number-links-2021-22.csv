@@ -1,0 +1,4 @@
+class_2021_22,match_method,old_admission,student_name,father_name,dob_in_file,matched_admission,matched_name,matched_dob,matched_status
+"II-A","name+DOB","224/S/2K20","Anayasha Gupta","Mr. Anurag Gupta","2014-04-29","638/S/2K24","Anayasha Gupta","2014-04-29","active"
+"VI-A","name+DOB","49/S/2K17","Priyam Rajput","Mr. Phool Singh Rajput","2010-07-25","521/S/2K23","Priyam Rajput","2010-07-25","active"
+"NURSERY-A","name+DOB","173/J/2K21","Smriti Katiyar","Mr. Sanjeev Katiyar","2018-04-24","695/S/2K24","Smriti Katiyar","2018-04-24","active"
