@@ -69,9 +69,23 @@ export interface EmployeeAudience {
   all?: boolean;
 }
 
+// Everyone connected to one or more transport routes: the students assigned to
+// the route (via their family contacts) plus the route's staff — accompanying
+// teacher, helper, and incharge employees. Resolved live at send time, so a van
+// swap / route edit made after enqueue is reflected. includeStudents/includeStaff
+// default to true when omitted. (Driver/conductor are name+phone snapshots, not
+// employee records, so they are not part of this audience.)
+export interface TransportAudience {
+  routeIds?: string[];
+  academicYearId?: string;
+  includeStudents?: boolean;
+  includeStaff?: boolean;
+}
+
 export interface AudienceSpec {
   students?: StudentAudience;
   employees?: EmployeeAudience;
+  transport?: TransportAudience;
 }
 
 // ------------------------------------------------------------------------- Job

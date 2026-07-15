@@ -1,5 +1,6 @@
 import {
   BASE_URL, headers, uniqueKey, getStudentWithNumber, processUntilDone, createTemplate, closePool,
+  getEmployeeId, seedTransportRoute,
 } from './helpers';
 
 afterAll(async () => {
@@ -94,6 +95,30 @@ describe('Communication API — templates + send flow', () => {
     const job = await processUntilDone(jobId);
     expect(job.status).toBe('failed');
     expect(job.error).toContain('No active template');
+  }, 30000);
+
+  it('resolves a transport route audience to its assigned students and staff', async () => {
+    const key = uniqueKey('route_');
+    await createTemplate({ key, channel: 'whatsapp', language: 'en', providerTemplateId: 'p-route', variables: ['recipientName'] });
+    const student = await getStudentWithNumber();
+    const staffId = await getEmployeeId();
+    const { routeId, cleanup } = await seedTransportRoute({ studentId: student.uuid, staffEmployeeId: staffId });
+    try {
+      const prevRes = await fetch(`${BASE_URL}/messages/preview`, {
+        method: 'POST', headers,
+        body: JSON.stringify({ templateKey: key, audience: { transport: { routeIds: [routeId] } } }),
+      });
+      expect(prevRes.status).toBe(200);
+      const preview = await prevRes.json();
+      // the assigned student must appear as a target
+      expect(preview.recipients.some((r: any) => r.recipientType === 'student' && r.recipientId === student.uuid)).toBe(true);
+      // and the route's accompanying teacher, when the school has an employee
+      if (staffId) {
+        expect(preview.recipients.some((r: any) => r.recipientType === 'employee' && r.recipientId === staffId)).toBe(true);
+      }
+    } finally {
+      await cleanup();
+    }
   }, 30000);
 
   it('skips a recipient when a required template variable is missing', async () => {

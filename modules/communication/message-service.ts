@@ -19,7 +19,7 @@ class MessageService {
     if (!req.templateKey || !req.templateKey.trim()) {
       throw new BusinessErrorResult(ErrorCode.BusinessError, 'templateKey is required');
     }
-    if (!req.audience || (!req.audience.students && !req.audience.employees)) {
+    if (!req.audience || (!req.audience.students && !req.audience.employees && !req.audience.transport)) {
       throw new BusinessErrorResult(ErrorCode.BusinessError, 'audience is required');
     }
 
@@ -294,7 +294,8 @@ class MessageService {
     return rows[0] || {};
   }
 
-  // student ids/classes/all and employee ids/roles/all. (wingId is reserved.)
+  // student ids/classes/all, employee ids/roles/all, and transport route(s).
+  // (wingId is reserved.)
   private async resolveTargets(schoolId: string, audience?: AudienceSpec): Promise<AudienceTarget[]> {
     const byKey = new Map<string, AudienceTarget>();
     if (!audience) return [];
@@ -328,18 +329,6 @@ class MessageService {
         ));
       }
     }
-    for (const row of studentRows) {
-      const key = `student:${row.uuid}`;
-      if (byKey.has(key)) continue;
-      byKey.set(key, {
-        recipientType: 'student',
-        recipientId: row.uuid,
-        name: row.name,
-        preference: row.communicationPreference,
-        numbers: studentNumbers(row),
-        context: autoContext('student', row),
-      });
-    }
 
     const employeeRows: any[] = [];
     const e = audience.employees;
@@ -366,6 +355,57 @@ class MessageService {
           [schoolId],
         ));
       }
+    }
+
+    // Transport routes: assigned students and/or route staff (teacher/helper/incharge).
+    const t = audience.transport;
+    if (t && t.routeIds && t.routeIds.length > 0) {
+      if (t.includeStudents !== false) {
+        const params: any[] = [schoolId, t.routeIds];
+        let yearClause = '';
+        if (t.academicYearId) { yearClause = ' and tsa.academic_year_id = $3'; params.push(t.academicYearId); }
+        studentRows.push(...await DB.query(
+          singleLineString`
+            select st.* from student st
+            join transport_student_assignment tsa on tsa.student_id = st.uuid and tsa.school_id = st.school_id
+            where st.school_id = $1 and st.status = 'active' and tsa.status = 'active'
+              and tsa.route_id = any($2)${yearClause}
+          `,
+          params,
+        ));
+      }
+      if (t.includeStaff !== false) {
+        const routes = await DB.query(
+          singleLineString`
+            select accompanying_teacher_id, helper_id, route_incharge_id
+            from transport_route where school_id = $1 and status = 'active' and uuid = any($2)
+          `,
+          [schoolId, t.routeIds],
+        );
+        const staffIds = Array.from(new Set(
+          routes.flatMap((r: any) => [r.accompanyingTeacherId, r.helperId, r.routeInchargeId])
+            .filter((id: any) => !!id),
+        ));
+        if (staffIds.length > 0) {
+          employeeRows.push(...await DB.query(
+            singleLineString`select * from employee where school_id = $1 and status = 'active' and uuid = any($2)`,
+            [schoolId, staffIds],
+          ));
+        }
+      }
+    }
+
+    for (const row of studentRows) {
+      const key = `student:${row.uuid}`;
+      if (byKey.has(key)) continue;
+      byKey.set(key, {
+        recipientType: 'student',
+        recipientId: row.uuid,
+        name: row.name,
+        preference: row.communicationPreference,
+        numbers: studentNumbers(row),
+        context: autoContext('student', row),
+      });
     }
     for (const row of employeeRows) {
       const key = `employee:${row.uuid}`;
@@ -399,6 +439,8 @@ function audienceSummary(audience: AudienceSpec): string {
     else if (e.employeeIds?.length) parts.push(`${e.employeeIds.length} employee(s)`);
     else if (e.roleIds?.length) parts.push(`${e.roleIds.length} role(s)`);
   }
+  const tr = audience.transport;
+  if (tr && tr.routeIds?.length) parts.push(`${tr.routeIds.length} transport route(s)`);
   return parts.join(' + ') || 'No audience';
 }
 

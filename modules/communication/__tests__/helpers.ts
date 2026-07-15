@@ -82,3 +82,47 @@ export async function createTemplate(body: any): Promise<any> {
   if (res.status !== 200) throw new Error(`createTemplate failed (${res.status}): ${await res.text()}`);
   return res.json();
 }
+
+const { generateShortUuid } = require('../../../shared/util/generate-uuid.js');
+
+export async function getSchoolId(): Promise<string> {
+  const res = await getPool().query(`select uuid from school where lower(code) = lower($1)`, [TEST_SCHOOL_CODE]);
+  if (res.rows.length === 0) throw new Error(`No school for code ${TEST_SCHOOL_CODE}`);
+  return res.rows[0].uuid;
+}
+
+// An active employee in the test school, for route-staff coverage.
+export async function getEmployeeId(): Promise<string | null> {
+  const res = await getPool().query(
+    `select emp.uuid from employee emp join school s on s.uuid = emp.school_id
+     where lower(s.code) = lower($1) and emp.status = 'active' limit 1`,
+    [TEST_SCHOOL_CODE],
+  );
+  return res.rows.length > 0 ? res.rows[0].uuid : null;
+}
+
+// Seed a morning transport route with one student assigned (+ optional staff),
+// returning ids for assertion and cleanup. Uses the pool directly so tests don't
+// depend on the transport module running.
+export async function seedTransportRoute(opts: { studentId: string; staffEmployeeId?: string | null }): Promise<{ routeId: string; cleanup: () => Promise<void> }> {
+  const schoolId = await getSchoolId();
+  const routeId = generateShortUuid(12);
+  const assignmentId = generateShortUuid(12);
+  const yearId = generateShortUuid(12);
+  const now = new Date();
+  await getPool().query(
+    `insert into transport_route (uuid, school_id, name, direction, accompanying_teacher_id, status, createdby_userid, created_at)
+     values ($1, $2, $3, 'morning', $4, 'active', 'test', $5)`,
+    [routeId, schoolId, `test-route-${routeId}`, opts.staffEmployeeId || null, now],
+  );
+  await getPool().query(
+    `insert into transport_student_assignment (uuid, school_id, academic_year_id, student_id, route_id, stop_id, direction, status, createdby_userid, created_at)
+     values ($1, $2, $3, $4, $5, $6, 'morning', 'active', 'test', $7)`,
+    [assignmentId, schoolId, yearId, opts.studentId, routeId, generateShortUuid(12), now],
+  );
+  const cleanup = async () => {
+    await getPool().query(`delete from transport_student_assignment where uuid = $1`, [assignmentId]);
+    await getPool().query(`delete from transport_route where uuid = $1`, [routeId]);
+  };
+  return { routeId, cleanup };
+}
