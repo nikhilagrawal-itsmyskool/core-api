@@ -30,13 +30,20 @@ class StudentHandler {
         phone: q.phone,
       });
       // Presign a photo URL per row only when the caller asks (the grid does; the
-      // dropdown/search dialogs don't, so they skip the presign cost).
+      // dropdown/search dialogs don't, so they skip the presign cost). The grid
+      // pulls the full roster, so sign in bounded batches rather than one giant
+      // Promise.all — firing thousands of concurrent SigV4 signings at once is
+      // what OOM'd/timed-out the Lambda (a broad name=a matches the whole school).
       if (q.withPhotos === 'true') {
-        await Promise.all(
-          (results as any[]).map(async (r: any) => {
-            if (r.photoStorageKey) r.photoUrl = await getSignedPhotoUrl(r.photoStorageKey);
-          })
-        );
+        const rows = (results as any[]).filter((r: any) => r.photoStorageKey);
+        const BATCH = 25;
+        for (let i = 0; i < rows.length; i += BATCH) {
+          await Promise.all(
+            rows.slice(i, i + BATCH).map(async (r: any) => {
+              r.photoUrl = await getSignedPhotoUrl(r.photoStorageKey);
+            })
+          );
+        }
       }
       (results as any[]).forEach((r: any) => delete r.photoStorageKey);
       ResponseBuilder.ok(results, callback);

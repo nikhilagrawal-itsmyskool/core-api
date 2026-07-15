@@ -10,6 +10,10 @@
   search-student:
     handler: student-handler.search
     name: ${self:service}-search-student
+    # withPhotos presigns an S3 URL per row (SigV4 = CPU); give this more memory
+    # (⇒ more CPU) and headroom over the 160MB/10s default so signing stays fast.
+    memorySize: 512
+    timeout: 20
     events:
       - http:
           path: search
