@@ -1,7 +1,7 @@
 import { ApiCallback, ApiContext, ApiEvent } from '../../shared/lib/api.interfaces';
 import { ErrorCode } from '../../shared/lib/error-codes';
 import { ResponseBuilder } from '../../shared/lib/response-builder';
-import { studentAuthService, StudentLogin } from './student-auth-service';
+import { studentAuthService, FamilyLogin } from './student-auth-service';
 import { validateSchoolCodeHeader } from './auth-utils';
 
 class StudentAuthHandler {
@@ -24,24 +24,26 @@ class StudentAuthHandler {
         return;
       }
 
-      const studentLogin: StudentLogin | null = await studentAuthService.validateUsernameAndPassword(
+      const familyLogin: FamilyLogin | null = await studentAuthService.validateFamilyLogin(
         username,
         password,
         schoolId
       );
 
-      if (!studentLogin) {
+      if (!familyLogin) {
         ResponseBuilder.unauthorizedRequest(ErrorCode.GeneralError, 'Invalid username or password', callback);
         return;
       }
 
       const token: string = studentAuthService.signToken({
         auth: process.env.JWT_MAGIC_KEY,
-        id: studentLogin.uuid,
+        id: familyLogin.loginId,
         login_name: username,
         school_id: schoolId,
         school_code: schoolCode,
         type: 'student',
+        // Sibling ids the app may act as; doubles as the X-Student-Id allowlist.
+        students: familyLogin.students.map((s) => ({ id: s.id, name: s.name })),
       });
 
       if (!token) {
@@ -52,7 +54,7 @@ class StudentAuthHandler {
 
       const resp = {
         token: token,
-        displayName: studentLogin.displayName,
+        students: familyLogin.students,
       };
       ResponseBuilder.ok(resp, callback);
     } catch (err: any) {

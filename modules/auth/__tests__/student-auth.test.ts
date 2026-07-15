@@ -11,7 +11,7 @@ describe('Student Auth API', () => {
   const loginUrl = `${BASE_URL}/student/login`;
 
   describe('POST /auth/student/login', () => {
-    it('should return JWT token and displayName on successful login', async () => {
+    it('should return JWT token and the family students list on successful login', async () => {
       const response = await fetch(loginUrl, {
         method: 'POST',
         headers: {
@@ -28,11 +28,14 @@ describe('Student Auth API', () => {
       const data = await response.json();
       expect(data).toHaveProperty('token');
       expect(typeof data.token).toBe('string');
-      expect(data).toHaveProperty('displayName');
-      expect(typeof data.displayName).toBe('string');
+      // Family login returns the linked siblings, each with id + name.
+      expect(Array.isArray(data.students)).toBe(true);
+      expect(data.students.length).toBeGreaterThan(0);
+      expect(data.students[0]).toHaveProperty('id');
+      expect(data.students[0]).toHaveProperty('name');
     });
 
-    it('should return JWT with login_name, school_code, and type=student', async () => {
+    it('should return JWT with login_name, school_code, type=student, and students[]', async () => {
       const response = await fetch(loginUrl, {
         method: 'POST',
         headers: {
@@ -55,6 +58,9 @@ describe('Student Auth API', () => {
       expect(payload).toHaveProperty('login_name', TEST_USERNAME);
       expect(payload).toHaveProperty('school_code', TEST_SCHOOL_CODE);
       expect(payload).toHaveProperty('type', 'student');
+      // The sibling-id allowlist is embedded in the token.
+      expect(Array.isArray(payload.students)).toBe(true);
+      expect(payload.students[0]).toHaveProperty('id');
     });
 
     it('should return 401 for invalid password', async () => {
