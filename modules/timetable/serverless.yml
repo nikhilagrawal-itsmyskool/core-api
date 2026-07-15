@@ -2,6 +2,10 @@ provider:
   name: aws
   region: ap-south-1
   stage: ${opt:stage, 'dev'}
+  # This service has ~90 functions; a published Lambda Version per function pushes
+  # the CloudFormation stack past its 500-resource limit. We don't use versions or
+  # aliases (no provisioned concurrency), so drop them to reclaim ~90 resources.
+  versionFunctions: false
   environment:
     ${file(../../configs/${self:provider.stage}/${self:provider.stage}.yml)}
   $<<: ${file(../global-config-${self:provider.stage}.yml):provider}

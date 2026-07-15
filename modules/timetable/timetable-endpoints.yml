@@ -649,3 +649,119 @@
           path: teacher-constraints/{id}
           method: delete
           cors: true
+
+  # Seasonal bell timings (summer/winter clock times over the same grid)
+  list-seasons:
+    handler: season-handler.list
+    name: ${self:service}-list-seasons
+    events:
+      - http:
+          path: seasons
+          method: get
+          cors: true
+  create-season:
+    handler: season-handler.create
+    name: ${self:service}-create-season
+    events:
+      - http:
+          path: seasons
+          method: post
+          cors: true
+  get-season:
+    handler: season-handler.getById
+    name: ${self:service}-get-season
+    events:
+      - http:
+          path: seasons/{id}
+          method: get
+          cors: true
+  update-season:
+    handler: season-handler.update
+    name: ${self:service}-update-season
+    events:
+      - http:
+          path: seasons/{id}
+          method: put
+          cors: true
+  delete-season:
+    handler: season-handler.remove
+    name: ${self:service}-delete-season
+    events:
+      - http:
+          path: seasons/{id}
+          method: delete
+          cors: true
+  list-season-slot-times:
+    handler: season-handler.listSlotTimes
+    name: ${self:service}-list-season-slot-times
+    events:
+      - http:
+          path: seasons/{id}/slot-times
+          method: get
+          cors: true
+  set-season-slot-times:
+    handler: season-handler.setSlotTimes
+    name: ${self:service}-set-season-slot-times
+    events:
+      - http:
+          path: seasons/{id}/slot-times
+          method: put
+          cors: true
+  prefill-season:
+    handler: season-handler.prefill
+    name: ${self:service}-prefill-season
+    events:
+      - http:
+          path: seasons/{id}/prefill
+          method: post
+          cors: true
+  delete-season-slot-time:
+    handler: season-handler.removeSlotTime
+    name: ${self:service}-delete-season-slot-time
+    events:
+      - http:
+          path: season-slot-times/{slotTimeId}
+          method: delete
+          cors: true
+  list-season-activations:
+    handler: season-handler.listActivations
+    name: ${self:service}-list-season-activations
+    events:
+      - http:
+          path: season-activations
+          method: get
+          cors: true
+  create-season-activation:
+    handler: season-handler.createActivation
+    name: ${self:service}-create-season-activation
+    events:
+      - http:
+          path: season-activations
+          method: post
+          cors: true
+  update-season-activation:
+    handler: season-handler.updateActivation
+    name: ${self:service}-update-season-activation
+    events:
+      - http:
+          path: season-activations/{activationId}
+          method: put
+          cors: true
+  delete-season-activation:
+    handler: season-handler.removeActivation
+    name: ${self:service}-delete-season-activation
+    events:
+      - http:
+          path: season-activations/{activationId}
+          method: delete
+          cors: true
+
+  # "Happening now" for the student app (published master + active season times)
+  happening-now:
+    handler: now-handler.now
+    name: ${self:service}-happening-now
+    events:
+      - http:
+          path: now
+          method: get
+          cors: true

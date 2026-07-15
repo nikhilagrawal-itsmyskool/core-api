@@ -464,3 +464,63 @@ alter table published_entry alter column subject_id drop not null;
 create index if not exists idx_published_entry_timetable on published_entry(published_timetable_id);
 create index if not exists idx_published_entry_class on published_entry(published_timetable_id, class_id);
 create index if not exists idx_published_entry_teacher on published_entry(published_timetable_id, teacher_id);
+
+-- ---------------------------------------------------------------------------
+-- Seasonal bell timings
+-- The grid STRUCTURE (day_structure/time_slot) is stable year-round, but the
+-- clock TIMES differ by season (summer/winter). A season is a reusable named
+-- override set layered on each slot's base start/end; a dated activation window
+-- selects which season applies on a given date. No season / no matching
+-- activation => the slot's own base start/end is used. Timing-only: adding or
+-- removing slots is a different config, not a season. See DESIGN.md.
+-- ---------------------------------------------------------------------------
+
+-- timetable_season: a reusable named timing set (e.g. "Summer", "Winter").
+create table if not exists timetable_season (
+    uuid varchar(12) primary key,
+    school_id varchar(12) not null,
+    name varchar(64) not null,
+    status varchar(16) check (status in ('active', 'archived')),
+    createdby_userid varchar(12),
+    created_at timestamp(0),
+    updatedby_userid varchar(12),
+    updated_at timestamp(0)
+);
+
+create index if not exists idx_timetable_season_school on timetable_season(school_id, status);
+
+-- season_slot_time: per-slot start/end override for a season. One row per
+-- (season, time_slot); slots without a row fall back to their base time.
+create table if not exists season_slot_time (
+    uuid varchar(12) primary key,
+    school_id varchar(12) not null,
+    season_id varchar(12) not null,
+    time_slot_id varchar(12) not null,
+    start_time time,
+    end_time time,
+    createdby_userid varchar(12),
+    created_at timestamp(0),
+    updatedby_userid varchar(12),
+    updated_at timestamp(0)
+);
+
+create unique index if not exists idx_season_slot_time_unique on season_slot_time(season_id, time_slot_id);
+create index if not exists idx_season_slot_time_slot on season_slot_time(time_slot_id);
+
+-- season_activation: a dated window mapping a date range to a season. The window
+-- containing a date selects it; on overlap the latest effective_from <= date
+-- wins; effective_to null = open-ended until a later activation supersedes it.
+create table if not exists season_activation (
+    uuid varchar(12) primary key,
+    school_id varchar(12) not null,
+    season_id varchar(12) not null,
+    effective_from date not null,
+    effective_to date,
+    createdby_userid varchar(12),
+    created_at timestamp(0),
+    updatedby_userid varchar(12),
+    updated_at timestamp(0)
+);
+
+create index if not exists idx_season_activation_school on season_activation(school_id, effective_from);
+create index if not exists idx_season_activation_season on season_activation(season_id);

@@ -194,6 +194,83 @@ single class are soft-deleted (`status='deleted'`) on `class_subject` / `teachin
 singles, two cross-class bands, the stream subjects) whose output passes `validateTimetable`,
 with the shared lessons at **identical** day/slot in both classes and no teacher double-booked.
 
+## Seasonal bell timings & "happening now"
+
+> Status: **built** (test-backed). Tables in `timetable-setup.sql`
+> (`timetable_season` / `season_slot_time` / `season_activation`); season +
+> activation CRUD, prefill, and `GET /timetable/now` are live. Tests:
+> `__tests__/now-util.test.ts` (pure time math), `season.test.ts` (CRUD +
+> overlap + prefill), `now.test.ts` (end-to-end resolve over a published master).
+
+**Problem.** The grid *structure* — which periods exist (assembly, registration,
+teaching periods, break, lunch, recess, activity), their `sequence`, `slot_type`,
+and `label` — is stable year-round, but the **clock times** differ by season
+(summer vs winter). The same published timetable (class→teacher assignments) must
+serve every season; only the bell times move. Separately, the student app wants a
+live "what's happening in school right now" view driven by these times.
+
+**Why not clone the config per season.** `published_entry` binds to `time_slot`
+uuids and the class→teacher assignment is identical across seasons; cloning the
+config per season mints new slot uuids and forces a re-publish just to shift bell
+times, and the two seasons would drift. So timing is an **overlay** on the one
+grid, not a copy of it.
+
+**Model — season as a timing overlay (additive, opt-in, no migration).** Today
+`time_slot.start_time/end_time` hold the *only* schedule; those stay as the
+**base/default** times, so a school with no seasonal variation is unaffected. A
+season supplies an optional per-slot override:
+
+- `timetable_season` — school-level named timing set (`name` e.g. "Summer" /
+  "Winter", `status`). Reusable across years.
+- `season_slot_time` — `(season_id, time_slot_id, start_time, end_time)`: one row
+  per slot per season, overriding that slot's base time. Partial sets allowed
+  (unspecified slots fall back to base). `time_slot_id` belongs to a config's day,
+  so one season can carry times across multiple configs/wings.
+- `season_activation` — dated windows `(season_id, effective_from date,
+  effective_to date|null)`. **Resolution:** the activation whose window contains a
+  given date wins; on overlap the **latest `effective_from ≤ date`** wins;
+  `effective_to = null` = open-ended until a later activation supersedes it; **no
+  match → base times**. Reusing "Summer" each year = add another activation row
+  (the timing set is defined once, not re-entered).
+
+**Scope boundary.** The overlay changes **times only** — including compressing
+periods / ending the day earlier. **Adding or removing slots** (a structurally
+different day) is a *different config*, not a season.
+
+**"Happening now" read.** `GET /timetable/now?classId=&at=` (`at` optional, for
+testing; default = school-local now):
+1. Resolve the active season for `at`'s date (rules above) → else base.
+2. `at`'s weekday → the class's published master → its config's `day_structure`
+   for that weekday → slots.
+3. Each slot's effective time = `season_slot_time(season, slot)` ?? slot base.
+4. The slot bracketing school-local `at` → its `label`/`slot_type` (Assembly /
+   Registration / Lunch / Recess / Period n…).
+5. If `teaching` and `classId` given → the `published_entry` at that (day, slot)
+   → subject + teacher.
+6. Return **current + next**: `{ now: {...}, next: {...} }`.
+
+**⚠️ Timezone.** `time` columns are wall-clock; all comparisons use
+**Asia/Kolkata** (Lambda runs UTC). School TZ is assumed IST for now; promote it
+to a school setting if the product ever leaves India.
+
+**Class resolution.** `/now` takes `classId` (the caller/BFF resolves the
+logged-in student's current class via `student_class`) to keep the timetable
+module decoupled from student enrollment; a `studentId` convenience form can
+resolve it internally later.
+
+**Admin UX / API (proposed).**
+- `timetable_season` CRUD (`/timetable/seasons`), nested `season_slot_time`, and
+  `season_activation` windows.
+- `POST /timetable/seasons/{id}/prefill?configId=` — seed `season_slot_time` from
+  each slot's base time so the admin only tweaks the deltas.
+- Activation windows must not overlap (validated on write); latest-start-wins is
+  the tolerant runtime rule.
+
+**Build order (when greenlit).** (1) tables + season / slot-time / activation CRUD
++ prefill; (2) the `/now` resolver + tests (season pick by date, base fallback, TZ
+correctness, slot-edge boundaries, non-teaching slots); (3) admin-portal season
+editor. Backward-compatible throughout — schools with no seasons keep base times.
+
 ## Build phases
 
 A manual builder alone just reproduces what schools already do by hand, so it is

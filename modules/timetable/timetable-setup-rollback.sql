@@ -2,6 +2,9 @@
 -- Drops all timetable tables. Safe to re-run.
 -- Note: the forward-compatible class.class_group_id column is also dropped.
 
+drop table if exists season_activation;
+drop table if exists season_slot_time;
+drop table if exists timetable_season;
 drop table if exists published_entry;
 drop table if exists published_timetable;
 drop table if exists timetable_entry;

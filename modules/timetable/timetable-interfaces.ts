@@ -340,6 +340,101 @@ export interface UpdateTimeSlotRequest {
   label?: string;
 }
 
+// -------------------------------------------------------------- seasonal timings
+// A season is a reusable named set of per-slot clock times (e.g. "Summer") layered
+// over the grid's base times; a dated activation window selects which season is in
+// effect on a given date. Structure never changes — only the times. See DESIGN.md.
+export interface TimetableSeason extends BaseEntity {
+  name: string;
+  status: ConfigStatus; // active | archived
+  slotTimes?: SeasonSlotTime[];
+  activations?: SeasonActivation[];
+}
+
+export interface CreateSeasonRequest {
+  name: string;
+}
+
+export interface UpdateSeasonRequest {
+  name?: string;
+  status?: ConfigStatus;
+}
+
+// Per-slot time override for a season. Missing rows (or null times) fall back to
+// the slot's own base start/end.
+export interface SeasonSlotTime extends BaseEntity {
+  seasonId: string;
+  timeSlotId: string;
+  startTime?: string | null;
+  endTime?: string | null;
+}
+
+export interface SeasonSlotTimeInput {
+  timeSlotId: string;
+  startTime?: string | null;
+  endTime?: string | null;
+}
+
+// Bulk set several slots' season times in one call (partial: only the listed slots).
+export interface SetSeasonSlotTimesRequest {
+  slotTimes: SeasonSlotTimeInput[];
+}
+
+// Seed a season's slot times from each slot's base time, for one config's grid.
+export interface PrefillSeasonRequest {
+  configId: string;
+}
+
+export interface SeasonActivation extends BaseEntity {
+  seasonId: string;
+  effectiveFrom: string; // date (YYYY-MM-DD)
+  effectiveTo?: string | null; // null = open-ended until a later activation supersedes it
+  seasonName?: string;
+}
+
+export interface CreateSeasonActivationRequest {
+  seasonId: string;
+  effectiveFrom: string;
+  effectiveTo?: string | null;
+}
+
+export interface UpdateSeasonActivationRequest {
+  effectiveFrom?: string;
+  effectiveTo?: string | null;
+}
+
+// ---------------------------------------------------------------- "happening now"
+// A resolved view of what a class is doing at a given moment (school-local time),
+// driven by the published master + the active season's bell times.
+export interface HappeningSlot {
+  timeSlotId: string;
+  sequence: number;
+  slotType: SlotType;
+  label?: string | null;
+  startTime?: string | null;
+  endTime?: string | null;
+  // Present for teaching slots that resolve to a class entry (one, or several for
+  // an elective band). Empty for assembly/break/lunch/free periods.
+  entries: {
+    subjectId?: string | null;
+    subjectName?: string | null;
+    teacherId?: string | null;
+    teacherName?: string | null;
+  }[];
+}
+
+export interface HappeningNow {
+  classId: string;
+  at: string; // ISO instant the answer was computed for
+  localDate: string; // school-local date (YYYY-MM-DD)
+  dayOfWeek: number; // 1=Mon..7=Sun
+  seasonId: string | null; // active season, or null (base times)
+  seasonName: string | null;
+  now: HappeningSlot | null; // slot bracketing the current time, or null (before/after school / no school)
+  next: HappeningSlot | null; // the following slot today, or null
+  note?: string; // set when there's nothing to show (e.g. no published timetable)
+}
+
 // ------------------------------------------------------------ teacher_constraint
 export interface TeacherConstraint extends BaseEntity {
   academicYearId: string;
