@@ -330,6 +330,118 @@ class AttendanceService {
     const updated = await DB.query(singleLineString`select * from attendance_record where uuid = $1`, [recordId]);
     return updated[0];
   }
+
+  // Parent-app view: one student's attendance across finalized sessions, newest
+  // first, plus a rolled-up summary. Only finalized sessions count — an open
+  // (mid-marking) session isn't a fact yet. `percent` treats present + late as
+  // attended.
+  public async getStudentAttendance(
+    schoolId: string,
+    studentId: string,
+    filters: { academicYearId?: string; from?: string; to?: string },
+  ): Promise<{ summary: Record<string, number>; days: any[] }> {
+    const params: any[] = [schoolId, studentId];
+    const clauses: string[] = ['sess.school_id = $1', 'r.student_id = $2', `sess.status = 'finalized'`];
+    if (filters.academicYearId) { params.push(filters.academicYearId); clauses.push(`sess.academic_year_id = $${params.length}`); }
+    if (filters.from) { params.push(filters.from); clauses.push(`sess.attendance_date >= $${params.length}`); }
+    if (filters.to) { params.push(filters.to); clauses.push(`sess.attendance_date <= $${params.length}`); }
+
+    const days = await DB.query(
+      singleLineString`
+        select to_char(sess.attendance_date, 'YYYY-MM-DD') as date,
+               r.status, r.remark, c.name as class_name
+        from attendance_record r
+        join attendance_session sess on sess.uuid = r.session_id
+        left join class c on c.uuid = sess.class_id
+        where ${clauses.join(' and ')}
+        order by sess.attendance_date desc
+      `,
+      params,
+    );
+
+    const summary: Record<string, number> = { present: 0, absent: 0, late: 0, leave: 0, total: 0, percent: 0 };
+    for (const d of days) {
+      if (summary[d.status] !== undefined) summary[d.status]++;
+      summary.total++;
+    }
+    summary.percent = summary.total > 0
+      ? Math.round(((summary.present + summary.late) / summary.total) * 100)
+      : 0;
+
+    return { summary, days };
+  }
+
+  // Class attendance register for a date range: the enrolled roster as rows, the
+  // finalized session dates as columns, and each student's per-day status +
+  // totals. Mirrors a physical register (blank cell = no mark that day).
+  public async getClassRegister(
+    schoolId: string,
+    classId: string,
+    academicYearId: string,
+    from: string,
+    to: string,
+  ): Promise<{ dates: string[]; students: any[] }> {
+    const dateRows = await DB.query(
+      singleLineString`
+        select to_char(attendance_date, 'YYYY-MM-DD') as d
+        from attendance_session
+        where school_id = $1 and class_id = $2 and academic_year_id = $3
+          and status = 'finalized' and attendance_date between $4 and $5
+        order by attendance_date
+      `,
+      [schoolId, classId, academicYearId, from, to],
+    );
+    const dates = dateRows.map((r: any) => r.d);
+
+    const roster = await DB.query(
+      singleLineString`
+        select sc.student_id, s.name, s.admission_number, sc.roll_number
+        from student_class sc
+        join student s on s.uuid = sc.student_id and s.school_id = sc.school_id
+        where sc.school_id = $1 and sc.class_id = $2 and sc.academic_year_id = $3
+          and (sc.status is null or sc.status <> 'deleted') and s.status <> 'deleted'
+        order by sc.roll_number nulls last, s.name
+      `,
+      [schoolId, classId, academicYearId],
+    );
+
+    const marks = await DB.query(
+      singleLineString`
+        select r.student_id, to_char(sess.attendance_date, 'YYYY-MM-DD') as d, r.status
+        from attendance_record r
+        join attendance_session sess on sess.uuid = r.session_id
+        where sess.school_id = $1 and sess.class_id = $2 and sess.academic_year_id = $3
+          and sess.status = 'finalized' and sess.attendance_date between $4 and $5
+      `,
+      [schoolId, classId, academicYearId, from, to],
+    );
+    const byStudent = new Map<string, Record<string, string>>();
+    for (const m of marks) {
+      if (!byStudent.has(m.studentId)) byStudent.set(m.studentId, {});
+      byStudent.get(m.studentId)![m.d] = m.status;
+    }
+
+    const students = roster.map((st: any) => {
+      const map = byStudent.get(st.studentId) || {};
+      let present = 0, absent = 0, leave = 0, late = 0;
+      for (const d of dates) {
+        const s = map[d];
+        if (s === 'present') present++;
+        else if (s === 'absent') absent++;
+        else if (s === 'leave') leave++;
+        else if (s === 'late') late++;
+      }
+      const working = present + absent + late; // leave excluded, matching the source
+      return {
+        studentId: st.studentId, name: st.name, admissionNumber: st.admissionNumber,
+        rollNumber: st.rollNumber, marks: map,
+        present, absent, leave, late, working,
+        percent: working > 0 ? Math.round(((present + late) / working) * 100) : 0,
+      };
+    });
+
+    return { dates, students };
+  }
 }
 
 export const attendanceService = new AttendanceService();

@@ -130,9 +130,48 @@ class AttendanceHandler {
       ResponseBuilder.handleError(err, callback);
     }
   };
+
+  // GET /student/{studentId}?academicYearId=&from=&to= — a student's attendance
+  // (daily records + summary) for the 360 view.
+  public getStudentAttendance = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
+    _context.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const ctx = await resolveSchool(event, callback);
+      if (!ctx) return;
+      const studentId = requireParam(event, 'studentId', callback);
+      if (!studentId) return;
+      const q = event.queryStringParameters || {};
+      const result = await attendanceService.getStudentAttendance(ctx.schoolId, studentId, {
+        academicYearId: q.academicYearId, from: q.from, to: q.to,
+      });
+      ResponseBuilder.ok(result, callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
+  // GET /register?classId=&academicYearId=&from=&to= — class attendance register.
+  public getRegister = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
+    _context.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const ctx = await resolveSchool(event, callback);
+      if (!ctx) return;
+      const q = event.queryStringParameters || {};
+      if (!q.classId || !q.academicYearId || !q.from || !q.to) {
+        ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'classId, academicYearId, from and to are required', callback);
+        return;
+      }
+      const result = await attendanceService.getClassRegister(ctx.schoolId, q.classId, q.academicYearId, q.from, q.to);
+      ResponseBuilder.ok(result, callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
 }
 
 const handler = new AttendanceHandler();
+export const getStudentAttendance = handler.getStudentAttendance;
+export const getRegister = handler.getRegister;
 export const getRoster = handler.getRoster;
 export const openSession = handler.openSession;
 export const saveMarks = handler.saveMarks;

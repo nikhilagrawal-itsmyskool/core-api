@@ -7,6 +7,16 @@
           method: get
           cors: true
 
+  # Parent app (family token + X-Student-Id): my child's attendance history
+  get-my-attendance:
+    handler: attendance-me-handler.getMy
+    name: ${self:service}-get-my-attendance
+    events:
+      - http:
+          path: me
+          method: get
+          cors: true
+
   # Roster for the marking screen
   get-roster:
     handler: attendance-handler.getRoster
@@ -14,6 +24,26 @@
     events:
       - http:
           path: roster
+          method: get
+          cors: true
+
+  # Class attendance register (rows=students, cols=dates) for a duration
+  get-register:
+    handler: attendance-handler.getRegister
+    name: ${self:service}-get-register
+    events:
+      - http:
+          path: register
+          method: get
+          cors: true
+
+  # A student's attendance (daily + summary) for the 360 view
+  get-student-attendance:
+    handler: attendance-handler.getStudentAttendance
+    name: ${self:service}-get-student-attendance
+    events:
+      - http:
+          path: student/{studentId}
           method: get
           cors: true
 
