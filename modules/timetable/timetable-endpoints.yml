@@ -765,3 +765,31 @@
           path: now
           method: get
           cors: true
+
+  # Today's full published day for a class (all slots + now/next) — admin 360 view
+  class-today:
+    handler: now-handler.today
+    name: ${self:service}-class-today
+    events:
+      - http:
+          path: today
+          method: get
+          cors: true
+
+  # Parent app (family token + X-Student-Id): my child's class, resolved from the token
+  my-now:
+    handler: now-handler.myNow
+    name: ${self:service}-my-now
+    events:
+      - http:
+          path: me/now
+          method: get
+          cors: true
+  my-week:
+    handler: now-handler.myWeek
+    name: ${self:service}-my-week
+    events:
+      - http:
+          path: me/week
+          method: get
+          cors: true
