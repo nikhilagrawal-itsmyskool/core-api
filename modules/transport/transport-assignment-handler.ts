@@ -5,6 +5,7 @@ import { resolveSchool, parseBody, requireParam } from './handler-util';
 import { transportAssignmentService } from './transport-assignment-service';
 import { CreateAssignmentRequest, UpdateAssignmentRequest } from './transport-interfaces';
 import { DIRECTION_VALUES } from './transport-constants';
+import { guardActiveStudent } from '../auth/auth-utils';
 
 class TransportAssignmentHandler {
   public create = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
@@ -106,6 +107,26 @@ class TransportAssignmentHandler {
       ResponseBuilder.handleError(err, callback);
     }
   };
+
+  // Parent app: GET /transport/me?academicYearId= — the family's active child's
+  // morning + evening route/stop. Active child from the family token +
+  // X-Student-Id; schoolId from the token. Reuses the admin studentReport.
+  public myTransport = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
+    _context.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const auth = guardActiveStudent(event, callback);
+      if (!auth) return;
+
+      const schoolId = auth.token.school_id;
+      const studentId = auth.activeStudentId;
+      const q = event.queryStringParameters || {};
+
+      const result = await transportAssignmentService.studentReport(schoolId, studentId, q.academicYearId);
+      ResponseBuilder.ok(result, callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
 }
 
 const handler = new TransportAssignmentHandler();
@@ -115,3 +136,4 @@ export const remove = handler.remove;
 export const list = handler.list;
 export const routeRoster = handler.routeRoster;
 export const studentReport = handler.studentReport;
+export const myTransport = handler.myTransport;

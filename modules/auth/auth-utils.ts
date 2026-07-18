@@ -109,3 +109,18 @@ export function respondStudentAuthFailure(failure: StudentAuthFailure, callback:
   }
 }
 
+// One-call guard for student-app handlers: on success returns the authorized
+// ActiveStudentAuth; on failure it writes the matching error response and returns
+// null, so the handler just does `if (!auth) return;`. (Narrows positively, which
+// is required because this project compiles with strictNullChecks off.)
+export function guardActiveStudent(event: ApiEvent, callback: ApiCallback): ActiveStudentAuth | null {
+  const result = resolveActiveStudent(event);
+  if (result.ok) {
+    return result.auth;
+  }
+  // strictNullChecks is off, so the complement of `result.ok` doesn't narrow the
+  // union — assert the failure member explicitly (safe: we're in the !ok branch).
+  respondStudentAuthFailure((result as { failure: StudentAuthFailure }).failure, callback);
+  return null;
+}
+

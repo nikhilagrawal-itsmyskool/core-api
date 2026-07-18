@@ -200,6 +200,16 @@
           method: get
           cors: true
 
+  # Parent app (family token + X-Student-Id): my child's route + stop
+  my-transport:
+    handler: transport-assignment-handler.myTransport
+    name: ${self:service}-my-transport
+    events:
+      - http:
+          path: me
+          method: get
+          cors: true
+
   # ── Student assignments + reports ─────────────────────────────────────────
   create-assignment:
     handler: transport-assignment-handler.create
