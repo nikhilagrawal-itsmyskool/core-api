@@ -48,7 +48,7 @@ create unique index if not exists idx_message_template_unique
 create table if not exists message_job (
     uuid varchar(12) primary key,
     school_id varchar(12) not null,
-    status varchar(16) not null check (status in ('queued', 'running', 'completed', 'failed', 'canceled')),
+    status varchar(16) not null check (status in ('queued', 'expanding', 'sending', 'running', 'completed', 'failed', 'canceled')),
     scheduled_at timestamp(0),
     template_key varchar(64) not null,
     language varchar(8),
@@ -85,7 +85,7 @@ create table if not exists message_recipient (
     channel varchar(16) check (channel in ('sms', 'whatsapp')),
     template_id varchar(12),
     context jsonb,
-    status varchar(16) check (status in ('pending', 'sent', 'delivered', 'read', 'failed', 'skipped')),
+    status varchar(16) check (status in ('pending', 'sending', 'sent', 'delivered', 'read', 'failed', 'skipped')),
     provider_message_id varchar(128),
     error text,
     sent_at timestamp(0),
@@ -96,6 +96,7 @@ create table if not exists message_recipient (
 );
 
 create index if not exists idx_message_recipient_job on message_recipient(job_id);
+create index if not exists idx_message_recipient_job_status on message_recipient(job_id, status);
 create index if not exists idx_message_recipient_provider_msg on message_recipient(provider_message_id);
 
 -- Employees are also message recipients and carry a channel preference; the

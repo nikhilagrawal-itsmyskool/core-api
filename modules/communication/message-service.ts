@@ -1,15 +1,43 @@
 import { DB, singleLineString } from '../../shared/lib/db';
 import { BusinessErrorResult } from '../../shared/lib/errors';
 import { ErrorCode } from '../../shared/lib/error-codes';
-import { Channel, DEFAULTS, RETRY } from './communication-constants';
+import { Channel, DEFAULTS, RETRY, SEND_BATCH_SIZE, REAPER } from './communication-constants';
 import {
-  AudienceSpec, AudienceTarget, MessageJob, MessageRecipient,
+  AudienceSpec, AudienceTarget, MessageJob, MessageRecipient, MessageTemplate,
   SendMessageRequest, PreviewRequest,
 } from './communication-interfaces';
 import { resolveLadder, resolveVariables, studentNumbers, employeeNumbers, autoContext, schoolContext } from './communication-util';
 import { templateService } from './template-service';
 import { getProvider } from './providers';
 const { generateShortUuid } = require('../../shared/util/generate-uuid.js');
+
+// Single-row insert for message_recipient, shared by the expand transaction.
+const RECIPIENT_INSERT_SQL = singleLineString`
+  insert into message_recipient
+  (uuid, school_id, job_id, recipient_type, recipient_id, role, to_number, channel, template_id, context, status, provider_message_id, error, sent_at, createdby_userid, created_at)
+  values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+`;
+
+// Build the ordered parameter row for RECIPIENT_INSERT_SQL. Recipients are created
+// in a terminal 'skipped' state or a 'pending' state (send happens later, so
+// provider_message_id / sent_at are always null at insert).
+function recipientRow(
+  job: MessageJob,
+  target: AudienceTarget,
+  match: { role: string; channel: string; toNumber: string } | null,
+  templateId: string | null,
+  ctx: Record<string, any> | null,
+  status: string,
+  error: string | null,
+): any[] {
+  return [
+    generateShortUuid(12), job.schoolId, job.uuid, target.recipientType, target.recipientId,
+    match ? match.role : null, match ? match.toNumber : null, match ? match.channel : null,
+    templateId, ctx ? JSON.stringify(ctx) : null, status,
+    null, error ? String(error).slice(0, 2000) : null,
+    null, job.createdbyUserid || 'worker', new Date(),
+  ];
+}
 
 class MessageService {
   // ----------------------------------------------------------------- enqueue
@@ -108,12 +136,30 @@ class MessageService {
   }
 
   // ------------------------------------------------------------- process-next
-  // Claim one DUE queued job and process it. Called by the worker poller.
-  public async processNext(workerId: string): Promise<{ claimed: boolean; jobId?: string; status?: string; counts?: any; error?: string }> {
+  // One unit of queue work, called repeatedly by the worker poller / drain loop.
+  // A "unit" is intentionally small so no single invocation runs long:
+  //   1. sweep the reaper (recover crashed expands / stuck sends / strays),
+  //   2. drain ONE batch of an in-flight job's pending recipients, else
+  //   3. expand ONE freshly-claimed queued job into recipient rows.
+  // In-flight sends are prioritised over new expands so broadcasts finish before
+  // new ones pile on. Returns { claimed:false } only when nothing is left to do.
+  public async processNext(workerId: string): Promise<{ claimed: boolean; kind?: string; jobId?: string; status?: string; counts?: any; error?: string }> {
+    await this.reap();
+
+    // 1. Send one batch of an already-expanded job.
+    const batch = await this.claimSendBatch(workerId);
+    if (batch.length > 0) {
+      const counts = await this.sendClaimedBatch(batch);
+      const jobIds = Array.from(new Set(batch.map((r) => r.jobId)));
+      const completed = await this.completeFinishedJobs(jobIds);
+      return { claimed: true, kind: 'send', status: completed > 0 ? 'completed' : 'sending', counts };
+    }
+
+    // 2. Nothing to send — expand the next due queued job.
     const claimed = await DB.query(
       singleLineString`
         update message_job
-        set status = 'running', worker_id = $1, heartbeat_at = now(), started_at = now(),
+        set status = 'expanding', worker_id = $1, heartbeat_at = now(), started_at = now(),
             attempts = coalesce(attempts, 0) + 1, updated_at = now()
         where uuid = (
           select uuid from message_job where status = 'queued' and scheduled_at <= now() order by scheduled_at limit 1 for update skip locked
@@ -126,16 +172,23 @@ class MessageService {
 
     const job = claimed[0];
     try {
-      const counts = await this.expandAndSend(job);
-      return { claimed: true, jobId: job.uuid, status: 'completed', counts };
+      const counts = await this.expand(job);
+      // A job with no reachable recipients (all skipped) is already done.
+      return { claimed: true, kind: 'expand', jobId: job.uuid, status: counts.pending > 0 ? 'expanded' : 'completed', counts };
     } catch (err: any) {
       const message = err.message || String(err);
       const outcome = await this.markFailedOrRetry(job, err);
-      return { claimed: true, jobId: job.uuid, status: outcome, error: message };
+      return { claimed: true, kind: 'expand', jobId: job.uuid, status: outcome, error: message };
     }
   }
 
-  private async expandAndSend(job: MessageJob): Promise<any> {
+  // ---------------------------------------------------------------- phase 1: expand
+  // Resolve the live roster into message_recipient rows in ONE transaction. Each
+  // target is classified now (ladder + variable resolution): reachable -> pending
+  // (to be sent in phase 2), unreachable/missing-vars -> skipped (terminal). The
+  // leading delete makes a re-run after a crash idempotent. The job flips to
+  // 'sending' (or 'completed' if nothing is pending) atomically with the inserts.
+  private async expand(job: MessageJob): Promise<{ pending: number; skipped: number }> {
     const language = job.language || DEFAULTS.LANGUAGE;
     const templates = await templateService.getActiveByKey(job.schoolId, job.templateKey, language);
     const availableChannels = new Set<Channel>(templates.keys());
@@ -144,84 +197,193 @@ class MessageService {
     }
 
     const targets = await this.resolveTargets(job.schoolId, job.audience);
-    const provider = getProvider();
     const schoolCtx = schoolContext(await this.getSchool(job.schoolId));
-    const counts = { sent: 0, failed: 0, skipped: 0 };
+
+    const queries: string[] = [`delete from message_recipient where job_id = $1`];
+    const params: any[][] = [[job.uuid]];
+    let pending = 0;
+    let skipped = 0;
 
     for (const t of targets) {
       const match = resolveLadder(t, availableChannels, job.forceChannel);
       if (!match) {
-        await this.insertRecipient(job, t, null, null, null, 'skipped', { error: 'no reachable channel with an approved template' });
-        counts.skipped++;
+        queries.push(RECIPIENT_INSERT_SQL);
+        params.push(recipientRow(job, t, null, null, null, 'skipped', 'no reachable channel with an approved template'));
+        skipped++;
         continue;
       }
       const template = templates.get(match.channel)!;
       const ctx = { ...(job.context || {}), ...t.context, ...schoolCtx };
-      const { values, missing } = resolveVariables(template.variables, ctx);
+      const { missing } = resolveVariables(template.variables, ctx);
       if (missing.length > 0) {
-        await this.insertRecipient(job, t, match, template.uuid, ctx, 'skipped', { error: `missing variables: ${missing.join(', ')}` });
-        counts.skipped++;
+        queries.push(RECIPIENT_INSERT_SQL);
+        params.push(recipientRow(job, t, match, template.uuid, ctx, 'skipped', `missing variables: ${missing.join(', ')}`));
+        skipped++;
         continue;
       }
+      // Reachable: store the resolved context so phase 2 re-derives the exact same
+      // variable values from it at send time.
+      queries.push(RECIPIENT_INSERT_SQL);
+      params.push(recipientRow(job, t, match, template.uuid, ctx, 'pending', null));
+      pending++;
+    }
+
+    const finalStatus = pending > 0 ? 'sending' : 'completed';
+    queries.push(
+      singleLineString`
+        update message_job set status = $1, finished_at = ${pending > 0 ? 'null' : 'now()'}, updated_at = now() where uuid = $2
+      `,
+    );
+    params.push([finalStatus, job.uuid]);
+
+    await DB.queriesInTransaction(queries, params);
+    return { pending, skipped };
+  }
+
+  // ---------------------------------------------------------------- phase 2: send
+  // Claim up to SEND_BATCH_SIZE pending recipients belonging to a 'sending' job,
+  // oldest job / oldest recipient first, marking them 'sending' so a concurrent
+  // worker skips them. `for update of r skip locked` locks only the recipient rows.
+  private async claimSendBatch(workerId: string): Promise<MessageRecipient[]> {
+    return DB.query(
+      singleLineString`
+        update message_recipient
+        set status = 'sending', updatedby_userid = $1, updated_at = now()
+        where uuid in (
+          select r.uuid from message_recipient r
+          join message_job j on j.uuid = r.job_id and j.status = 'sending'
+          where r.status = 'pending'
+          order by j.scheduled_at, r.created_at
+          limit ${SEND_BATCH_SIZE}
+          for update of r skip locked
+        )
+        returning *
+      `,
+      [workerId],
+    );
+  }
+
+  // Send each claimed recipient and record its outcome IMMEDIATELY (per row), so a
+  // mid-batch crash leaves at most one recipient in limbo for the reaper to requeue.
+  private async sendClaimedBatch(batch: MessageRecipient[]): Promise<{ sent: number; failed: number }> {
+    const provider = getProvider();
+    const templates = await this.getTemplatesByIds(
+      Array.from(new Set(batch.map((r) => r.templateId).filter((id): id is string => !!id))),
+    );
+    const counts = { sent: 0, failed: 0 };
+
+    for (const r of batch) {
       try {
+        const template = templates.get(r.templateId!);
+        if (!template) throw new Error('template not found at send time');
+        const { values } = resolveVariables(template.variables, r.context || {});
         const result = await provider.send({
-          channel: match.channel,
-          toNumber: match.toNumber,
-          templateKey: job.templateKey,
+          channel: r.channel!,
+          toNumber: r.toNumber!,
+          templateKey: template.key,
           providerTemplateId: template.providerTemplateId,
-          language,
+          language: template.language || DEFAULTS.LANGUAGE,
           variables: values,
           variableNames: template.variables,
           headerType: template.headerType,
         });
         const status = result.status === 'sent' ? 'sent' : 'failed';
-        await this.insertRecipient(job, t, match, template.uuid, ctx, status, {
+        await this.markRecipient(r.uuid, status, {
           providerMessageId: result.providerMessageId,
           error: result.error,
           sentAt: status === 'sent' ? new Date() : undefined,
         });
         if (status === 'sent') counts.sent++; else counts.failed++;
       } catch (err: any) {
-        await this.insertRecipient(job, t, match, template.uuid, ctx, 'failed', { error: err.message || String(err) });
+        await this.markRecipient(r.uuid, 'failed', { error: err.message || String(err) });
         counts.failed++;
       }
     }
-
-    await this.markCompleted(job.uuid, counts);
     return counts;
   }
 
-  private async insertRecipient(
-    job: MessageJob,
-    target: AudienceTarget,
-    match: { role: string; channel: string; toNumber: string } | null,
-    templateId: string | null,
-    ctx: Record<string, any> | null,
+  private async markRecipient(
+    uuid: string,
     status: string,
     extra: { providerMessageId?: string; error?: string; sentAt?: Date },
   ): Promise<void> {
     await DB.query(
       singleLineString`
-        insert into message_recipient
-        (uuid, school_id, job_id, recipient_type, recipient_id, role, to_number, channel, template_id, context, status, provider_message_id, error, sent_at, createdby_userid, created_at)
-        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+        update message_recipient
+        set status = $1, provider_message_id = coalesce($2, provider_message_id),
+            error = $3, sent_at = $4, updated_at = now()
+        where uuid = $5
       `,
       [
-        generateShortUuid(12), job.schoolId, job.uuid, target.recipientType, target.recipientId,
-        match ? match.role : null, match ? match.toNumber : null, match ? match.channel : null,
-        templateId, ctx ? JSON.stringify(ctx) : null, status,
-        extra.providerMessageId || null, extra.error ? String(extra.error).slice(0, 2000) : null,
-        extra.sentAt || null, job.createdbyUserid || 'worker', new Date(),
+        status, extra.providerMessageId || null,
+        extra.error ? String(extra.error).slice(0, 2000) : null,
+        extra.sentAt || null, uuid,
       ],
     );
   }
 
-  private async markCompleted(jobId: string, counts: any): Promise<void> {
+  private async getTemplatesByIds(ids: string[]): Promise<Map<string, MessageTemplate>> {
+    const map = new Map<string, MessageTemplate>();
+    if (ids.length === 0) return map;
+    const rows = await DB.query(
+      singleLineString`select * from message_template where uuid = any($1)`,
+      [ids],
+    );
+    for (const row of rows) map.set(row.uuid, row);
+    return map;
+  }
+
+  // Flip any of the given 'sending' jobs to 'completed' once none of their
+  // recipients are still pending or in-flight. Idempotent / concurrency-safe.
+  private async completeFinishedJobs(jobIds: string[]): Promise<number> {
+    if (jobIds.length === 0) return 0;
+    const rows = await DB.query(
+      singleLineString`
+        update message_job set status = 'completed', finished_at = now(), updated_at = now()
+        where uuid = any($1) and status = 'sending'
+          and not exists (
+            select 1 from message_recipient r
+            where r.job_id = message_job.uuid and r.status in ('pending', 'sending')
+          )
+        returning uuid
+      `,
+      [jobIds],
+    );
+    return rows.length;
+  }
+
+  // ---------------------------------------------------------------- reaper
+  // Crash recovery, cheap enough to run before every unit of work (all three
+  // UPDATEs match zero rows in the common case, guarded by indexed predicates):
+  //   1. an 'expanding' job that stalled -> back to 'queued' (expand is idempotent),
+  //   2. a recipient stuck 'sending' (invocation died mid-batch) -> back to 'pending'
+  //      (at-least-once: it may already have been sent, hence a possible duplicate),
+  //   3. a 'sending' job whose recipients are all terminal but never got flipped
+  //      (crash right before completion) -> 'completed'.
+  private async reap(): Promise<void> {
     await DB.query(
       singleLineString`
-        update message_job set status = 'completed', finished_at = now(), updated_at = now() where uuid = $1
+        update message_job set status = 'queued', worker_id = null, started_at = null, updated_at = now()
+        where status = 'expanding' and coalesce(heartbeat_at, started_at) < now() - make_interval(secs => $1)
       `,
-      [jobId],
+      [REAPER.EXPANDING_STALE_SECONDS],
+    );
+    await DB.query(
+      singleLineString`
+        update message_recipient set status = 'pending', updated_at = now()
+        where status = 'sending' and updated_at < now() - make_interval(secs => $1)
+      `,
+      [REAPER.SENDING_RECIPIENT_STALE_SECONDS],
+    );
+    await DB.query(
+      singleLineString`
+        update message_job set status = 'completed', finished_at = now(), updated_at = now()
+        where status = 'sending'
+          and not exists (
+            select 1 from message_recipient r
+            where r.job_id = message_job.uuid and r.status in ('pending', 'sending')
+          )
+      `,
     );
   }
 
