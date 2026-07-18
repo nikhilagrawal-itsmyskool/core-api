@@ -94,12 +94,23 @@ export interface StudentDetail {
   currentClassId?: string;
   currentClassName?: string;
   currentRollNumber?: number;
+  classTeacher?: ClassTeacherRef | null;
   guardians: Guardian[];
   enrollments: EnrollmentRow[];
   addresses: StudentAddress[];
   siblings: SiblingRef[];
   photoId?: string;
   photoThumbId?: string;
+}
+
+// Class teacher of the student's current class, resolved from the timetable
+// module's class_teacher link. `subjects` is a comma-joined list of the subject(s)
+// that teacher teaches this class (from teaching_assignment), or null.
+export interface ClassTeacherRef {
+  name: string;
+  mobile?: string | null;
+  whatsapp?: string | null;
+  subjects?: string | null;
 }
 
 export interface EnrollmentRow {

@@ -6,7 +6,7 @@ import {
   UpdateStudentRequest,
   StudentDetail,
 } from './student-interfaces';
-import { DEFAULTS } from './student-constants';
+import { DEFAULTS, DEFAULT_PASSWORD } from './student-constants';
 import { studentGuardianService } from './student-guardian-service';
 import { studentAddressService } from './student-address-service';
 import { studentSiblingService } from './student-sibling-service';
@@ -58,6 +58,28 @@ class StudentAdminService {
         `Admission number "${admissionNumber}" already exists`
       );
     }
+  }
+
+  // Ensure a single family login row exists for this family_unique_number.
+  // Siblings share it (username = family_unique_number); idempotent via the
+  // unique (username, school_id) index. Mirrors employee login creation.
+  private async ensureFamilyLogin(
+    familyUniqueNumber: string | null | undefined,
+    displayName: string,
+    schoolId: string,
+    userId: string
+  ): Promise<void> {
+    const family = (familyUniqueNumber || '').trim();
+    if (!family) return;
+    await DB.query(
+      singleLineString`
+        insert into student_login
+        (uuid, username, password, display_name, school_id, createdby_userid, created_at)
+        values ($1, $2, $3, $4, $5, $6, $7)
+        on conflict (username, school_id) do nothing
+      `,
+      [generateShortUuid(12), family, DEFAULT_PASSWORD, displayName, schoolId, userId, new Date()]
+    );
   }
 
   // ---- CRUD ----
@@ -122,6 +144,9 @@ class StudentAdminService {
         now,
       ]
     );
+
+    // Ensure the family login exists so the student can sign in to the app.
+    await this.ensureFamilyLogin(data.familyUniqueNumber, data.name.trim(), schoolId, userId);
 
     // Optional initial enrollment.
     if (data.classId && data.academicYearId) {
@@ -222,6 +247,14 @@ class StudentAdminService {
       );
     }
 
+    // If a family number was set/changed, make sure its login row exists.
+    if (data.familyUniqueNumber !== undefined) {
+      const displayName = data.name?.trim()
+        ? data.name.trim()
+        : (await DB.query(`select name from student where uuid = $1 and school_id = $2`, [id, schoolId]))[0]?.name || '';
+      await this.ensureFamilyLogin(data.familyUniqueNumber, displayName, schoolId, userId);
+    }
+
     return this.getDetail(id, schoolId);
   }
 
@@ -252,6 +285,8 @@ class StudentAdminService {
           cur.class_id as current_class_id,
           cur.class_name as current_class_name,
           cur.roll_number as current_roll_number,
+          ct.class_teacher_name, ct.class_teacher_mobile, ct.class_teacher_whatsapp,
+          ct.class_teacher_subjects,
           (select fs.uuid from file_storage fs
              where fs.entity_type = 'student' and fs.entity_id = s.uuid and fs.school_id = s.school_id
                and (fs.variant = 'original' or fs.variant is null)
@@ -271,6 +306,21 @@ class StudentAdminService {
           where sc.student_id = s.uuid and (sc.status is null or sc.status <> 'deleted')
           order by ay.start_date desc nulls last limit 1
         ) cur on true
+        left join lateral (
+          select e.name as class_teacher_name, e.mobile as class_teacher_mobile,
+                 e.whatsapp as class_teacher_whatsapp,
+                 (select string_agg(distinct sub.name, ', ' order by sub.name)
+                    from teaching_assignment ta
+                    join subject sub on sub.uuid = ta.subject_id and sub.school_id = ta.school_id
+                    where ta.school_id = s.school_id and ta.class_id = cur.class_id
+                      and ta.academic_year_id = cur.academic_year_id
+                      and ta.teacher_id = ct0.teacher_id and ta.status = 'active') as class_teacher_subjects
+          from class_teacher ct0
+          join employee e on e.uuid = ct0.teacher_id and e.school_id = ct0.school_id
+          where ct0.school_id = s.school_id and ct0.class_id = cur.class_id
+            and ct0.academic_year_id = cur.academic_year_id and ct0.status = 'active'
+          limit 1
+        ) ct on true
         where s.uuid = $1 and s.school_id = $2 and s.status <> 'deleted'
       `,
       [id, schoolId]
@@ -295,7 +345,85 @@ class StudentAdminService {
     const addresses = await studentAddressService.list(id, schoolId);
     const siblings = await studentSiblingService.list(id, schoolId);
 
-    return { ...r, enrollments, guardians, addresses, siblings } as StudentDetail;
+    // Class teacher of the student's current class (from the timetable module's
+    // class_teacher link), with the subject(s) they teach that class. null when the
+    // class has no class teacher assigned or the student has no current enrollment.
+    const {
+      classTeacherName,
+      classTeacherMobile,
+      classTeacherWhatsapp,
+      classTeacherSubjects,
+      ...rest
+    } = r;
+    const classTeacher = classTeacherName
+      ? {
+          name: classTeacherName,
+          mobile: classTeacherMobile ?? null,
+          whatsapp: classTeacherWhatsapp ?? null,
+          subjects: classTeacherSubjects ?? null,
+        }
+      : null;
+
+    return { ...rest, classTeacher, enrollments, guardians, addresses, siblings } as StudentDetail;
+  }
+
+  // ---- Credentials (god/admin only, gated in the UI — mirrors employee) ----
+
+  // Resolve a student's family login row (username = family_unique_number).
+  private async getFamilyNumber(studentId: string, schoolId: string): Promise<string | null> {
+    const rows = await DB.query(
+      singleLineString`
+        select family_unique_number from student
+        where uuid = $1 and school_id = $2 and (status is null or status <> 'deleted')
+      `,
+      [studentId, schoolId]
+    );
+    const family = (rows[0]?.familyUniqueNumber || '').trim();
+    return family || null;
+  }
+
+  public async getCredentials(
+    studentId: string,
+    schoolId: string
+  ): Promise<{ username: string; password: string; displayName: string } | null> {
+    const family = await this.getFamilyNumber(studentId, schoolId);
+    if (!family) return null;
+
+    const logins = await DB.query(
+      singleLineString`
+        select username, password, display_name from student_login
+        where username = $1 and school_id = $2
+      `,
+      [family, schoolId]
+    );
+    if (logins.length === 0) return null;
+
+    return {
+      username: logins[0].username,
+      password: logins[0].password,
+      displayName: logins[0].displayName,
+    };
+  }
+
+  public async resetPassword(studentId: string, schoolId: string, userId: string): Promise<boolean> {
+    const family = await this.getFamilyNumber(studentId, schoolId);
+    if (!family) return false;
+
+    const logins = await DB.query(
+      singleLineString`select uuid from student_login where username = $1 and school_id = $2`,
+      [family, schoolId]
+    );
+    if (logins.length === 0) return false;
+
+    await DB.query(
+      singleLineString`
+        update student_login
+        set password = $1, updatedby_userid = $2, updated_at = $3
+        where username = $4 and school_id = $5
+      `,
+      [DEFAULT_PASSWORD, userId, new Date(), family, schoolId]
+    );
+    return true;
   }
 }
 
