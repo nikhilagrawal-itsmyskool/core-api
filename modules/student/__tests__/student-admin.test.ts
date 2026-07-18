@@ -192,6 +192,56 @@ describe('Student admin API', () => {
     expect(after.status).toBe(404);
   });
 
+  it('provisions a family login on create and reveals credentials', async () => {
+    const family = `${f.tag}FAM1`;
+    const s = await createStudent({
+      name: `${f.tag} Creds`,
+      admissionNumber: `${f.tag}-CRD`,
+      familyUniqueNumber: family,
+    });
+    const res = await fetch(`${BASE_URL}/${s.uuid}/credentials`, { headers });
+    expect(res.status).toBe(200);
+    const creds = await res.json();
+    expect(creds.username).toBe(family);
+    expect(creds.password).toBe('Itsmyskool@123');
+  });
+
+  it('shares a single family login across siblings', async () => {
+    const family = `${f.tag}FAM2`;
+    const a = await createStudent({ name: `${f.tag} SibA`, admissionNumber: `${f.tag}-SBA`, familyUniqueNumber: family });
+    const b = await createStudent({ name: `${f.tag} SibB`, admissionNumber: `${f.tag}-SBB`, familyUniqueNumber: family });
+    const credsA = await (await fetch(`${BASE_URL}/${a.uuid}/credentials`, { headers })).json();
+    const credsB = await (await fetch(`${BASE_URL}/${b.uuid}/credentials`, { headers })).json();
+    expect(credsA.username).toBe(family);
+    expect(credsB.username).toBe(family);
+    // Only one login row exists for the family despite two siblings.
+    const rows = await pool.query(
+      `select count(*)::int as n from student_login where username = $1 and school_id = $2`,
+      [family, f.schoolId]
+    );
+    expect(rows.rows[0].n).toBe(1);
+  });
+
+  it('resets a family login password back to the default', async () => {
+    const family = `${f.tag}FAM3`;
+    const s = await createStudent({ name: `${f.tag} Reset`, admissionNumber: `${f.tag}-RST`, familyUniqueNumber: family });
+    // Move the password away from the default, then reset.
+    await pool.query(`update student_login set password = 'Changed@1' where username = $1 and school_id = $2`, [
+      family,
+      f.schoolId,
+    ]);
+    const reset = await fetch(`${BASE_URL}/${s.uuid}/reset-password`, { method: 'POST', headers });
+    expect(reset.status).toBe(200);
+    const creds = await (await fetch(`${BASE_URL}/${s.uuid}/credentials`, { headers })).json();
+    expect(creds.password).toBe('Itsmyskool@123');
+  });
+
+  it('returns 404 credentials for a student without a family number', async () => {
+    const s = await createStudent({ name: `${f.tag} NoFam`, admissionNumber: `${f.tag}-NOF` });
+    const res = await fetch(`${BASE_URL}/${s.uuid}/credentials`, { headers });
+    expect(res.status).toBe(404);
+  });
+
   it('soft-deletes a student', async () => {
     const s = await createStudent({ name: `${f.tag} Gone`, admissionNumber: `${f.tag}-DEL` });
     const del = await fetch(`${BASE_URL}/${s.uuid}`, { method: 'DELETE', headers });

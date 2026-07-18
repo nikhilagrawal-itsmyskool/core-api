@@ -1,5 +1,9 @@
 // Student module constants.
 
+// Default password for student family logins (same as employee logins). Set on
+// first login-row creation and on admin reset.
+export const DEFAULT_PASSWORD = 'Itsmyskool@123';
+
 export const STATUS_VALUES = ['active', 'inactive', 'deleted'] as const;
 
 export const GUARDIAN_RELATIONS = ['father', 'mother', 'guardian', 'other'] as const;

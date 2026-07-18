@@ -93,6 +93,42 @@ class StudentAdminHandler {
     }
   };
 
+  // View login credentials for a student's family (god/admin only, gated in UI).
+  public getCredentials = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
+    _context.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const schoolId = await this.resolveSchool(event, callback);
+      if (!schoolId) return;
+
+      const id = event.pathParameters?.id;
+      if (!id) { ResponseBuilder.badRequest(ErrorCode.MissingId, 'Student ID is required', callback); return; }
+
+      const result = await studentAdminService.getCredentials(id, schoolId);
+      if (!result) { ResponseBuilder.notFound(ErrorCode.InvalidId, 'No login found for this student', callback); return; }
+      ResponseBuilder.ok(result, callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
+  // Reset a student's family login password to the default (god/admin only).
+  public resetPassword = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
+    _context.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const schoolId = await this.resolveSchool(event, callback);
+      if (!schoolId) return;
+
+      const id = event.pathParameters?.id;
+      if (!id) { ResponseBuilder.badRequest(ErrorCode.MissingId, 'Student ID is required', callback); return; }
+
+      const done = await studentAdminService.resetPassword(id, schoolId, userId(event));
+      if (!done) { ResponseBuilder.notFound(ErrorCode.InvalidId, 'No login found for this student', callback); return; }
+      ResponseBuilder.ok({ message: 'Password has been reset to the default.' }, callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
   public remove = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
     _context.callbackWaitsForEmptyEventLoop = false;
     try {
@@ -117,3 +153,5 @@ export const getById = handler.getById;
 export const create = handler.create;
 export const update = handler.update;
 export const remove = handler.remove;
+export const getCredentials = handler.getCredentials;
+export const resetPassword = handler.resetPassword;
