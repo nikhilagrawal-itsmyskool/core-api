@@ -17,6 +17,7 @@ const { generateShortUuid } = require('../../shared/util/generate-uuid.js');
 const PLAN_COLS = singleLineString`
   uuid, school_id, academic_year_id, name, scope_label,
   start_date::text as start_date, end_date::text as end_date, priority,
+  rotation_anchor::text as rotation_anchor,
   publish_status, published_at, publishedby_userid, status,
   createdby_userid, created_at, updatedby_userid, updated_at
 `;
@@ -113,6 +114,10 @@ class AssemblyPlanService {
       set('end_date', v.endDate);
     }
     if (data.priority !== undefined) set('priority', data.priority ?? null);
+    if (data.rotationAnchor !== undefined) {
+      if (data.rotationAnchor && !isValidDate(data.rotationAnchor)) throw new BusinessErrorResult(ErrorCode.BusinessError, 'Invalid rotationAnchor (yyyy-mm-dd)');
+      set('rotation_anchor', data.rotationAnchor || null);
+    }
 
     if (updates.length === 0) return this.getDetail(id, schoolId);
     set('updatedby_userid', userId);

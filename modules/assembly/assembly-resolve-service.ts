@@ -105,12 +105,14 @@ class AssemblyResolveService {
   // are per-node. Responsibility rules are date-aware (independent dated rows + rotating
   // groups).
   private toResolved(nodes: AssemblyNodeDetail[], inherited: NodeResponsibleView[], date: string): ResolvedNode[] {
+    const wd = weekdayOf(date);
     return nodes.map(n => {
       const rules = n.responsible || [];
       const eff = rules.length > 0 ? this.resolveResponsibleForDate(rules, date) : inherited;
       return {
         uuid: n.uuid,
         title: n.title,
+        content: (n.dayContent || []).find(c => c.weekday === wd)?.content,
         description: n.description,
         expectation: n.expectation,
         recommendation: n.recommendation,

@@ -17,6 +17,56 @@
           method: get
           cors: true
 
+  # ── House mode: config, houses, rotation ────────────────────────────────────
+  get-config:
+    handler: assembly-house-handler.getConfig
+    name: ${self:service}-get-config
+    events:
+      - http:
+          path: config
+          method: get
+          cors: true
+  set-config:
+    handler: assembly-house-handler.setConfig
+    name: ${self:service}-set-config
+    events:
+      - http:
+          path: config
+          method: put
+          cors: true
+  list-houses:
+    handler: assembly-house-handler.listHouses
+    name: ${self:service}-list-houses
+    events:
+      - http:
+          path: houses
+          method: get
+          cors: true
+  set-house-meta:
+    handler: assembly-house-handler.setHouseMeta
+    name: ${self:service}-set-house-meta
+    events:
+      - http:
+          path: houses/{id}
+          method: put
+          cors: true
+  get-rotation:
+    handler: assembly-house-handler.rotation
+    name: ${self:service}-get-rotation
+    events:
+      - http:
+          path: plans/{id}/rotation
+          method: get
+          cors: true
+  set-week-house:
+    handler: assembly-house-handler.setWeekHouse
+    name: ${self:service}-set-week-house
+    events:
+      - http:
+          path: plans/{id}/rotation
+          method: put
+          cors: true
+
   # ── Plans ─────────────────────────────────────────────────────────────────
   create-plan:
     handler: assembly-plan-handler.create
@@ -187,6 +237,15 @@
     events:
       - http:
           path: nodes/{id}/resources
+          method: put
+          cors: true
+
+  set-node-day-content:
+    handler: assembly-node-handler.setDayContent
+    name: ${self:service}-set-node-day-content
+    events:
+      - http:
+          path: nodes/{id}/day-content
           method: put
           cors: true
 

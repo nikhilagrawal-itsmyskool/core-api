@@ -20,8 +20,12 @@ const { generateShortUuid } = require('../../shared/util/generate-uuid.js');
 const NODE_COLS = singleLineString`
   uuid, school_id, owner_type, owner_id, parent_id, depth, sort_order,
   title, description, expectation, recommendation, outcome, start_time,
-  duration_minutes, status, createdby_userid, created_at, updatedby_userid, updated_at
+  duration_minutes, fill_mode, is_optional, options,
+  status, createdby_userid, created_at, updatedby_userid, updated_at
 `;
+
+const parseOptions = (v: any): string[] => (typeof v === 'string' && v.trim() ? v.split('\n').map(s => s.trim()).filter(Boolean) : []);
+const joinOptions = (v: any): string | null => (Array.isArray(v) && v.length ? v.map((s: string) => String(s).trim()).filter(Boolean).join('\n') : null);
 
 // The node content fields tracked for per-field audit on update.
 const CONTENT_FIELDS: { key: keyof UpdateNodeRequest; col: string }[] = [
@@ -32,6 +36,8 @@ const CONTENT_FIELDS: { key: keyof UpdateNodeRequest; col: string }[] = [
   { key: 'outcome', col: 'outcome' },
   { key: 'startTime', col: 'start_time' },
   { key: 'durationMinutes', col: 'duration_minutes' },
+  { key: 'fillMode', col: 'fill_mode' },
+  { key: 'isOptional', col: 'is_optional' },
 ];
 
 export interface NodeWriteQuery { q: string; p: any[]; }
@@ -75,12 +81,14 @@ class AssemblyNodeService {
       q: singleLineString`
         insert into assembly_node
         (uuid, school_id, owner_type, owner_id, parent_id, depth, sort_order, title, description,
-         expectation, recommendation, outcome, start_time, duration_minutes, status, createdby_userid, created_at)
-        values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+         expectation, recommendation, outcome, start_time, duration_minutes, fill_mode, is_optional, options,
+         status, createdby_userid, created_at)
+        values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
       `,
       p: [uuid, schoolId, ownerType, ownerId, parentId, depth, sortOrder, data.title.trim(),
         data.description || null, data.expectation || null, data.recommendation || null, data.outcome || null,
-        data.startTime || null, data.durationMinutes ?? null, DEFAULTS.STATUS, userId, now],
+        data.startTime || null, data.durationMinutes ?? null, data.fillMode || null, data.isOptional ?? null, joinOptions(data.options),
+        DEFAULTS.STATUS, userId, now],
     });
     queries.push(this.audit(schoolId, uuid, ownerType, ownerId, 'create', null, null, data.title.trim(), userId, now));
     await this.run(queries);
@@ -101,16 +109,19 @@ class AssemblyNodeService {
   public async getNodeDetail(nodeId: string, schoolId: string): Promise<AssemblyNodeDetail | null> {
     const node = await this.getNodeRow(nodeId, schoolId);
     if (!node) return null;
-    const [days, responsible, resources] = await Promise.all([
+    const [days, responsible, resources, dayContent] = await Promise.all([
       this.loadDays([nodeId], schoolId),
       this.loadResponsible([nodeId], schoolId),
       this.loadResources([nodeId], schoolId),
+      this.loadDayContent([nodeId], schoolId),
     ]);
     return {
       ...node,
+      options: parseOptions((node as any).options),
       days: days.get(nodeId) || [],
       responsible: responsible.get(nodeId) || [],
       resources: resources.get(nodeId) || [],
+      dayContent: dayContent.get(nodeId) || [],
     };
   }
 
@@ -126,19 +137,22 @@ class AssemblyNodeService {
     );
     if (nodes.length === 0) return [];
     const ids = nodes.map(n => n.uuid);
-    const [days, responsible, resources] = await Promise.all([
+    const [days, responsible, resources, dayContent] = await Promise.all([
       this.loadDays(ids, schoolId),
       this.loadResponsible(ids, schoolId),
       this.loadResources(ids, schoolId),
+      this.loadDayContent(ids, schoolId),
     ]);
 
     const byId = new Map<string, AssemblyNodeDetail>();
     for (const n of nodes) {
       byId.set(n.uuid, {
         ...n,
+        options: parseOptions((n as any).options),
         days: days.get(n.uuid) || [],
         responsible: responsible.get(n.uuid) || [],
         resources: resources.get(n.uuid) || [],
+        dayContent: dayContent.get(n.uuid) || [],
         children: [],
       });
     }
@@ -178,6 +192,7 @@ class AssemblyNodeService {
       auditRows.push(this.audit(schoolId, nodeId, existing.ownerType, existing.ownerId, 'update', f.col,
         oldVal == null ? null : String(oldVal), val == null ? null : String(val), userId, now));
     }
+    if (data.options !== undefined) { updates.push(`options = $${i++}`); params.push(joinOptions(data.options)); }
 
     if (updates.length === 0) return this.getNodeDetail(nodeId, schoolId);
     updates.push(`updatedby_userid = $${i++}`); params.push(userId);
@@ -423,10 +438,13 @@ class AssemblyNodeService {
   // with explicit responsible/resources attached — the read basis for resolve.
   public async getFilteredTree(planId: string, schoolId: string, weekday: Weekday): Promise<AssemblyNodeDetail[]> {
     const { nodes, responsible, resources } = await this.collectForClone(planId, schoolId, weekday);
+    const dayContent = await this.loadDayContent(nodes.map(n => n.uuid), schoolId);
     const byId = new Map<string, AssemblyNodeDetail>();
     for (const n of nodes) {
       byId.set(n.uuid, {
-        ...n, days: [], responsible: responsible.get(n.uuid) || [], resources: resources.get(n.uuid) || [], children: [],
+        ...n, options: parseOptions((n as any).options), days: [],
+        responsible: responsible.get(n.uuid) || [], resources: resources.get(n.uuid) || [],
+        dayContent: dayContent.get(n.uuid) || [], children: [],
       });
     }
     const roots: AssemblyNodeDetail[] = [];
@@ -456,12 +474,14 @@ class AssemblyNodeService {
         q: singleLineString`
           insert into assembly_node
           (uuid, school_id, owner_type, owner_id, parent_id, depth, sort_order, title, description,
-           expectation, recommendation, outcome, start_time, duration_minutes, status, createdby_userid, created_at)
-          values ($1,$2,'special',$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+           expectation, recommendation, outcome, start_time, duration_minutes, fill_mode, is_optional, options,
+           status, createdby_userid, created_at)
+          values ($1,$2,'special',$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
         `,
         p: [newId, schoolId, specialId, newParent, n.depth, n.sortOrder, n.title, n.description ?? null,
           n.expectation ?? null, n.recommendation ?? null, n.outcome ?? null, n.startTime ?? null,
-          n.durationMinutes ?? null, DEFAULTS.STATUS, userId, now],
+          n.durationMinutes ?? null, n.fillMode ?? null, n.isOptional ?? null, (n as any).options ?? null,
+          DEFAULTS.STATUS, userId, now],
       });
       queries.push(this.audit(schoolId, newId, 'special', specialId, 'create', null, null, n.title, userId, now));
       for (const r of collected.responsible.get(n.uuid) || []) {
@@ -494,10 +514,11 @@ class AssemblyNodeService {
       [sourcePlanId, schoolId],
     );
     const ids = nodes.map(n => n.uuid);
-    const [days, responsible, resources] = await Promise.all([
+    const [days, responsible, resources, dayContent] = await Promise.all([
       this.loadDays(ids, schoolId),
       this.loadResponsible(ids, schoolId),
       this.loadResources(ids, schoolId),
+      this.loadDayContent(ids, schoolId),
     ]);
     const idMap = new Map<string, string>();
     for (const n of nodes) idMap.set(n.uuid, generateShortUuid(12));
@@ -510,18 +531,26 @@ class AssemblyNodeService {
         q: singleLineString`
           insert into assembly_node
           (uuid, school_id, owner_type, owner_id, parent_id, depth, sort_order, title, description,
-           expectation, recommendation, outcome, start_time, duration_minutes, status, createdby_userid, created_at)
-          values ($1,$2,'plan',$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+           expectation, recommendation, outcome, start_time, duration_minutes, fill_mode, is_optional, options,
+           status, createdby_userid, created_at)
+          values ($1,$2,'plan',$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
         `,
         p: [newId, schoolId, newPlanId, newParent, n.depth, n.sortOrder, n.title, n.description ?? null,
           n.expectation ?? null, n.recommendation ?? null, n.outcome ?? null, n.startTime ?? null,
-          n.durationMinutes ?? null, DEFAULTS.STATUS, userId, now],
+          n.durationMinutes ?? null, n.fillMode ?? null, n.isOptional ?? null, (n as any).options ?? null,
+          DEFAULTS.STATUS, userId, now],
       });
       queries.push(this.audit(schoolId, newId, 'plan', newPlanId, 'create', null, null, n.title, userId, now));
       for (const wd of days.get(n.uuid) || []) {
         queries.push({
           q: singleLineString`insert into assembly_node_day (uuid, school_id, node_id, weekday, createdby_userid, created_at) values ($1,$2,$3,$4,$5,$6)`,
           p: [generateShortUuid(12), schoolId, newId, wd, userId, now],
+        });
+      }
+      for (const dc of dayContent.get(n.uuid) || []) {
+        queries.push({
+          q: singleLineString`insert into assembly_node_day_content (uuid, school_id, node_id, weekday, content, createdby_userid, created_at) values ($1,$2,$3,$4,$5,$6,$7)`,
+          p: [generateShortUuid(12), schoolId, newId, dc.weekday, dc.content ?? null, userId, now],
         });
       }
       for (const r of responsible.get(n.uuid) || []) {
@@ -693,6 +722,43 @@ class AssemblyNodeService {
       if (!map.has(r.nodeId)) map.set(r.nodeId, []);
       map.get(r.nodeId)!.push({ uuid: r.uuid, label: r.label, url: r.url, note: r.note, sortOrder: r.sortOrder });
     }
+    return map;
+  }
+
+  // Per-weekday content grid (leaf template content).
+  public async setNodeDayContent(nodeId: string, content: { weekday: Weekday; content?: string }[], schoolId: string, userId: string): Promise<AssemblyNodeDetail | null> {
+    const node = await this.getNodeRow(nodeId, schoolId);
+    if (!node) return null;
+    if (!Array.isArray(content)) throw new BusinessErrorResult(ErrorCode.BusinessError, 'content must be an array');
+    const now = new Date();
+    const queries: NodeWriteQuery[] = [{ q: singleLineString`delete from assembly_node_day_content where node_id = $1`, p: [nodeId] }];
+    for (const c of content) {
+      if (!WEEKDAY_VALUES.includes(c.weekday)) throw new BusinessErrorResult(ErrorCode.BusinessError, `Invalid weekday: ${c.weekday}`);
+      const text = (c.content || '').trim();
+      if (!text) continue; // empty cell = no row
+      queries.push({
+        q: singleLineString`insert into assembly_node_day_content (uuid, school_id, node_id, weekday, content, createdby_userid, created_at) values ($1,$2,$3,$4,$5,$6,$7)`,
+        p: [generateShortUuid(12), schoolId, nodeId, c.weekday, text, userId, now],
+      });
+    }
+    queries.push(this.audit(schoolId, nodeId, node.ownerType, node.ownerId, 'update', 'dayContent', null, `${queries.length - 1} day(s)`, userId, now));
+    await this.run(queries);
+    return this.getNodeDetail(nodeId, schoolId);
+  }
+
+  private async loadDayContent(nodeIds: string[], schoolId: string): Promise<Map<string, { weekday: Weekday; content?: string }[]>> {
+    const map = new Map<string, { weekday: Weekday; content?: string }[]>();
+    if (nodeIds.length === 0) return map;
+    const ph = nodeIds.map((_, i) => `$${i + 2}`).join(', ');
+    const rows = await DB.query(
+      singleLineString`select node_id, weekday, content from assembly_node_day_content where school_id = $1 and node_id in (${ph})`,
+      [schoolId, ...nodeIds],
+    );
+    for (const r of rows) {
+      if (!map.has(r.nodeId)) map.set(r.nodeId, []);
+      map.get(r.nodeId)!.push({ weekday: r.weekday, content: r.content || undefined });
+    }
+    for (const v of map.values()) v.sort((a, b) => WEEKDAY_VALUES.indexOf(a.weekday) - WEEKDAY_VALUES.indexOf(b.weekday));
     return map;
   }
 

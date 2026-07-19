@@ -7,7 +7,55 @@ import {
   NodeAuditAction,
   ResponsibleMode,
   CycleUnit,
+  AssemblyMode,
+  FillMode,
 } from './assembly-constants';
+
+// ── House mode: config, houses, rotation ─────────────────────────────────────
+
+export interface AssemblyConfig {
+  schoolId: string;
+  mode: AssemblyMode;
+  title?: string;
+  subtitle?: string;
+}
+export interface SetConfigRequest {
+  mode?: AssemblyMode;
+  title?: string | null;
+  subtitle?: string | null;
+}
+
+export interface HouseTeacherView { employeeId: string; name?: string; }
+export interface HouseView {
+  houseId: string;
+  name: string;
+  code?: string;
+  color?: string;
+  inchargeId?: string;
+  inchargeName?: string;
+  coinchargeId?: string;
+  coinchargeName?: string;
+  rotationOrder?: number;
+  teachers: HouseTeacherView[];
+}
+export interface SetHouseMetaRequest {
+  inchargeId?: string | null;
+  coinchargeId?: string | null;
+  rotationOrder?: number | null;
+  teacherIds?: string[];
+}
+
+// One week's house-on-duty for a plan (wing).
+export interface WeekHouseView {
+  weekStart: string; // yyyy-mm-dd (Monday)
+  houseId?: string;
+  houseName?: string;
+  source: 'auto' | 'override' | 'skip';
+}
+export interface SetWeekHouseRequest {
+  weekStart: string;
+  houseId?: string | null; // null = skip (no house that week)
+}
 
 export interface BaseEntity {
   uuid: string;
@@ -27,6 +75,7 @@ export interface AssemblyPlan extends BaseEntity {
   startDate?: string; // yyyy-mm-dd; null = -inf (whole-year base plan)
   endDate?: string; // yyyy-mm-dd; null = +inf
   priority?: number; // tie-break for equal-span overlaps (higher wins)
+  rotationAnchor?: string; // house-mode: the Monday this wing's house cycle starts from
   publishStatus: PublishStatus;
   publishedAt?: Date;
   publishedbyUserid?: string;
@@ -61,6 +110,7 @@ export interface UpdatePlanRequest {
   startDate?: string | null;
   endDate?: string | null;
   priority?: number | null;
+  rotationAnchor?: string | null;
 }
 
 // Clone a whole plan (tree + days + audience) into a new dated plan.
@@ -95,14 +145,20 @@ export interface AssemblyNode extends BaseEntity {
   outcome?: string;
   startTime?: string;
   durationMinutes?: number;
+  fillMode?: FillMode;   // 'auto' (template content) | 'roster' (house fills weekly)
+  isOptional?: boolean;  // can be opted in/out per day
+  options?: string[];    // pick-one choices (e.g. performance types)
   status: string;
 }
 
-// Node with its own child sets (days/responsible/resources) attached.
+export interface NodeDayContent { weekday: Weekday; content?: string; }
+
+// Node with its own child sets (days/responsible/resources/day-content) attached.
 export interface AssemblyNodeDetail extends AssemblyNode {
   days: Weekday[]; // explicit rows only (empty = inherit)
   responsible: NodeResponsibleView[];
   resources: NodeResourceView[];
+  dayContent: NodeDayContent[]; // per-weekday content grid (leaf template content)
   children?: AssemblyNodeDetail[];
 }
 
@@ -140,6 +196,9 @@ export interface CreateNodeRequest {
   outcome?: string;
   startTime?: string;
   durationMinutes?: number;
+  fillMode?: FillMode;
+  isOptional?: boolean;
+  options?: string[];
   // Optional insert position among siblings; appended to the end when omitted.
   sortOrder?: number;
 }
@@ -152,6 +211,13 @@ export interface UpdateNodeRequest {
   outcome?: string | null;
   startTime?: string | null;
   durationMinutes?: number | null;
+  fillMode?: FillMode | null;
+  isOptional?: boolean | null;
+  options?: string[] | null;
+}
+
+export interface SetNodeDayContentRequest {
+  content: NodeDayContent[]; // per-weekday content; empty content clears a day
 }
 
 export interface ReorderNodesRequest {
@@ -282,6 +348,7 @@ export interface ResolvedAssembly {
 export interface ResolvedNode {
   uuid: string;
   title: string;
+  content?: string; // the template's per-weekday content cell for the resolved date
   description?: string;
   expectation?: string;
   recommendation?: string;

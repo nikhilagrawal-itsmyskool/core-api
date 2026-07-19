@@ -10,6 +10,7 @@ import {
   SetNodeDaysRequest,
   SetNodeResponsibleRequest,
   SetNodeResourcesRequest,
+  SetNodeDayContentRequest,
 } from './assembly-interfaces';
 
 const NOT_FOUND = 'Node not found';
@@ -179,6 +180,23 @@ class AssemblyNodeHandler {
     }
   };
 
+  public setDayContent = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
+    _context.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const ctx = await resolveSchool(event, callback);
+      if (!ctx) return;
+      const id = requireParam(event, 'id', callback);
+      if (!id) return;
+      const body = parseBody<SetNodeDayContentRequest>(event, callback);
+      if (!body) return;
+      const result = await assemblyNodeService.setNodeDayContent(id, body.content || [], ctx.schoolId, ctx.userId);
+      if (!result) { ResponseBuilder.notFound(ErrorCode.InvalidId, NOT_FOUND, callback); return; }
+      ResponseBuilder.ok(result, callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
   public setResources = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
     _context.callbackWaitsForEmptyEventLoop = false;
     try {
@@ -209,3 +227,4 @@ export const remove = handler.remove;
 export const setDays = handler.setDays;
 export const setResponsible = handler.setResponsible;
 export const setResources = handler.setResources;
+export const setDayContent = handler.setDayContent;
