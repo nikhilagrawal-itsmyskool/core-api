@@ -1,0 +1,307 @@
+import { BASE_URL, headers, getSeed, closePool, rnd, Seed } from "./helpers";
+
+const get = (p: string) => fetch(`${BASE_URL}${p}`, { headers });
+const post = (p: string, body: any) =>
+  fetch(`${BASE_URL}${p}`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(body),
+  });
+const put = (p: string, body: any) =>
+  fetch(`${BASE_URL}${p}`, {
+    method: "PUT",
+    headers,
+    body: JSON.stringify(body),
+  });
+const del = (p: string) =>
+  fetch(`${BASE_URL}${p}`, { method: "DELETE", headers });
+
+describe("Syllabus module", () => {
+  let seed: Seed;
+  let subjectId: string;
+  let syllabusId: string;
+  const tag = rnd();
+
+  beforeAll(async () => {
+    seed = await getSeed();
+  });
+  afterAll(async () => {
+    await closePool();
+  });
+
+  describe("Subjects", () => {
+    const name = `GK ${tag}`;
+
+    it("creates a subject", async () => {
+      const res = await post("/subjects", {
+        name,
+        description: "General Knowledge",
+      });
+      expect(res.status).toBe(200);
+      const d = await res.json();
+      expect(d.uuid).toBeTruthy();
+      expect(d.name).toBe(name);
+      subjectId = d.uuid;
+    });
+
+    it("rejects a duplicate subject name", async () => {
+      const res = await post("/subjects", { name });
+      expect(res.status).toBeGreaterThanOrEqual(400);
+    });
+
+    it("lists subjects including the new one", async () => {
+      const res = await get("/subjects");
+      const d = await res.json();
+      expect(Array.isArray(d)).toBe(true);
+      expect(d.some((s: any) => s.uuid === subjectId)).toBe(true);
+    });
+  });
+
+  describe("Grades lookup", () => {
+    it("derives grades (with sections) from class names", async () => {
+      const res = await get("/grades");
+      expect(res.status).toBe(200);
+      const d = await res.json();
+      expect(Array.isArray(d)).toBe(true);
+      const g = d.find(
+        (x: any) => x.grade.toLowerCase() === seed.grade.toLowerCase(),
+      );
+      expect(g).toBeTruthy();
+      expect(g.sections.length).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  describe("Plans", () => {
+    it("creates a syllabus for the grade + subject", async () => {
+      const res = await post("/syllabi", {
+        academicYearId: seed.academicYearId,
+        grade: seed.grade,
+        subjectId,
+        layout: "junior",
+        note: "Current affairs are also part of the syllabus.",
+      });
+      expect(res.status).toBe(200);
+      const d = await res.json();
+      expect(d.uuid).toBeTruthy();
+      expect(d.grade).toBe(seed.grade);
+      syllabusId = d.uuid;
+    });
+
+    it("rejects a duplicate plan (same grade + subject + year)", async () => {
+      const res = await post("/syllabi", {
+        academicYearId: seed.academicYearId,
+        grade: seed.grade,
+        subjectId,
+        layout: "junior",
+      });
+      expect(res.status).toBeGreaterThanOrEqual(400);
+    });
+
+    it("rejects an invalid layout", async () => {
+      const res = await post("/syllabi", {
+        academicYearId: seed.academicYearId,
+        grade: `Z${rnd()}`,
+        subjectId,
+        layout: "bogus",
+      });
+      expect(res.status).toBeGreaterThanOrEqual(400);
+    });
+
+    it("rejects an invalid subjectId", async () => {
+      const res = await post("/syllabi", {
+        academicYearId: seed.academicYearId,
+        grade: `Z${rnd()}`,
+        subjectId: "nope12345678",
+        layout: "junior",
+      });
+      expect(res.status).toBeGreaterThanOrEqual(400);
+    });
+  });
+
+  describe("Entries", () => {
+    it("adds a single entry and defaults its term from the month", async () => {
+      const res = await post(`/syllabi/${syllabusId}/entries`, {
+        month: "april",
+        title: "India is One",
+        theme: "Our India",
+        topicNo: "T-1",
+        pageRef: "177",
+      });
+      expect(res.status).toBe(200);
+      const d = await res.json();
+      expect(d.seq).toBe(1);
+      expect(d.term).toBe("half_yearly"); // April → half-yearly by default
+    });
+
+    it("bulk-appends entries (annual term for later months)", async () => {
+      const res = await post(`/syllabi/${syllabusId}/entries/bulk`, {
+        mode: "append",
+        entries: [
+          {
+            month: "april",
+            title: "Food We Must Eat",
+            theme: "Health and Fitness",
+          },
+          {
+            month: "october",
+            title: "Take Care of Earth",
+            theme: "General Awareness",
+          },
+        ],
+      });
+      expect(res.status).toBe(200);
+      const d = await res.json();
+      expect(d.length).toBe(3);
+      const oct = d.find((e: any) => e.month === "october");
+      expect(oct.term).toBe("annual");
+    });
+
+    it("bulk-replaces the whole entry list, resequenced from 1", async () => {
+      const res = await post(`/syllabi/${syllabusId}/entries/bulk`, {
+        mode: "replace",
+        entries: [
+          {
+            month: "april",
+            title: "Quality Education",
+            entryType: "topic",
+            theme: "SDGs",
+          },
+          {
+            month: "may",
+            title: "Say It Short",
+            entryType: "topic",
+            theme: "Digital Literacy",
+          },
+          {
+            month: "august",
+            title: "Revision & Worksheet-1",
+            entryType: "revision",
+          },
+        ],
+      });
+      const d = await res.json();
+      expect(d.length).toBe(3);
+      expect(d.map((e: any) => e.seq)).toEqual([1, 2, 3]);
+    });
+
+    it("reorders entries", async () => {
+      const list = await (await get(`/syllabi/${syllabusId}`)).json();
+      const ids = list.entries.map((e: any) => e.uuid);
+      const reversed = [...ids].reverse();
+      const res = await put(`/syllabi/${syllabusId}/entries/order`, {
+        order: reversed,
+      });
+      const d = await res.json();
+      expect(d.map((e: any) => e.uuid)).toEqual(reversed);
+      expect(d.map((e: any) => e.seq)).toEqual([1, 2, 3]);
+    });
+
+    it("rejects a blank entry title", async () => {
+      const res = await post(`/syllabi/${syllabusId}/entries`, {
+        month: "april",
+        title: "   ",
+      });
+      expect(res.status).toBeGreaterThanOrEqual(400);
+    });
+
+    it("rejects an invalid month", async () => {
+      const res = await post(`/syllabi/${syllabusId}/entries`, {
+        month: "smarch",
+        title: "X",
+      });
+      expect(res.status).toBeGreaterThanOrEqual(400);
+    });
+  });
+
+  describe("Progress (per section)", () => {
+    let entryId: string;
+
+    beforeAll(async () => {
+      const plan = await (await get(`/syllabi/${syllabusId}`)).json();
+      entryId = plan.entries.find((e: any) => e.entryType === "topic").uuid;
+    });
+
+    it("marks an entry covered for section A", async () => {
+      const res = await post("/progress", {
+        entryId,
+        classId: seed.sectionA.classId,
+        status: "covered",
+      });
+      expect(res.status).toBe(200);
+      const d = await res.json();
+      expect(d.status).toBe("covered");
+      expect(d.coveredDate).toBeTruthy();
+    });
+
+    it("roster for section A shows it covered with a count", async () => {
+      const res = await get(
+        `/syllabi/${syllabusId}/progress?classId=${seed.sectionA.classId}`,
+      );
+      expect(res.status).toBe(200);
+      const d = await res.json();
+      const e = d.entries.find((x: any) => x.uuid === entryId);
+      expect(e.covered).toBe(true);
+      expect(d.counts.covered).toBe(1);
+    });
+
+    it("roster for section B shows the same entry still pending (isolation)", async () => {
+      const res = await get(
+        `/syllabi/${syllabusId}/progress?classId=${seed.sectionB.classId}`,
+      );
+      const d = await res.json();
+      const e = d.entries.find((x: any) => x.uuid === entryId);
+      expect(e.covered).toBe(false);
+      expect(d.counts.covered).toBe(0);
+    });
+
+    it("re-marking covered is idempotent (single row per entry+section)", async () => {
+      await post("/progress", {
+        entryId,
+        classId: seed.sectionA.classId,
+        status: "covered",
+      });
+      const res = await get(
+        `/syllabi/${syllabusId}/progress?classId=${seed.sectionA.classId}`,
+      );
+      const d = await res.json();
+      expect(d.entries.filter((x: any) => x.covered).length).toBe(1);
+    });
+
+    it("marking pending un-covers the entry", async () => {
+      await post("/progress", {
+        entryId,
+        classId: seed.sectionA.classId,
+        status: "pending",
+      });
+      const res = await get(
+        `/syllabi/${syllabusId}/progress?classId=${seed.sectionA.classId}`,
+      );
+      const d = await res.json();
+      const e = d.entries.find((x: any) => x.uuid === entryId);
+      expect(e.covered).toBe(false);
+    });
+
+    it("rejects marking against an invalid classId", async () => {
+      const res = await post("/progress", {
+        entryId,
+        classId: "nope12345678",
+        status: "covered",
+      });
+      expect(res.status).toBeGreaterThanOrEqual(400);
+    });
+  });
+
+  describe("Cleanup", () => {
+    it("deletes the syllabus and its entries", async () => {
+      const res = await del(`/syllabi/${syllabusId}`);
+      expect(res.status).toBe(200);
+      const check = await get(`/syllabi/${syllabusId}`);
+      expect(check.status).toBe(404);
+    });
+
+    it("deletes the subject once no plan uses it", async () => {
+      const res = await del(`/subjects/${subjectId}`);
+      expect(res.status).toBe(200);
+    });
+  });
+});

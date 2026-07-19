@@ -1,0 +1,203 @@
+  # Health check
+  health:
+    handler: health-handler.health
+    events:
+      - http:
+          path: health
+          method: get
+          cors: true
+
+  # ── Lookups ───────────────────────────────────────────────────────────────
+  get-lookups:
+    handler: syllabus-lookup-handler.getLookups
+    name: ${self:service}-get-lookups
+    events:
+      - http:
+          path: lookups
+          method: get
+          cors: true
+
+  get-grades:
+    handler: syllabus-lookup-handler.getGrades
+    name: ${self:service}-get-grades
+    events:
+      - http:
+          path: grades
+          method: get
+          cors: true
+
+  # ── Subjects ──────────────────────────────────────────────────────────────
+  create-subject:
+    handler: syllabus-subject-handler.create
+    name: ${self:service}-create-subject
+    events:
+      - http:
+          path: subjects
+          method: post
+          cors: true
+
+  list-subjects:
+    handler: syllabus-subject-handler.list
+    name: ${self:service}-list-subjects
+    events:
+      - http:
+          path: subjects
+          method: get
+          cors: true
+
+  get-subject:
+    handler: syllabus-subject-handler.getById
+    name: ${self:service}-get-subject
+    events:
+      - http:
+          path: subjects/{id}
+          method: get
+          cors: true
+
+  update-subject:
+    handler: syllabus-subject-handler.update
+    name: ${self:service}-update-subject
+    events:
+      - http:
+          path: subjects/{id}
+          method: put
+          cors: true
+
+  delete-subject:
+    handler: syllabus-subject-handler.remove
+    name: ${self:service}-delete-subject
+    events:
+      - http:
+          path: subjects/{id}
+          method: delete
+          cors: true
+
+  # ── Plans ─────────────────────────────────────────────────────────────────
+  create-syllabus:
+    handler: syllabus-plan-handler.create
+    name: ${self:service}-create-syllabus
+    events:
+      - http:
+          path: syllabi
+          method: post
+          cors: true
+
+  list-syllabi:
+    handler: syllabus-plan-handler.list
+    name: ${self:service}-list-syllabi
+    events:
+      - http:
+          path: syllabi
+          method: get
+          cors: true
+
+  get-syllabus:
+    handler: syllabus-plan-handler.getById
+    name: ${self:service}-get-syllabus
+    events:
+      - http:
+          path: syllabi/{id}
+          method: get
+          cors: true
+
+  update-syllabus:
+    handler: syllabus-plan-handler.update
+    name: ${self:service}-update-syllabus
+    events:
+      - http:
+          path: syllabi/{id}
+          method: put
+          cors: true
+
+  delete-syllabus:
+    handler: syllabus-plan-handler.remove
+    name: ${self:service}-delete-syllabus
+    events:
+      - http:
+          path: syllabi/{id}
+          method: delete
+          cors: true
+
+  # ── Entries ───────────────────────────────────────────────────────────────
+  add-entry:
+    handler: syllabus-plan-handler.addEntry
+    name: ${self:service}-add-entry
+    events:
+      - http:
+          path: syllabi/{id}/entries
+          method: post
+          cors: true
+
+  bulk-entries:
+    handler: syllabus-plan-handler.bulkEntries
+    name: ${self:service}-bulk-entries
+    events:
+      - http:
+          path: syllabi/{id}/entries/bulk
+          method: post
+          cors: true
+
+  reorder-entries:
+    handler: syllabus-plan-handler.reorderEntries
+    name: ${self:service}-reorder-entries
+    events:
+      - http:
+          path: syllabi/{id}/entries/order
+          method: put
+          cors: true
+
+  update-entry:
+    handler: syllabus-plan-handler.updateEntry
+    name: ${self:service}-update-entry
+    events:
+      - http:
+          path: entries/{id}
+          method: put
+          cors: true
+
+  delete-entry:
+    handler: syllabus-plan-handler.removeEntry
+    name: ${self:service}-delete-entry
+    events:
+      - http:
+          path: entries/{id}
+          method: delete
+          cors: true
+
+  # ── Progress (teacher) ────────────────────────────────────────────────────
+  progress-roster:
+    handler: syllabus-progress-handler.getRoster
+    name: ${self:service}-progress-roster
+    events:
+      - http:
+          path: syllabi/{id}/progress
+          method: get
+          cors: true
+
+  mark-progress:
+    handler: syllabus-progress-handler.mark
+    name: ${self:service}-mark-progress
+    events:
+      - http:
+          path: progress
+          method: post
+          cors: true
+
+  mark-progress-bulk:
+    handler: syllabus-progress-handler.markBulk
+    name: ${self:service}-mark-progress-bulk
+    events:
+      - http:
+          path: progress/bulk
+          method: post
+          cors: true
+
+  # ── Student/parent app (family token + X-Student-Id) ──────────────────────
+  my-timeline:
+    handler: syllabus-me-handler.timeline
+    name: ${self:service}-my-timeline
+    events:
+      - http:
+          path: me/timeline
+          method: get
+          cors: true

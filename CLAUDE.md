@@ -31,7 +31,7 @@ npx prettier --write .
 | `npm run stop:<module>` | Stop module |
 | `npm run test:<module>:full` | Full cycle: stop → start → test → stop |
 
-Available modules: `auth`, `medical`, `lab`, `sample`, `student`, `employee`, `class`, `academic-year`, `fine`, `uniform`, `shop`, `sports`, `asset`, `library`, `supplies`, `timetable`, `attendance`, `communication`, `transport`
+Available modules: `auth`, `medical`, `lab`, `sample`, `student`, `employee`, `class`, `academic-year`, `fine`, `uniform`, `shop`, `sports`, `asset`, `library`, `supplies`, `timetable`, `attendance`, `communication`, `transport`, `assembly`, `syllabus`
 
 > These always run on `local` stage (hardcoded in `start-module.js`). Stage cannot be changed for individual module commands.
 
@@ -69,7 +69,9 @@ Each module in `modules/` is an independent Lambda microservice with its own `se
 - **fine/**: Fine collection - incident tracking, workflow (open→under review→decision→closed), evidence upload, receipt generation
 - **attendance/**: Daily roll-call attendance per class - one session per class/academic-year/date, mark-exceptions UX (default present, finalize fills the roster), back-dated entry, edits with an append-only audit trail, and absence notifications fired to the communication module on finalize
 - **transport/**: School bus/van transport - a school-wide stop master (km-tagged, deduped, entered via a grid/bulk upsert), a vehicle registry (owned/contract; free-text make-model; driver+conductor name/phone), routes that run in one direction (separate morning-pickup and evening-drop rows) with an ordered de-duplicated stop list + employee staff (accompanying teacher/helper/incharge) and a driver/conductor snapshot prefilled from the vehicle, per-direction student route+stop assignment (one morning + one evening per student per year), and per-route attendance (open→mark→finalize + append-only audit, mirrors the attendance module) firing absence notifications to communication. Fees deferred. See `modules/transport/DESIGN.md`.
+- **assembly/**: School morning-assembly planning - per-wing **assembly plans** (draft→published, scoped to an explicit set of classes with no class in two plans/year), each an unlimited-depth recursive **node tree** (block→segment→sub-…) whose nodes carry running-order (`sort_order`), three guidance fields (expectation/recommendation/outcome), optional timing, text/link resources, and multiple polymorphic **responsible** parties (employee/class/student/text) with role labels. Nodes carry a **recurring-weekday** set that **inherits down the tree** (child ⊆ parent, no-days = inherit/plan-ceiling); the plan's weekday set is the ceiling. **Special assemblies** are per-date **snapshots** (clone the day's resolved tree into an independent editable copy) that replace the plan for that date. A light **theme** (value-of-the-week) spans a date range. Append-only node audit; `/me/assembly` read surface for the student app. Execution "diary" and duty notifications deferred (schema-ready). See `modules/assembly/DESIGN.md`.
 - **communication/**: Independent SMS/WhatsApp notification service (other modules call it). References externally pre-approved templates (Meta/DLT) keyed by (key, channel, language); a DB-as-queue (`message_job`, same `for update skip locked` pattern as timetable) with lazy audience expansion; an ordered `role:channel` preference ladder (WhatsApp-first default) over student/employee contacts; provider-agnostic adapter (stub by default via `COMM_PROVIDER`). The queue is drained by a worker that calls the module's `processNext` (claim one due job → resolve audience → send); job-level failures retry with exponential backoff (transient only — a `BusinessErrorResult` like "no active template" fails immediately), per-recipient send failures don't retry. **Two drivers for the same work:** in **dev** run `scripts/local/communication-worker.js` (polls the `messages/process-next` HTTP endpoint) — required, because `serverless-offline` does NOT fire `schedule` events; on **AWS** the `drain-messages` function (EventBridge `rate(1 minute)`) loops `processNext` until the queue is empty or ~50s, so no worker process is needed (overlap-safe via `for update skip locked`, so no reserved concurrency). The `drain` function is inert under serverless-offline.
+- **syllabus/**: Month-wise **syllabus planner** - its own subject catalog (independent of timetable subjects); one shared **plan** per (academic-year, grade, subject) where grade is derived from the class-name prefix (`I-A`→`I`); an ordered `syllabus_entry` list interleaving months / senior "Topic:" section-headers / topics / exam+revision+refresher markers (`entry_type`), with free-text theme and page refs, split by `term` (half-yearly/annual) and a junior/senior `layout` hint; per-**section** coverage marks (`syllabus_progress`, teacher-marked covered/pending); and a student-app `/me/timeline` that anchors on the current month ("we are here") with past=covered / future=pending, coverage driven by teacher marks. Manual entry (bulk add + reorder); no importer. See `modules/syllabus/DESIGN.md`.
 - **student/**: Student search by name, class, and academic year
 - **employee/**: Employee search by name
 - **class/**: Class search for dropdowns (uuid + name)
@@ -103,6 +105,8 @@ Each module runs on dedicated ports to allow simultaneous local development:
 | attendance    | 3033      | 3034        | /attendance/*     |
 | communication | 3035      | 3036        | /communication/*  |
 | transport     | 3039      | 3040        | /transport/*      |
+| assembly      | 3041      | 3042        | /assembly/*       |
+| syllabus      | 3043      | 3044        | /syllabus/*       |
 | gateway       | 3000      | -           | (routes all)      |
 
 #### Prod Stage
@@ -128,6 +132,8 @@ Each module runs on dedicated ports to allow simultaneous local development:
 | attendance    | 6033      | 6034        |
 | communication | 6035      | 6036        |
 | transport     | 6039      | 6040        |
+| assembly      | 6041      | 6042        |
+| syllabus      | 6043      | 6044        |
 | gateway       | 6000      | -           |
 
 ### Scripts Organization
@@ -383,7 +389,7 @@ node scripts/local/kill-ports.js --all
 node scripts/local/health-all.js
 set GATEWAY_PORT=3000 && node node_modules/jest/bin/jest.js
 
-# Single module lifecycle (module = auth, medical, lab, sample, student, employee, class, academic-year, supplies, timetable, attendance, communication, transport)
+# Single module lifecycle (module = auth, medical, lab, sample, student, employee, class, academic-year, supplies, timetable, attendance, communication, transport, assembly, syllabus)
 node scripts/local/start-module.js <module> --kill
 node scripts/local/kill-ports.js --<module>
 node scripts/local/health-module.js <module>

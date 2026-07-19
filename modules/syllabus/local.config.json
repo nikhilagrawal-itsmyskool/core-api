@@ -1,0 +1,5 @@
+{
+  "httpPort": 3043,
+  "lambdaPort": 3044,
+  "prefix": "syllabus"
+}

@@ -1,0 +1,112 @@
+import {
+  EntryType,
+  Layout,
+  Month,
+  ProgressStatus,
+  Term,
+} from "./syllabus-constants";
+
+// ── Subjects ────────────────────────────────────────────────────────────────
+export interface SyllabusSubject {
+  uuid: string;
+  schoolId: string;
+  name: string;
+  description: string | null;
+  status: string;
+}
+
+export interface CreateSubjectRequest {
+  name: string;
+  description?: string;
+}
+
+export interface UpdateSubjectRequest {
+  name?: string;
+  description?: string;
+}
+
+// ── Plans ───────────────────────────────────────────────────────────────────
+export interface Syllabus {
+  uuid: string;
+  schoolId: string;
+  academicYearId: string;
+  grade: string;
+  subjectId: string;
+  book: string | null;
+  layout: Layout;
+  note: string | null;
+  status: string;
+}
+
+export interface CreateSyllabusRequest {
+  academicYearId: string;
+  grade: string;
+  subjectId: string;
+  layout: Layout;
+  book?: string;
+  note?: string;
+}
+
+export interface UpdateSyllabusRequest {
+  book?: string;
+  layout?: Layout;
+  note?: string;
+}
+
+// ── Entries ─────────────────────────────────────────────────────────────────
+export interface SyllabusEntry {
+  uuid: string;
+  syllabusId: string;
+  seq: number;
+  month: Month;
+  entryType: EntryType;
+  topicNo: string | null;
+  title: string;
+  theme: string | null;
+  pageRef: string | null;
+  term: Term | null;
+}
+
+export interface EntryInput {
+  month: Month;
+  entryType?: EntryType;
+  topicNo?: string;
+  title: string;
+  theme?: string;
+  pageRef?: string;
+  term?: Term;
+}
+
+export interface BulkEntriesRequest {
+  mode?: "append" | "replace";
+  entries: EntryInput[];
+}
+
+export interface ReorderEntriesRequest {
+  order: string[]; // entry uuids in desired sequence
+}
+
+// ── Progress ────────────────────────────────────────────────────────────────
+export interface MarkProgressRequest {
+  entryId: string;
+  classId: string;
+  status: ProgressStatus;
+  coveredDate?: string;
+  remark?: string;
+}
+
+export interface BulkProgressRequest {
+  classId: string;
+  marks: {
+    entryId: string;
+    status: ProgressStatus;
+    coveredDate?: string;
+    remark?: string;
+  }[];
+}
+
+export interface EntryWithProgress extends SyllabusEntry {
+  covered: boolean;
+  coveredDate: string | null;
+  remark: string | null;
+}
