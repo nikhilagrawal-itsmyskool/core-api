@@ -1,0 +1,330 @@
+  # Health check
+  health:
+    handler: health-handler.health
+    events:
+      - http:
+          path: health
+          method: get
+          cors: true
+
+  # Lookups (all dropdown catalogs: weekdays, roles, target types, statuses)
+  get-lookups:
+    handler: assembly-lookup-handler.getLookups
+    name: ${self:service}-get-lookups
+    events:
+      - http:
+          path: lookups
+          method: get
+          cors: true
+
+  # ── Plans ─────────────────────────────────────────────────────────────────
+  create-plan:
+    handler: assembly-plan-handler.create
+    name: ${self:service}-create-plan
+    events:
+      - http:
+          path: plans
+          method: post
+          cors: true
+
+  list-plans:
+    handler: assembly-plan-handler.list
+    name: ${self:service}-list-plans
+    events:
+      - http:
+          path: plans
+          method: get
+          cors: true
+
+  get-plan:
+    handler: assembly-plan-handler.getById
+    name: ${self:service}-get-plan
+    events:
+      - http:
+          path: plans/{id}
+          method: get
+          cors: true
+
+  update-plan:
+    handler: assembly-plan-handler.update
+    name: ${self:service}-update-plan
+    events:
+      - http:
+          path: plans/{id}
+          method: put
+          cors: true
+
+  delete-plan:
+    handler: assembly-plan-handler.remove
+    name: ${self:service}-delete-plan
+    events:
+      - http:
+          path: plans/{id}
+          method: delete
+          cors: true
+
+  publish-plan:
+    handler: assembly-plan-handler.publish
+    name: ${self:service}-publish-plan
+    events:
+      - http:
+          path: plans/{id}/publish
+          method: post
+          cors: true
+
+  get-plan-classes:
+    handler: assembly-plan-handler.getClasses
+    name: ${self:service}-get-plan-classes
+    events:
+      - http:
+          path: plans/{id}/classes
+          method: get
+          cors: true
+
+  set-plan-classes:
+    handler: assembly-plan-handler.setClasses
+    name: ${self:service}-set-plan-classes
+    events:
+      - http:
+          path: plans/{id}/classes
+          method: put
+          cors: true
+
+  set-plan-days:
+    handler: assembly-plan-handler.setDays
+    name: ${self:service}-set-plan-days
+    events:
+      - http:
+          path: plans/{id}/days
+          method: put
+          cors: true
+
+  # ── Nodes (tree) ────────────────────────────────────────────────────────────
+  create-node:
+    handler: assembly-node-handler.create
+    name: ${self:service}-create-node
+    events:
+      - http:
+          path: plans/{id}/nodes
+          method: post
+          cors: true
+
+  get-plan-tree:
+    handler: assembly-node-handler.tree
+    name: ${self:service}-get-plan-tree
+    events:
+      - http:
+          path: plans/{id}/tree
+          method: get
+          cors: true
+
+  reorder-nodes:
+    handler: assembly-node-handler.reorder
+    name: ${self:service}-reorder-nodes
+    events:
+      - http:
+          path: plans/{id}/nodes/order
+          method: put
+          cors: true
+
+  get-node:
+    handler: assembly-node-handler.getById
+    name: ${self:service}-get-node
+    events:
+      - http:
+          path: nodes/{id}
+          method: get
+          cors: true
+
+  update-node:
+    handler: assembly-node-handler.update
+    name: ${self:service}-update-node
+    events:
+      - http:
+          path: nodes/{id}
+          method: put
+          cors: true
+
+  delete-node:
+    handler: assembly-node-handler.remove
+    name: ${self:service}-delete-node
+    events:
+      - http:
+          path: nodes/{id}
+          method: delete
+          cors: true
+
+  set-node-days:
+    handler: assembly-node-handler.setDays
+    name: ${self:service}-set-node-days
+    events:
+      - http:
+          path: nodes/{id}/days
+          method: put
+          cors: true
+
+  set-node-responsible:
+    handler: assembly-node-handler.setResponsible
+    name: ${self:service}-set-node-responsible
+    events:
+      - http:
+          path: nodes/{id}/responsible
+          method: put
+          cors: true
+
+  set-node-resources:
+    handler: assembly-node-handler.setResources
+    name: ${self:service}-set-node-resources
+    events:
+      - http:
+          path: nodes/{id}/resources
+          method: put
+          cors: true
+
+  # ── Special assemblies ──────────────────────────────────────────────────────
+  create-special:
+    handler: assembly-special-handler.create
+    name: ${self:service}-create-special
+    events:
+      - http:
+          path: plans/{id}/specials
+          method: post
+          cors: true
+
+  list-specials:
+    handler: assembly-special-handler.list
+    name: ${self:service}-list-specials
+    events:
+      - http:
+          path: plans/{id}/specials
+          method: get
+          cors: true
+
+  get-special:
+    handler: assembly-special-handler.getById
+    name: ${self:service}-get-special
+    events:
+      - http:
+          path: specials/{id}
+          method: get
+          cors: true
+
+  update-special:
+    handler: assembly-special-handler.update
+    name: ${self:service}-update-special
+    events:
+      - http:
+          path: specials/{id}
+          method: put
+          cors: true
+
+  delete-special:
+    handler: assembly-special-handler.remove
+    name: ${self:service}-delete-special
+    events:
+      - http:
+          path: specials/{id}
+          method: delete
+          cors: true
+
+  publish-special:
+    handler: assembly-special-handler.publish
+    name: ${self:service}-publish-special
+    events:
+      - http:
+          path: specials/{id}/publish
+          method: post
+          cors: true
+
+  create-special-node:
+    handler: assembly-node-handler.createForSpecial
+    name: ${self:service}-create-special-node
+    events:
+      - http:
+          path: specials/{id}/nodes
+          method: post
+          cors: true
+
+  reorder-special-nodes:
+    handler: assembly-node-handler.reorderForSpecial
+    name: ${self:service}-reorder-special-nodes
+    events:
+      - http:
+          path: specials/{id}/nodes/order
+          method: put
+          cors: true
+
+  # ── Themes ──────────────────────────────────────────────────────────────────
+  create-theme:
+    handler: assembly-theme-handler.create
+    name: ${self:service}-create-theme
+    events:
+      - http:
+          path: themes
+          method: post
+          cors: true
+
+  list-themes:
+    handler: assembly-theme-handler.list
+    name: ${self:service}-list-themes
+    events:
+      - http:
+          path: themes
+          method: get
+          cors: true
+
+  get-theme:
+    handler: assembly-theme-handler.getById
+    name: ${self:service}-get-theme
+    events:
+      - http:
+          path: themes/{id}
+          method: get
+          cors: true
+
+  update-theme:
+    handler: assembly-theme-handler.update
+    name: ${self:service}-update-theme
+    events:
+      - http:
+          path: themes/{id}
+          method: put
+          cors: true
+
+  delete-theme:
+    handler: assembly-theme-handler.remove
+    name: ${self:service}-delete-theme
+    events:
+      - http:
+          path: themes/{id}
+          method: delete
+          cors: true
+
+  # ── Resolve ─────────────────────────────────────────────────────────────────
+  resolve-assembly:
+    handler: assembly-resolve-handler.resolve
+    name: ${self:service}-resolve-assembly
+    events:
+      - http:
+          path: resolve
+          method: get
+          cors: true
+
+  # ── Student/parent app (family token + X-Student-Id) ────────────────────────
+  my-assembly-today:
+    handler: assembly-me-handler.today
+    name: ${self:service}-my-assembly-today
+    events:
+      - http:
+          path: me/assembly/today
+          method: get
+          cors: true
+
+  my-assembly-on:
+    handler: assembly-me-handler.on
+    name: ${self:service}-my-assembly-on
+    events:
+      - http:
+          path: me/assembly/on
+          method: get
+          cors: true

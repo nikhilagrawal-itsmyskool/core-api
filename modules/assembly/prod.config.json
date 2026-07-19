@@ -1,0 +1,5 @@
+{
+  "httpPort": 6041,
+  "lambdaPort": 6042,
+  "prefix": "assembly"
+}
