@@ -30,10 +30,16 @@ const ENTRY_COLS = singleLineString`
   uuid, syllabus_id, seq, month, entry_type, topic_no, title, theme, page_ref, term
 `;
 
-// Half-yearly term spans April–August; the rest of the session is annual. Used
-// as a default when a bulk-imported entry doesn't specify a term.
+// Half-yearly term spans April–August; the rest of the session is annual.
 const HALF_YEARLY_MONTHS: Month[] = ["april", "may", "june", "july", "august"];
-function defaultTerm(month: Month): Term {
+// `term` (which exam block content is tested in) is only meaningful for study
+// content — topics, the supplementary note boxes, and GK refreshers. Structural
+// markers (exam, revision, section headers, activities) carry no term: it's
+// either redundant with their title (e.g. "Half Yearly Examination") or meaningless.
+const TERM_TYPES = new Set<EntryType>(["topic", "note", "refresher"]);
+function resolveTerm(entryType: EntryType, month: Month, explicit?: Term): Term | null {
+  if (!TERM_TYPES.has(entryType)) return null;
+  if (explicit) return explicit;
   return HALF_YEARLY_MONTHS.includes(month) ? "half_yearly" : "annual";
 }
 
@@ -360,9 +366,14 @@ class SyllabusPlanService {
     if (input.theme !== undefined) set("theme", input.theme?.trim() || null);
     if (input.pageRef !== undefined)
       set("page_ref", input.pageRef?.trim() || null);
-    if (input.term !== undefined) {
-      if (input.term !== null && !TERM_VALUES.includes(input.term))
-        throw new BusinessErrorResult(ErrorCode.BusinessError, "invalid term");
+    // term applies only to topic/note. Validate if provided; clear it whenever the
+    // (effective) type is a structural row so an edit can't reintroduce a stray term.
+    if (input.term !== undefined && input.term !== null && !TERM_VALUES.includes(input.term))
+      throw new BusinessErrorResult(ErrorCode.BusinessError, "invalid term");
+    const effectiveType = input.entryType !== undefined ? input.entryType : existing[0].entryType;
+    if (!TERM_TYPES.has(effectiveType)) {
+      if (input.term !== undefined || input.entryType !== undefined) set("term", null);
+    } else if (input.term !== undefined) {
       set("term", input.term || null);
     }
 
@@ -494,7 +505,7 @@ class SyllabusPlanService {
       const seq = startSeq + idx;
       const entryType: EntryType = input.entryType || DEFAULTS.ENTRY_TYPE;
       const month = input.month as Month;
-      const term: Term = (input.term as Term) || defaultTerm(month);
+      const term: Term | null = resolveTerm(entryType, month, input.term as Term);
       queries.push(singleLineString`
         insert into syllabus_entry
         (uuid, school_id, syllabus_id, seq, month, entry_type, topic_no, title, theme, page_ref, term, status, createdby_userid, created_at)
