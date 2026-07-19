@@ -63,18 +63,40 @@ describe('plans + audience', () => {
     expect(r.status).toBe(400);
   });
 
-  it('sets an audience and blocks class overlap across plans', async () => {
+  it('sets an audience and ALLOWS class overlap across dated plans', async () => {
     const a = await newPlan('WingA');
     const b = await newPlan('WingB');
     const set = await api('PUT', `/plans/${a.uuid}/classes`, { classIds: [seed.classIds[0], seed.classIds[1]] });
     expect(set.status).toBe(200);
     expect(set.body.classes).toHaveLength(2);
 
+    // Overlap is now allowed — dated plans resolve by narrowest-range-wins.
     const overlap = await api('PUT', `/plans/${b.uuid}/classes`, { classIds: [seed.classIds[1], seed.classIds[2]] });
-    expect(overlap.status).toBe(400);
+    expect(overlap.status).toBe(200);
+    expect(overlap.body.classes).toHaveLength(2);
+  });
 
-    const ok = await api('PUT', `/plans/${b.uuid}/classes`, { classIds: [seed.classIds[2], seed.classIds[3]] });
-    expect(ok.status).toBe(200);
+  it('creates dated plans and clones a plan with its tree', async () => {
+    const t1 = await api('POST', '/plans', {
+      academicYearId: seed.academicYearId, name: `Term1-${SUF}`, startDate: '2026-04-01', endDate: '2026-09-30',
+    });
+    expect(t1.status).toBe(200);
+    expect(t1.body.startDate).toBe('2026-04-01');
+    createdPlans.push(t1.body.uuid);
+    await addNode(t1.body.uuid, 'Opening');
+
+    // bad range rejected
+    const bad = await api('POST', '/plans', { academicYearId: seed.academicYearId, name: `Bad-${SUF}`, startDate: '2026-10-01', endDate: '2026-09-01' });
+    expect(bad.status).toBe(400);
+
+    // clone → new dated draft with the tree copied
+    const clone = await api('POST', `/plans/${t1.body.uuid}/clone`, { name: `Term2-${SUF}`, startDate: '2026-10-01', endDate: '2027-03-31' });
+    expect(clone.status).toBe(200);
+    createdPlans.push(clone.body.uuid);
+    expect(clone.body.startDate).toBe('2026-10-01');
+    expect(clone.body.publishStatus).toBe('draft');
+    const tree = await api('GET', `/plans/${clone.body.uuid}/tree`);
+    expect(titlesOf(tree.body)).toContain('Opening');
   });
 
   it('replaces weekdays and publishes', async () => {
@@ -218,6 +240,30 @@ describe('resolve', () => {
 
     expect((await api('GET', `/resolve?planId=${plan.uuid}&date=2026-13-40`)).status).toBe(400);
     expect((await api('GET', `/resolve?planId=nope&date=${MON}`)).status).toBe(404);
+  });
+});
+
+describe('time-aware responsibility', () => {
+  it('rotates a responsible weekly by calendar cycle', async () => {
+    const plan = await newPlan('Rota', ['mon', 'tue', 'wed', 'thu', 'fri', 'sat']);
+    const node = await addNode(plan.uuid, 'Prayer');
+    const set = await api('PUT', `/nodes/${node}/responsible`, {
+      responsible: [
+        { role: 'performers', targetType: 'class', targetId: seed.classIds[0], mode: 'rotating', cycleUnit: 'weekly', anchorDate: '2026-04-06', ruleGroup: 'rg1' },
+        { role: 'performers', targetType: 'class', targetId: seed.classIds[1], mode: 'rotating', cycleUnit: 'weekly', anchorDate: '2026-04-06', ruleGroup: 'rg1' },
+      ],
+    });
+    expect(set.status).toBe(200);
+    await api('POST', `/plans/${plan.uuid}/publish`);
+
+    const perf = async (date: string) => {
+      const r = await api('GET', `/resolve?planId=${plan.uuid}&date=${date}`);
+      const p = (r.body.nodes || []).find((n: any) => n.title === 'Prayer');
+      return (p?.responsible || []).map((x: any) => x.targetId)[0];
+    };
+    expect(await perf('2026-04-08')).toBe(seed.classIds[0]); // week 0 → member 0
+    expect(await perf('2026-04-15')).toBe(seed.classIds[1]); // week 1 → member 1
+    expect(await perf('2026-04-22')).toBe(seed.classIds[0]); // week 2 → wraps to member 0
   });
 });
 

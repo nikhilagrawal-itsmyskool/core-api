@@ -5,6 +5,7 @@ import {
   RESPONSIBLE_ROLES,
   RESPONSIBLE_TARGET_TYPES,
   PUBLISH_STATUSES,
+  CYCLE_UNITS,
 } from './assembly-constants';
 
 class AssemblyLookupHandler {
@@ -17,6 +18,7 @@ class AssemblyLookupHandler {
         responsibleRoles: [...RESPONSIBLE_ROLES],
         responsibleTargetTypes: [...RESPONSIBLE_TARGET_TYPES],
         publishStatuses: [...PUBLISH_STATUSES],
+        cycleUnits: [...CYCLE_UNITS],
       },
       callback,
     );

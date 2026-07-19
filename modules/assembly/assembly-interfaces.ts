@@ -5,6 +5,8 @@ import {
   OwnerType,
   SpecialSource,
   NodeAuditAction,
+  ResponsibleMode,
+  CycleUnit,
 } from './assembly-constants';
 
 export interface BaseEntity {
@@ -22,6 +24,9 @@ export interface AssemblyPlan extends BaseEntity {
   academicYearId: string;
   name: string;
   scopeLabel?: string;
+  startDate?: string; // yyyy-mm-dd; null = -inf (whole-year base plan)
+  endDate?: string; // yyyy-mm-dd; null = +inf
+  priority?: number; // tie-break for equal-span overlaps (higher wins)
   publishStatus: PublishStatus;
   publishedAt?: Date;
   publishedbyUserid?: string;
@@ -43,6 +48,9 @@ export interface CreatePlanRequest {
   academicYearId: string;
   name: string;
   scopeLabel?: string;
+  startDate?: string; // yyyy-mm-dd; omit for a whole-year base plan
+  endDate?: string;
+  priority?: number;
   // Optional; defaults to DEFAULTS.PLAN_WEEKDAYS when omitted.
   days?: Weekday[];
 }
@@ -50,6 +58,18 @@ export interface CreatePlanRequest {
 export interface UpdatePlanRequest {
   name?: string;
   scopeLabel?: string | null;
+  startDate?: string | null;
+  endDate?: string | null;
+  priority?: number | null;
+}
+
+// Clone a whole plan (tree + days + audience) into a new dated plan.
+export interface ClonePlanRequest {
+  name: string;
+  startDate?: string;
+  endDate?: string;
+  scopeLabel?: string;
+  copyClasses?: boolean; // default true — carry the audience over
 }
 
 export interface SetPlanClassesRequest {
@@ -94,6 +114,13 @@ export interface NodeResponsibleView {
   targetText?: string;
   targetName?: string;
   sortOrder: number;
+  // Time-aware fields (a rotating rule = rows sharing ruleGroup). Absent = fixed/always.
+  startDate?: string;
+  endDate?: string;
+  mode?: ResponsibleMode; // undefined ≡ 'fixed'
+  cycleUnit?: CycleUnit;
+  anchorDate?: string;
+  ruleGroup?: string;
 }
 
 export interface NodeResourceView {
@@ -141,6 +168,14 @@ export interface ResponsibleInput {
   targetType: ResponsibleTargetType;
   targetId?: string; // required unless targetType = 'text'
   targetText?: string; // required when targetType = 'text'
+  // Optional time-scoping. For a rotating rule, send one entry per member, all with
+  // the same ruleGroup + mode:'rotating' + cycleUnit + anchorDate; sortOrder = order.
+  startDate?: string;
+  endDate?: string;
+  mode?: ResponsibleMode; // 'fixed' (default) | 'rotating'
+  cycleUnit?: CycleUnit;
+  anchorDate?: string;
+  ruleGroup?: string;
 }
 
 export interface SetNodeResponsibleRequest {

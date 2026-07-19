@@ -12,9 +12,9 @@ import {
   NodeResourceView,
 } from './assembly-interfaces';
 import {
-  DEFAULTS, WEEKDAY_VALUES, RESPONSIBLE_TARGET_TYPE_VALUES, Weekday, OwnerType,
+  DEFAULTS, WEEKDAY_VALUES, RESPONSIBLE_TARGET_TYPE_VALUES, RESPONSIBLE_MODES, CYCLE_UNIT_VALUES, Weekday, OwnerType,
 } from './assembly-constants';
-import { findClass, findEmployee, findStudent } from './assembly-common';
+import { findClass, findEmployee, findStudent, isValidDate } from './assembly-common';
 const { generateShortUuid } = require('../../shared/util/generate-uuid.js');
 
 const NODE_COLS = singleLineString`
@@ -333,7 +333,21 @@ class AssemblyNodeService {
         targetId = e.targetId;
         targetName = found.name;
       }
-      rows.push([generateShortUuid(12), schoolId, nodeId, e.role?.trim() || null, e.targetType, targetId, targetText, targetName, idx, DEFAULTS.STATUS, userId, now]);
+      // Time-aware validation.
+      const mode = e.mode || null;
+      if (mode && !RESPONSIBLE_MODES.includes(mode)) throw new BusinessErrorResult(ErrorCode.BusinessError, `Invalid responsible mode: ${e.mode}`);
+      for (const [label, d] of [['startDate', e.startDate], ['endDate', e.endDate], ['anchorDate', e.anchorDate]] as const) {
+        if (d && !isValidDate(d)) throw new BusinessErrorResult(ErrorCode.BusinessError, `Invalid ${label} (yyyy-mm-dd)`);
+      }
+      if (e.startDate && e.endDate && e.endDate < e.startDate) throw new BusinessErrorResult(ErrorCode.BusinessError, 'endDate must be on or after startDate');
+      if (mode === 'rotating') {
+        if (!e.cycleUnit || !CYCLE_UNIT_VALUES.includes(e.cycleUnit)) throw new BusinessErrorResult(ErrorCode.BusinessError, 'A rotating responsible needs cycleUnit (weekly|monthly)');
+        if (!e.anchorDate) throw new BusinessErrorResult(ErrorCode.BusinessError, 'A rotating responsible needs an anchorDate');
+        if (!e.ruleGroup) throw new BusinessErrorResult(ErrorCode.BusinessError, 'A rotating responsible needs a ruleGroup (shared by its members)');
+      }
+      rows.push([generateShortUuid(12), schoolId, nodeId, e.role?.trim() || null, e.targetType, targetId, targetText, targetName, idx,
+        e.startDate || null, e.endDate || null, mode, mode === 'rotating' ? e.cycleUnit : null, e.anchorDate || null, e.ruleGroup || null,
+        DEFAULTS.STATUS, userId, now]);
     }
 
     const queries: NodeWriteQuery[] = [{
@@ -342,7 +356,7 @@ class AssemblyNodeService {
     }];
     for (const r of rows) {
       queries.push({
-        q: singleLineString`insert into assembly_node_responsible (uuid, school_id, node_id, role, target_type, target_id, target_text, target_name, sort_order, status, createdby_userid, created_at) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+        q: singleLineString`insert into assembly_node_responsible (uuid, school_id, node_id, role, target_type, target_id, target_text, target_name, sort_order, start_date, end_date, mode, cycle_unit, anchor_date, rule_group, status, createdby_userid, created_at) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)`,
         p: r,
       });
     }
@@ -452,8 +466,8 @@ class AssemblyNodeService {
       queries.push(this.audit(schoolId, newId, 'special', specialId, 'create', null, null, n.title, userId, now));
       for (const r of collected.responsible.get(n.uuid) || []) {
         queries.push({
-          q: singleLineString`insert into assembly_node_responsible (uuid, school_id, node_id, role, target_type, target_id, target_text, target_name, sort_order, status, createdby_userid, created_at) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
-          p: [generateShortUuid(12), schoolId, newId, r.role ?? null, r.targetType, r.targetId ?? null, r.targetText ?? null, r.targetName ?? null, r.sortOrder, DEFAULTS.STATUS, userId, now],
+          q: singleLineString`insert into assembly_node_responsible (uuid, school_id, node_id, role, target_type, target_id, target_text, target_name, sort_order, start_date, end_date, mode, cycle_unit, anchor_date, rule_group, status, createdby_userid, created_at) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)`,
+          p: [generateShortUuid(12), schoolId, newId, r.role ?? null, r.targetType, r.targetId ?? null, r.targetText ?? null, r.targetName ?? null, r.sortOrder, r.startDate ?? null, r.endDate ?? null, r.mode ?? null, r.cycleUnit ?? null, r.anchorDate ?? null, r.ruleGroup ?? null, DEFAULTS.STATUS, userId, now],
         });
       }
       for (const res of collected.resources.get(n.uuid) || []) {
@@ -464,6 +478,66 @@ class AssemblyNodeService {
       }
     }
     return { queries, nodeCount: collected.nodes.length };
+  }
+
+  // Deep-copy an ENTIRE plan tree (all nodes, all weekdays) into a new plan —
+  // nodes + their day rows + responsible + resources. Used by plan clone.
+  public async buildFullPlanCloneQueries(
+    newPlanId: string, sourcePlanId: string, schoolId: string, userId: string, now: Date,
+  ): Promise<NodeWriteQuery[]> {
+    const nodes: AssemblyNode[] = await DB.query(
+      singleLineString`
+        select ${NODE_COLS} from assembly_node
+        where owner_type = 'plan' and owner_id = $1 and school_id = $2 and status = 'active'
+        order by depth, sort_order
+      `,
+      [sourcePlanId, schoolId],
+    );
+    const ids = nodes.map(n => n.uuid);
+    const [days, responsible, resources] = await Promise.all([
+      this.loadDays(ids, schoolId),
+      this.loadResponsible(ids, schoolId),
+      this.loadResources(ids, schoolId),
+    ]);
+    const idMap = new Map<string, string>();
+    for (const n of nodes) idMap.set(n.uuid, generateShortUuid(12));
+
+    const queries: NodeWriteQuery[] = [];
+    for (const n of nodes) {
+      const newId = idMap.get(n.uuid)!;
+      const newParent = n.parentId ? (idMap.get(n.parentId) || null) : null;
+      queries.push({
+        q: singleLineString`
+          insert into assembly_node
+          (uuid, school_id, owner_type, owner_id, parent_id, depth, sort_order, title, description,
+           expectation, recommendation, outcome, start_time, duration_minutes, status, createdby_userid, created_at)
+          values ($1,$2,'plan',$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+        `,
+        p: [newId, schoolId, newPlanId, newParent, n.depth, n.sortOrder, n.title, n.description ?? null,
+          n.expectation ?? null, n.recommendation ?? null, n.outcome ?? null, n.startTime ?? null,
+          n.durationMinutes ?? null, DEFAULTS.STATUS, userId, now],
+      });
+      queries.push(this.audit(schoolId, newId, 'plan', newPlanId, 'create', null, null, n.title, userId, now));
+      for (const wd of days.get(n.uuid) || []) {
+        queries.push({
+          q: singleLineString`insert into assembly_node_day (uuid, school_id, node_id, weekday, createdby_userid, created_at) values ($1,$2,$3,$4,$5,$6)`,
+          p: [generateShortUuid(12), schoolId, newId, wd, userId, now],
+        });
+      }
+      for (const r of responsible.get(n.uuid) || []) {
+        queries.push({
+          q: singleLineString`insert into assembly_node_responsible (uuid, school_id, node_id, role, target_type, target_id, target_text, target_name, sort_order, start_date, end_date, mode, cycle_unit, anchor_date, rule_group, status, createdby_userid, created_at) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)`,
+          p: [generateShortUuid(12), schoolId, newId, r.role ?? null, r.targetType, r.targetId ?? null, r.targetText ?? null, r.targetName ?? null, r.sortOrder, r.startDate ?? null, r.endDate ?? null, r.mode ?? null, r.cycleUnit ?? null, r.anchorDate ?? null, r.ruleGroup ?? null, DEFAULTS.STATUS, userId, now],
+        });
+      }
+      for (const res of resources.get(n.uuid) || []) {
+        queries.push({
+          q: singleLineString`insert into assembly_node_resource (uuid, school_id, node_id, label, url, note, sort_order, status, createdby_userid, created_at) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+          p: [generateShortUuid(12), schoolId, newId, res.label ?? null, res.url ?? null, res.note ?? null, res.sortOrder, DEFAULTS.STATUS, userId, now],
+        });
+      }
+    }
+    return queries;
   }
 
   // ── Internal helpers ─────────────────────────────────────────────────────────
@@ -581,7 +655,9 @@ class AssemblyNodeService {
     const ph = nodeIds.map((_, i) => `$${i + 2}`).join(', ');
     const rows = await DB.query(
       singleLineString`
-        select uuid, node_id, role, target_type, target_id, target_text, target_name, sort_order
+        select uuid, node_id, role, target_type, target_id, target_text, target_name, sort_order,
+          start_date::text as start_date, end_date::text as end_date, mode,
+          cycle_unit, anchor_date::text as anchor_date, rule_group
         from assembly_node_responsible where school_id = $1 and node_id in (${ph}) and status = 'active'
         order by sort_order
       `,
@@ -593,6 +669,9 @@ class AssemblyNodeService {
       map.get(r.nodeId)!.push({
         uuid: r.uuid, role: r.role, targetType: r.targetType, targetId: r.targetId,
         targetText: r.targetText, targetName: r.targetName, sortOrder: r.sortOrder,
+        startDate: r.startDate || undefined, endDate: r.endDate || undefined,
+        mode: r.mode || undefined, cycleUnit: r.cycleUnit || undefined,
+        anchorDate: r.anchorDate || undefined, ruleGroup: r.ruleGroup || undefined,
       });
     }
     return map;

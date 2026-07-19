@@ -6,16 +6,19 @@ import {
   AssemblyPlanDetail,
   CreatePlanRequest,
   UpdatePlanRequest,
+  ClonePlanRequest,
   PlanClassView,
 } from './assembly-interfaces';
 import { DEFAULTS, WEEKDAY_VALUES, Weekday } from './assembly-constants';
-import { academicYearExists, findClass } from './assembly-common';
+import { academicYearExists, findClass, isValidDate } from './assembly-common';
+import { assemblyNodeService } from './assembly-node-service';
 const { generateShortUuid } = require('../../shared/util/generate-uuid.js');
 
 const PLAN_COLS = singleLineString`
-  uuid, school_id, academic_year_id, name, scope_label, publish_status,
-  published_at, publishedby_userid, status, createdby_userid, created_at,
-  updatedby_userid, updated_at
+  uuid, school_id, academic_year_id, name, scope_label,
+  start_date::text as start_date, end_date::text as end_date, priority,
+  publish_status, published_at, publishedby_userid, status,
+  createdby_userid, created_at, updatedby_userid, updated_at
 `;
 
 class AssemblyPlanService {
@@ -32,6 +35,7 @@ class AssemblyPlanService {
       throw new BusinessErrorResult(ErrorCode.BusinessError, 'Invalid academicYearId');
     }
     await this.assertNameFree(schoolId, data.academicYearId, data.name, null);
+    const { startDate, endDate } = this.validateDates(data.startDate, data.endDate);
 
     const days = this.normalizeDays(data.days ?? DEFAULTS.PLAN_WEEKDAYS);
     const uuid = generateShortUuid(12);
@@ -41,11 +45,11 @@ class AssemblyPlanService {
     const params: any[][] = [];
     queries.push(singleLineString`
       insert into assembly_plan
-      (uuid, school_id, academic_year_id, name, scope_label, publish_status, status, createdby_userid, created_at)
-      values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      (uuid, school_id, academic_year_id, name, scope_label, start_date, end_date, priority, publish_status, status, createdby_userid, created_at)
+      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
     `);
     params.push([uuid, schoolId, data.academicYearId, data.name.trim(), data.scopeLabel || null,
-      DEFAULTS.PUBLISH_DRAFT, DEFAULTS.STATUS, userId, now]);
+      startDate, endDate, data.priority ?? null, DEFAULTS.PUBLISH_DRAFT, DEFAULTS.STATUS, userId, now]);
     for (const weekday of days) {
       queries.push(singleLineString`
         insert into assembly_plan_day (uuid, school_id, plan_id, weekday, createdby_userid, created_at)
@@ -101,6 +105,14 @@ class AssemblyPlanService {
 
     if (data.name !== undefined) set('name', data.name.trim());
     if (data.scopeLabel !== undefined) set('scope_label', data.scopeLabel || null);
+    if (data.startDate !== undefined || data.endDate !== undefined) {
+      const start = data.startDate !== undefined ? data.startDate : existing.startDate;
+      const end = data.endDate !== undefined ? data.endDate : existing.endDate;
+      const v = this.validateDates(start || undefined, end || undefined);
+      set('start_date', v.startDate);
+      set('end_date', v.endDate);
+    }
+    if (data.priority !== undefined) set('priority', data.priority ?? null);
 
     if (updates.length === 0) return this.getDetail(id, schoolId);
     set('updatedby_userid', userId);
@@ -151,6 +163,49 @@ class AssemblyPlanService {
     return this.getDetail(id, schoolId);
   }
 
+  // Clone a whole plan (weekdays + audience + node tree) into a new dated plan (draft).
+  public async clone(sourceId: string, data: ClonePlanRequest, schoolId: string, userId: string): Promise<AssemblyPlanDetail | null> {
+    const src = await this.getById(sourceId, schoolId);
+    if (!src) return null;
+    if (!data.name || !data.name.trim()) throw new BusinessErrorResult(ErrorCode.BusinessError, 'name is required');
+    await this.assertNameFree(schoolId, src.academicYearId, data.name, null);
+    const { startDate, endDate } = this.validateDates(data.startDate, data.endDate);
+
+    const newId = generateShortUuid(12);
+    const now = new Date();
+    const queries: string[] = [];
+    const params: any[][] = [];
+
+    queries.push(singleLineString`
+      insert into assembly_plan
+      (uuid, school_id, academic_year_id, name, scope_label, start_date, end_date, priority, publish_status, status, createdby_userid, created_at)
+      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+    `);
+    params.push([newId, schoolId, src.academicYearId, data.name.trim(), data.scopeLabel ?? src.scopeLabel ?? null,
+      startDate, endDate, src.priority ?? null, DEFAULTS.PUBLISH_DRAFT, DEFAULTS.STATUS, userId, now]);
+
+    for (const weekday of await this.getDays(sourceId, schoolId)) {
+      queries.push(singleLineString`insert into assembly_plan_day (uuid, school_id, plan_id, weekday, createdby_userid, created_at) values ($1,$2,$3,$4,$5,$6)`);
+      params.push([generateShortUuid(12), schoolId, newId, weekday, userId, now]);
+    }
+
+    if (data.copyClasses !== false) {
+      for (const c of await this.getClasses(sourceId, schoolId)) {
+        queries.push(singleLineString`insert into assembly_plan_class (uuid, school_id, academic_year_id, plan_id, class_id, class_name, status, createdby_userid, created_at) values ($1,$2,$3,$4,$5,$6,$7,$8,$9)`);
+        params.push([generateShortUuid(12), schoolId, src.academicYearId, newId, c.classId, c.className ?? null, DEFAULTS.STATUS, userId, now]);
+      }
+    }
+
+    // Deep-copy the entire node tree (nodes + day rows + responsible + resources).
+    for (const q of await assemblyNodeService.buildFullPlanCloneQueries(newId, sourceId, schoolId, userId, now)) {
+      queries.push(q.q);
+      params.push(q.p);
+    }
+
+    await DB.queriesInTransaction(queries, params);
+    return this.getDetail(newId, schoolId);
+  }
+
   // ── Audience (classes) ───────────────────────────────────────────────────────
 
   public async getClasses(planId: string, schoolId: string): Promise<PlanClassView[]> {
@@ -164,8 +219,8 @@ class AssemblyPlanService {
     return rows.map((r: any) => ({ classId: r.classId, className: r.className }));
   }
 
-  // Replace the plan's class set. Validates each class exists and that no class
-  // already belongs to a different active plan in the same academic year.
+  // Replace the plan's class set. Validates each class exists. Classes MAY overlap
+  // with other dated plans (Term 1 + exam block, ...) — resolution is narrowest-wins.
   public async setClasses(planId: string, classIds: string[], schoolId: string, userId: string): Promise<AssemblyPlanDetail | null> {
     const plan = await this.getById(planId, schoolId);
     if (!plan) return null;
@@ -180,23 +235,6 @@ class AssemblyPlanService {
       const cls = await findClass(schoolId, classId);
       if (!cls) throw new BusinessErrorResult(ErrorCode.BusinessError, `Invalid classId: ${classId}`);
       names.set(classId, cls.name);
-    }
-
-    // No class may belong to another active plan in the same academic year.
-    if (unique.length > 0) {
-      const placeholders = unique.map((_, idx) => `$${idx + 4}`).join(', ');
-      const conflicts = await DB.query(
-        singleLineString`
-          select class_id, class_name, plan_id from assembly_plan_class
-          where school_id = $1 and academic_year_id = $2 and plan_id != $3
-            and status = 'active' and class_id in (${placeholders})
-        `,
-        [schoolId, plan.academicYearId, planId, ...unique],
-      );
-      if (conflicts.length > 0) {
-        const list = conflicts.map((c: any) => c.className || c.classId).join(', ');
-        throw new BusinessErrorResult(ErrorCode.BusinessError, `These classes already belong to another assembly plan this year: ${list}`);
-      }
     }
 
     const now = new Date();
@@ -248,6 +286,15 @@ class AssemblyPlanService {
   }
 
   // ── Helpers ──────────────────────────────────────────────────────────────────
+
+  private validateDates(startDate?: string | null, endDate?: string | null): { startDate: string | null; endDate: string | null } {
+    const s = startDate || null;
+    const e = endDate || null;
+    if (s && !isValidDate(s)) throw new BusinessErrorResult(ErrorCode.BusinessError, 'Invalid startDate (yyyy-mm-dd)');
+    if (e && !isValidDate(e)) throw new BusinessErrorResult(ErrorCode.BusinessError, 'Invalid endDate (yyyy-mm-dd)');
+    if (s && e && e < s) throw new BusinessErrorResult(ErrorCode.BusinessError, 'endDate must be on or after startDate');
+    return { startDate: s, endDate: e };
+  }
 
   private async assertNameFree(schoolId: string, academicYearId: string, name: string, excludeId: string | null): Promise<void> {
     const params: any[] = [schoolId, academicYearId, name.trim()];

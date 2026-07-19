@@ -6,6 +6,7 @@ import { assemblyPlanService } from './assembly-plan-service';
 import {
   CreatePlanRequest,
   UpdatePlanRequest,
+  ClonePlanRequest,
   SetPlanClassesRequest,
   SetPlanDaysRequest,
 } from './assembly-interfaces';
@@ -100,6 +101,23 @@ class AssemblyPlanHandler {
     }
   };
 
+  public clone = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
+    _context.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const ctx = await resolveSchool(event, callback);
+      if (!ctx) return;
+      const id = requireParam(event, 'id', callback);
+      if (!id) return;
+      const body = parseBody<ClonePlanRequest>(event, callback);
+      if (!body) return;
+      const result = await assemblyPlanService.clone(id, body, ctx.schoolId, ctx.userId);
+      if (!result) { ResponseBuilder.notFound(ErrorCode.InvalidId, 'Plan not found', callback); return; }
+      ResponseBuilder.ok(result, callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
   public getClasses = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
     _context.callbackWaitsForEmptyEventLoop = false;
     try {
@@ -156,6 +174,7 @@ export const getById = handler.getById;
 export const update = handler.update;
 export const remove = handler.remove;
 export const publish = handler.publish;
+export const clone = handler.clone;
 export const getClasses = handler.getClasses;
 export const setClasses = handler.setClasses;
 export const setDays = handler.setDays;

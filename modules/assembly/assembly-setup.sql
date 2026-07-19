@@ -25,6 +25,12 @@ create table if not exists assembly_plan (
     publish_status varchar(16) not null check (publish_status in ('draft', 'published', 'archived')),
     published_at timestamp(0),
     publishedby_userid varchar(12),
+    -- Validity window: dated, possibly overlapping plans (Term 1 / exam block / etc.).
+    -- null start = -inf, null end = +inf (a whole-year "base" plan). Resolution =
+    -- narrowest range covering the day wins; priority breaks equal-span ties.
+    start_date date,
+    end_date date,
+    priority integer,
     status varchar(16) not null check (status in ('active', 'deleted')),
     createdby_userid varchar(12),
     created_at timestamp(0),
@@ -55,10 +61,11 @@ create table if not exists assembly_plan_class (
 -- No duplicate class within a plan.
 create unique index if not exists idx_assembly_plan_class_unique
     on assembly_plan_class(plan_id, class_id) where status = 'active';
--- A class belongs to at most one plan per academic year (the no-overlap guarantee).
-create unique index if not exists idx_assembly_plan_class_no_overlap
-    on assembly_plan_class(school_id, academic_year_id, class_id) where status = 'active';
+-- NOTE: no cross-plan uniqueness — a class may belong to overlapping dated plans
+-- (e.g. a Term-1 plan and an exam-block plan); resolution is narrowest-range-wins.
 create index if not exists idx_assembly_plan_class_plan on assembly_plan_class(plan_id);
+create index if not exists idx_assembly_plan_class_school_year_class
+    on assembly_plan_class(school_id, academic_year_id, class_id) where status = 'active';
 
 -- Table 3: assembly_plan_day (weekdays this plan holds assembly)
 -- Set-replace semantics: rows are hard-deleted and re-inserted; no soft-delete needed.
@@ -124,6 +131,16 @@ create table if not exists assembly_node_responsible (
     target_text varchar(160),
     target_name varchar(160),
     sort_order integer not null,
+    -- Time-aware responsibility. A "rule" = rows sharing rule_group; null start/end
+    -- = always. mode null/'fixed' = single target; 'rotating' = the group's rows cycle
+    -- (cycle_unit from anchor_date), sort_order = member order. Resolution picks the
+    -- narrowest date-range rule covering the day, then fixed target or members[idx].
+    start_date date,
+    end_date date,
+    mode varchar(16) check (mode in ('fixed', 'rotating')),
+    cycle_unit varchar(16) check (cycle_unit in ('weekly', 'monthly')),
+    anchor_date date,
+    rule_group varchar(12),
     status varchar(16) not null check (status in ('active', 'deleted')),
     createdby_userid varchar(12),
     created_at timestamp(0),

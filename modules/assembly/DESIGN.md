@@ -12,6 +12,11 @@ School morning-assembly planning: a per-wing **assembly plan** (a weekly templat
 - **No special-assembly recurrence in v1.** Special assemblies are per-academic-year snapshots, re-authored annually. A clone-from-another-date/year helper is a later convenience.
 - **Students / employees / classes / academic years** are owned by their modules; assembly stores their uuids (no FKs) and denormalizes display names where useful (per house style).
 
+## Extensions G1/G2 — dated plans + time-aware responsibility (built)
+
+- **Dated, overlapping plans (G1).** `assembly_plan` has `start_date`/`end_date` (null = whole-year base) + `priority`. Plans MAY overlap for the same class; resolution picks the **narrowest date-range covering the day** (a term plan loses to an exam-block plan loses to a 1-day special), `priority` breaks equal-span ties. The old one-plan-per-class-per-year constraint is dropped. `POST /plans/{id}/clone` deep-copies a plan (tree + weekdays + audience) into a new dated **draft** — the way you author Term 2 from Term 1. Migration: `assembly-migrate-1-plan-dates.sql`.
+- **Time-aware responsibility (G2).** `assembly_node_responsible` gains `start_date`/`end_date` + `mode` (`fixed`|`rotating`) + `cycle_unit` (`weekly`|`monthly`) + `anchor_date` + `rule_group`. A **dated** row shows only when its range covers the day; rows sharing a `rule_group` with `mode='rotating'` collapse to one member chosen by the calendar cycle (`members[weekOrMonthIndex % n]`, holidays ignored). Both compose (a dated range can hold a rotation). Resolution lives in `assembly-resolve-service.resolveResponsibleForDate`. Migration: `assembly-migrate-2-responsible-time.sql`.
+
 ## Confirmed decisions (from discovery)
 
 1. **A "block" is a content phase of one assembly** (Opening / Presentation / Announcements / Closing). The tree describes the anatomy of a single assembly sitting, not a time bucket or a theme grouping.

@@ -52,7 +52,7 @@ class AssemblyResolveService {
       const nested = await assemblyNodeService.getTree('special', sp[0].uuid, schoolId);
       return {
         planId, date, weekday, held: true, source: 'special', specialId: sp[0].uuid, title: sp[0].title,
-        themes, nodes: this.toResolved(nested, []),
+        themes, nodes: this.toResolved(nested, [], date),
       };
     }
 
@@ -65,7 +65,7 @@ class AssemblyResolveService {
     if (!planDays.includes(weekday)) return notHeld();
 
     const nested = await assemblyNodeService.getFilteredTree(planId, schoolId, weekday);
-    return { planId, date, weekday, held: true, source: 'template', themes, nodes: this.toResolved(nested, []) };
+    return { planId, date, weekday, held: true, source: 'template', themes, nodes: this.toResolved(nested, [], date) };
   }
 
   // The /me path: resolve the assembly for the app's active student by finding the
@@ -74,7 +74,10 @@ class AssemblyResolveService {
   // has no published plan. Enrollment year is matched to the plan year via student_class.
   public async resolveForStudent(schoolId: string, studentId: string, date: string, academicYearId?: string): Promise<ResolvedAssembly> {
     if (!isValidDate(date)) throw new BusinessErrorResult(ErrorCode.BusinessError, 'A valid date (yyyy-mm-dd) is required');
-    const params: any[] = [studentId, schoolId];
+    // Among the student's published plans whose date range covers the day, pick the
+    // NARROWEST (most specific) — a term plan loses to an exam-block plan loses to a
+    // 1-day plan; priority breaks equal-span ties.
+    const params: any[] = [studentId, schoolId, date];
     let yearFilter = '';
     if (academicYearId) { params.push(academicYearId); yearFilter = ` and p.academic_year_id = $${params.length}`; }
     const rows = await DB.query(
@@ -83,8 +86,11 @@ class AssemblyResolveService {
         join assembly_plan_class pc on pc.class_id = sc.class_id and pc.academic_year_id = sc.academic_year_id
           and pc.school_id = sc.school_id and pc.status = 'active'
         join assembly_plan p on p.uuid = pc.plan_id and p.status = 'active' and p.publish_status = 'published'
+          and (p.start_date is null or p.start_date <= $3::date) and (p.end_date is null or p.end_date >= $3::date)
         where sc.student_id = $1 and sc.school_id = $2 and sc.status = 'active'${yearFilter}
-        order by sc.created_at desc limit 1
+        order by (coalesce(p.end_date, '9999-12-31')::date - coalesce(p.start_date, '0001-01-01')::date) asc,
+                 p.priority desc nulls last, sc.created_at desc
+        limit 1
       `,
       params,
     );
@@ -94,11 +100,14 @@ class AssemblyResolveService {
     return (await this.resolve(rows[0].planId, date, schoolId, { publishedPlanOnly: true }))!;
   }
 
-  // Produce the read model: each node's effective responsible = its own set, or the
-  // nearest ancestor's set (all-or-nothing inheritance); resources are per-node.
-  private toResolved(nodes: AssemblyNodeDetail[], inherited: NodeResponsibleView[]): ResolvedNode[] {
+  // Produce the read model: each node's effective responsible = its own rules resolved
+  // for the date, or (if it has none) the nearest ancestor's resolved set. Resources
+  // are per-node. Responsibility rules are date-aware (independent dated rows + rotating
+  // groups).
+  private toResolved(nodes: AssemblyNodeDetail[], inherited: NodeResponsibleView[], date: string): ResolvedNode[] {
     return nodes.map(n => {
-      const eff = n.responsible && n.responsible.length > 0 ? n.responsible : inherited;
+      const rules = n.responsible || [];
+      const eff = rules.length > 0 ? this.resolveResponsibleForDate(rules, date) : inherited;
       return {
         uuid: n.uuid,
         title: n.title,
@@ -111,9 +120,47 @@ class AssemblyResolveService {
         sortOrder: n.sortOrder,
         responsible: eff,
         resources: n.resources || [],
-        children: this.toResolved(n.children || [], eff),
+        children: this.toResolved(n.children || [], eff, date),
       };
     });
+  }
+
+  // Resolve a node's responsibility rules for a date. A fixed/undated row shows when
+  // its [start,end] covers the date; rows sharing a rule_group with mode='rotating'
+  // collapse to one member chosen by the calendar cycle. Holidays are ignored.
+  private resolveResponsibleForDate(rows: NodeResponsibleView[], date: string): NodeResponsibleView[] {
+    const covers = (r: NodeResponsibleView) => (!r.startDate || date >= r.startDate) && (!r.endDate || date <= r.endDate);
+    const concrete = (r: NodeResponsibleView): NodeResponsibleView => ({
+      uuid: r.uuid, role: r.role, targetType: r.targetType, targetId: r.targetId,
+      targetText: r.targetText, targetName: r.targetName, sortOrder: r.sortOrder,
+    });
+    const out: NodeResponsibleView[] = [];
+    const rotGroups = new Map<string, NodeResponsibleView[]>();
+    for (const r of rows) {
+      if (r.mode === 'rotating' && r.ruleGroup) {
+        if (!rotGroups.has(r.ruleGroup)) rotGroups.set(r.ruleGroup, []);
+        rotGroups.get(r.ruleGroup)!.push(r);
+      } else if (covers(r)) {
+        out.push(concrete(r));
+      }
+    }
+    for (const members of rotGroups.values()) {
+      members.sort((a, b) => a.sortOrder - b.sortOrder);
+      const meta = members[0];
+      if (!covers(meta) || !meta.anchorDate || !meta.cycleUnit) continue;
+      const idx = this.cycleIndex(date, meta.anchorDate, meta.cycleUnit);
+      out.push(concrete(members[((idx % members.length) + members.length) % members.length]));
+    }
+    return out.sort((a, b) => a.sortOrder - b.sortOrder);
+  }
+
+  private cycleIndex(date: string, anchor: string, unit: string): number {
+    const d = new Date(`${date}T00:00:00Z`);
+    const a = new Date(`${anchor}T00:00:00Z`);
+    if (unit === 'monthly') {
+      return (d.getUTCFullYear() - a.getUTCFullYear()) * 12 + (d.getUTCMonth() - a.getUTCMonth());
+    }
+    return Math.floor((d.getTime() - a.getTime()) / (7 * 86400000)); // weekly
   }
 }
 

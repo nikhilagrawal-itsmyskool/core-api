@@ -39,6 +39,12 @@ export const PUBLISH_STATUS_VALUES = PUBLISH_STATUSES.map(p => p.value);
 export const OWNER_TYPES = ['plan', 'special'] as const;
 export const SPECIAL_SOURCES = ['cloned', 'blank'] as const;
 export const NODE_AUDIT_ACTIONS = ['create', 'update', 'delete', 'reorder'] as const;
+export const RESPONSIBLE_MODES = ['fixed', 'rotating'] as const;
+export const CYCLE_UNITS = [
+  { value: 'weekly', label: 'Weekly' },
+  { value: 'monthly', label: 'Monthly' },
+] as const;
+export const CYCLE_UNIT_VALUES = CYCLE_UNITS.map(c => c.value);
 
 export type Weekday = typeof WEEKDAY_VALUES[number];
 export type ResponsibleTargetType = typeof RESPONSIBLE_TARGET_TYPE_VALUES[number];
@@ -46,6 +52,8 @@ export type PublishStatus = typeof PUBLISH_STATUS_VALUES[number];
 export type OwnerType = typeof OWNER_TYPES[number];
 export type SpecialSource = typeof SPECIAL_SOURCES[number];
 export type NodeAuditAction = typeof NODE_AUDIT_ACTIONS[number];
+export type ResponsibleMode = typeof RESPONSIBLE_MODES[number];
+export type CycleUnit = typeof CYCLE_UNIT_VALUES[number];
 
 export const DEFAULTS = {
   STATUS: 'active' as const,

@@ -72,6 +72,15 @@
           method: post
           cors: true
 
+  clone-plan:
+    handler: assembly-plan-handler.clone
+    name: ${self:service}-clone-plan
+    events:
+      - http:
+          path: plans/{id}/clone
+          method: post
+          cors: true
+
   get-plan-classes:
     handler: assembly-plan-handler.getClasses
     name: ${self:service}-get-plan-classes
