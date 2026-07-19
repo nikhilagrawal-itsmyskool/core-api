@@ -1,30 +1,36 @@
 import { DB, singleLineString } from "../../shared/lib/db";
 import { MONTHS } from "./syllabus-constants";
-import { findStudentClass } from "./syllabus-common";
+import { findStudentClass, getCurrentAcademicYearId } from "./syllabus-common";
 import { currentMonth, parseGrade } from "./syllabus-util";
 
 class SyllabusMeService {
   // The active child's grade timeline for a year: every subject plan for the
   // grade, its entries grouped into months (teaching order), each entry carrying
   // the child's section coverage. `currentMonth` anchors "we are here".
+  // academicYearId is optional — omitted, it defaults to the school's current year
+  // (matches attendance/transport /me), so the app needn't know the year.
   public async getTimeline(
     schoolId: string,
     studentId: string,
-    academicYearId: string,
+    academicYearId?: string,
     today?: string,
   ): Promise<any> {
-    if (!academicYearId) {
-      return { error: "academicYearId is required" };
-    }
-    const placement = await findStudentClass(
-      schoolId,
-      studentId,
-      academicYearId,
-    );
     const anchor = currentMonth(today);
+    const yearId = academicYearId || (await getCurrentAcademicYearId(schoolId));
+    if (!yearId) {
+      return {
+        academicYearId: null,
+        grade: null,
+        classId: null,
+        className: null,
+        currentMonth: anchor,
+        subjects: [],
+      };
+    }
+    const placement = await findStudentClass(schoolId, studentId, yearId);
     if (!placement) {
       return {
-        academicYearId,
+        academicYearId: yearId,
         grade: null,
         classId: null,
         className: null,
@@ -42,7 +48,7 @@ class SyllabusMeService {
         where s.school_id = $1 and s.academic_year_id = $2 and lower(s.grade) = lower($3) and s.status = 'active'
         order by sub.name
       `,
-      [schoolId, academicYearId, grade],
+      [schoolId, yearId, grade],
     );
 
     const subjects = [];
@@ -79,7 +85,7 @@ class SyllabusMeService {
     }
 
     return {
-      academicYearId,
+      academicYearId: yearId,
       grade,
       classId: placement.classId,
       className: placement.className,

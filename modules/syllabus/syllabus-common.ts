@@ -24,6 +24,26 @@ export async function academicYearExists(
   return rows.length > 0;
 }
 
+// The school's current academic year uuid, or null. "Current" = the year whose
+// date range contains today, else the latest-starting year (mirrors the
+// academic-year module's isCurrent rule). Used to default the student timeline
+// when the app doesn't pass an academicYearId.
+export async function getCurrentAcademicYearId(
+  schoolId: string,
+): Promise<string | null> {
+  const rows = await DB.query(
+    singleLineString`
+      select uuid from academic_year
+      where school_id = $1
+      order by (case when current_date between start_date and end_date then 0 else 1 end),
+               start_date desc nulls last
+      limit 1
+    `,
+    [schoolId],
+  );
+  return rows.length > 0 ? rows[0].uuid : null;
+}
+
 // All active classes (sections) in a school with their names, for grade
 // derivation and dropdowns.
 export async function listClasses(

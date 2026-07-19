@@ -4,7 +4,6 @@ import {
   ApiEvent,
 } from "../../shared/lib/api.interfaces";
 import { ResponseBuilder } from "../../shared/lib/response-builder";
-import { ErrorCode } from "../../shared/lib/error-codes";
 import { guardActiveStudent } from "./handler-util";
 import { syllabusMeService } from "./syllabus-me-service";
 
@@ -25,15 +24,8 @@ class SyllabusMeHandler {
       const schoolId = auth.token.school_id;
       const studentId = auth.activeStudentId;
       const q = event.queryStringParameters || {};
-      if (!q.academicYearId) {
-        ResponseBuilder.badRequest(
-          ErrorCode.InvalidInput,
-          "academicYearId query parameter is required",
-          callback,
-        );
-        return;
-      }
 
+      // academicYearId is optional — the service defaults to the current year.
       const result = await syllabusMeService.getTimeline(
         schoolId,
         studentId,
