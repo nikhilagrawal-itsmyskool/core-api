@@ -192,6 +192,44 @@
           method: post
           cors: true
 
+  # ── Plan ↔ teacher assignment (per section) ───────────────────────────────
+  list-plan-teachers:
+    handler: syllabus-teacher-handler.list
+    name: ${self:service}-list-plan-teachers
+    events:
+      - http:
+          path: syllabi/{id}/teachers
+          method: get
+          cors: true
+
+  assign-plan-teacher:
+    handler: syllabus-teacher-handler.assign
+    name: ${self:service}-assign-plan-teacher
+    events:
+      - http:
+          path: syllabi/{id}/teachers
+          method: post
+          cors: true
+
+  unassign-plan-teacher:
+    handler: syllabus-teacher-handler.unassign
+    name: ${self:service}-unassign-plan-teacher
+    events:
+      - http:
+          path: teachers/{id}
+          method: delete
+          cors: true
+
+  # ── Teacher PWA: my assigned plans ────────────────────────────────────────
+  my-plans:
+    handler: syllabus-teacher-handler.myPlans
+    name: ${self:service}-my-plans
+    events:
+      - http:
+          path: my-plans
+          method: get
+          cors: true
+
   # ── Student/parent app (family token + X-Student-Id) ──────────────────────
   my-timeline:
     handler: syllabus-me-handler.timeline

@@ -48,6 +48,7 @@ export interface CreateSyllabusRequest {
 }
 
 export interface UpdateSyllabusRequest {
+  grade?: string;
   book?: string;
   layout?: Layout;
   note?: string;

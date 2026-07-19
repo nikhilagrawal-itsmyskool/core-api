@@ -67,6 +67,18 @@ export async function findClass(
   return rows.length > 0 ? rows[0] : null;
 }
 
+// An active employee (teacher) by uuid, or null.
+export async function findEmployee(
+  schoolId: string,
+  employeeId: string,
+): Promise<{ uuid: string; name: string } | null> {
+  const rows = await DB.query(
+    singleLineString`select uuid, name from employee where uuid = $1 and school_id = $2 and status != 'deleted'`,
+    [employeeId, schoolId],
+  );
+  return rows.length > 0 ? rows[0] : null;
+}
+
 // The section a student is placed in for a given academic year, or null.
 export async function findStudentClass(
   schoolId: string,

@@ -20,7 +20,8 @@ import {
   TERM_VALUES,
   Term,
 } from "./syllabus-constants";
-import { academicYearExists } from "./syllabus-common";
+import { academicYearExists, listClasses } from "./syllabus-common";
+import { gradeEquals } from "./syllabus-util";
 const { generateShortUuid } = require("../../shared/util/generate-uuid.js");
 
 const SYLLABUS_COLS = singleLineString`
@@ -86,6 +87,12 @@ class SyllabusPlanService {
         "Invalid subjectId",
       );
     }
+    if (!(await this.gradeExists(schoolId, data.grade))) {
+      throw new BusinessErrorResult(
+        ErrorCode.BusinessError,
+        `Grade "${data.grade.trim()}" has no class sections`,
+      );
+    }
     await this.assertPlanFree(
       schoolId,
       data.academicYearId,
@@ -134,6 +141,27 @@ class SyllabusPlanService {
       );
     }
 
+    // Grade is editable, but must be a real grade (has class sections) and stay
+    // unique per (year, grade, subject). A grade change invalidates the plan's
+    // section-scoped data (teacher assignments + coverage), which we clear below.
+    let gradeChanging = false;
+    if (data.grade !== undefined) {
+      const newGrade = (data.grade || "").trim();
+      if (!newGrade) {
+        throw new BusinessErrorResult(ErrorCode.BusinessError, "grade cannot be blank");
+      }
+      gradeChanging = newGrade.toLowerCase() !== existing.grade.toLowerCase();
+      if (gradeChanging) {
+        if (!(await this.gradeExists(schoolId, newGrade))) {
+          throw new BusinessErrorResult(
+            ErrorCode.BusinessError,
+            `Grade "${newGrade}" has no class sections`,
+          );
+        }
+        await this.assertPlanFree(schoolId, existing.academicYearId, newGrade, existing.subjectId, id);
+      }
+    }
+
     const updates: string[] = [];
     const params: any[] = [];
     let i = 1;
@@ -145,11 +173,25 @@ class SyllabusPlanService {
     if (data.book !== undefined) set("book", data.book?.trim() || null);
     if (data.layout !== undefined) set("layout", data.layout);
     if (data.note !== undefined) set("note", data.note?.trim() || null);
+    if (gradeChanging) set("grade", (data.grade as string).trim());
 
     if (updates.length === 0) return existing;
     set("updatedby_userid", userId);
     set("updated_at", new Date());
     params.push(id, schoolId);
+
+    // On a grade change, drop teacher assignments and coverage — both point at the
+    // old grade's sections and are meaningless for the new grade. Entries (the
+    // subject content) are kept.
+    if (gradeChanging) {
+      await DB.queriesInTransaction(
+        [
+          singleLineString`delete from syllabus_plan_teacher where syllabus_id = $1 and school_id = $2`,
+          singleLineString`delete from syllabus_progress where syllabus_entry_id in (select uuid from syllabus_entry where syllabus_id = $1 and school_id = $2)`,
+        ],
+        [[id, schoolId], [id, schoolId]],
+      );
+    }
 
     const rows = await DB.query(
       singleLineString`
@@ -561,6 +603,13 @@ class SyllabusPlanService {
       [subjectId, schoolId],
     );
     return rows.length > 0;
+  }
+
+  // A grade is valid only if at least one class section derives to it (e.g. "III"
+  // requires an "III-A"/"III-B"). Keeps plans tied to grades that actually exist.
+  private async gradeExists(schoolId: string, grade: string): Promise<boolean> {
+    const classes = await listClasses(schoolId);
+    return classes.some((c) => gradeEquals(c.name, grade));
   }
 
   private async subjectName(

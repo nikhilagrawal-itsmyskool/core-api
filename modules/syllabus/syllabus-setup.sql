@@ -96,3 +96,23 @@ create table if not exists syllabus_progress (
 create unique index if not exists idx_syllabus_progress_unique
     on syllabus_progress(syllabus_entry_id, class_id);
 create index if not exists idx_syllabus_progress_class on syllabus_progress(school_id, class_id);
+
+-- Table 5: syllabus_plan_teacher (which teacher(s) teach a plan's subject to a section)
+create table if not exists syllabus_plan_teacher (
+    uuid varchar(12) primary key,
+    school_id varchar(12) not null,
+    syllabus_id varchar(12) not null,
+    class_id varchar(12) not null,
+    teacher_id varchar(12) not null,
+    status varchar(16) not null check (status in ('active', 'deleted')),
+    createdby_userid varchar(12),
+    created_at timestamp(0),
+    updatedby_userid varchar(12),
+    updated_at timestamp(0)
+);
+
+-- A teacher is assigned at most once per (plan, section); many teachers per section allowed.
+create unique index if not exists idx_syllabus_plan_teacher_unique
+    on syllabus_plan_teacher(syllabus_id, class_id, teacher_id) where status = 'active';
+create index if not exists idx_syllabus_plan_teacher_plan on syllabus_plan_teacher(syllabus_id) where status = 'active';
+create index if not exists idx_syllabus_plan_teacher_teacher on syllabus_plan_teacher(school_id, teacher_id) where status = 'active';
