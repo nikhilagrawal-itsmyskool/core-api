@@ -55,6 +55,10 @@ Base path `/syllabus`. All admin/teacher requests require `X-School-Code`; JSON 
 
 Integration tests (`__tests__/syllabus.test.ts`, run against the gateway): subject create + duplicate rejection; plan create + one-per-grade/subject enforcement; entry add, bulk append/replace, reorder; grade derivation in `GET /grades`; progress mark → roster covered count, re-mark idempotency, per-section isolation. The student `/me` timeline is covered by unit tests for its pure logic (`parseGrade`, current-month anchor) plus the shared coverage overlay exercised by the progress-roster test; it is not driven over HTTP because minting a family JWT across the test/module processes is unreliable (same reason transport skips it). Ports: 3043/3044 local, 6043/6044 prod.
 
+## Tools
+
+- **`scripts/import-syllabus.js`** — dependency-free `.docx` importer for the school's GK syllabus sheets. Parses both layouts (junior single-table, senior two-column with `Topic:` section headers and `#…` note rows), auto-detects grade/subject/layout, and seeds the plan via the API. `--file`/`--dir`, `--school`, `--stage`, `--mode append|replace`, `--dry-run`. Reuse for future syllabus documents.
+
 ## Handover checklist
 
 - [ ] Deploy DB (`node modules/syllabus/scripts/db-setup.js --stage <stage> --action setup`).
