@@ -280,6 +280,7 @@ class AssemblyWeekService {
           out.push({
             nodeId: n.uuid, title: n.title, depth: n.depth, parentId: n.parentId || undefined,
             fillMode: n.fillMode, isOptional: n.isOptional === true, options: n.options || [],
+            dayHint: (n.dayContent || []).find((c) => c.weekday === weekday)?.content,
           });
         }
         if (n.children && n.children.length) walk(n.children);

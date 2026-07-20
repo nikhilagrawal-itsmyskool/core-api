@@ -59,38 +59,22 @@ const TREE = [
   ] },
   { title: 'Block II: The Core Foundations', description: 'The Civic Oath, Daily Wisdom & Live News Bulletin', children: [
     { title: 'The Solemn Oath', description: 'National Pledge', day: D6('English', 'English', 'Hindi', 'English', 'English', 'English') },
-    { title: 'The Morning Spark', description: 'Thought of the Day · Doha, Sukti, Neeti Vachan', fill: 'roster' },
-    { title: 'The Pulse Point', description: 'The Daily News Bulletin', fill: 'roster' },
+    // Roster slot with a per-day language/focus hint (house fills the actual thought).
+    { title: 'The Morning Spark', description: 'Thought of the Day', fill: 'roster', day: D6('English', 'English', 'Doha, Sukti, Neeti Vachan (Hindi)', 'English', 'English', 'English') },
+    { title: 'The Pulse Point', description: 'The Daily News Bulletin', fill: 'roster', day: D6('English', 'English', 'Hindi', 'English', 'English', 'English') },
   ] },
   { title: 'Block III: The Expressions Horizon', description: 'Language, Knowledge and Performance', children: [
-    { title: 'Lingua Lexicon', description: 'The Language Grid', children: [
-      { title: 'Word of the Day', description: 'Word, Pronunciation, Use, Synonym, Antonym', fill: 'roster' },
-      { title: 'The Phrase Phase', description: 'Idioms, Phrases, Proverbs', fill: 'roster' },
-      { title: 'Vagdhaara', description: 'Muhaware, Lokokti, Elite Hindi Shabd', fill: 'roster' },
-      { title: 'Double Trouble', description: 'Confusing Words (Accept/Except…)', fill: 'roster' },
-      { title: 'Mind Your Language', description: 'Common Errors (Incorrect→Correct→Reason)', fill: 'roster' },
-      { title: 'The Global Dial', description: 'Words from other languages', fill: 'roster' },
-    ] },
-    { title: 'Mentis Matrix', description: 'The Knowledge Hub', children: [
-      { title: 'Perspective 360°', description: 'Deep analysis of one big topic with India’s impact', fill: 'roster' },
-      { title: 'Sci-Files', description: 'Myth Buster / Genius / Backyard Science files', fill: 'roster' },
-      { title: 'Discover India', description: 'GK: India from ancient to modern era', fill: 'roster' },
-      { title: 'World Window', description: 'Global geography, history, polity, culture, trivia', fill: 'roster' },
-      { title: 'Character Credo', description: 'Manners, etiquettes, values, life skills, moral stories', fill: 'roster' },
-      { title: 'Wonder Box', description: 'Amazing facts, puzzles, riddles, Myths vs Facts', fill: 'roster' },
-    ] },
-    { title: 'Stage Spectrum', description: 'The Performing Arts Stage', fill: 'roster',
-      options: ['Alter Ego', 'Dialogue Duel', 'Mudra', 'Forum', 'Tableau', 'Resonance'] },
+    // Each is ONE daily roster segment; its FOCUS rotates by day (the doc's grid),
+    // carried as per-weekday content. The house fills the actual word/topic/act.
+    { title: 'Lingua Lexicon', description: 'The Language Grid', fill: 'roster', day: D6('Word of the Day', 'The Phrase Phase', 'Vagdhaara', 'Double Trouble', 'Mind Your Language', 'The Global Dial') },
+    { title: 'Mentis Matrix', description: 'The Knowledge Hub', fill: 'roster', day: D6('Perspective 360°', 'Sci-Files', 'Discover India', 'World Window', 'Character Credo', 'Wonder Box') },
+    { title: 'Stage Spectrum', description: 'The Performing Arts Stage', fill: 'roster', day: D6('Alter Ego', 'Dialogue Duel', 'Mudra', 'Forum', 'Tableau', 'Resonance') },
     { title: 'Skill Skylines', description: 'Poetry, Dance, Open-Mic & Individual Talents Hub', fill: 'roster' },
     { title: 'The Page Turners', description: 'Book Review', fill: 'roster' },
     { title: 'The Flex and Flow', description: 'Health & Fitness Block', fill: 'roster' },
   ] },
   { title: 'Block IV: The Day’s Spotlight', description: 'Personalities, Commemorative Days and Celebrations', children: [
-    { title: 'Calendar Chronicles', description: 'History, Heritage & Days Grid', children: [
-      { title: 'Titans of Time', description: 'Great Personalities', fill: 'roster' },
-      { title: 'Milestone Markers', description: 'Important Days', fill: 'roster' },
-      { title: 'Festal Focus', description: 'Festivals & Occasions', fill: 'roster' },
-    ] },
+    { title: 'Calendar Chronicles', description: 'History, Heritage & Days Grid', fill: 'roster', day: D6('Titans of Time', 'Milestone Markers', 'Festal Focus', 'Titans of Time', 'Milestone Markers', 'Festal Focus') },
     { title: 'The Birthday Beacons', description: 'Birthday Celebration', fill: 'roster' },
   ] },
   { title: 'Block V: The Wisdom Compass', description: 'Guiding Voices from Within and Beyond', children: [

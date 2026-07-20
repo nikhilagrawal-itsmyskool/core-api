@@ -109,6 +109,7 @@ export interface RosterSlot {
   fillMode?: FillMode;
   isOptional: boolean;
   options: string[];
+  dayHint?: string;     // the template's per-weekday focus/guideline (e.g. "Word of the Day")
   // Saved slot state for this (date, node).
   opted: boolean;       // optional segment opted in (defaults true)
   content?: string;
