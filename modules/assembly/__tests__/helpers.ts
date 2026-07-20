@@ -79,7 +79,7 @@ export async function cleanupPlan(planId: string): Promise<void> {
   // House-mode weekly roster rows hanging off this plan's weeks.
   const weeks = (await p.query(`select uuid from assembly_week where plan_id = $1`, [planId])).rows.map(r => r.uuid);
   if (weeks.length) {
-    for (const t of ['assembly_roster_entry', 'assembly_roster_participant', 'assembly_week_unlock']) {
+    for (const t of ['assembly_roster_entry', 'assembly_roster_participant', 'assembly_week_unlock', 'assembly_checklist_tick', 'assembly_checklist_signoff']) {
       await p.query(`delete from ${t} where week_id = any($1)`, [weeks]);
     }
     await p.query(`delete from assembly_week where plan_id = $1`, [planId]);
@@ -99,6 +99,10 @@ export async function resetAssemblyConfig(schoolId: string): Promise<void> {
 
 export async function deleteThemeById(themeId: string): Promise<void> {
   await getPool().query(`delete from assembly_theme where uuid = $1`, [themeId]);
+}
+
+export async function deleteChecklistItemById(itemId: string): Promise<void> {
+  await getPool().query(`delete from assembly_checklist_item where uuid = $1`, [itemId]);
 }
 
 // A date in the given month/year for a target weekday (0=Sun..6=Sat).

@@ -10,6 +10,7 @@ import {
   AssemblyMode,
   FillMode,
   WeekStatus,
+  ChecklistScope,
 } from './assembly-constants';
 
 // ── House mode: config, houses, rotation ─────────────────────────────────────
@@ -173,6 +174,63 @@ export interface SaveRosterEntryInput {
 
 export interface UnlockWeekRequest {
   reason?: string;
+}
+
+// ── House mode Phase C: execution checklist ──────────────────────────────────
+
+// A per-school configurable checklist item. phase = a free grouping label;
+// scope 'week' = once per roster week, 'day' = per assembly date.
+export interface ChecklistItem {
+  uuid: string;
+  phase?: string;
+  scope: ChecklistScope;
+  text: string;
+  sortOrder: number;
+}
+export interface CreateChecklistItemRequest {
+  phase?: string;
+  scope: ChecklistScope;
+  text: string;
+  sortOrder?: number;
+}
+export interface UpdateChecklistItemRequest {
+  phase?: string | null;
+  scope?: ChecklistScope;
+  text?: string;
+  sortOrder?: number;
+}
+
+// A recorded tick (checked item) against a roster week. date is set for day-scoped
+// items, absent for week-scoped ones.
+export interface ChecklistTickView {
+  itemId: string;
+  date?: string;
+  checkedbyUserid?: string;
+  checkedAt?: string;
+}
+
+// The per-week checklist read model: the catalog (split by scope), the week's
+// assembly dates (for day-scope expansion), recorded ticks, and any sign-off.
+export interface WeekChecklist {
+  weekId: string;
+  weekItems: ChecklistItem[];
+  dayItems: ChecklistItem[];
+  dates: string[];
+  ticks: ChecklistTickView[];
+  signoff?: ChecklistSignoffView;
+}
+export interface ChecklistSignoffView {
+  note?: string;
+  signedbyUserid?: string;
+  signedAt?: string;
+}
+
+// Bulk-set the week's ticks (replace: send exactly the CHECKED items).
+export interface SaveChecklistRequest {
+  ticks: { itemId: string; date?: string | null }[];
+}
+export interface SignoffRequest {
+  note?: string;
 }
 
 export interface BaseEntity {

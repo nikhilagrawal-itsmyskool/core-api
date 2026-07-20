@@ -24,18 +24,15 @@ evaluator **grading** → weekly average → **house-of-the-month**).
   collide.
 
 ## Mode & rollout
-- `assembly_school_config(school_id pk, mode 'template'|'house', rotation_anchor date, ...)`. Default `template`. DBPASN → `house`.
+- `assembly_school_config(school_id pk, mode 'template'|'house', title, subtitle, ...)`. Default `template`. DBPASN → `house`.
 
-## Houses & rotation (reuse the student-module houses)
-- Extend the existing house (students already belong) — do NOT duplicate:
-  - `assembly_house_meta(house_id pk, school_id, incharge_id, coincharge_id, rotation_order int)`.
-  - `assembly_house_teacher(uuid, school_id, house_id, employee_id, status)` — member teachers.
-- **Rotation**: one house per **calendar week** (Mon-anchored), auto-cycle by
-  `rotation_order` from `rotation_anchor`. Holidays ignored (count calendar weeks).
-  - `assembly_week_house(school_id, week_start, house_id|null)` — manual override for a
-    week (null = "no house / skip"); an override does NOT shift the cycle.
-  - Effective house for a week = override if present, else `houses[weekIndex % n]`.
-- Supports N houses (not hardcoded to 4).
+## Houses & rotation
+> NOTE (revised): the house DOMAIN moved to the student module. Leadership +
+> member teachers are `house_teacher(role incharge|coincharge|member)` there; do
+> NOT store them in assembly. Assembly owns only the rotation policy below.
+- **Rotation order** (assembly-specific): `assembly_house_rotation(school_id, house_id, sort_order, status)` — a row = the house participates in assembly rotation, at this order. Supports N houses.
+- **Per-plan/wing pins**: `assembly_week_house(school_id, plan_id, week_start, house_id|null)` — `house_id` set = pin + **re-anchor** the cycle from that house going forward; `null` = **skip** (no house, no shift). The **earliest pin is the cycle start** (no separate `rotation_anchor`).
+- **Effective house for a week** = the pin if present, else the next house (by `sort_order`) after the previous week's house. Holidays ignored (count calendar weeks). Rotation is per-plan, so wings run independent phases.
 
 ## Weekly roster (the instance)
 - `assembly_week(uuid, school_id, week_start, house_id, academic_year_id, status
@@ -101,20 +98,31 @@ evaluator **grading** → weekly average → **house-of-the-month**).
   provider locally; register templates like transport/attendance.
 
 ## Phases
-- **A — Houses + mode + rotation** — backend ✅ (commit `76411e4`; migration `assembly-migrate-3`). Admin Houses/Rotation screens still pending (batched with the UI phase).
-- **B — Weekly roster + finalize/approve/lock + resolve overlay** — backend ✅ (migration `assembly-migrate-4-roster`). Admin roster editor + PWA roster editing + student-app house-on-duty batched with the UI phase.
-- **C — Checklist** (config + tick; PWA ticking). ⏳ not started.
+- **A — Houses + mode + rotation** — backend ✅ (migration `assembly-migrate-3`). Admin Houses/Rotation screens pending (batched with the UI phase).
+- **B — Weekly roster + finalize/approve/lock + resolve overlay** — backend ✅ (migration `assembly-migrate-4-roster`). Admin roster editor + PWA + student-app house-on-duty batched with the UI phase.
+- **C — Checklist** (config + tick + week sign-off) — backend ✅ (migration `assembly-migrate-5-checklist`). PWA ticking batched with the UI phase.
 - **D — Grading + rubric + evaluators + leaderboard** (backend + admin + PWA grade entry + student-app leaderboard). ⏳ not started.
 - Deploy: build/commit/push per phase; prod DB migrations + serverless deploy once at the end (prod not half-shipped).
 - **Frontend**: per the agreed sequencing, all admin-portal + PWA + student-app UI for A–D is built as one batch AFTER the backend phases, before the single end-deploy.
 
-### Phase B backend — as built
-- Tables `assembly_week` (per plan/wing, per week; `draft→submitted→approved`=locked), `assembly_roster_day` (per-day anchors + day owner), `assembly_roster_entry` (per day+roster-node opt-in/content/student speaker/owner), `assembly_week_unlock` (audit).
-- Endpoints: `POST/GET /plans/{id}/weeks` (ensure idempotent / list), `GET /weeks/{id}` (editor read model = week + each assembly date's fillable slots), `PUT /weeks/{id}/roster` (bulk replace-per-kind, editable-gated), `POST /weeks/{id}/{submit|approve|unlock}`.
-- **House-on-duty snapshot** taken at week-create from the per-plan rotation; a skip week has no house.
-- **Deadline / lock**: `deadline_at` = Wed 14:00 of the prior week; editing is gated on `locked` + status + deadline (with a recorded `unlock` to re-open late). The *lock* is enforced at write-time (no scheduler needed).
-- **Resolve overlay**: in `house` mode `resolve` attaches the house-on-duty and, when an **approved** roster exists, overlays it onto the template — fills `roster` slot content, sets the speaker/owner as effective responsible, prunes opted-out optional nodes, and attaches the day's anchors + owner. Specials get the house label but no roster overlay.
+### House domain lives in the STUDENT module (not assembly)
+House identity, in-charge/co-in-charge, and member teachers are a house-domain concern owned by the student module (`house`, `house_teacher(role incharge|coincharge|member)`, one-in-charge/one-co-in-charge max). Assembly owns only its **rotation policy**:
+- `assembly_house_rotation(house_id, sort_order)` — the assembly-specific rotation order; a row = the house participates.
+- `assembly_week_house` — per-plan/wing week **pins** (house = pin + re-anchor forward, null = skip); the **earliest pin is the cycle start** (there is no `rotation_anchor`).
+- Rotation walks the ordered houses from the earliest pin; `resolve`/`houseForWeek` read leadership from the student module's `house_teacher`.
 
-### Deferred (Phase B follow-ups, schema-ready)
-- **Reminder / missed-deadline notifications**: the ~10-day / 3-day / deadline-morning reminders and the missed-deadline *notify* (communication module + a scheduled drain job, like timetable/communication). The lock behaviour already works without it; only the proactive messaging is outstanding.
+### Phase B backend — as built
+- Tables `assembly_week` (per plan/wing, per week; `draft→submitted→approved`=locked, house snapshot + deadline), `assembly_roster_entry` (per (date, roster node) SLOT STATE: `opted` + `content`), `assembly_roster_participant` (**polymorphic** — `scope` day/entry, `role`, target employee/student/class/text; scales to N anchors, N day owners, and skit **groups** on one slot; mirrors `assembly_node_responsible`), `assembly_week_unlock` (audit).
+- Endpoints: `POST/GET /plans/{id}/weeks` (ensure idempotent / list), `GET /weeks/{id}` (editor read model = week + each date's fillable slots), `PUT /weeks/{id}/roster` (bulk replace-per-kind, editable-gated), `POST /weeks/{id}/{submit|approve|unlock}`.
+- **Deadline / lock**: `deadline_at` = Wed 14:00 of the prior week; editing gated on `locked` + status + deadline (recorded `unlock` re-opens late). Enforced at write-time — no scheduler needed.
+- **Resolve overlay**: in `house` mode `resolve` attaches the house-on-duty and, when an **approved** roster exists, overlays it — fills `roster` slot content, sets the slot participants as effective responsible, prunes opted-out optional nodes, and attaches the day's anchors + owners. Specials get the house label but no roster overlay.
+
+### Phase C backend — as built
+- Tables `assembly_checklist_item` (per-school configurable catalog; `scope` week/day + free `phase` grouping), `assembly_checklist_tick` (a recorded checked item per (week, item, date)), `assembly_checklist_signoff` (one week-level sign-off).
+- Endpoints: `GET/POST /checklist/items`, `PUT/DELETE /checklist/items/{id}`, `GET/PUT /weeks/{id}/checklist` (read model = items split by scope + week's assembly dates + ticks + sign-off; bulk-set = send the checked items), `POST/DELETE /weeks/{id}/checklist/signoff`.
+- Ticking is **execution-time and NOT gated by the week lock** (it happens around/after the assembly). Recorded, not a hard gate.
+
+### Deferred (schema-ready follow-ups)
+- **Curated checklist seed**: the actual "House Execution Check List" items are a data task — the catalog is fully admin-configurable; seed the school's list once provided (no content invented).
+- **Reminder / missed-deadline notifications** (Phase B): the ~10-day / 3-day / deadline-morning reminders + missed-deadline *notify* (communication module + a scheduled drain job). The lock works without it; only the proactive messaging is outstanding.
 - **Role enforcement** (`assembly-incharge`, derived house-in-charge/evaluator) at the service layer — currently, like the rest of the module, actions are open behind the authorizer; wire per-action gates when the role lands.

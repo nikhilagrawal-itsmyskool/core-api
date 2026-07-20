@@ -125,6 +125,72 @@
           method: post
           cors: true
 
+  # ── House mode: execution checklist (Phase C) ───────────────────────────────
+  list-checklist-items:
+    handler: assembly-checklist-handler.listItems
+    name: ${self:service}-list-checklist-items
+    events:
+      - http:
+          path: checklist/items
+          method: get
+          cors: true
+  create-checklist-item:
+    handler: assembly-checklist-handler.createItem
+    name: ${self:service}-create-checklist-item
+    events:
+      - http:
+          path: checklist/items
+          method: post
+          cors: true
+  update-checklist-item:
+    handler: assembly-checklist-handler.updateItem
+    name: ${self:service}-update-checklist-item
+    events:
+      - http:
+          path: checklist/items/{id}
+          method: put
+          cors: true
+  delete-checklist-item:
+    handler: assembly-checklist-handler.deleteItem
+    name: ${self:service}-delete-checklist-item
+    events:
+      - http:
+          path: checklist/items/{id}
+          method: delete
+          cors: true
+  get-week-checklist:
+    handler: assembly-checklist-handler.getWeekChecklist
+    name: ${self:service}-get-week-checklist
+    events:
+      - http:
+          path: weeks/{id}/checklist
+          method: get
+          cors: true
+  save-week-checklist:
+    handler: assembly-checklist-handler.saveTicks
+    name: ${self:service}-save-week-checklist
+    events:
+      - http:
+          path: weeks/{id}/checklist
+          method: put
+          cors: true
+  signoff-week-checklist:
+    handler: assembly-checklist-handler.signoff
+    name: ${self:service}-signoff-week-checklist
+    events:
+      - http:
+          path: weeks/{id}/checklist/signoff
+          method: post
+          cors: true
+  clear-week-checklist-signoff:
+    handler: assembly-checklist-handler.clearSignoff
+    name: ${self:service}-clear-week-checklist-signoff
+    events:
+      - http:
+          path: weeks/{id}/checklist/signoff
+          method: delete
+          cors: true
+
   # ── Plans ─────────────────────────────────────────────────────────────────
   create-plan:
     handler: assembly-plan-handler.create

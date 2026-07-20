@@ -1,4 +1,4 @@
-import { api, getSeed, cleanupPlan, deleteThemeById, resetAssemblyConfig, closePool, dateForWeekday, BASE_URL, headers } from './helpers';
+import { api, getSeed, cleanupPlan, deleteThemeById, deleteChecklistItemById, resetAssemblyConfig, closePool, dateForWeekday, BASE_URL, headers } from './helpers';
 
 // Integration tests against a running assembly module (or the gateway).
 // Covers plans, the node tree (day subset + inheritance), special assemblies
@@ -7,6 +7,7 @@ import { api, getSeed, cleanupPlan, deleteThemeById, resetAssemblyConfig, closeP
 let seed: { schoolId: string; academicYearId: string; classIds: string[] };
 const createdPlans: string[] = [];
 const createdThemes: string[] = [];
+const createdChecklistItems: string[] = [];
 const SUF = Date.now().toString(36);
 
 // Dates in Sep 2026 for deterministic weekday behaviour.
@@ -32,6 +33,7 @@ beforeAll(async () => { seed = await getSeed(); });
 afterAll(async () => {
   for (const id of createdPlans) await cleanupPlan(id);
   for (const t of createdThemes) await deleteThemeById(t);
+  for (const c of createdChecklistItems) await deleteChecklistItemById(c);
   await resetAssemblyConfig(seed.schoolId); // restore default template mode
   await closePool();
 });
@@ -353,6 +355,35 @@ describe('house mode: weekly roster', () => {
     expect(unlocked.body.editable).toBe(true);
 
     expect((await api('PUT', `/weeks/${weekId}/roster`, { entries: [] })).status).toBe(200);
+  });
+
+  it('configures a checklist, ticks it for the week, and signs off', async () => {
+    const weekItem = await api('POST', '/checklist/items', { scope: 'week', text: 'Roster approved on time', phase: 'Before' });
+    expect(weekItem.status).toBe(200);
+    createdChecklistItems.push(weekItem.body.uuid);
+    const dayItem = await api('POST', '/checklist/items', { scope: 'day', text: 'Mic tested', phase: 'On the day' });
+    createdChecklistItems.push(dayItem.body.uuid);
+
+    // The week checklist read model splits scopes and lists the week's assembly dates.
+    const before = await api('GET', `/weeks/${weekId}/checklist`);
+    expect(before.body.weekItems.map((i: any) => i.uuid)).toContain(weekItem.body.uuid);
+    expect(before.body.dayItems.map((i: any) => i.uuid)).toContain(dayItem.body.uuid);
+    expect(before.body.dates).toContain(MON);
+
+    // A day-scoped item without a date is rejected; a week-scoped one with a date too.
+    expect((await api('PUT', `/weeks/${weekId}/checklist`, { ticks: [{ itemId: dayItem.body.uuid }] })).status).toBe(400);
+    expect((await api('PUT', `/weeks/${weekId}/checklist`, { ticks: [{ itemId: weekItem.body.uuid, date: MON }] })).status).toBe(400);
+
+    const saved = await api('PUT', `/weeks/${weekId}/checklist`, {
+      ticks: [{ itemId: weekItem.body.uuid }, { itemId: dayItem.body.uuid, date: MON }],
+    });
+    expect(saved.status).toBe(200);
+    expect(saved.body.ticks).toHaveLength(2);
+
+    const signed = await api('POST', `/weeks/${weekId}/checklist/signoff`, { note: 'All good' });
+    expect(signed.body.signoff.note).toBe('All good');
+    const cleared = await api('DELETE', `/weeks/${weekId}/checklist/signoff`);
+    expect(cleared.body.signoff).toBeUndefined();
   });
 });
 
