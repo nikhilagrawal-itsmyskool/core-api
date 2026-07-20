@@ -660,6 +660,14 @@
           path: me/assembly/duties
           method: get
           cors: true
+  my-assembly-ensure-week:
+    handler: assembly-duties-handler.ensureWeek
+    name: ${self:service}-my-assembly-ensure-week
+    events:
+      - http:
+          path: me/assembly/plans/{id}/weeks
+          method: post
+          cors: true
   my-assembly-week:
     handler: assembly-duties-handler.getWeek
     name: ${self:service}-my-assembly-week

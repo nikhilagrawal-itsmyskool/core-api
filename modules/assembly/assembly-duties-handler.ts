@@ -73,13 +73,32 @@ class AssemblyDutiesHandler {
     return this.guardedWeek(event, callback, (id, s, e) => assemblyChecklistService.signoff(id, body.note, s, e)).catch((err) => ResponseBuilder.handleError(err, callback));
   };
 
+  // POST /me/assembly/plans/{id}/weeks — start (ensure) MY house's week for a date.
+  public ensureWeek = async (event: ApiEvent, _c: ApiContext, callback: ApiCallback) => {
+    _c.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const me = resolveEmployee(event, callback); if (!me) return;
+      const planId = requireParam(event, 'id', callback); if (!planId) return;
+      const body = parseBody<{ weekStart: string }>(event, callback); if (!body) return;
+      if (!body.weekStart) { ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'weekStart is required', callback); return; }
+      if (!(await assemblyDutiesService.canEnsure(me.schoolId, me.employeeId, planId, body.weekStart))) {
+        ResponseBuilder.forbidden(ErrorCode.GeneralError, 'Your house is not on duty that week', callback); return;
+      }
+      ResponseBuilder.ok(await assemblyWeekService.ensureWeek(planId, body.weekStart, me.schoolId, me.employeeId), callback);
+    } catch (err: any) { ResponseBuilder.handleError(err, callback); }
+  };
+
   // POST /me/assembly/weeks/{id}/grades — grade as MYSELF (evaluator=the caller).
+  // Future-dated grades are rejected (today or earlier only); admins use the desktop.
   public saveGrade = async (event: ApiEvent, _c: ApiContext, callback: ApiCallback) => {
     _c.callbackWaitsForEmptyEventLoop = false;
     try {
       const me = resolveEmployee(event, callback); if (!me) return;
       const weekId = requireParam(event, 'id', callback); if (!weekId) return;
       const body = parseBody<Omit<SaveGradeRequest, 'evaluatorId'>>(event, callback); if (!body) return;
+      if (body.gradeDate && body.gradeDate > istToday()) {
+        ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'You cannot grade a future date', callback); return;
+      }
       const result = await assemblyGradingService.saveGrade(weekId, { ...body, evaluatorId: me.employeeId } as SaveGradeRequest, me.schoolId, me.employeeId);
       if (!result) { ResponseBuilder.notFound(ErrorCode.InvalidId, 'Week not found', callback); return; }
       ResponseBuilder.ok(result, callback);
@@ -102,6 +121,7 @@ class AssemblyDutiesHandler {
 
 const handler = new AssemblyDutiesHandler();
 export const duties = handler.duties;
+export const ensureWeek = handler.ensureWeek;
 export const getWeek = handler.getWeek;
 export const saveRoster = handler.saveRoster;
 export const submit = handler.submit;
