@@ -1,7 +1,12 @@
 -- Assembly migration 3: house-mode foundation (Phase A) + per-weekday content grid.
 -- Additive and idempotent; safe on a populated DB.
+--
+-- NOTE: the house DOMAIN (identity, in-charge/co-in-charge, member teachers) lives
+-- in the student module (`house`, `house_teacher`). Assembly owns only its own
+-- rotation POLICY: which houses rotate for assembly duty and in what order
+-- (assembly_house_rotation), plus per-week pins/overrides (assembly_week_house).
 
--- Per-school mode + optional branding. (Rotation is PER-PLAN/wing — see below.)
+-- Per-school mode + optional branding.
 create table if not exists assembly_school_config (
     school_id varchar(12) primary key,
     mode varchar(16) not null check (mode in ('template', 'house')),
@@ -13,41 +18,26 @@ create table if not exists assembly_school_config (
     updated_at timestamp(0)
 );
 
--- Rotation is per-plan (each wing rotates the houses independently). anchor = the
--- Monday the wing's cycle starts from; houses cycle by assembly_house_meta.rotation_order.
-alter table assembly_plan add column if not exists rotation_anchor date;
-
--- House leadership + rotation order (extends the student-module `house` by house_id).
-create table if not exists assembly_house_meta (
-    house_id varchar(12) primary key,
-    school_id varchar(12) not null,
-    incharge_id varchar(12),
-    coincharge_id varchar(12),
-    rotation_order integer,
-    createdby_userid varchar(12),
-    created_at timestamp(0),
-    updatedby_userid varchar(12),
-    updated_at timestamp(0)
-);
-create index if not exists idx_assembly_house_meta_school on assembly_house_meta(school_id);
-
--- House member teachers (employees).
-create table if not exists assembly_house_teacher (
+-- Assembly-specific house rotation order. A row = this house participates in the
+-- assembly duty rotation, at this sort_order. (Leadership/members are read from the
+-- student module's house_teacher — not duplicated here.)
+create table if not exists assembly_house_rotation (
     uuid varchar(12) primary key,
     school_id varchar(12) not null,
     house_id varchar(12) not null,
-    employee_id varchar(12) not null,
+    sort_order integer not null,
     status varchar(16) not null check (status in ('active', 'deleted')),
     createdby_userid varchar(12),
     created_at timestamp(0),
     updatedby_userid varchar(12),
     updated_at timestamp(0)
 );
-create unique index if not exists idx_assembly_house_teacher_unique on assembly_house_teacher(house_id, employee_id) where status = 'active';
-create index if not exists idx_assembly_house_teacher_house on assembly_house_teacher(school_id, house_id);
+create unique index if not exists idx_assembly_house_rotation_unique on assembly_house_rotation(school_id, house_id) where status = 'active';
+create index if not exists idx_assembly_house_rotation_school on assembly_house_rotation(school_id) where status = 'active';
 
--- Manual per-week rotation override, PER PLAN. house_id set = re-anchors the cycle
--- from that house going forward; house_id null = "no house / skip" (no shift).
+-- Per-plan (wing) week PIN / override. house_id set = pin this week to that house
+-- and RE-ANCHOR the cycle from it going forward; house_id null = "skip" (no house,
+-- no shift). The EARLIEST pin is the cycle's start (there is no separate anchor).
 create table if not exists assembly_week_house (
     uuid varchar(12) primary key,
     school_id varchar(12) not null,

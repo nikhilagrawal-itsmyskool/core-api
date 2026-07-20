@@ -2,10 +2,10 @@ import { DB, singleLineString } from '../../shared/lib/db';
 import { BusinessErrorResult } from '../../shared/lib/errors';
 import { ErrorCode } from '../../shared/lib/error-codes';
 import {
-  AssemblyConfig, SetConfigRequest, HouseView, SetHouseMetaRequest, WeekHouseView, SetWeekHouseRequest,
+  AssemblyConfig, SetConfigRequest, HouseView, HouseStaff, SetHouseRotationRequest, WeekHouseView, SetWeekHouseRequest,
 } from './assembly-interfaces';
 import { ASSEMBLY_MODES } from './assembly-constants';
-import { resolveEmployeeNames, isValidDate } from './assembly-common';
+import { isValidDate } from './assembly-common';
 const { generateShortUuid } = require('../../shared/util/generate-uuid.js');
 
 const iso = (d: Date) => d.toISOString().slice(0, 10);
@@ -48,81 +48,69 @@ class AssemblyHouseService {
     return this.getConfig(schoolId);
   }
 
-  // ── Houses (extend the student-module `house` with leadership + teachers) ────
+  // ── Houses (identity + leadership from the student module; assembly owns only
+  //    the rotation order) ──────────────────────────────────────────────────────
 
   public async listHouses(schoolId: string): Promise<HouseView[]> {
     const rows = await DB.query(
       singleLineString`
-        select h.uuid as house_id, h.name, h.code, h.color,
-          m.incharge_id, m.coincharge_id, m.rotation_order
-        from house h left join assembly_house_meta m on m.house_id = h.uuid
+        select h.uuid as house_id, h.name, h.code, h.color, r.sort_order
+        from house h
+        left join assembly_house_rotation r on r.house_id = h.uuid and r.school_id = h.school_id and r.status = 'active'
         where h.school_id = $1 and h.status = 'active'
-        order by m.rotation_order asc nulls last, h.name
+        order by r.sort_order asc nulls last, h.name
       `,
       [schoolId],
     );
-    const names = await resolveEmployeeNames(schoolId, rows.flatMap((r: any) => [r.inchargeId, r.coinchargeId]));
-    const teachers = await this.loadTeachers(schoolId, rows.map((r: any) => r.houseId));
+    const staff = await this.loadHouseStaff(schoolId, rows.map((r: any) => r.houseId));
     return rows.map((r: any) => ({
       houseId: r.houseId, name: r.name, code: r.code, color: r.color,
-      inchargeId: r.inchargeId || undefined, inchargeName: r.inchargeId ? names[r.inchargeId] : undefined,
-      coinchargeId: r.coinchargeId || undefined, coinchargeName: r.coinchargeId ? names[r.coinchargeId] : undefined,
-      rotationOrder: r.rotationOrder ?? undefined,
-      teachers: teachers.get(r.houseId) || [],
+      rotationOrder: r.sortOrder ?? undefined,
+      ...(staff.get(r.houseId) || { teachers: [] }),
     }));
   }
 
-  public async setHouseMeta(houseId: string, data: SetHouseMetaRequest, schoolId: string, userId: string): Promise<HouseView | null> {
+  // Set (or clear) a house's assembly rotation order. sortOrder null removes the
+  // house from the rotation; a number sets/updates its place.
+  public async setHouseRotation(houseId: string, data: SetHouseRotationRequest, schoolId: string, userId: string): Promise<HouseView | null> {
     const house = await DB.query(singleLineString`select uuid from house where uuid = $1 and school_id = $2 and status = 'active'`, [houseId, schoolId]);
     if (house.length === 0) return null;
     const now = new Date();
-    const queries: string[] = [];
-    const params: any[][] = [];
-
-    // Upsert the meta row (incharge / coincharge / rotation_order).
-    const meta = await DB.query(singleLineString`select house_id from assembly_house_meta where house_id = $1`, [houseId]);
-    if (meta.length === 0) {
-      queries.push(singleLineString`insert into assembly_house_meta (house_id, school_id, incharge_id, coincharge_id, rotation_order, createdby_userid, created_at) values ($1,$2,$3,$4,$5,$6,$7)`);
-      params.push([houseId, schoolId, data.inchargeId ?? null, data.coinchargeId ?? null, data.rotationOrder ?? null, userId, now]);
-    } else {
-      const u: string[] = []; const p: any[] = []; let i = 1;
-      const set = (c: string, v: any) => { u.push(`${c} = $${i++}`); p.push(v); };
-      if (data.inchargeId !== undefined) set('incharge_id', data.inchargeId || null);
-      if (data.coinchargeId !== undefined) set('coincharge_id', data.coinchargeId || null);
-      if (data.rotationOrder !== undefined) set('rotation_order', data.rotationOrder ?? null);
-      if (u.length) { set('updatedby_userid', userId); set('updated_at', now); p.push(houseId); queries.push(singleLineString`update assembly_house_meta set ${u.join(', ')} where house_id = $${i}`); params.push(p); }
+    const existing = await DB.query(singleLineString`select uuid from assembly_house_rotation where school_id = $1 and house_id = $2 and status = 'active'`, [schoolId, houseId]);
+    if (data.sortOrder === null) {
+      if (existing.length) await DB.query(singleLineString`update assembly_house_rotation set status = 'deleted', updatedby_userid = $1, updated_at = $2 where uuid = $3`, [userId, now, existing[0].uuid]);
+    } else if (data.sortOrder !== undefined) {
+      if (existing.length) await DB.query(singleLineString`update assembly_house_rotation set sort_order = $1, updatedby_userid = $2, updated_at = $3 where uuid = $4`, [data.sortOrder, userId, now, existing[0].uuid]);
+      else await DB.query(singleLineString`insert into assembly_house_rotation (uuid, school_id, house_id, sort_order, status, createdby_userid, created_at) values ($1,$2,$3,$4,'active',$5,$6)`, [generateShortUuid(12), schoolId, houseId, data.sortOrder, userId, now]);
     }
-
-    // Replace the teacher set when provided.
-    if (data.teacherIds) {
-      queries.push(singleLineString`update assembly_house_teacher set status = 'deleted', updatedby_userid = $1, updated_at = $2 where house_id = $3 and status = 'active'`);
-      params.push([userId, now, houseId]);
-      for (const empId of [...new Set(data.teacherIds.filter(Boolean))]) {
-        queries.push(singleLineString`insert into assembly_house_teacher (uuid, school_id, house_id, employee_id, status, createdby_userid, created_at) values ($1,$2,$3,$4,'active',$5,$6)`);
-        params.push([generateShortUuid(12), schoolId, houseId, empId, userId, now]);
-      }
-    }
-    if (queries.length) await DB.queriesInTransaction(queries, params);
     return (await this.listHouses(schoolId)).find(h => h.houseId === houseId) || null;
   }
 
-  private async loadTeachers(schoolId: string, houseIds: string[]): Promise<Map<string, { employeeId: string; name?: string }[]>> {
-    const map = new Map<string, { employeeId: string; name?: string }[]>();
+  // Leadership + member teachers, read from the student module's house_teacher.
+  private async loadHouseStaff(schoolId: string, houseIds: string[]): Promise<Map<string, HouseStaff>> {
+    const map = new Map<string, HouseStaff>();
+    for (const id of houseIds) map.set(id, { teachers: [] });
     if (houseIds.length === 0) return map;
     const ph = houseIds.map((_, i) => `$${i + 2}`).join(', ');
     const rows = await DB.query(
-      singleLineString`select house_id, employee_id from assembly_house_teacher where school_id = $1 and house_id in (${ph}) and status = 'active'`,
+      singleLineString`
+        select ht.house_id, ht.employee_id, ht.role, e.name
+        from house_teacher ht
+        left join employee e on e.uuid = ht.employee_id and e.school_id = ht.school_id
+        where ht.school_id = $1 and ht.house_id in (${ph}) and ht.status = 'active'
+      `,
       [schoolId, ...houseIds],
     );
-    const names = await resolveEmployeeNames(schoolId, rows.map((r: any) => r.employeeId));
     for (const r of rows) {
-      if (!map.has(r.houseId)) map.set(r.houseId, []);
-      map.get(r.houseId)!.push({ employeeId: r.employeeId, name: names[r.employeeId] });
+      const s = map.get(r.houseId); if (!s) continue;
+      if (r.role === 'incharge') { s.inchargeId = r.employeeId; s.inchargeName = r.name || undefined; }
+      else if (r.role === 'coincharge') { s.coinchargeId = r.employeeId; s.coinchargeName = r.name || undefined; }
+      else s.teachers.push({ employeeId: r.employeeId, name: r.name || undefined });
     }
     return map;
   }
 
-  // ── Rotation (per plan/wing; re-anchoring overrides) ────────────────────────
+  // ── Rotation (per plan/wing; week pins re-anchor; earliest pin = start) ──────
 
   public async setWeekHouse(planId: string, data: SetWeekHouseRequest, schoolId: string, userId: string): Promise<WeekHouseView[]> {
     if (!isValidDate(data.weekStart)) throw new BusinessErrorResult(ErrorCode.BusinessError, 'A valid weekStart (yyyy-mm-dd) is required');
@@ -140,23 +128,20 @@ class AssemblyHouseService {
         [data.houseId ?? null, userId, now, existing[0].uuid],
       );
     }
-    // Return the recomputed calendar for the containing month window.
     return this.weekCalendar(planId, schoolId, addWeeks(weekStart, -4), addWeeks(weekStart, 8));
   }
 
-  // The house-on-duty for each Monday in [fromWeek, toWeek]. Walks from the plan
-  // anchor: a set override re-anchors the cycle; a null (skip) override pauses it.
+  // The house-on-duty for each Monday in [fromWeek, toWeek]. The rotation cycles
+  // the assembly_house_rotation houses (by sort_order) starting from the plan's
+  // EARLIEST week pin: a pinned house re-anchors the cycle, a null pin skips the
+  // week without shifting. No plan-level anchor.
   public async weekCalendar(planId: string, schoolId: string, fromWeek: string, toWeek: string): Promise<WeekHouseView[]> {
-    const planRows = await DB.query(singleLineString`select rotation_anchor::text as rotation_anchor from assembly_plan where uuid = $1 and school_id = $2 and status = 'active'`, [planId, schoolId]);
-    if (planRows.length === 0 || !planRows[0].rotationAnchor) return [];
-    const anchor = mondayOf(planRows[0].rotationAnchor);
-    const from = mondayOf(fromWeek); const to = mondayOf(toWeek);
-
     const houses = await DB.query(
       singleLineString`
-        select h.uuid as house_id, h.name from house h join assembly_house_meta m on m.house_id = h.uuid
-        where h.school_id = $1 and h.status = 'active' and m.rotation_order is not null
-        order by m.rotation_order asc
+        select r.house_id, h.name from assembly_house_rotation r
+        join house h on h.uuid = r.house_id and h.school_id = r.school_id and h.status = 'active'
+        where r.school_id = $1 and r.status = 'active'
+        order by r.sort_order asc
       `,
       [schoolId],
     );
@@ -164,29 +149,32 @@ class AssemblyHouseService {
     const n = houses.length;
     const idxById = (id: string) => houses.findIndex((h: any) => h.houseId === id);
 
-    const ovRows = await DB.query(singleLineString`select week_start::text as week_start, house_id from assembly_week_house where plan_id = $1 and school_id = $2`, [planId, schoolId]);
-    const overrides = new Map<string, string | null>();
-    for (const r of ovRows) overrides.set(mondayOf(r.weekStart), r.houseId);
+    const pinRows = await DB.query(singleLineString`select week_start::text as week_start, house_id from assembly_week_house where plan_id = $1 and school_id = $2 order by week_start`, [planId, schoolId]);
+    if (pinRows.length === 0) return []; // no pin → no cycle start → no rotation
+    const pins = new Map<string, string | null>();
+    for (const r of pinRows) pins.set(mondayOf(r.weekStart), r.houseId);
+    const start = mondayOf(pinRows[0].weekStart); // earliest pin = cycle start
+    const from = mondayOf(fromWeek); const to = mondayOf(toWeek);
 
     const out: WeekHouseView[] = [];
     let lastIdx: number | null = null;
-    for (let w = anchor; w <= to; w = addWeeks(w, 1)) {
-      const hasOv = overrides.has(w);
-      const ovHouse = overrides.get(w);
+    for (let w = start; w <= to; w = addWeeks(w, 1)) {
+      const hasPin = pins.has(w);
+      const pinHouse = pins.get(w);
       let row: WeekHouseView;
-      if (hasOv && (ovHouse === null || ovHouse === undefined)) {
-        row = { weekStart: w, source: 'skip' }; // no house; lastIdx unchanged
+      if (hasPin && (pinHouse === null || pinHouse === undefined)) {
+        row = { weekStart: w, source: 'skip' }; // explicit skip; lastIdx unchanged
+      } else if (!hasPin && lastIdx === null) {
+        row = { weekStart: w, source: 'skip' }; // before any concrete pin — undetermined
       } else {
         let idx: number;
         let source: WeekHouseView['source'];
-        if (hasOv && ovHouse) {
-          const oi = idxById(ovHouse);
+        if (hasPin && pinHouse) {
+          const oi = idxById(pinHouse);
           idx = oi >= 0 ? oi : (lastIdx ?? 0);
           source = 'override';
-        } else if (lastIdx === null) {
-          idx = 0; source = 'auto';
         } else {
-          idx = (lastIdx + 1) % n; source = 'auto';
+          idx = ((lastIdx as number) + 1) % n; source = 'auto';
         }
         lastIdx = idx;
         row = { weekStart: w, houseId: houses[idx].houseId, houseName: houses[idx].name, source };

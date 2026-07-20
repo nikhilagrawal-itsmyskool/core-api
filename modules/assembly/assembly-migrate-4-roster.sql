@@ -4,6 +4,11 @@
 -- rosters overlay the resolved template (fill 'roster' slots, prune un-opted
 -- optional nodes, attach the day's anchors/owner + house-on-duty).
 -- Additive and idempotent; inert for 'template'-mode schools.
+--
+-- People (anchors, day owner, per-slot speakers/performers/groups) are NOT flat
+-- columns: they are polymorphic rows in assembly_roster_participant, mirroring
+-- assembly_node_responsible. assembly_roster_entry holds only the slot's own
+-- state (opted + content).
 
 -- One roster instance per (plan/wing, week). house_id is the house-on-duty
 -- SNAPSHOT at create time (from rotation); null = a skip week. deadline_at =
@@ -34,30 +39,8 @@ create table if not exists assembly_week (
 create unique index if not exists idx_assembly_week_unique on assembly_week(plan_id, week_start);
 create index if not exists idx_assembly_week_school_year on assembly_week(school_id, academic_year_id);
 
--- Per-day header: the day's anchors (MCs) + a day owner (teacher). Anchors are
--- linked students (feed the student 360 view) with denormalized name/class.
-create table if not exists assembly_roster_day (
-    uuid varchar(12) primary key,
-    school_id varchar(12) not null,
-    week_id varchar(12) not null,
-    entry_date date not null,
-    anchor1_student_id varchar(12),
-    anchor1_name varchar(160),
-    anchor1_class varchar(128),
-    anchor2_student_id varchar(12),
-    anchor2_name varchar(160),
-    anchor2_class varchar(128),
-    day_owner_employee_id varchar(12),
-    day_owner_name varchar(160),
-    createdby_userid varchar(12),
-    created_at timestamp(0),
-    updatedby_userid varchar(12),
-    updated_at timestamp(0)
-);
-create unique index if not exists idx_assembly_roster_day_unique on assembly_roster_day(week_id, entry_date);
-
--- Per (day, roster node): opt-in/out of optional segments, the day's variable
--- content, the linked student speaker, and per-segment delegation owner.
+-- Per (day, roster node) SLOT STATE: opt-in/out of an optional segment + the
+-- day's filled content. People on the slot are participant rows (scope='entry').
 create table if not exists assembly_roster_entry (
     uuid varchar(12) primary key,
     school_id varchar(12) not null,
@@ -66,11 +49,6 @@ create table if not exists assembly_roster_entry (
     node_id varchar(12) not null,
     opted boolean,                             -- optional segment opted in (null/true = shown)
     content text,
-    student_id varchar(12),
-    student_name varchar(160),
-    student_class varchar(128),
-    owner_employee_id varchar(12),
-    owner_name varchar(160),
     createdby_userid varchar(12),
     created_at timestamp(0),
     updatedby_userid varchar(12),
@@ -78,6 +56,32 @@ create table if not exists assembly_roster_entry (
 );
 create unique index if not exists idx_assembly_roster_entry_unique on assembly_roster_entry(week_id, entry_date, node_id);
 create index if not exists idx_assembly_roster_entry_week on assembly_roster_entry(week_id);
+
+-- Polymorphic roster participants (mirrors assembly_node_responsible):
+--   scope='day'   (node_id null) -> the day's anchors (role 'anchor') + day owner
+--                                   (role 'day-owner'); N of each allowed.
+--   scope='entry' (node_id set)  -> a slot's speakers/performers/group; a skit
+--                                   group is simply many rows on one node.
+-- target_type: employee | student | class | text.
+create table if not exists assembly_roster_participant (
+    uuid varchar(12) primary key,
+    school_id varchar(12) not null,
+    week_id varchar(12) not null,
+    entry_date date not null,
+    scope varchar(8) not null check (scope in ('day', 'entry')),
+    node_id varchar(12),                       -- null for scope='day'
+    role varchar(48),
+    target_type varchar(16) not null check (target_type in ('employee', 'student', 'class', 'text')),
+    target_id varchar(12),
+    target_name varchar(160),
+    target_class varchar(128),
+    target_text varchar(160),
+    sort_order integer not null,
+    createdby_userid varchar(12),
+    created_at timestamp(0)
+);
+create index if not exists idx_assembly_roster_participant_day on assembly_roster_participant(week_id, entry_date);
+create index if not exists idx_assembly_roster_participant_node on assembly_roster_participant(week_id, entry_date, node_id);
 
 -- Audit of unlocks (who re-opened a locked/late week and why).
 create table if not exists assembly_week_unlock (

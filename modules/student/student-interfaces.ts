@@ -250,6 +250,26 @@ export interface UpdateHouseRequest {
   color?: string;
 }
 
+// ---- House staff (in-charge / co-in-charge / member teachers) ----
+export type HouseTeacherRole = 'incharge' | 'coincharge' | 'member';
+
+export interface HouseTeacher {
+  uuid: string;
+  houseId: string;
+  employeeId: string;
+  employeeName?: string;
+  role: HouseTeacherRole;
+}
+
+export interface HouseTeacherInput {
+  employeeId: string;
+  role: HouseTeacherRole;
+}
+
+export interface SetHouseTeachersRequest {
+  teachers: HouseTeacherInput[];
+}
+
 // ---- Photos ----
 
 export interface UploadPhotoRequest {

@@ -79,7 +79,7 @@ export async function cleanupPlan(planId: string): Promise<void> {
   // House-mode weekly roster rows hanging off this plan's weeks.
   const weeks = (await p.query(`select uuid from assembly_week where plan_id = $1`, [planId])).rows.map(r => r.uuid);
   if (weeks.length) {
-    for (const t of ['assembly_roster_entry', 'assembly_roster_day', 'assembly_week_unlock']) {
+    for (const t of ['assembly_roster_entry', 'assembly_roster_participant', 'assembly_week_unlock']) {
       await p.query(`delete from ${t} where week_id = any($1)`, [weeks]);
     }
     await p.query(`delete from assembly_week where plan_id = $1`, [planId]);

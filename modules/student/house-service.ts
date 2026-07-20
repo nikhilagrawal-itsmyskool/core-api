@@ -1,8 +1,10 @@
 import { DB, singleLineString } from '../../shared/lib/db';
 import { BusinessErrorResult } from '../../shared/lib/errors';
 import { ErrorCode } from '../../shared/lib/error-codes';
-import { House, CreateHouseRequest, UpdateHouseRequest } from './student-interfaces';
+import { House, CreateHouseRequest, UpdateHouseRequest, HouseTeacher, HouseTeacherInput, HouseTeacherRole } from './student-interfaces';
 import { DEFAULTS } from './student-constants';
+
+const HOUSE_TEACHER_ROLES: HouseTeacherRole[] = ['incharge', 'coincharge', 'member'];
 const { generateShortUuid } = require('../../shared/util/generate-uuid.js');
 
 function slugify(name: string): string {
@@ -132,6 +134,71 @@ class HouseService {
       [houseId, userId, new Date(), studentId, schoolId]
     );
     return rows.length > 0;
+  }
+
+  // ---- House staff (in-charge / co-in-charge / member teachers) ----
+
+  public async listTeachers(houseId: string, schoolId: string): Promise<HouseTeacher[]> {
+    return DB.query(
+      singleLineString`
+        select ht.uuid, ht.house_id, ht.employee_id, e.name as employee_name, ht.role
+        from house_teacher ht
+        left join employee e on e.uuid = ht.employee_id and e.school_id = ht.school_id
+        where ht.house_id = $1 and ht.school_id = $2 and ht.status = 'active'
+        order by case ht.role when 'incharge' then 0 when 'coincharge' then 1 else 2 end, e.name
+      `,
+      [houseId, schoolId]
+    );
+  }
+
+  // Replace a house's staff set. Validates roles, employees, and enforces at most
+  // one in-charge and one co-in-charge per house (members are unlimited).
+  public async setTeachers(
+    houseId: string,
+    entries: HouseTeacherInput[],
+    schoolId: string,
+    userId: string
+  ): Promise<HouseTeacher[]> {
+    const house = await this.getById(houseId, schoolId);
+    if (!house) throw new BusinessErrorResult(ErrorCode.BusinessError, 'Invalid house');
+    if (!Array.isArray(entries)) throw new BusinessErrorResult(ErrorCode.BusinessError, 'teachers array is required');
+
+    const seenEmployees = new Set<string>();
+    let inchargeCount = 0;
+    let coinchargeCount = 0;
+    for (const e of entries) {
+      if (!HOUSE_TEACHER_ROLES.includes(e.role)) {
+        throw new BusinessErrorResult(ErrorCode.BusinessError, `Invalid role: ${e.role}`);
+      }
+      if (!e.employeeId) throw new BusinessErrorResult(ErrorCode.BusinessError, 'employeeId is required');
+      if (seenEmployees.has(e.employeeId)) {
+        throw new BusinessErrorResult(ErrorCode.BusinessError, 'A teacher can hold only one role in a house');
+      }
+      seenEmployees.add(e.employeeId);
+      if (e.role === 'incharge') inchargeCount++;
+      if (e.role === 'coincharge') coinchargeCount++;
+      const emp = await DB.query(
+        singleLineString`select 1 from employee where uuid = $1 and school_id = $2 and status <> 'deleted' limit 1`,
+        [e.employeeId, schoolId]
+      );
+      if (emp.length === 0) throw new BusinessErrorResult(ErrorCode.BusinessError, `Invalid employee: ${e.employeeId}`);
+    }
+    if (inchargeCount > 1) throw new BusinessErrorResult(ErrorCode.BusinessError, 'A house can have only one in-charge');
+    if (coinchargeCount > 1) throw new BusinessErrorResult(ErrorCode.BusinessError, 'A house can have only one co-in-charge');
+
+    const now = new Date();
+    const queries: string[] = [
+      singleLineString`update house_teacher set status = 'deleted', updatedby_userid = $1, updated_at = $2 where house_id = $3 and status = 'active'`,
+    ];
+    const params: any[][] = [[userId, now, houseId]];
+    for (const e of entries) {
+      queries.push(
+        singleLineString`insert into house_teacher (uuid, school_id, house_id, employee_id, role, status, createdby_userid, created_at) values ($1,$2,$3,$4,$5,'active',$6,$7)`
+      );
+      params.push([generateShortUuid(12), schoolId, houseId, e.employeeId, e.role, userId, now]);
+    }
+    await DB.queriesInTransaction(queries, params);
+    return this.listTeachers(houseId, schoolId);
   }
 }
 

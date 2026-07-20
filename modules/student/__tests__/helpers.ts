@@ -90,7 +90,12 @@ export async function cleanupFixtures(pool: any, f: Fixtures): Promise<void> {
   ]);
   await pool.query(`delete from student where school_id = $1 and admission_number like $2`, [f.schoolId, `${f.tag}%`]);
   await pool.query(`delete from student_login where school_id = $1 and username like $2`, [f.schoolId, `${f.tag}%`]);
+  await pool.query(
+    `delete from house_teacher where school_id = $1 and house_id in (select uuid from house where school_id = $1 and name like $2)`,
+    [f.schoolId, `${f.tag}%`]
+  );
   await pool.query(`delete from house where school_id = $1 and name like $2`, [f.schoolId, `${f.tag}%`]);
+  await pool.query(`delete from employee where school_id = $1 and name like $2`, [f.schoolId, `${f.tag}%`]);
   await pool.query(`delete from academic_year where uuid = any($1)`, [[f.yearFromId, f.yearToId]]);
   await pool.query(`delete from class where uuid = any($1)`, [[f.classAId, f.classBId]]);
 }

@@ -102,52 +102,61 @@ class AssemblyResolveService {
     if (weekRows[0].houseId) { result.houseId = weekRows[0].houseId; result.houseName = weekRows[0].houseName || result.houseName; }
     result.rosterApproved = true;
 
-    const dayRows = await DB.query(
-      singleLineString`
-        select anchor1_student_id, anchor1_name, anchor1_class, anchor2_student_id, anchor2_name, anchor2_class,
-          day_owner_employee_id, day_owner_name
-        from assembly_roster_day where week_id = $1 and entry_date = $2
-      `,
+    // Day participants (scope='day'): anchors + day owners.
+    const dayParts = await DB.query(
+      singleLineString`select role, target_type, target_id, target_name, target_class, target_text from assembly_roster_participant where week_id = $1 and entry_date = $2 and scope = 'day' order by sort_order`,
       [weekId, result.date],
     );
-    if (dayRows.length > 0) {
-      const d = dayRows[0];
-      const anchors: ResolvedAnchor[] = [];
-      if (d.anchor1StudentId || d.anchor1Name) anchors.push({ studentId: d.anchor1StudentId || undefined, name: d.anchor1Name || undefined, className: d.anchor1Class || undefined });
-      if (d.anchor2StudentId || d.anchor2Name) anchors.push({ studentId: d.anchor2StudentId || undefined, name: d.anchor2Name || undefined, className: d.anchor2Class || undefined });
-      if (anchors.length) result.anchors = anchors;
-      if (d.dayOwnerEmployeeId || d.dayOwnerName) result.dayOwner = { employeeId: d.dayOwnerEmployeeId || undefined, name: d.dayOwnerName || undefined };
+    const anchors: ResolvedAnchor[] = [];
+    const dayOwners: { employeeId?: string; name?: string }[] = [];
+    for (const p of dayParts) {
+      if (p.role === 'day-owner') dayOwners.push({ employeeId: p.targetId || undefined, name: p.targetName || p.targetText || undefined });
+      else anchors.push({ studentId: p.targetType === 'student' ? (p.targetId || undefined) : undefined, name: p.targetName || p.targetText || undefined, className: p.targetClass || undefined });
     }
+    if (anchors.length) result.anchors = anchors;
+    if (dayOwners.length) result.dayOwners = dayOwners;
 
     // Roster only overlays the recurring template — specials are standalone.
     if (result.source === 'template') {
       const entryRows = await DB.query(
-        singleLineString`select node_id, opted, content, student_id, student_name, student_class, owner_employee_id, owner_name from assembly_roster_entry where week_id = $1 and entry_date = $2`,
+        singleLineString`select node_id, opted, content from assembly_roster_entry where week_id = $1 and entry_date = $2`,
         [weekId, result.date],
       );
-      const byNode = new Map<string, any>();
-      for (const r of entryRows) byNode.set(r.nodeId, r);
-      result.nodes = this.overlayRoster(result.nodes, byNode);
+      const entryByNode = new Map<string, any>();
+      for (const r of entryRows) entryByNode.set(r.nodeId, r);
+
+      const partRows = await DB.query(
+        singleLineString`select node_id, role, target_type, target_id, target_name, target_text from assembly_roster_participant where week_id = $1 and entry_date = $2 and scope = 'entry' order by sort_order`,
+        [weekId, result.date],
+      );
+      const partsByNode = new Map<string, any[]>();
+      for (const r of partRows) { if (!partsByNode.has(r.nodeId)) partsByNode.set(r.nodeId, []); partsByNode.get(r.nodeId)!.push(r); }
+
+      result.nodes = this.overlayRoster(result.nodes, entryByNode, partsByNode);
     }
     return result;
   }
 
   // Walk the resolved tree applying an approved roster: drop opted-out optional
-  // nodes (with their subtree), fill 'roster' slot content, and set the speaker/
-  // owner as the effective responsible when the roster names them.
-  private overlayRoster(nodes: ResolvedNode[], byNode: Map<string, any>): ResolvedNode[] {
+  // nodes (with their subtree), fill 'roster' slot content, and set the roster's
+  // participants (speakers/performers) as the effective responsible.
+  private overlayRoster(nodes: ResolvedNode[], entryByNode: Map<string, any>, partsByNode: Map<string, any[]>): ResolvedNode[] {
     const out: ResolvedNode[] = [];
     for (const n of nodes) {
-      const e = byNode.get(n.uuid);
+      const e = entryByNode.get(n.uuid);
       if (n.isOptional && e && e.opted === false) continue; // opted out → hide segment
-      if (n.fillMode === 'roster' && e) {
-        if (e.content) n.content = e.content;
-        const rostered: NodeResponsibleView[] = [];
-        if (e.studentId || e.studentName) rostered.push({ uuid: `roster-spk-${n.uuid}`, role: 'presenter', targetType: 'student', targetId: e.studentId || undefined, targetName: e.studentName || undefined, sortOrder: 0 });
-        if (e.ownerEmployeeId || e.ownerName) rostered.push({ uuid: `roster-own-${n.uuid}`, role: 'in-charge', targetType: 'employee', targetId: e.ownerEmployeeId || undefined, targetName: e.ownerName || undefined, sortOrder: 1 });
-        if (rostered.length) n.responsible = rostered;
+      if (n.fillMode === 'roster') {
+        if (e?.content) n.content = e.content;
+        const parts = partsByNode.get(n.uuid) || [];
+        if (parts.length) {
+          n.responsible = parts.map((p, i): NodeResponsibleView => ({
+            uuid: `roster-${n.uuid}-${i}`, role: p.role || undefined, targetType: p.targetType,
+            targetId: p.targetId || undefined, targetName: p.targetName || undefined,
+            targetText: p.targetText || undefined, sortOrder: i,
+          }));
+        }
       }
-      n.children = this.overlayRoster(n.children || [], byNode);
+      n.children = this.overlayRoster(n.children || [], entryByNode, partsByNode);
       out.push(n);
     }
     return out;

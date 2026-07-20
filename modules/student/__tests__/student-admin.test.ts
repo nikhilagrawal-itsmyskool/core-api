@@ -5,6 +5,7 @@ import {
   createFixtures,
   cleanupFixtures,
   createStudent,
+  uid,
   Fixtures,
 } from './helpers';
 
@@ -151,6 +152,42 @@ describe('Student admin API', () => {
     const detail = await (await fetch(`${BASE_URL}/${s.uuid}`, { headers })).json();
     expect(detail.houseId).toBe(house.uuid);
     expect(detail.houseName).toBe(`${f.tag} Tagore`);
+  });
+
+  it('sets house staff with roles and enforces one in-charge max', async () => {
+    const house = await (await fetch(`${BASE_URL}/houses`, {
+      method: 'POST', headers, body: JSON.stringify({ name: `${f.tag} Staffed` }),
+    })).json();
+
+    // Seed two employees directly (cleaned up via the tag).
+    const e1 = `em${uid()}`.slice(0, 12);
+    const e2 = `em${uid()}`.slice(0, 12);
+    for (const [id, n] of [[e1, `${f.tag} Emp1`], [e2, `${f.tag} Emp2`]] as const) {
+      await pool.query(
+        `insert into employee (uuid, name, status, school_id, createdby_userid, created_at) values ($1,$2,'active',$3,'test',now())`,
+        [id, n, f.schoolId]
+      );
+    }
+
+    const set = await fetch(`${BASE_URL}/houses/${house.uuid}/teachers`, {
+      method: 'PUT', headers,
+      body: JSON.stringify({ teachers: [{ employeeId: e1, role: 'incharge' }, { employeeId: e2, role: 'member' }] }),
+    });
+    expect(set.status).toBe(200);
+    const body = await set.json();
+    expect(body.teachers).toHaveLength(2);
+    expect(body.teachers.find((t: any) => t.role === 'incharge').employeeName).toBe(`${f.tag} Emp1`);
+
+    // Two in-charges rejected.
+    const bad = await fetch(`${BASE_URL}/houses/${house.uuid}/teachers`, {
+      method: 'PUT', headers,
+      body: JSON.stringify({ teachers: [{ employeeId: e1, role: 'incharge' }, { employeeId: e2, role: 'incharge' }] }),
+    });
+    expect(bad.status).toBe(400);
+
+    // The rejected save left the good set intact.
+    const list = await (await fetch(`${BASE_URL}/houses/${house.uuid}/teachers`, { headers })).json();
+    expect(list.teachers).toHaveLength(2);
   });
 
   it('uploads / fetches / deletes a student photo with guards', async () => {

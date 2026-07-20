@@ -27,23 +27,28 @@ export interface SetConfigRequest {
 }
 
 export interface HouseTeacherView { employeeId: string; name?: string; }
-export interface HouseView {
-  houseId: string;
-  name: string;
-  code?: string;
-  color?: string;
+
+// Leadership + member teachers, sourced from the student module's house_teacher.
+export interface HouseStaff {
   inchargeId?: string;
   inchargeName?: string;
   coinchargeId?: string;
   coinchargeName?: string;
-  rotationOrder?: number;
-  teachers: HouseTeacherView[];
+  teachers: HouseTeacherView[]; // members
 }
-export interface SetHouseMetaRequest {
-  inchargeId?: string | null;
-  coinchargeId?: string | null;
-  rotationOrder?: number | null;
-  teacherIds?: string[];
+
+export interface HouseView extends HouseStaff {
+  houseId: string;
+  name: string;
+  code?: string;
+  color?: string;
+  rotationOrder?: number; // assembly-specific rotation order (from assembly_house_rotation)
+}
+
+// Assembly owns only the rotation order; leadership/teachers are managed in the
+// student (house) module. sortOrder null removes the house from the rotation.
+export interface SetHouseRotationRequest {
+  sortOrder?: number | null;
 }
 
 // One week's house-on-duty for a plan (wing).
@@ -81,8 +86,20 @@ export interface AssemblyWeek {
   approvedAt?: string;
 }
 
+// A roster participant (polymorphic; mirrors NodeResponsibleView). Used for the
+// day's anchors/owners (scope='day') and a slot's speakers/performers (scope='entry').
+export interface RosterParticipantView {
+  role?: string;
+  targetType: ResponsibleTargetType; // employee | class | student | text
+  targetId?: string;
+  targetName?: string;
+  targetClass?: string; // a student's class/section (denormalized)
+  targetText?: string;
+  sortOrder: number;
+}
+
 // A fillable template slot the house completes for a date (fill_mode='roster'
-// or is_optional). Carries the authored template context + the saved values.
+// or is_optional). Carries the authored template context + the saved slot state.
 export interface RosterSlot {
   nodeId: string;
   title: string;
@@ -91,27 +108,17 @@ export interface RosterSlot {
   fillMode?: FillMode;
   isOptional: boolean;
   options: string[];
-  // Saved roster values for this (date, node), if any.
+  // Saved slot state for this (date, node).
   opted: boolean;       // optional segment opted in (defaults true)
   content?: string;
-  studentId?: string;
-  studentName?: string;
-  studentClass?: string;
-  ownerEmployeeId?: string;
-  ownerName?: string;
+  participants: RosterParticipantView[]; // speakers / performers / group
 }
 
 export interface RosterDayView {
   date: string;         // yyyy-mm-dd
   weekday: Weekday;
-  anchor1StudentId?: string;
-  anchor1Name?: string;
-  anchor1Class?: string;
-  anchor2StudentId?: string;
-  anchor2Name?: string;
-  anchor2Class?: string;
-  dayOwnerEmployeeId?: string;
-  dayOwnerName?: string;
+  anchors: RosterParticipantView[];  // scope='day', role 'anchor'
+  owners: RosterParticipantView[];   // scope='day', role 'day-owner'
   slots: RosterSlot[];
 }
 
@@ -137,24 +144,31 @@ export interface EnsureWeekRequest {
   weekStart: string; // any date in the target week; normalized to its Monday
 }
 
-// Bulk save of a week's roster (replace semantics per week).
+// A participant to save. targetId required unless targetType='text' (targetText).
+export interface RosterParticipantInput {
+  role?: string;
+  targetType: ResponsibleTargetType;
+  targetId?: string;
+  targetText?: string;
+}
+
+// Bulk save of a week's roster (replace-per-kind: sending `days` replaces all day
+// participants; sending `entries` replaces all slot state + entry participants).
 export interface SaveRosterRequest {
   days?: SaveRosterDayInput[];
   entries?: SaveRosterEntryInput[];
 }
 export interface SaveRosterDayInput {
   date: string;
-  anchor1StudentId?: string | null;
-  anchor2StudentId?: string | null;
-  dayOwnerEmployeeId?: string | null;
+  anchors?: RosterParticipantInput[]; // role defaulted to 'anchor'
+  owners?: RosterParticipantInput[];  // role defaulted to 'day-owner'
 }
 export interface SaveRosterEntryInput {
   date: string;
   nodeId: string;
   opted?: boolean;
   content?: string | null;
-  studentId?: string | null;
-  ownerEmployeeId?: string | null;
+  participants?: RosterParticipantInput[];
 }
 
 export interface UnlockWeekRequest {
@@ -179,7 +193,6 @@ export interface AssemblyPlan extends BaseEntity {
   startDate?: string; // yyyy-mm-dd; null = -inf (whole-year base plan)
   endDate?: string; // yyyy-mm-dd; null = +inf
   priority?: number; // tie-break for equal-span overlaps (higher wins)
-  rotationAnchor?: string; // house-mode: the Monday this wing's house cycle starts from
   publishStatus: PublishStatus;
   publishedAt?: Date;
   publishedbyUserid?: string;
@@ -214,7 +227,6 @@ export interface UpdatePlanRequest {
   startDate?: string | null;
   endDate?: string | null;
   priority?: number | null;
-  rotationAnchor?: string | null;
 }
 
 // Clone a whole plan (tree + days + audience) into a new dated plan.
@@ -454,7 +466,7 @@ export interface ResolvedAssembly {
   houseName?: string;
   rosterApproved?: boolean; // true when an approved roster was overlaid onto the template
   anchors?: ResolvedAnchor[];
-  dayOwner?: { employeeId?: string; name?: string };
+  dayOwners?: { employeeId?: string; name?: string }[];
 }
 
 export interface ResolvedAnchor {

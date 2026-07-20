@@ -3,10 +3,11 @@ import { BusinessErrorResult } from '../../shared/lib/errors';
 import { ErrorCode } from '../../shared/lib/error-codes';
 import {
   AssemblyWeek, AssemblyWeekDetail, WeekSummary, RosterSlot, RosterDayView,
-  SaveRosterRequest, SaveRosterDayInput, AssemblyNodeDetail,
+  RosterParticipantView, RosterParticipantInput, AssemblyNodeDetail,
+  SaveRosterRequest,
 } from './assembly-interfaces';
-import { WEEKDAY_VALUES, Weekday, WeekStatus } from './assembly-constants';
-import { isValidDate, findEmployee, resolveStudentInfo } from './assembly-common';
+import { WEEKDAY_VALUES, Weekday, WeekStatus, RESPONSIBLE_TARGET_TYPE_VALUES } from './assembly-constants';
+import { isValidDate, findEmployee, findClass, resolveStudentInfo } from './assembly-common';
 import { assemblyHouseService } from './assembly-house-service';
 import { assemblyNodeService } from './assembly-node-service';
 const { generateShortUuid } = require('../../shared/util/generate-uuid.js');
@@ -31,6 +32,11 @@ const WEEK_COLS = singleLineString`
   status, locked, late_unlocked, deadline_at, submittedby_userid, submitted_at,
   approvedby_userid, approved_at
 `;
+
+interface ResolvedParticipant {
+  targetType: string; targetId: string | null; targetName: string | null;
+  targetClass: string | null; targetText: string | null;
+}
 
 class AssemblyWeekService {
   // ── Week lifecycle ───────────────────────────────────────────────────────────
@@ -67,35 +73,44 @@ class AssemblyWeekService {
     const planDays = await this.planDays(week.planId, schoolId);
     const dates = WEEKDAY_VALUES.filter(wd => planDays.includes(wd)).map(wd => ({ wd, date: dateInWeek(week.weekStart, wd) }));
 
-    // Saved day headers + entries, keyed for merge.
-    const dayRows = await DB.query(singleLineString`select entry_date::text as entry_date, anchor1_student_id, anchor1_name, anchor1_class, anchor2_student_id, anchor2_name, anchor2_class, day_owner_employee_id, day_owner_name from assembly_roster_day where week_id = $1`, [weekId]);
-    const daysByDate = new Map<string, any>();
-    for (const r of dayRows) daysByDate.set(r.entryDate, r);
-    const entryRows = await DB.query(singleLineString`select entry_date::text as entry_date, node_id, opted, content, student_id, student_name, student_class, owner_employee_id, owner_name from assembly_roster_entry where week_id = $1`, [weekId]);
-    const entriesByKey = new Map<string, any>();
-    for (const r of entryRows) entriesByKey.set(`${r.entryDate}|${r.nodeId}`, r);
+    // Slot state (opted/content) keyed (date|node).
+    const entryRows = await DB.query(singleLineString`select entry_date::text as entry_date, node_id, opted, content from assembly_roster_entry where week_id = $1`, [weekId]);
+    const entryByKey = new Map<string, any>();
+    for (const r of entryRows) entryByKey.set(`${r.entryDate}|${r.nodeId}`, r);
+
+    // Participants: day-scope keyed by date; entry-scope keyed (date|node).
+    const partRows = await DB.query(
+      singleLineString`select entry_date::text as entry_date, scope, node_id, role, target_type, target_id, target_name, target_class, target_text, sort_order from assembly_roster_participant where week_id = $1 order by sort_order`,
+      [weekId],
+    );
+    const dayParts = new Map<string, any[]>();       // date -> rows (scope='day')
+    const entryParts = new Map<string, any[]>();      // date|node -> rows (scope='entry')
+    for (const r of partRows) {
+      if (r.scope === 'day') { (dayParts.get(r.entryDate) || dayParts.set(r.entryDate, []).get(r.entryDate)!).push(r); }
+      else { const k = `${r.entryDate}|${r.nodeId}`; (entryParts.get(k) || entryParts.set(k, []).get(k)!).push(r); }
+    }
+    const view = (r: any): RosterParticipantView => ({
+      role: r.role || undefined, targetType: r.targetType, targetId: r.targetId || undefined,
+      targetName: r.targetName || undefined, targetClass: r.targetClass || undefined,
+      targetText: r.targetText || undefined, sortOrder: r.sortOrder,
+    });
 
     const days: RosterDayView[] = [];
     for (const { wd, date } of dates) {
       const slots = (await this.fillableSlots(week.planId, schoolId, wd)).map(s => {
-        const e = entriesByKey.get(`${date}|${s.nodeId}`);
+        const e = entryByKey.get(`${date}|${s.nodeId}`);
         return {
           ...s,
           opted: e ? e.opted !== false : true,
           content: e?.content || undefined,
-          studentId: e?.studentId || undefined,
-          studentName: e?.studentName || undefined,
-          studentClass: e?.studentClass || undefined,
-          ownerEmployeeId: e?.ownerEmployeeId || undefined,
-          ownerName: e?.ownerName || undefined,
+          participants: (entryParts.get(`${date}|${s.nodeId}`) || []).map(view),
         } as RosterSlot;
       });
-      const d = daysByDate.get(date);
+      const dp = dayParts.get(date) || [];
       days.push({
         date, weekday: wd,
-        anchor1StudentId: d?.anchor1StudentId || undefined, anchor1Name: d?.anchor1Name || undefined, anchor1Class: d?.anchor1Class || undefined,
-        anchor2StudentId: d?.anchor2StudentId || undefined, anchor2Name: d?.anchor2Name || undefined, anchor2Class: d?.anchor2Class || undefined,
-        dayOwnerEmployeeId: d?.dayOwnerEmployeeId || undefined, dayOwnerName: d?.dayOwnerName || undefined,
+        anchors: dp.filter(r => r.role === 'anchor').map(view),
+        owners: dp.filter(r => r.role === 'day-owner').map(view),
         slots,
       });
     }
@@ -125,7 +140,6 @@ class AssemblyWeekService {
 
     const planDays = await this.planDays(week.planId, schoolId);
     const validDates = new Set(WEEKDAY_VALUES.filter(wd => planDays.includes(wd)).map(wd => dateInWeek(week.weekStart, wd)));
-    // Fillable node ids per weekday, to validate entries target real roster slots.
     const fillableByDate = new Map<string, Set<string>>();
     for (const date of validDates) {
       const slots = await this.fillableSlots(week.planId, schoolId, weekdayOf(date));
@@ -135,32 +149,36 @@ class AssemblyWeekService {
     const now = new Date();
     const queries: string[] = [];
     const params: any[][] = [];
+    const insertParticipant = (scope: 'day' | 'entry', date: string, nodeId: string | null, role: string | undefined, p: ResolvedParticipant, idx: number) => {
+      queries.push(singleLineString`insert into assembly_roster_participant (uuid, school_id, week_id, entry_date, scope, node_id, role, target_type, target_id, target_name, target_class, target_text, sort_order, createdby_userid, created_at) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`);
+      params.push([generateShortUuid(12), schoolId, weekId, date, scope, nodeId, role ?? null, p.targetType, p.targetId, p.targetName, p.targetClass, p.targetText, idx, userId, now]);
+    };
 
     if (Array.isArray(data.days)) {
-      queries.push(singleLineString`delete from assembly_roster_day where week_id = $1`); params.push([weekId]);
+      queries.push(singleLineString`delete from assembly_roster_participant where week_id = $1 and scope = 'day'`); params.push([weekId]);
       for (const day of data.days) {
         if (!validDates.has(day.date)) throw new BusinessErrorResult(ErrorCode.BusinessError, `Date ${day.date} is not an assembly day of this week`);
-        const a1 = await this.student(schoolId, day.anchor1StudentId, week.academicYearId);
-        const a2 = await this.student(schoolId, day.anchor2StudentId, week.academicYearId);
-        const owner = await this.employee(schoolId, day.dayOwnerEmployeeId);
-        if (this.dayEmpty(day, a1, a2, owner)) continue;
-        queries.push(singleLineString`insert into assembly_roster_day (uuid, school_id, week_id, entry_date, anchor1_student_id, anchor1_name, anchor1_class, anchor2_student_id, anchor2_name, anchor2_class, day_owner_employee_id, day_owner_name, createdby_userid, created_at) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`);
-        params.push([generateShortUuid(12), schoolId, weekId, day.date, a1?.id ?? null, a1?.name ?? null, a1?.className ?? null, a2?.id ?? null, a2?.name ?? null, a2?.className ?? null, owner?.id ?? null, owner?.name ?? null, userId, now]);
+        let idx = 0;
+        for (const a of day.anchors || []) insertParticipant('day', day.date, null, a.role || 'anchor', await this.resolveParticipant(schoolId, a, week.academicYearId), idx++);
+        for (const o of day.owners || []) insertParticipant('day', day.date, null, o.role || 'day-owner', await this.resolveParticipant(schoolId, o, week.academicYearId), idx++);
       }
     }
 
     if (Array.isArray(data.entries)) {
       queries.push(singleLineString`delete from assembly_roster_entry where week_id = $1`); params.push([weekId]);
+      queries.push(singleLineString`delete from assembly_roster_participant where week_id = $1 and scope = 'entry'`); params.push([weekId]);
       for (const e of data.entries) {
         if (!validDates.has(e.date)) throw new BusinessErrorResult(ErrorCode.BusinessError, `Date ${e.date} is not an assembly day of this week`);
         if (!fillableByDate.get(e.date)!.has(e.nodeId)) throw new BusinessErrorResult(ErrorCode.BusinessError, `Node ${e.nodeId} is not a roster slot on ${e.date}`);
-        const speaker = await this.student(schoolId, e.studentId, week.academicYearId);
-        const owner = await this.employee(schoolId, e.ownerEmployeeId);
         const content = (e.content ?? '').toString().trim() || null;
         const opted = e.opted === undefined ? true : !!e.opted;
-        if (this.entryEmpty(opted, content, speaker, owner)) continue;
-        queries.push(singleLineString`insert into assembly_roster_entry (uuid, school_id, week_id, entry_date, node_id, opted, content, student_id, student_name, student_class, owner_employee_id, owner_name, createdby_userid, created_at) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`);
-        params.push([generateShortUuid(12), schoolId, weekId, e.date, e.nodeId, opted, content, speaker?.id ?? null, speaker?.name ?? null, speaker?.className ?? null, owner?.id ?? null, owner?.name ?? null, userId, now]);
+        const parts = e.participants || [];
+        // Only persist a slot that carries signal: opted-out, content, or people.
+        if (opted && !content && parts.length === 0) continue;
+        queries.push(singleLineString`insert into assembly_roster_entry (uuid, school_id, week_id, entry_date, node_id, opted, content, createdby_userid, created_at) values ($1,$2,$3,$4,$5,$6,$7,$8,$9)`);
+        params.push([generateShortUuid(12), schoolId, weekId, e.date, e.nodeId, opted, content, userId, now]);
+        let idx = 0;
+        for (const p of parts) insertParticipant('entry', e.date, e.nodeId, p.role, await this.resolveParticipant(schoolId, p, week.academicYearId), idx++);
       }
     }
 
@@ -253,16 +271,15 @@ class AssemblyWeekService {
   }
 
   // The template nodes the house fills for a weekday: fill_mode='roster' or optional.
-  private async fillableSlots(planId: string, schoolId: string, weekday: Weekday): Promise<RosterSlot[]> {
+  private async fillableSlots(planId: string, schoolId: string, weekday: Weekday): Promise<Omit<RosterSlot, 'opted' | 'content' | 'participants'>[]> {
     const tree = await assemblyNodeService.getFilteredTree(planId, schoolId, weekday);
-    const out: RosterSlot[] = [];
+    const out: Omit<RosterSlot, 'opted' | 'content' | 'participants'>[] = [];
     const walk = (nodes: AssemblyNodeDetail[]) => {
       for (const n of nodes) {
         if (n.fillMode === 'roster' || n.isOptional === true) {
           out.push({
             nodeId: n.uuid, title: n.title, depth: n.depth, parentId: n.parentId || undefined,
             fillMode: n.fillMode, isOptional: n.isOptional === true, options: n.options || [],
-            opted: true,
           });
         }
         if (n.children && n.children.length) walk(n.children);
@@ -272,27 +289,27 @@ class AssemblyWeekService {
     return out;
   }
 
-  private async student(schoolId: string, studentId: string | null | undefined, ay: string): Promise<{ id: string; name?: string; className?: string } | null> {
-    if (!studentId) return null;
-    const info = await resolveStudentInfo(schoolId, studentId, ay);
-    if (!info) throw new BusinessErrorResult(ErrorCode.BusinessError, `Invalid student id: ${studentId}`);
-    return { id: studentId, name: info.name, className: info.className };
-  }
-
-  private async employee(schoolId: string, employeeId: string | null | undefined): Promise<{ id: string; name?: string } | null> {
-    if (!employeeId) return null;
-    const found = await findEmployee(schoolId, employeeId);
-    if (!found) throw new BusinessErrorResult(ErrorCode.BusinessError, `Invalid employee id: ${employeeId}`);
-    return { id: employeeId, name: found.name };
-  }
-
-  private dayEmpty(day: SaveRosterDayInput, a1: any, a2: any, owner: any): boolean {
-    return !a1 && !a2 && !owner;
-  }
-
-  private entryEmpty(opted: boolean, content: string | null, speaker: any, owner: any): boolean {
-    // An opted-OUT optional slot is meaningful (it hides the segment) — keep it.
-    return opted && !content && !speaker && !owner;
+  // Validate + denormalize one participant (mirrors assembly_node_responsible rules).
+  private async resolveParticipant(schoolId: string, e: RosterParticipantInput, ay: string): Promise<ResolvedParticipant> {
+    if (!RESPONSIBLE_TARGET_TYPE_VALUES.includes(e.targetType)) throw new BusinessErrorResult(ErrorCode.BusinessError, `Invalid targetType: ${e.targetType}`);
+    if (e.targetType === 'text') {
+      if (!e.targetText || !e.targetText.trim()) throw new BusinessErrorResult(ErrorCode.BusinessError, 'targetText is required for a text participant');
+      return { targetType: 'text', targetId: null, targetName: null, targetClass: null, targetText: e.targetText.trim() };
+    }
+    if (!e.targetId) throw new BusinessErrorResult(ErrorCode.BusinessError, `targetId is required for a ${e.targetType} participant`);
+    if (e.targetType === 'student') {
+      const info = await resolveStudentInfo(schoolId, e.targetId, ay);
+      if (!info) throw new BusinessErrorResult(ErrorCode.BusinessError, `Invalid student id: ${e.targetId}`);
+      return { targetType: 'student', targetId: e.targetId, targetName: info.name, targetClass: info.className ?? null, targetText: null };
+    }
+    if (e.targetType === 'employee') {
+      const emp = await findEmployee(schoolId, e.targetId);
+      if (!emp) throw new BusinessErrorResult(ErrorCode.BusinessError, `Invalid employee id: ${e.targetId}`);
+      return { targetType: 'employee', targetId: e.targetId, targetName: emp.name, targetClass: null, targetText: null };
+    }
+    const cls = await findClass(schoolId, e.targetId);
+    if (!cls) throw new BusinessErrorResult(ErrorCode.BusinessError, `Invalid class id: ${e.targetId}`);
+    return { targetType: 'class', targetId: e.targetId, targetName: cls.name, targetClass: null, targetText: null };
   }
 }
 

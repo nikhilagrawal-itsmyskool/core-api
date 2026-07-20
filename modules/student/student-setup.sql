@@ -29,6 +29,24 @@ create table if not exists house (
 create index if not exists idx_house_school_status on house(school_id, status);
 create unique index if not exists idx_house_code_unique on house(school_id, lower(code)) where status = 'active';
 
+-- Table 1b: house_teacher — a house's staff (in-charge / co-in-charge / member
+-- teachers). A house-domain concept (independent of assembly); consumers like the
+-- assembly module read it for house-on-duty display.
+create table if not exists house_teacher (
+    uuid varchar(12) primary key,
+    school_id varchar(12) not null,
+    house_id varchar(12) not null,
+    employee_id varchar(12) not null,
+    role varchar(16) not null check (role in ('incharge', 'coincharge', 'member')),
+    status varchar(16) not null check (status in ('active', 'deleted')),
+    createdby_userid varchar(12),
+    created_at timestamp(0),
+    updatedby_userid varchar(12),
+    updated_at timestamp(0)
+);
+create unique index if not exists idx_house_teacher_unique on house_teacher(house_id, employee_id) where status = 'active';
+create index if not exists idx_house_teacher_house on house_teacher(school_id, house_id) where status = 'active';
+
 -- student.house_id — lifelong House assignment (nullable; survives promotion).
 alter table student add column if not exists house_id varchar(12);
 

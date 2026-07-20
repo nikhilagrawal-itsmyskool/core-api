@@ -4,7 +4,7 @@ import { ErrorCode } from '../../shared/lib/error-codes';
 import { validateSchoolCodeHeader } from '../auth/auth-utils';
 import { studentService } from './student-service';
 import { houseService } from './house-service';
-import { CreateHouseRequest, UpdateHouseRequest } from './student-interfaces';
+import { CreateHouseRequest, UpdateHouseRequest, SetHouseTeachersRequest } from './student-interfaces';
 
 function userId(event: ApiEvent): string {
   return event.requestContext?.authorizer?.principalId || 'system';
@@ -94,6 +94,38 @@ class HouseHandler {
     }
   };
 
+  // GET /houses/{id}/teachers
+  public listTeachers = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
+    _context.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const schoolId = await this.resolveSchool(event, callback);
+      if (!schoolId) return;
+      const id = event.pathParameters?.id;
+      if (!id) { ResponseBuilder.badRequest(ErrorCode.MissingId, 'House ID is required', callback); return; }
+      const result = await houseService.listTeachers(id, schoolId);
+      ResponseBuilder.ok({ teachers: result }, callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
+  // PUT /houses/{id}/teachers  body { teachers: [{ employeeId, role }] }
+  public setTeachers = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
+    _context.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const schoolId = await this.resolveSchool(event, callback);
+      if (!schoolId) return;
+      const id = event.pathParameters?.id;
+      if (!id) { ResponseBuilder.badRequest(ErrorCode.MissingId, 'House ID is required', callback); return; }
+      if (!event.body) { ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'Request body is required', callback); return; }
+      const body: SetHouseTeachersRequest = JSON.parse(event.body);
+      const result = await houseService.setTeachers(id, body.teachers, schoolId, userId(event));
+      ResponseBuilder.ok({ teachers: result }, callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
   // PUT /students/{id}/house  body { houseId: string | null }
   public assign = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
     _context.callbackWaitsForEmptyEventLoop = false;
@@ -120,4 +152,6 @@ export const create = handler.create;
 export const getById = handler.getById;
 export const update = handler.update;
 export const remove = handler.remove;
+export const listTeachers = handler.listTeachers;
+export const setTeachers = handler.setTeachers;
 export const assign = handler.assign;

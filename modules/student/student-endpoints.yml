@@ -103,6 +103,24 @@
           method: delete
           cors: true
 
+  list-house-teachers:
+    handler: house-handler.listTeachers
+    name: ${self:service}-list-house-teachers
+    events:
+      - http:
+          path: houses/{id}/teachers
+          method: get
+          cors: true
+
+  set-house-teachers:
+    handler: house-handler.setTeachers
+    name: ${self:service}-set-house-teachers
+    events:
+      - http:
+          path: houses/{id}/teachers
+          method: put
+          cors: true
+
   # ---- Lookups (per-school reference data) ----
   list-lookups:
     handler: student-lookup-handler.list

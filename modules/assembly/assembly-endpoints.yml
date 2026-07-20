@@ -42,12 +42,12 @@
           path: houses
           method: get
           cors: true
-  set-house-meta:
-    handler: assembly-house-handler.setHouseMeta
-    name: ${self:service}-set-house-meta
+  set-house-rotation:
+    handler: assembly-house-handler.setRotation
+    name: ${self:service}-set-house-rotation
     events:
       - http:
-          path: houses/{id}
+          path: houses/{id}/rotation
           method: put
           cors: true
   get-rotation:

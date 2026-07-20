@@ -42,6 +42,7 @@ export const NODE_AUDIT_ACTIONS = ['create', 'update', 'delete', 'reorder'] as c
 export const ASSEMBLY_MODES = ['template', 'house'] as const;
 export const FILL_MODES = ['auto', 'roster'] as const;
 export const WEEK_STATUSES = ['draft', 'submitted', 'approved'] as const;
+export const CHECKLIST_SCOPES = ['week', 'day'] as const;
 export const RESPONSIBLE_MODES = ['fixed', 'rotating'] as const;
 export const CYCLE_UNITS = [
   { value: 'weekly', label: 'Weekly' },
@@ -60,6 +61,7 @@ export type CycleUnit = typeof CYCLE_UNIT_VALUES[number];
 export type AssemblyMode = typeof ASSEMBLY_MODES[number];
 export type FillMode = typeof FILL_MODES[number];
 export type WeekStatus = typeof WEEK_STATUSES[number];
+export type ChecklistScope = typeof CHECKLIST_SCOPES[number];
 
 export const DEFAULTS = {
   STATUS: 'active' as const,

@@ -31,6 +31,7 @@ alter table student drop column if exists withdrawal_date;
 alter table student drop column if exists withdrawal_remarks;
 
 drop table if exists student_guardian;
+drop table if exists house_teacher;
 drop table if exists house;
 
 drop index if exists idx_student_class_roll_unique;

@@ -1,17 +1,21 @@
 -- Assembly Module Schema Rollback
 -- Drops all assembly tables. Safe to re-run (IF EXISTS guards).
 
+-- House mode Phase C (checklist)
+drop table if exists assembly_checklist_signoff;
+drop table if exists assembly_checklist_tick;
+drop table if exists assembly_checklist_item;
+
 -- House mode Phase B (weekly roster)
 drop table if exists assembly_week_unlock;
+drop table if exists assembly_roster_participant;
 drop table if exists assembly_roster_entry;
-drop table if exists assembly_roster_day;
 drop table if exists assembly_week;
 
 -- House mode (Phase A)
 drop table if exists assembly_node_day_content;
 drop table if exists assembly_week_house;
-drop table if exists assembly_house_teacher;
-drop table if exists assembly_house_meta;
+drop table if exists assembly_house_rotation;
 drop table if exists assembly_school_config;
 
 drop table if exists assembly_node_audit;

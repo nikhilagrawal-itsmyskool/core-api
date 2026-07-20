@@ -303,24 +303,42 @@ describe('house mode: weekly roster', () => {
 
   it('saves a roster, approves it, and overlays it onto resolve', async () => {
     const save = await api('PUT', `/weeks/${weekId}/roster`, {
+      // Day anchors (polymorphic participants, incl. a free-text anchor + a group).
+      days: [
+        { date: MON, anchors: [{ targetType: 'text', targetText: 'Head Girl' }, { targetType: 'class', targetId: seed.classIds[0] }] },
+      ],
       entries: [
-        { date: MON, nodeId: rosterNode, content: 'Speech on Courage' },
+        // A skit slot: content + a GROUP of performers (two classes) on one node.
+        {
+          date: MON, nodeId: rosterNode, content: 'Speech on Courage',
+          participants: [
+            { role: 'presenter', targetType: 'class', targetId: seed.classIds[0] },
+            { role: 'performer', targetType: 'class', targetId: seed.classIds[1] },
+          ],
+        },
         { date: MON, nodeId: optionalNode, opted: false }, // hide the optional segment
       ],
     });
     expect(save.status).toBe(200);
+    const monDay = save.body.days.find((d: any) => d.date === MON);
+    expect(monDay.anchors).toHaveLength(2);           // N anchors, not capped at 2 columns
+    const savedSlot = monDay.slots.find((s: any) => s.nodeId === rosterNode);
+    expect(savedSlot.participants).toHaveLength(2);    // a group on one slot
 
     expect((await api('POST', `/weeks/${weekId}/submit`)).body.status).toBe('submitted');
     const approved = await api('POST', `/weeks/${weekId}/approve`);
     expect(approved.body.status).toBe('approved');
     expect(approved.body.locked).toBe(true);
 
-    // Resolve now overlays the approved roster: filled content + pruned optional.
+    // Resolve now overlays the approved roster: filled content, group of performers,
+    // anchors surfaced, and the opted-out optional segment pruned.
     const r = await api('GET', `/resolve?planId=${planId}&date=${MON}`);
     expect(r.body.mode).toBe('house');
     expect(r.body.rosterApproved).toBe(true);
+    expect((r.body.anchors || []).map((a: any) => a.name)).toContain('Head Girl');
     const pres = r.body.nodes.find((n: any) => n.title === 'Presentation');
     expect(pres.content).toBe('Speech on Courage');
+    expect(pres.responsible).toHaveLength(2);          // the performer group
     expect(titlesOf(r.body.nodes)).not.toContain('Special Item'); // opted out
   });
 
