@@ -51,6 +51,28 @@ export async function findStudent(schoolId: string, studentId: string): Promise<
   return rows.length > 0 ? rows[0] : null;
 }
 
+// Resolve a student's display name + their class name within an academic year
+// (for denormalizing roster speakers/anchors). Returns null when not found.
+export async function resolveStudentInfo(
+  schoolId: string, studentId: string, academicYearId?: string,
+): Promise<{ name: string; className?: string } | null> {
+  const params: any[] = [studentId, schoolId];
+  let ayJoin = '';
+  if (academicYearId) { params.push(academicYearId); ayJoin = ` and sc.academic_year_id = $${params.length}`; }
+  const rows = await DB.query(
+    singleLineString`
+      select s.name, c.name as class_name
+      from student s
+      left join student_class sc on sc.student_id = s.uuid and sc.school_id = s.school_id and sc.status = 'active'${ayJoin}
+      left join class c on c.uuid = sc.class_id
+      where s.uuid = $1 and s.school_id = $2 and s.status = 'active'
+      limit 1
+    `,
+    params,
+  );
+  return rows.length > 0 ? { name: rows[0].name, className: rows[0].className || undefined } : null;
+}
+
 // Resolve a set of ids of one entity type -> { id: name } for denormalized display.
 async function resolveNames(schoolId: string, table: string, ids: (string | undefined | null)[]): Promise<Record<string, string>> {
   const unique = [...new Set(ids.filter((x): x is string => !!x))];

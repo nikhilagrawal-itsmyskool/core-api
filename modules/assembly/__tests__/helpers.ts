@@ -71,16 +71,30 @@ export async function cleanupPlan(planId: string): Promise<void> {
   const owners = [planId, ...specials];
   const ids = (await p.query(`select uuid from assembly_node where owner_id = any($1)`, [owners])).rows.map(r => r.uuid);
   if (ids.length) {
-    for (const t of ['assembly_node_day', 'assembly_node_responsible', 'assembly_node_resource', 'assembly_node_audit']) {
+    for (const t of ['assembly_node_day', 'assembly_node_responsible', 'assembly_node_resource', 'assembly_node_audit', 'assembly_node_day_content']) {
       await p.query(`delete from ${t} where node_id = any($1)`, [ids]);
     }
     await p.query(`delete from assembly_node where owner_id = any($1)`, [owners]);
   }
+  // House-mode weekly roster rows hanging off this plan's weeks.
+  const weeks = (await p.query(`select uuid from assembly_week where plan_id = $1`, [planId])).rows.map(r => r.uuid);
+  if (weeks.length) {
+    for (const t of ['assembly_roster_entry', 'assembly_roster_day', 'assembly_week_unlock']) {
+      await p.query(`delete from ${t} where week_id = any($1)`, [weeks]);
+    }
+    await p.query(`delete from assembly_week where plan_id = $1`, [planId]);
+  }
+  await p.query(`delete from assembly_week_house where plan_id = $1`, [planId]);
   await p.query(`delete from assembly_special where plan_id = $1`, [planId]);
   await p.query(`delete from assembly_theme where plan_id = $1`, [planId]);
   await p.query(`delete from assembly_plan_class where plan_id = $1`, [planId]);
   await p.query(`delete from assembly_plan_day where plan_id = $1`, [planId]);
   await p.query(`delete from assembly_plan where uuid = $1`, [planId]);
+}
+
+// Remove the per-school assembly config row (restores default 'template' mode).
+export async function resetAssemblyConfig(schoolId: string): Promise<void> {
+  await getPool().query(`delete from assembly_school_config where school_id = $1`, [schoolId]);
 }
 
 export async function deleteThemeById(themeId: string): Promise<void> {

@@ -101,8 +101,20 @@ evaluator **grading** → weekly average → **house-of-the-month**).
   provider locally; register templates like transport/attendance.
 
 ## Phases
-- **A — Houses + mode + rotation** (backend + admin Houses/Rotation screens; `assembly_mode`, `fill_mode`, `assembly-incharge` role/perms).
-- **B — Weekly roster + finalize/approve/lock + resolve overlay** (backend + admin roster editor + PWA roster editing + student-app house-on-duty).
-- **C — Checklist** (config + tick; PWA ticking).
-- **D — Grading + rubric + evaluators + leaderboard** (backend + admin + PWA grade entry + student-app leaderboard).
+- **A — Houses + mode + rotation** — backend ✅ (commit `76411e4`; migration `assembly-migrate-3`). Admin Houses/Rotation screens still pending (batched with the UI phase).
+- **B — Weekly roster + finalize/approve/lock + resolve overlay** — backend ✅ (migration `assembly-migrate-4-roster`). Admin roster editor + PWA roster editing + student-app house-on-duty batched with the UI phase.
+- **C — Checklist** (config + tick; PWA ticking). ⏳ not started.
+- **D — Grading + rubric + evaluators + leaderboard** (backend + admin + PWA grade entry + student-app leaderboard). ⏳ not started.
 - Deploy: build/commit/push per phase; prod DB migrations + serverless deploy once at the end (prod not half-shipped).
+- **Frontend**: per the agreed sequencing, all admin-portal + PWA + student-app UI for A–D is built as one batch AFTER the backend phases, before the single end-deploy.
+
+### Phase B backend — as built
+- Tables `assembly_week` (per plan/wing, per week; `draft→submitted→approved`=locked), `assembly_roster_day` (per-day anchors + day owner), `assembly_roster_entry` (per day+roster-node opt-in/content/student speaker/owner), `assembly_week_unlock` (audit).
+- Endpoints: `POST/GET /plans/{id}/weeks` (ensure idempotent / list), `GET /weeks/{id}` (editor read model = week + each assembly date's fillable slots), `PUT /weeks/{id}/roster` (bulk replace-per-kind, editable-gated), `POST /weeks/{id}/{submit|approve|unlock}`.
+- **House-on-duty snapshot** taken at week-create from the per-plan rotation; a skip week has no house.
+- **Deadline / lock**: `deadline_at` = Wed 14:00 of the prior week; editing is gated on `locked` + status + deadline (with a recorded `unlock` to re-open late). The *lock* is enforced at write-time (no scheduler needed).
+- **Resolve overlay**: in `house` mode `resolve` attaches the house-on-duty and, when an **approved** roster exists, overlays it onto the template — fills `roster` slot content, sets the speaker/owner as effective responsible, prunes opted-out optional nodes, and attaches the day's anchors + owner. Specials get the house label but no roster overlay.
+
+### Deferred (Phase B follow-ups, schema-ready)
+- **Reminder / missed-deadline notifications**: the ~10-day / 3-day / deadline-morning reminders and the missed-deadline *notify* (communication module + a scheduled drain job, like timetable/communication). The lock behaviour already works without it; only the proactive messaging is outstanding.
+- **Role enforcement** (`assembly-incharge`, derived house-in-charge/evaluator) at the service layer — currently, like the rest of the module, actions are open behind the authorizer; wire per-action gates when the role lands.

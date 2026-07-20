@@ -14,6 +14,17 @@
 --   assembly_special           - a dated snapshot that replaces the plan for one date
 --   assembly_theme             - value-of-the-week; a date range, informational only
 --   assembly_node_audit        - append-only node change log
+--   -- House mode (optional per-school extension; inert for template schools):
+--   assembly_school_config     - per-school mode (template|house) + branding
+--   assembly_house_meta        - house leadership + rotation order (extends student-module house)
+--   assembly_house_teacher     - house member teachers (employees)
+--   assembly_week_house        - manual per-week rotation override, per plan/wing
+--   assembly_node_day_content  - per-weekday content grid on a leaf node
+--   -- House mode Phase B (weekly roster):
+--   assembly_week              - per (plan/wing, week) roster instance; draft->submitted->approved(=locked)
+--   assembly_roster_day        - per-day anchors (MCs) + day owner
+--   assembly_roster_entry      - per (day, roster node) opt-in/content/student speaker/owner
+--   assembly_week_unlock       - audit of late/locked-week unlocks
 
 -- Table 1: assembly_plan (per-wing weekly template)
 create table if not exists assembly_plan (
@@ -31,6 +42,8 @@ create table if not exists assembly_plan (
     start_date date,
     end_date date,
     priority integer,
+    -- House-mode: the Monday this wing's house rotation cycles from (see assembly_house_meta).
+    rotation_anchor date,
     status varchar(16) not null check (status in ('active', 'deleted')),
     createdby_userid varchar(12),
     created_at timestamp(0),
@@ -96,6 +109,12 @@ create table if not exists assembly_node (
     outcome text,
     start_time varchar(8),
     duration_minutes integer,
+    -- House-mode template grid. fill_mode null/'auto' = fixed template content;
+    -- 'roster' = a slot the house fills weekly. is_optional = can be opted in/out per day.
+    -- options = newline-separated pick-one choices. All ignored in 'template' mode.
+    fill_mode varchar(16),
+    is_optional boolean,
+    options text,
     status varchar(16) not null check (status in ('active', 'deleted')),
     createdby_userid varchar(12),
     created_at timestamp(0),
@@ -228,3 +247,161 @@ create table if not exists assembly_node_audit (
 );
 
 create index if not exists idx_assembly_node_audit_node on assembly_node_audit(school_id, node_id);
+
+-- ---------------------------------------------------------------------------
+-- House mode (Phase A). Optional per-school extension. These tables stay empty
+-- and menus hidden for 'template' schools — zero added surface. Kept in parity
+-- with assembly-migrate-3-house-mode.sql for fresh installs.
+-- ---------------------------------------------------------------------------
+
+-- Table 11: assembly_school_config (per-school mode + optional branding)
+create table if not exists assembly_school_config (
+    school_id varchar(12) primary key,
+    mode varchar(16) not null check (mode in ('template', 'house')),
+    title varchar(160),
+    subtitle varchar(200),
+    createdby_userid varchar(12),
+    created_at timestamp(0),
+    updatedby_userid varchar(12),
+    updated_at timestamp(0)
+);
+
+-- Table 12: assembly_house_meta (house leadership + rotation order; extends student-module `house`)
+create table if not exists assembly_house_meta (
+    house_id varchar(12) primary key,
+    school_id varchar(12) not null,
+    incharge_id varchar(12),
+    coincharge_id varchar(12),
+    rotation_order integer,
+    createdby_userid varchar(12),
+    created_at timestamp(0),
+    updatedby_userid varchar(12),
+    updated_at timestamp(0)
+);
+create index if not exists idx_assembly_house_meta_school on assembly_house_meta(school_id);
+
+-- Table 13: assembly_house_teacher (house member teachers / employees)
+create table if not exists assembly_house_teacher (
+    uuid varchar(12) primary key,
+    school_id varchar(12) not null,
+    house_id varchar(12) not null,
+    employee_id varchar(12) not null,
+    status varchar(16) not null check (status in ('active', 'deleted')),
+    createdby_userid varchar(12),
+    created_at timestamp(0),
+    updatedby_userid varchar(12),
+    updated_at timestamp(0)
+);
+create unique index if not exists idx_assembly_house_teacher_unique on assembly_house_teacher(house_id, employee_id) where status = 'active';
+create index if not exists idx_assembly_house_teacher_house on assembly_house_teacher(school_id, house_id);
+
+-- Table 14: assembly_week_house (manual per-week rotation override, PER PLAN/wing)
+-- house_id set = re-anchors the cycle from that house going forward; null = "skip" (no shift).
+create table if not exists assembly_week_house (
+    uuid varchar(12) primary key,
+    school_id varchar(12) not null,
+    plan_id varchar(12) not null,
+    week_start date not null,
+    house_id varchar(12),
+    createdby_userid varchar(12),
+    created_at timestamp(0),
+    updatedby_userid varchar(12),
+    updated_at timestamp(0)
+);
+create unique index if not exists idx_assembly_week_house_unique on assembly_week_house(plan_id, week_start);
+
+-- Table 15: assembly_node_day_content (per-weekday content grid on a leaf node)
+create table if not exists assembly_node_day_content (
+    uuid varchar(12) primary key,
+    school_id varchar(12) not null,
+    node_id varchar(12) not null,
+    weekday varchar(3) not null check (weekday in ('mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun')),
+    content text,
+    createdby_userid varchar(12),
+    created_at timestamp(0)
+);
+create unique index if not exists idx_assembly_node_day_content_unique on assembly_node_day_content(node_id, weekday);
+
+-- ---------------------------------------------------------------------------
+-- House mode Phase B: the weekly roster (draft -> submitted -> approved=locked).
+-- Kept in parity with assembly-migrate-4-roster.sql for fresh installs.
+-- ---------------------------------------------------------------------------
+
+-- Table 16: assembly_week (per plan/wing, per week roster instance)
+create table if not exists assembly_week (
+    uuid varchar(12) primary key,
+    school_id varchar(12) not null,
+    plan_id varchar(12) not null,
+    academic_year_id varchar(12) not null,
+    week_start date not null,                 -- Monday
+    house_id varchar(12),                      -- snapshot of house-on-duty (null = skip week)
+    house_name varchar(128),
+    status varchar(16) not null check (status in ('draft', 'submitted', 'approved')),
+    locked boolean,                            -- true once approved (hard lock)
+    late_unlocked boolean,                     -- assembly-incharge re-opened editing past deadline/lock
+    deadline_at timestamp(0),
+    submittedby_userid varchar(12),
+    submitted_at timestamp(0),
+    approvedby_userid varchar(12),
+    approved_at timestamp(0),
+    createdby_userid varchar(12),
+    created_at timestamp(0),
+    updatedby_userid varchar(12),
+    updated_at timestamp(0)
+);
+create unique index if not exists idx_assembly_week_unique on assembly_week(plan_id, week_start);
+create index if not exists idx_assembly_week_school_year on assembly_week(school_id, academic_year_id);
+
+-- Table 17: assembly_roster_day (per-day anchors + day owner)
+create table if not exists assembly_roster_day (
+    uuid varchar(12) primary key,
+    school_id varchar(12) not null,
+    week_id varchar(12) not null,
+    entry_date date not null,
+    anchor1_student_id varchar(12),
+    anchor1_name varchar(160),
+    anchor1_class varchar(128),
+    anchor2_student_id varchar(12),
+    anchor2_name varchar(160),
+    anchor2_class varchar(128),
+    day_owner_employee_id varchar(12),
+    day_owner_name varchar(160),
+    createdby_userid varchar(12),
+    created_at timestamp(0),
+    updatedby_userid varchar(12),
+    updated_at timestamp(0)
+);
+create unique index if not exists idx_assembly_roster_day_unique on assembly_roster_day(week_id, entry_date);
+
+-- Table 18: assembly_roster_entry (per day+roster node: opt-in/content/speaker/owner)
+create table if not exists assembly_roster_entry (
+    uuid varchar(12) primary key,
+    school_id varchar(12) not null,
+    week_id varchar(12) not null,
+    entry_date date not null,
+    node_id varchar(12) not null,
+    opted boolean,                             -- optional segment opted in (null/true = shown)
+    content text,
+    student_id varchar(12),
+    student_name varchar(160),
+    student_class varchar(128),
+    owner_employee_id varchar(12),
+    owner_name varchar(160),
+    createdby_userid varchar(12),
+    created_at timestamp(0),
+    updatedby_userid varchar(12),
+    updated_at timestamp(0)
+);
+create unique index if not exists idx_assembly_roster_entry_unique on assembly_roster_entry(week_id, entry_date, node_id);
+create index if not exists idx_assembly_roster_entry_week on assembly_roster_entry(week_id);
+
+-- Table 19: assembly_week_unlock (audit of late/locked-week unlocks)
+create table if not exists assembly_week_unlock (
+    uuid varchar(12) primary key,
+    school_id varchar(12) not null,
+    week_id varchar(12) not null,
+    reason text,
+    unlockedby_userid varchar(12),
+    unlocked_at timestamp(0)
+);
+create index if not exists idx_assembly_week_unlock_week on assembly_week_unlock(week_id);

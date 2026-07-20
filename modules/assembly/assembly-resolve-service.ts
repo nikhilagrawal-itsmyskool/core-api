@@ -2,16 +2,25 @@ import { DB, singleLineString } from '../../shared/lib/db';
 import { BusinessErrorResult } from '../../shared/lib/errors';
 import { ErrorCode } from '../../shared/lib/error-codes';
 import {
-  AssemblyNodeDetail, ResolvedAssembly, ResolvedNode, NodeResponsibleView,
+  AssemblyNodeDetail, ResolvedAssembly, ResolvedNode, NodeResponsibleView, ResolvedAnchor,
 } from './assembly-interfaces';
 import { Weekday } from './assembly-constants';
 import { assemblyNodeService } from './assembly-node-service';
 import { assemblyThemeService } from './assembly-theme-service';
+import { assemblyHouseService } from './assembly-house-service';
 import { isValidDate } from './assembly-common';
 
 function weekdayOf(dateStr: string): Weekday {
   const map: Weekday[] = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
   return map[new Date(`${dateStr}T00:00:00Z`).getUTCDay()];
+}
+
+const isoDate = (d: Date) => d.toISOString().slice(0, 10);
+function mondayOf(dateStr: string): string {
+  const d = new Date(`${dateStr}T00:00:00Z`);
+  const dow = d.getUTCDay();
+  d.setUTCDate(d.getUTCDate() + (dow === 0 ? -6 : 1 - dow));
+  return isoDate(d);
 }
 
 interface ResolveOptions {
@@ -50,10 +59,11 @@ class AssemblyResolveService {
     );
     if (sp.length > 0) {
       const nested = await assemblyNodeService.getTree('special', sp[0].uuid, schoolId);
-      return {
+      // A special replaces the day; no roster overlay, but still surface the house on duty.
+      return this.withHouseMode({
         planId, date, weekday, held: true, source: 'special', specialId: sp[0].uuid, title: sp[0].title,
         themes, nodes: this.toResolved(nested, [], date),
-      };
+      }, schoolId);
     }
 
     // Otherwise the day-filtered template, but only if the plan runs that weekday.
@@ -65,7 +75,82 @@ class AssemblyResolveService {
     if (!planDays.includes(weekday)) return notHeld();
 
     const nested = await assemblyNodeService.getFilteredTree(planId, schoolId, weekday);
-    return { planId, date, weekday, held: true, source: 'template', themes, nodes: this.toResolved(nested, [], date) };
+    const result: ResolvedAssembly = { planId, date, weekday, held: true, source: 'template', themes, nodes: this.toResolved(nested, [], date) };
+    return this.withHouseMode(result, schoolId);
+  }
+
+  // House-mode enrichment: attach the house on duty for the date's week and, when
+  // an APPROVED roster exists, overlay it onto the template (fill 'roster' slots,
+  // prune opted-out optional nodes, attach the day's anchors/owner). No-op for
+  // template-mode schools. Specials get the house label but no roster overlay.
+  private async withHouseMode(result: ResolvedAssembly, schoolId: string): Promise<ResolvedAssembly> {
+    const config = await assemblyHouseService.getConfig(schoolId);
+    if (config.mode !== 'house') return result;
+    result.mode = 'house';
+
+    const weekStart = mondayOf(result.date);
+    const house = await assemblyHouseService.houseForWeek(result.planId, schoolId, weekStart);
+    if (house?.houseId) { result.houseId = house.houseId; result.houseName = house.houseName; }
+
+    const weekRows = await DB.query(
+      singleLineString`select uuid, house_id, house_name from assembly_week where plan_id = $1 and school_id = $2 and week_start = $3 and status = 'approved'`,
+      [result.planId, schoolId, weekStart],
+    );
+    if (weekRows.length === 0) { result.rosterApproved = false; return result; }
+    const weekId = weekRows[0].uuid;
+    // Prefer the roster's snapshot of the house on duty over the live rotation.
+    if (weekRows[0].houseId) { result.houseId = weekRows[0].houseId; result.houseName = weekRows[0].houseName || result.houseName; }
+    result.rosterApproved = true;
+
+    const dayRows = await DB.query(
+      singleLineString`
+        select anchor1_student_id, anchor1_name, anchor1_class, anchor2_student_id, anchor2_name, anchor2_class,
+          day_owner_employee_id, day_owner_name
+        from assembly_roster_day where week_id = $1 and entry_date = $2
+      `,
+      [weekId, result.date],
+    );
+    if (dayRows.length > 0) {
+      const d = dayRows[0];
+      const anchors: ResolvedAnchor[] = [];
+      if (d.anchor1StudentId || d.anchor1Name) anchors.push({ studentId: d.anchor1StudentId || undefined, name: d.anchor1Name || undefined, className: d.anchor1Class || undefined });
+      if (d.anchor2StudentId || d.anchor2Name) anchors.push({ studentId: d.anchor2StudentId || undefined, name: d.anchor2Name || undefined, className: d.anchor2Class || undefined });
+      if (anchors.length) result.anchors = anchors;
+      if (d.dayOwnerEmployeeId || d.dayOwnerName) result.dayOwner = { employeeId: d.dayOwnerEmployeeId || undefined, name: d.dayOwnerName || undefined };
+    }
+
+    // Roster only overlays the recurring template — specials are standalone.
+    if (result.source === 'template') {
+      const entryRows = await DB.query(
+        singleLineString`select node_id, opted, content, student_id, student_name, student_class, owner_employee_id, owner_name from assembly_roster_entry where week_id = $1 and entry_date = $2`,
+        [weekId, result.date],
+      );
+      const byNode = new Map<string, any>();
+      for (const r of entryRows) byNode.set(r.nodeId, r);
+      result.nodes = this.overlayRoster(result.nodes, byNode);
+    }
+    return result;
+  }
+
+  // Walk the resolved tree applying an approved roster: drop opted-out optional
+  // nodes (with their subtree), fill 'roster' slot content, and set the speaker/
+  // owner as the effective responsible when the roster names them.
+  private overlayRoster(nodes: ResolvedNode[], byNode: Map<string, any>): ResolvedNode[] {
+    const out: ResolvedNode[] = [];
+    for (const n of nodes) {
+      const e = byNode.get(n.uuid);
+      if (n.isOptional && e && e.opted === false) continue; // opted out → hide segment
+      if (n.fillMode === 'roster' && e) {
+        if (e.content) n.content = e.content;
+        const rostered: NodeResponsibleView[] = [];
+        if (e.studentId || e.studentName) rostered.push({ uuid: `roster-spk-${n.uuid}`, role: 'presenter', targetType: 'student', targetId: e.studentId || undefined, targetName: e.studentName || undefined, sortOrder: 0 });
+        if (e.ownerEmployeeId || e.ownerName) rostered.push({ uuid: `roster-own-${n.uuid}`, role: 'in-charge', targetType: 'employee', targetId: e.ownerEmployeeId || undefined, targetName: e.ownerName || undefined, sortOrder: 1 });
+        if (rostered.length) n.responsible = rostered;
+      }
+      n.children = this.overlayRoster(n.children || [], byNode);
+      out.push(n);
+    }
+    return out;
   }
 
   // The /me path: resolve the assembly for the app's active student by finding the
@@ -120,6 +205,8 @@ class AssemblyResolveService {
         startTime: n.startTime,
         durationMinutes: n.durationMinutes,
         sortOrder: n.sortOrder,
+        fillMode: n.fillMode,
+        isOptional: n.isOptional === true ? true : undefined,
         responsible: eff,
         resources: n.resources || [],
         children: this.toResolved(n.children || [], eff, date),

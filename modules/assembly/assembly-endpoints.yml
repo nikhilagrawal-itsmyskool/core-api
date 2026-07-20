@@ -67,6 +67,64 @@
           method: put
           cors: true
 
+  # ── House mode: weekly roster (Phase B) ─────────────────────────────────────
+  ensure-week:
+    handler: assembly-week-handler.ensure
+    name: ${self:service}-ensure-week
+    events:
+      - http:
+          path: plans/{id}/weeks
+          method: post
+          cors: true
+  list-weeks:
+    handler: assembly-week-handler.list
+    name: ${self:service}-list-weeks
+    events:
+      - http:
+          path: plans/{id}/weeks
+          method: get
+          cors: true
+  get-week:
+    handler: assembly-week-handler.getById
+    name: ${self:service}-get-week
+    events:
+      - http:
+          path: weeks/{id}
+          method: get
+          cors: true
+  save-roster:
+    handler: assembly-week-handler.saveRoster
+    name: ${self:service}-save-roster
+    events:
+      - http:
+          path: weeks/{id}/roster
+          method: put
+          cors: true
+  submit-week:
+    handler: assembly-week-handler.submit
+    name: ${self:service}-submit-week
+    events:
+      - http:
+          path: weeks/{id}/submit
+          method: post
+          cors: true
+  approve-week:
+    handler: assembly-week-handler.approve
+    name: ${self:service}-approve-week
+    events:
+      - http:
+          path: weeks/{id}/approve
+          method: post
+          cors: true
+  unlock-week:
+    handler: assembly-week-handler.unlock
+    name: ${self:service}-unlock-week
+    events:
+      - http:
+          path: weeks/{id}/unlock
+          method: post
+          cors: true
+
   # ── Plans ─────────────────────────────────────────────────────────────────
   create-plan:
     handler: assembly-plan-handler.create

@@ -9,6 +9,7 @@ import {
   CycleUnit,
   AssemblyMode,
   FillMode,
+  WeekStatus,
 } from './assembly-constants';
 
 // ── House mode: config, houses, rotation ─────────────────────────────────────
@@ -55,6 +56,109 @@ export interface WeekHouseView {
 export interface SetWeekHouseRequest {
   weekStart: string;
   houseId?: string | null; // null = skip (no house that week)
+}
+
+// ── House mode Phase B: weekly roster ────────────────────────────────────────
+
+// One roster instance for a plan/wing's week. Workflow: draft -> submitted ->
+// approved(=locked). house is the snapshot of the house-on-duty at create time.
+export interface AssemblyWeek {
+  uuid: string;
+  planId: string;
+  academicYearId: string;
+  weekStart: string;   // yyyy-mm-dd (Monday)
+  houseId?: string;    // null = a skip week (no house on duty)
+  houseName?: string;
+  status: WeekStatus;
+  locked: boolean;         // hard lock (set on approve)
+  lateUnlocked: boolean;   // assembly-incharge re-opened editing past deadline/lock
+  deadlineAt?: string;     // ISO; Wed 14:00 of the prior week
+  pastDeadline: boolean;   // computed: now > deadlineAt
+  editable: boolean;       // computed: may the roster still be edited
+  submittedbyUserid?: string;
+  submittedAt?: string;
+  approvedbyUserid?: string;
+  approvedAt?: string;
+}
+
+// A fillable template slot the house completes for a date (fill_mode='roster'
+// or is_optional). Carries the authored template context + the saved values.
+export interface RosterSlot {
+  nodeId: string;
+  title: string;
+  depth: number;
+  parentId?: string;
+  fillMode?: FillMode;
+  isOptional: boolean;
+  options: string[];
+  // Saved roster values for this (date, node), if any.
+  opted: boolean;       // optional segment opted in (defaults true)
+  content?: string;
+  studentId?: string;
+  studentName?: string;
+  studentClass?: string;
+  ownerEmployeeId?: string;
+  ownerName?: string;
+}
+
+export interface RosterDayView {
+  date: string;         // yyyy-mm-dd
+  weekday: Weekday;
+  anchor1StudentId?: string;
+  anchor1Name?: string;
+  anchor1Class?: string;
+  anchor2StudentId?: string;
+  anchor2Name?: string;
+  anchor2Class?: string;
+  dayOwnerEmployeeId?: string;
+  dayOwnerName?: string;
+  slots: RosterSlot[];
+}
+
+// Full editor read model: the week + each assembly date's day header + fillable slots.
+export interface AssemblyWeekDetail extends AssemblyWeek {
+  days: RosterDayView[];
+}
+
+export interface WeekSummary {
+  uuid: string;
+  planId: string;
+  weekStart: string;
+  houseId?: string;
+  houseName?: string;
+  status: WeekStatus;
+  locked: boolean;
+  editable: boolean;
+  pastDeadline: boolean;
+  deadlineAt?: string;
+}
+
+export interface EnsureWeekRequest {
+  weekStart: string; // any date in the target week; normalized to its Monday
+}
+
+// Bulk save of a week's roster (replace semantics per week).
+export interface SaveRosterRequest {
+  days?: SaveRosterDayInput[];
+  entries?: SaveRosterEntryInput[];
+}
+export interface SaveRosterDayInput {
+  date: string;
+  anchor1StudentId?: string | null;
+  anchor2StudentId?: string | null;
+  dayOwnerEmployeeId?: string | null;
+}
+export interface SaveRosterEntryInput {
+  date: string;
+  nodeId: string;
+  opted?: boolean;
+  content?: string | null;
+  studentId?: string | null;
+  ownerEmployeeId?: string | null;
+}
+
+export interface UnlockWeekRequest {
+  reason?: string;
 }
 
 export interface BaseEntity {
@@ -343,6 +447,20 @@ export interface ResolvedAssembly {
   title?: string; // special title, when source = 'special'
   themes: AssemblyTheme[];
   nodes: ResolvedNode[]; // top-level nodes, nested via children
+  // House mode: the house on duty that week + (when an approved roster exists) the
+  // day's anchors/owner. Absent for template-mode schools.
+  mode?: AssemblyMode;
+  houseId?: string;
+  houseName?: string;
+  rosterApproved?: boolean; // true when an approved roster was overlaid onto the template
+  anchors?: ResolvedAnchor[];
+  dayOwner?: { employeeId?: string; name?: string };
+}
+
+export interface ResolvedAnchor {
+  studentId?: string;
+  name?: string;
+  className?: string;
 }
 
 export interface ResolvedNode {
@@ -356,6 +474,8 @@ export interface ResolvedNode {
   startTime?: string;
   durationMinutes?: number;
   sortOrder: number;
+  fillMode?: FillMode;  // house mode: 'roster' slots are filled from the approved roster
+  isOptional?: boolean; // house mode: dropped when the roster opts it out
   responsible: NodeResponsibleView[]; // effective (own or inherited)
   resources: NodeResourceView[];
   children: ResolvedNode[];

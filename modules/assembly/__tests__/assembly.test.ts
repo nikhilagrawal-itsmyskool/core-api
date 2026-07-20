@@ -1,4 +1,4 @@
-import { api, getSeed, cleanupPlan, deleteThemeById, closePool, dateForWeekday, BASE_URL, headers } from './helpers';
+import { api, getSeed, cleanupPlan, deleteThemeById, resetAssemblyConfig, closePool, dateForWeekday, BASE_URL, headers } from './helpers';
 
 // Integration tests against a running assembly module (or the gateway).
 // Covers plans, the node tree (day subset + inheritance), special assemblies
@@ -32,6 +32,7 @@ beforeAll(async () => { seed = await getSeed(); });
 afterAll(async () => {
   for (const id of createdPlans) await cleanupPlan(id);
   for (const t of createdThemes) await deleteThemeById(t);
+  await resetAssemblyConfig(seed.schoolId); // restore default template mode
   await closePool();
 });
 
@@ -264,6 +265,76 @@ describe('time-aware responsibility', () => {
     expect(await perf('2026-04-08')).toBe(seed.classIds[0]); // week 0 → member 0
     expect(await perf('2026-04-15')).toBe(seed.classIds[1]); // week 1 → member 1
     expect(await perf('2026-04-22')).toBe(seed.classIds[0]); // week 2 → wraps to member 0
+  });
+});
+
+describe('house mode: weekly roster', () => {
+  // MON is a Monday in Sep 2026 → a valid week_start.
+  let planId: string;
+  let rosterNode: string;
+  let optionalNode: string;
+  let weekId: string;
+
+  beforeAll(async () => {
+    await api('PUT', '/config', { mode: 'house' });
+    const plan = await newPlan('HouseWing', ['mon']);
+    planId = plan.uuid;
+    rosterNode = (await api('POST', `/plans/${planId}/nodes`, { title: 'Presentation', fillMode: 'roster' })).body.uuid;
+    optionalNode = (await api('POST', `/plans/${planId}/nodes`, { title: 'Special Item', isOptional: true })).body.uuid;
+    await api('POST', `/plans/${planId}/publish`);
+  });
+
+  it('ensures a draft week (idempotent) and lists it', async () => {
+    const r = await api('POST', `/plans/${planId}/weeks`, { weekStart: MON });
+    expect(r.status).toBe(200);
+    expect(r.body.status).toBe('draft');
+    expect(r.body.editable).toBe(true);
+    weekId = r.body.uuid;
+    // Fillable slots surface the roster + optional nodes for the Monday.
+    const monDay = r.body.days.find((d: any) => d.date === MON);
+    expect(monDay.slots.map((s: any) => s.nodeId)).toEqual(expect.arrayContaining([rosterNode, optionalNode]));
+
+    const again = await api('POST', `/plans/${planId}/weeks`, { weekStart: MON });
+    expect(again.body.uuid).toBe(weekId); // idempotent
+
+    const list = await api('GET', `/plans/${planId}/weeks?from=${MON}&to=${MON}`);
+    expect(list.body.map((w: any) => w.uuid)).toContain(weekId);
+  });
+
+  it('saves a roster, approves it, and overlays it onto resolve', async () => {
+    const save = await api('PUT', `/weeks/${weekId}/roster`, {
+      entries: [
+        { date: MON, nodeId: rosterNode, content: 'Speech on Courage' },
+        { date: MON, nodeId: optionalNode, opted: false }, // hide the optional segment
+      ],
+    });
+    expect(save.status).toBe(200);
+
+    expect((await api('POST', `/weeks/${weekId}/submit`)).body.status).toBe('submitted');
+    const approved = await api('POST', `/weeks/${weekId}/approve`);
+    expect(approved.body.status).toBe('approved');
+    expect(approved.body.locked).toBe(true);
+
+    // Resolve now overlays the approved roster: filled content + pruned optional.
+    const r = await api('GET', `/resolve?planId=${planId}&date=${MON}`);
+    expect(r.body.mode).toBe('house');
+    expect(r.body.rosterApproved).toBe(true);
+    const pres = r.body.nodes.find((n: any) => n.title === 'Presentation');
+    expect(pres.content).toBe('Speech on Courage');
+    expect(titlesOf(r.body.nodes)).not.toContain('Special Item'); // opted out
+  });
+
+  it('blocks edits once approved, then re-opens on unlock', async () => {
+    const blocked = await api('PUT', `/weeks/${weekId}/roster`, { entries: [] });
+    expect(blocked.status).toBe(400);
+
+    const unlocked = await api('POST', `/weeks/${weekId}/unlock`, { reason: 'late correction' });
+    expect(unlocked.status).toBe(200);
+    expect(unlocked.body.status).toBe('draft');
+    expect(unlocked.body.locked).toBe(false);
+    expect(unlocked.body.editable).toBe(true);
+
+    expect((await api('PUT', `/weeks/${weekId}/roster`, { entries: [] })).status).toBe(200);
   });
 });
 
