@@ -650,3 +650,77 @@
           path: me/assembly/on
           method: get
           cors: true
+
+  # ── Teacher PWA (employee token): my house-duty roster + checklist + grading ──
+  my-assembly-duties:
+    handler: assembly-duties-handler.duties
+    name: ${self:service}-my-assembly-duties
+    events:
+      - http:
+          path: me/assembly/duties
+          method: get
+          cors: true
+  my-assembly-week:
+    handler: assembly-duties-handler.getWeek
+    name: ${self:service}-my-assembly-week
+    events:
+      - http:
+          path: me/assembly/weeks/{id}
+          method: get
+          cors: true
+  my-assembly-save-roster:
+    handler: assembly-duties-handler.saveRoster
+    name: ${self:service}-my-assembly-save-roster
+    events:
+      - http:
+          path: me/assembly/weeks/{id}/roster
+          method: put
+          cors: true
+  my-assembly-submit-week:
+    handler: assembly-duties-handler.submit
+    name: ${self:service}-my-assembly-submit-week
+    events:
+      - http:
+          path: me/assembly/weeks/{id}/submit
+          method: post
+          cors: true
+  my-assembly-week-checklist:
+    handler: assembly-duties-handler.getChecklist
+    name: ${self:service}-my-assembly-week-checklist
+    events:
+      - http:
+          path: me/assembly/weeks/{id}/checklist
+          method: get
+          cors: true
+  my-assembly-save-checklist:
+    handler: assembly-duties-handler.saveChecklist
+    name: ${self:service}-my-assembly-save-checklist
+    events:
+      - http:
+          path: me/assembly/weeks/{id}/checklist
+          method: put
+          cors: true
+  my-assembly-checklist-signoff:
+    handler: assembly-duties-handler.signoff
+    name: ${self:service}-my-assembly-checklist-signoff
+    events:
+      - http:
+          path: me/assembly/weeks/{id}/checklist/signoff
+          method: post
+          cors: true
+  my-assembly-save-grade:
+    handler: assembly-duties-handler.saveGrade
+    name: ${self:service}-my-assembly-save-grade
+    events:
+      - http:
+          path: me/assembly/weeks/{id}/grades
+          method: post
+          cors: true
+  my-assembly-leaderboard:
+    handler: assembly-duties-handler.leaderboard
+    name: ${self:service}-my-assembly-leaderboard
+    events:
+      - http:
+          path: me/assembly/leaderboard
+          method: get
+          cors: true

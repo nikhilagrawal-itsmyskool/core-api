@@ -1,7 +1,8 @@
 import { ApiCallback, ApiEvent } from '../../shared/lib/api.interfaces';
 import { ResponseBuilder } from '../../shared/lib/response-builder';
 import { ErrorCode } from '../../shared/lib/error-codes';
-import { validateSchoolCodeHeader, getSchoolCodeFromHeader } from '../auth/auth-utils';
+import { validateSchoolCodeHeader, getSchoolCodeFromHeader, getAuthorizationHeader } from '../auth/auth-utils';
+import { extractAndVerifyToken } from '../auth/token-utils';
 import { getSchoolIdByCode } from './assembly-common';
 
 export interface RequestContext {
@@ -38,6 +39,19 @@ export function requireParam(event: ApiEvent, name: string, callback: ApiCallbac
     return null;
   }
   return value;
+}
+
+// Resolve the logged-in employee (teacher) from the bearer token — for the
+// teacher-PWA "my duties" surface. Verifies the token in-handler (no authorizer,
+// mirroring the student /me guard). On failure writes 401 and returns null.
+export function resolveEmployee(event: ApiEvent, callback: ApiCallback): { employeeId: string; schoolId: string } | null {
+  const token = extractAndVerifyToken(getAuthorizationHeader(event));
+  const employeeId = token?.employee_id || token?.id;
+  if (!token || token.type !== 'employee' || !employeeId) {
+    ResponseBuilder.unauthorizedRequest(ErrorCode.GeneralError, 'Employee login required', callback);
+    return null;
+  }
+  return { employeeId, schoolId: token.school_id };
 }
 
 export { getSchoolCodeFromHeader };

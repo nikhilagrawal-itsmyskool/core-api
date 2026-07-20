@@ -440,5 +440,10 @@ describe('/me guard', () => {
     expect(today.status).toBe(401);
     const on = await fetch(`${BASE_URL}/me/assembly/on?date=${MON}`, { headers });
     expect(on.status).toBe(401);
+    // Teacher-PWA duties need an employee token; student leaderboard needs a family token.
+    const duties = await fetch(`${BASE_URL}/me/assembly/duties`, { headers });
+    expect(duties.status).toBe(401);
+    const lb = await fetch(`${BASE_URL}/me/assembly/leaderboard`, { headers });
+    expect(lb.status).toBe(401);
   });
 });
