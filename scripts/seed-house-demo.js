@@ -66,15 +66,26 @@ const TREE = [
   { title: 'Block III: The Expressions Horizon', description: 'Language, Knowledge and Performance', children: [
     // Each is ONE daily roster segment; its FOCUS rotates by day (the doc's grid),
     // carried as per-weekday content. The house fills the actual word/topic/act.
-    { title: 'Lingua Lexicon', description: 'The Language Grid', fill: 'roster', day: D6('Word of the Day', 'The Phrase Phase', 'Vagdhaara', 'Double Trouble', 'Mind Your Language', 'The Global Dial') },
-    { title: 'Mentis Matrix', description: 'The Knowledge Hub', fill: 'roster', day: D6('Perspective 360°', 'Sci-Files', 'Discover India', 'World Window', 'Character Credo', 'Wonder Box') },
-    { title: 'Stage Spectrum', description: 'The Performing Arts Stage', fill: 'roster', day: D6('Alter Ego', 'Dialogue Duel', 'Mudra', 'Forum', 'Tableau', 'Resonance') },
+    { title: 'Lingua Lexicon', description: 'The Language Grid', fill: 'roster', day: D6(
+      'Word of the Day (Word, Pronunciation, Use, Synonym, Antonym)', 'The Phrase Phase (Idioms, Phrases, Proverbs)',
+      'Vagdhaara (Muhaware, Lokokti, Elite Hindi Shabd)', 'Double Trouble (Confusing Words: Accept/Except, Birth/Berth)',
+      'Mind Your Language (Common Errors: Incorrect → Correct → Reason)', 'The Global Dial (Words from other languages, e.g. Konnichiwa)') },
+    { title: 'Mentis Matrix', description: 'The Knowledge Hub', fill: 'roster', day: D6(
+      'Perspective 360° (Deep analysis of one big topic with India’s impact)', 'Sci-Files (Myth Buster / Genius / Backyard Science files)',
+      'Discover India (GK related to India from ancient to modern era)', 'World Window (Global geography, history, polity, culture, trivia)',
+      'Character Credo (Manners, etiquettes, values, life skills, moral stories)', 'Wonder Box (Amazing facts, puzzles, riddles, Myths vs Facts)') },
+    { title: 'Stage Spectrum', description: 'The Performing Arts Stage', fill: 'roster', day: D6(
+      'Alter Ego (Monologues & Solo Character Acting)', 'Dialogue Duel (Dialogue-Form Acts, Two-Person Jugalbandi)',
+      'Mudra (Dance, Expressions & Mime)', 'Forum (Street Plays & Social Awakenings)',
+      'Tableau (Freeze-Frame Pictures & Living Jhankis)', 'Resonance (Flash Mob / Chant)') },
     { title: 'Skill Skylines', description: 'Poetry, Dance, Open-Mic & Individual Talents Hub', fill: 'roster' },
     { title: 'The Page Turners', description: 'Book Review', fill: 'roster' },
     { title: 'The Flex and Flow', description: 'Health & Fitness Block', fill: 'roster' },
   ] },
   { title: 'Block IV: The Day’s Spotlight', description: 'Personalities, Commemorative Days and Celebrations', children: [
-    { title: 'Calendar Chronicles', description: 'History, Heritage & Days Grid', fill: 'roster', day: D6('Titans of Time', 'Milestone Markers', 'Festal Focus', 'Titans of Time', 'Milestone Markers', 'Festal Focus') },
+    { title: 'Calendar Chronicles', description: 'History, Heritage & Days Grid', fill: 'roster', day: D6(
+      'Titans of Time (Great Personalities)', 'Milestone Markers (Important Days)', 'Festal Focus (Festivals & Occasions)',
+      'Titans of Time (Great Personalities)', 'Milestone Markers (Important Days)', 'Festal Focus (Festivals & Occasions)') },
     { title: 'The Birthday Beacons', description: 'Birthday Celebration', fill: 'roster' },
   ] },
   { title: 'Block V: The Wisdom Compass', description: 'Guiding Voices from Within and Beyond', children: [

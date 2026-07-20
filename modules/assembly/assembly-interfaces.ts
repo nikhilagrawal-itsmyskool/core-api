@@ -104,6 +104,7 @@ export interface RosterParticipantView {
 export interface RosterSlot {
   nodeId: string;
   title: string;
+  description?: string; // the segment's static description (shown as a hint when no dayHint)
   depth: number;
   parentId?: string;
   fillMode?: FillMode;

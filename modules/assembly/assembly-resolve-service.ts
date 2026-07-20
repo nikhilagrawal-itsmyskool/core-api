@@ -144,17 +144,15 @@ class AssemblyResolveService {
     const out: ResolvedNode[] = [];
     for (const n of nodes) {
       const e = entryByNode.get(n.uuid);
-      if (n.isOptional && e && e.opted === false) continue; // opted out → hide segment
-      if (n.fillMode === 'roster') {
-        if (e?.content) n.content = e.content;
-        const parts = partsByNode.get(n.uuid) || [];
-        if (parts.length) {
-          n.responsible = parts.map((p, i): NodeResponsibleView => ({
-            uuid: `roster-${n.uuid}-${i}`, role: p.role || undefined, targetType: p.targetType,
-            targetId: p.targetId || undefined, targetName: p.targetName || undefined,
-            targetText: p.targetText || undefined, sortOrder: i,
-          }));
-        }
+      if (e && e.opted === false) continue; // the house opted this leaf out for the day
+      if (e?.content) n.content = e.content; // house-filled content overrides the template
+      const parts = partsByNode.get(n.uuid) || [];
+      if (parts.length) {
+        n.responsible = parts.map((p, i): NodeResponsibleView => ({
+          uuid: `roster-${n.uuid}-${i}`, role: p.role || undefined, targetType: p.targetType,
+          targetId: p.targetId || undefined, targetName: p.targetName || undefined,
+          targetText: p.targetText || undefined, sortOrder: i,
+        }));
       }
       n.children = this.overlayRoster(n.children || [], entryByNode, partsByNode);
       out.push(n);

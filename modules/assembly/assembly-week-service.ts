@@ -270,20 +270,21 @@ class AssemblyWeekService {
     return WEEKDAY_VALUES.filter(w => set.includes(w)) as Weekday[];
   }
 
-  // The template nodes the house fills for a weekday: fill_mode='roster' or optional.
+  // The roster slots for a weekday = every LEAF segment that runs that day. Each
+  // carries its per-weekday hint (day-content); the house fills the actual content
+  // + performer, and may opt any leaf out for the day. Containers (blocks) recurse.
   private async fillableSlots(planId: string, schoolId: string, weekday: Weekday): Promise<Omit<RosterSlot, 'opted' | 'content' | 'participants'>[]> {
     const tree = await assemblyNodeService.getFilteredTree(planId, schoolId, weekday);
     const out: Omit<RosterSlot, 'opted' | 'content' | 'participants'>[] = [];
     const walk = (nodes: AssemblyNodeDetail[]) => {
       for (const n of nodes) {
-        if (n.fillMode === 'roster' || n.isOptional === true) {
-          out.push({
-            nodeId: n.uuid, title: n.title, depth: n.depth, parentId: n.parentId || undefined,
-            fillMode: n.fillMode, isOptional: n.isOptional === true, options: n.options || [],
-            dayHint: (n.dayContent || []).find((c) => c.weekday === weekday)?.content,
-          });
-        }
-        if (n.children && n.children.length) walk(n.children);
+        if (n.children && n.children.length) { walk(n.children); continue; } // container → recurse
+        out.push({
+          nodeId: n.uuid, title: n.title, description: n.description || undefined,
+          depth: n.depth, parentId: n.parentId || undefined,
+          fillMode: n.fillMode, isOptional: n.isOptional === true, options: n.options || [],
+          dayHint: (n.dayContent || []).find((c) => c.weekday === weekday)?.content,
+        });
       }
     };
     walk(tree);
