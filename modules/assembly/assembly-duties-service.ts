@@ -58,19 +58,28 @@ class AssemblyDutiesService {
     if (houseIds.size > 0) {
       const plans = await DB.query(singleLineString`select uuid, name from assembly_plan where school_id = $1 and status = 'active'`, [schoolId]);
       for (const plan of plans) {
-        const cal = await assemblyHouseService.weekCalendar(plan.uuid, schoolId, from, to);
-        const mine = cal.filter((c) => c.houseId && houseIds.has(c.houseId));
-        if (mine.length === 0) continue;
+        // Existing weeks: trust the week's house-on-duty SNAPSHOT (authoritative).
         const weeks = await assemblyWeekService.listWeeks(plan.uuid, schoolId, from, to);
         const byWeek = new Map(weeks.map((w) => [w.weekStart, w]));
-        for (const m of mine) {
-          const w = byWeek.get(m.weekStart);
-          rosterDuties.push({
-            planId: plan.uuid, planName: plan.name, weekStart: m.weekStart,
-            houseId: m.houseId, houseName: m.houseName,
-            weekId: w?.uuid, status: w?.status || 'not-created',
-            editable: w?.editable ?? false, deadlineAt: w?.deadlineAt,
-          });
+        for (const w of weeks) {
+          if (w.houseId && houseIds.has(w.houseId)) {
+            rosterDuties.push({
+              planId: plan.uuid, planName: plan.name, weekStart: w.weekStart,
+              houseId: w.houseId, houseName: w.houseName,
+              weekId: w.uuid, status: w.status, editable: w.editable, deadlineAt: w.deadlineAt,
+            });
+          }
+        }
+        // Future not-yet-created weeks: predict via the rotation calendar.
+        const cal = await assemblyHouseService.weekCalendar(plan.uuid, schoolId, from, to);
+        for (const m of cal) {
+          if (m.houseId && houseIds.has(m.houseId) && !byWeek.has(m.weekStart)) {
+            rosterDuties.push({
+              planId: plan.uuid, planName: plan.name, weekStart: m.weekStart,
+              houseId: m.houseId, houseName: m.houseName,
+              status: 'not-created', editable: false,
+            });
+          }
         }
       }
       rosterDuties.sort((a, b) => a.weekStart.localeCompare(b.weekStart) || a.planName.localeCompare(b.planName));
