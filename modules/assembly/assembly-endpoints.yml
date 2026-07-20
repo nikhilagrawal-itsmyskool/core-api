@@ -191,6 +191,136 @@
           method: delete
           cors: true
 
+  # ── House mode: grading + house-of-the-month (Phase D) ──────────────────────
+  get-rubric:
+    handler: assembly-grading-handler.getRubric
+    name: ${self:service}-get-rubric
+    events:
+      - http:
+          path: rubric
+          method: get
+          cors: true
+  set-rubric-config:
+    handler: assembly-grading-handler.setConfig
+    name: ${self:service}-set-rubric-config
+    events:
+      - http:
+          path: rubric/config
+          method: put
+          cors: true
+  create-rubric-metric:
+    handler: assembly-grading-handler.createMetric
+    name: ${self:service}-create-rubric-metric
+    events:
+      - http:
+          path: rubric/metrics
+          method: post
+          cors: true
+  update-rubric-metric:
+    handler: assembly-grading-handler.updateMetric
+    name: ${self:service}-update-rubric-metric
+    events:
+      - http:
+          path: rubric/metrics/{id}
+          method: put
+          cors: true
+  delete-rubric-metric:
+    handler: assembly-grading-handler.deleteMetric
+    name: ${self:service}-delete-rubric-metric
+    events:
+      - http:
+          path: rubric/metrics/{id}
+          method: delete
+          cors: true
+  create-rubric-penalty:
+    handler: assembly-grading-handler.createPenalty
+    name: ${self:service}-create-rubric-penalty
+    events:
+      - http:
+          path: rubric/penalties
+          method: post
+          cors: true
+  update-rubric-penalty:
+    handler: assembly-grading-handler.updatePenalty
+    name: ${self:service}-update-rubric-penalty
+    events:
+      - http:
+          path: rubric/penalties/{id}
+          method: put
+          cors: true
+  delete-rubric-penalty:
+    handler: assembly-grading-handler.deletePenalty
+    name: ${self:service}-delete-rubric-penalty
+    events:
+      - http:
+          path: rubric/penalties/{id}
+          method: delete
+          cors: true
+  list-evaluators:
+    handler: assembly-grading-handler.listEvaluators
+    name: ${self:service}-list-evaluators
+    events:
+      - http:
+          path: evaluators
+          method: get
+          cors: true
+  add-evaluator:
+    handler: assembly-grading-handler.addEvaluator
+    name: ${self:service}-add-evaluator
+    events:
+      - http:
+          path: evaluators
+          method: post
+          cors: true
+  remove-evaluator:
+    handler: assembly-grading-handler.removeEvaluator
+    name: ${self:service}-remove-evaluator
+    events:
+      - http:
+          path: evaluators/{id}
+          method: delete
+          cors: true
+  list-week-grades:
+    handler: assembly-grading-handler.listGrades
+    name: ${self:service}-list-week-grades
+    events:
+      - http:
+          path: weeks/{id}/grades
+          method: get
+          cors: true
+  save-week-grade:
+    handler: assembly-grading-handler.saveGrade
+    name: ${self:service}-save-week-grade
+    events:
+      - http:
+          path: weeks/{id}/grades
+          method: post
+          cors: true
+  get-grade:
+    handler: assembly-grading-handler.getGrade
+    name: ${self:service}-get-grade
+    events:
+      - http:
+          path: grades/{id}
+          method: get
+          cors: true
+  delete-grade:
+    handler: assembly-grading-handler.deleteGrade
+    name: ${self:service}-delete-grade
+    events:
+      - http:
+          path: grades/{id}
+          method: delete
+          cors: true
+  get-leaderboard:
+    handler: assembly-grading-handler.leaderboard
+    name: ${self:service}-get-leaderboard
+    events:
+      - http:
+          path: leaderboard
+          method: get
+          cors: true
+
   # ── Plans ─────────────────────────────────────────────────────────────────
   create-plan:
     handler: assembly-plan-handler.create

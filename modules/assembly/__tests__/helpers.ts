@@ -79,6 +79,13 @@ export async function cleanupPlan(planId: string): Promise<void> {
   // House-mode weekly roster rows hanging off this plan's weeks.
   const weeks = (await p.query(`select uuid from assembly_week where plan_id = $1`, [planId])).rows.map(r => r.uuid);
   if (weeks.length) {
+    const grades = (await p.query(`select uuid from assembly_grade where week_id = any($1)`, [weeks])).rows.map(r => r.uuid);
+    if (grades.length) {
+      for (const t of ['assembly_grade_metric', 'assembly_grade_penalty']) {
+        await p.query(`delete from ${t} where grade_id = any($1)`, [grades]);
+      }
+      await p.query(`delete from assembly_grade where week_id = any($1)`, [weeks]);
+    }
     for (const t of ['assembly_roster_entry', 'assembly_roster_participant', 'assembly_week_unlock', 'assembly_checklist_tick', 'assembly_checklist_signoff']) {
       await p.query(`delete from ${t} where week_id = any($1)`, [weeks]);
     }
@@ -95,6 +102,40 @@ export async function cleanupPlan(planId: string): Promise<void> {
 // Remove the per-school assembly config row (restores default 'template' mode).
 export async function resetAssemblyConfig(schoolId: string): Promise<void> {
   await getPool().query(`delete from assembly_school_config where school_id = $1`, [schoolId]);
+}
+
+// Purge test-school grading config (rubric + evaluators) + any fixtures matching
+// a name tag (seeded employees/houses).
+export async function resetGrading(schoolId: string, tag: string): Promise<void> {
+  const p = getPool();
+  for (const t of ['assembly_rubric_metric', 'assembly_rubric_penalty', 'assembly_evaluator']) {
+    await p.query(`delete from ${t} where school_id = $1`, [schoolId]);
+  }
+  await p.query(`delete from assembly_rubric_config where school_id = $1`, [schoolId]);
+  await p.query(`delete from employee where school_id = $1 and name like $2`, [schoolId, `${tag}%`]);
+  await p.query(`delete from house where school_id = $1 and name like $2`, [schoolId, `${tag}%`]);
+}
+
+// Seed an employee + a house directly, and pin a week's house snapshot (test setup
+// for grading — the assembly module has no employee/house create of its own).
+export async function seedEmployee(schoolId: string, name: string): Promise<string> {
+  const id = `em${Date.now()}${Math.floor(Math.random() * 10000)}`.slice(0, 12);
+  await getPool().query(
+    `insert into employee (uuid, name, status, school_id, createdby_userid, created_at) values ($1,$2,'active',$3,'test',now())`,
+    [id, name, schoolId],
+  );
+  return id;
+}
+export async function seedHouse(schoolId: string, name: string): Promise<string> {
+  const id = `ho${Date.now()}${Math.floor(Math.random() * 10000)}`.slice(0, 12);
+  await getPool().query(
+    `insert into house (uuid, school_id, name, code, status, createdby_userid, created_at) values ($1,$2,$3,$4,'active','test',now())`,
+    [id, schoolId, name, name.replace(/[^a-z0-9]+/gi, '_').slice(0, 30)],
+  );
+  return id;
+}
+export async function setWeekHouse(weekId: string, houseId: string, houseName: string): Promise<void> {
+  await getPool().query(`update assembly_week set house_id = $1, house_name = $2 where uuid = $3`, [houseId, houseName, weekId]);
 }
 
 export async function deleteThemeById(themeId: string): Promise<void> {

@@ -1,6 +1,15 @@
 -- Assembly Module Schema Rollback
 -- Drops all assembly tables. Safe to re-run (IF EXISTS guards).
 
+-- House mode Phase D (grading)
+drop table if exists assembly_grade_penalty;
+drop table if exists assembly_grade_metric;
+drop table if exists assembly_grade;
+drop table if exists assembly_evaluator;
+drop table if exists assembly_rubric_config;
+drop table if exists assembly_rubric_penalty;
+drop table if exists assembly_rubric_metric;
+
 -- House mode Phase C (checklist)
 drop table if exists assembly_checklist_signoff;
 drop table if exists assembly_checklist_tick;

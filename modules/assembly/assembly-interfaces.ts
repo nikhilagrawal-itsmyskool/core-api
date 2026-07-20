@@ -233,6 +233,73 @@ export interface SignoffRequest {
   note?: string;
 }
 
+// ── House mode Phase D: grading + house-of-the-month ─────────────────────────
+
+export interface RubricMetric { uuid: string; name: string; maxMarks: number; sortOrder: number; }
+export interface RubricPenalty { uuid: string; name: string; value: number; sortOrder: number; }
+export interface RubricConfig { scalingAdjustment?: number; }
+// GET /rubric read model.
+export interface Rubric { metrics: RubricMetric[]; penalties: RubricPenalty[]; config: RubricConfig; }
+
+export interface CreateRubricMetricRequest { name: string; maxMarks: number; sortOrder?: number; }
+export interface UpdateRubricMetricRequest { name?: string; maxMarks?: number; sortOrder?: number; }
+export interface CreateRubricPenaltyRequest { name: string; value: number; sortOrder?: number; }
+export interface UpdateRubricPenaltyRequest { name?: string; value?: number; sortOrder?: number; }
+export interface SetRubricConfigRequest { scalingAdjustment?: number | null; }
+
+export interface Evaluator {
+  uuid: string;
+  employeeId: string;
+  employeeName?: string;
+  startDate?: string;
+  endDate?: string;
+}
+export interface CreateEvaluatorRequest { employeeId: string; startDate?: string; endDate?: string; }
+
+export interface GradeMetricScore { metricId: string; score: number; }
+
+export interface GradeView {
+  uuid: string;
+  weekId: string;
+  gradeDate: string;
+  houseId?: string;
+  houseName?: string;
+  evaluatorEmployeeId: string;
+  evaluatorName?: string;
+  starPresenter?: string;
+  diction?: string;
+  feedback?: string;
+  total?: number;
+  metrics: GradeMetricScore[];
+  penalties: string[]; // applied penalty ids
+}
+
+export interface SaveGradeRequest {
+  gradeDate: string;
+  evaluatorId: string; // employee id (must have an evaluator assignment covering the date)
+  metrics: GradeMetricScore[];
+  penalties?: string[]; // penalty ids applied
+  starPresenter?: string;
+  diction?: string;
+  feedback?: string;
+}
+
+// Leaderboard / house-of-the-month over a date range.
+export interface LeaderboardWeek { weekId: string; weekStart: string; average: number; }
+export interface LeaderboardEntry {
+  houseId?: string;
+  houseName?: string;
+  average: number;   // avg of the house's week averages
+  weekCount: number;
+  weeks: LeaderboardWeek[];
+}
+export interface Leaderboard {
+  from: string;
+  to: string;
+  houseOfTheMonth?: { houseId?: string; houseName?: string; average: number };
+  standings: LeaderboardEntry[];
+}
+
 export interface BaseEntity {
   uuid: string;
   schoolId: string;

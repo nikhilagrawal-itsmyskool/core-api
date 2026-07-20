@@ -101,7 +101,7 @@ evaluator **grading** → weekly average → **house-of-the-month**).
 - **A — Houses + mode + rotation** — backend ✅ (migration `assembly-migrate-3`). Admin Houses/Rotation screens pending (batched with the UI phase).
 - **B — Weekly roster + finalize/approve/lock + resolve overlay** — backend ✅ (migration `assembly-migrate-4-roster`). Admin roster editor + PWA + student-app house-on-duty batched with the UI phase.
 - **C — Checklist** (config + tick + week sign-off) — backend ✅ (migration `assembly-migrate-5-checklist`). PWA ticking batched with the UI phase.
-- **D — Grading + rubric + evaluators + leaderboard** (backend + admin + PWA grade entry + student-app leaderboard). ⏳ not started.
+- **D — Grading + rubric + evaluators + house-of-the-month** — backend ✅ (migration `assembly-migrate-6-grading`). Admin rubric/evaluator/leaderboard + PWA grade entry + student-app leaderboard batched with the UI phase.
 - Deploy: build/commit/push per phase; prod DB migrations + serverless deploy once at the end (prod not half-shipped).
 - **Frontend**: per the agreed sequencing, all admin-portal + PWA + student-app UI for A–D is built as one batch AFTER the backend phases, before the single end-deploy.
 
@@ -121,6 +121,11 @@ House identity, in-charge/co-in-charge, and member teachers are a house-domain c
 - Tables `assembly_checklist_item` (per-school configurable catalog; `scope` week/day + free `phase` grouping), `assembly_checklist_tick` (a recorded checked item per (week, item, date)), `assembly_checklist_signoff` (one week-level sign-off).
 - Endpoints: `GET/POST /checklist/items`, `PUT/DELETE /checklist/items/{id}`, `GET/PUT /weeks/{id}/checklist` (read model = items split by scope + week's assembly dates + ticks + sign-off; bulk-set = send the checked items), `POST/DELETE /weeks/{id}/checklist/signoff`.
 - Ticking is **execution-time and NOT gated by the week lock** (it happens around/after the assembly). Recorded, not a hard gate.
+
+### Phase D backend — as built
+- Tables `assembly_rubric_metric` (scoring metrics), `assembly_rubric_penalty` (deductions; `value` = amount subtracted), `assembly_rubric_config` (per-school `scaling_adjustment`), `assembly_evaluator` (employee assigned over a date range → derives `assembly.grade`), `assembly_grade` (+ `_metric`/`_penalty`) — one grade per `(week, date, evaluator)`, `total = Σ metric scores − Σ applied penalties + scaling` (validated: score ≤ metric max; evaluator must be assigned covering the date; house snapshot from the week).
+- Endpoints: `GET /rubric`, `PUT /rubric/config`, `POST/PUT/DELETE /rubric/metrics[/{id}]` + `…/penalties[/{id}]`; `GET/POST/DELETE /evaluators[/{id}]`; `GET/POST /weeks/{id}/grades` (upsert per evaluator+date), `GET/DELETE /grades/{id}`; `GET /leaderboard?from=&to=`.
+- **Aggregation**: day score = avg of evaluators' totals for `(week, date)`; week score = avg of its day scores; **house-of-the-month** = house with the highest average of its week scores over the range (multi-week house → avg its weeks). Visibility (god/assembly-incharge/graded-house-incharge only, not students) is a UI concern for the batched frontend.
 
 ### Deferred (schema-ready follow-ups)
 - **Curated checklist seed**: the actual "House Execution Check List" items are a data task — the catalog is fully admin-configurable; seed the school's list once provided (no content invented).

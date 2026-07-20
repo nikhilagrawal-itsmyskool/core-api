@@ -1,4 +1,4 @@
-import { api, getSeed, cleanupPlan, deleteThemeById, deleteChecklistItemById, resetAssemblyConfig, closePool, dateForWeekday, BASE_URL, headers } from './helpers';
+import { api, getSeed, cleanupPlan, deleteThemeById, deleteChecklistItemById, resetAssemblyConfig, resetGrading, seedEmployee, seedHouse, setWeekHouse, closePool, dateForWeekday, BASE_URL, headers } from './helpers';
 
 // Integration tests against a running assembly module (or the gateway).
 // Covers plans, the node tree (day subset + inheritance), special assemblies
@@ -34,6 +34,7 @@ afterAll(async () => {
   for (const id of createdPlans) await cleanupPlan(id);
   for (const t of createdThemes) await deleteThemeById(t);
   for (const c of createdChecklistItems) await deleteChecklistItemById(c);
+  await resetGrading(seed.schoolId, `AG-${SUF}`); // rubric/evaluators + seeded fixtures
   await resetAssemblyConfig(seed.schoolId); // restore default template mode
   await closePool();
 });
@@ -384,6 +385,51 @@ describe('house mode: weekly roster', () => {
     expect(signed.body.signoff.note).toBe('All good');
     const cleared = await api('DELETE', `/weeks/${weekId}/checklist/signoff`);
     expect(cleared.body.signoff).toBeUndefined();
+  });
+
+  it('grades a week against a rubric and computes house-of-the-month', async () => {
+    // Give the week a house snapshot + seed an evaluator employee.
+    const houseId = await seedHouse(seed.schoolId, `AG-${SUF} Red`);
+    await setWeekHouse(weekId, houseId, `AG-${SUF} Red`);
+    const evalEmp = await seedEmployee(seed.schoolId, `AG-${SUF} Eval`);
+
+    // Rubric: two metrics (max 5) + one penalty (2), scaling 0.
+    const m1 = await api('POST', '/rubric/metrics', { name: 'Discipline', maxMarks: 5 });
+    const m2 = await api('POST', '/rubric/metrics', { name: 'Content', maxMarks: 5 });
+    const p1 = await api('POST', '/rubric/penalties', { name: 'Overran', value: 2 });
+    expect(m1.status).toBe(200);
+    await api('PUT', '/rubric/config', { scalingAdjustment: 0 });
+    expect((await api('GET', '/rubric')).body.metrics.length).toBeGreaterThanOrEqual(2);
+
+    const ev = await api('POST', '/evaluators', { employeeId: evalEmp, startDate: MON, endDate: MON });
+    expect(ev.status).toBe(200);
+
+    // An unassigned evaluator and an over-max score are both rejected.
+    expect((await api('POST', `/weeks/${weekId}/grades`, { gradeDate: MON, evaluatorId: 'nobody', metrics: [] })).status).toBe(400);
+    expect((await api('POST', `/weeks/${weekId}/grades`, { gradeDate: MON, evaluatorId: evalEmp, metrics: [{ metricId: m1.body.uuid, score: 9 }] })).status).toBe(400);
+
+    // Valid grade: 5 + 4 - 2 (penalty) + 0 (scaling) = 7.
+    const g = await api('POST', `/weeks/${weekId}/grades`, {
+      gradeDate: MON, evaluatorId: evalEmp,
+      metrics: [{ metricId: m1.body.uuid, score: 5 }, { metricId: m2.body.uuid, score: 4 }],
+      penalties: [p1.body.uuid], starPresenter: 'Aarav', feedback: 'Crisp',
+    });
+    expect(g.status).toBe(200);
+    expect(g.body.total).toBe(7);
+
+    // Upsert (same evaluator+date) stays a single grade; recomputes total = 5 + 5 = 10.
+    await api('POST', `/weeks/${weekId}/grades`, {
+      gradeDate: MON, evaluatorId: evalEmp,
+      metrics: [{ metricId: m1.body.uuid, score: 5 }, { metricId: m2.body.uuid, score: 5 }],
+    });
+    const list = await api('GET', `/weeks/${weekId}/grades`);
+    expect(list.body).toHaveLength(1);
+    expect(list.body[0].total).toBe(10);
+
+    // Leaderboard → house-of-the-month is our house at average 10.
+    const lb = await api('GET', `/leaderboard?from=${MON}&to=${MON}`);
+    expect(lb.body.houseOfTheMonth.houseId).toBe(houseId);
+    expect(lb.body.houseOfTheMonth.average).toBe(10);
   });
 });
 
