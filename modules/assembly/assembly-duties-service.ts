@@ -32,6 +32,7 @@ export interface GradingWeek {
 export interface MyDuties {
   rosterDuties: RosterDuty[];
   gradingWeeks: GradingWeek[];
+  isHouseMember: boolean; // belongs to any house (in-charge/co-in-charge/member)
   isEvaluator: boolean;
   evaluatorRanges: { startDate?: string; endDate?: string }[];
 }
@@ -129,7 +130,7 @@ class AssemblyDutiesService {
     }
 
     return {
-      rosterDuties, gradingWeeks, isEvaluator,
+      rosterDuties, gradingWeeks, isEvaluator, isHouseMember: houseIds.size > 0,
       evaluatorRanges: evals.map((e: any) => ({ startDate: e.startDate || undefined, endDate: e.endDate || undefined })),
     };
   }
