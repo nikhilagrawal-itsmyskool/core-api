@@ -12,6 +12,10 @@ custom:
   fullServiceName: ${self:custom.prefix}-${self:custom.baseServiceName}
   customDomain:
    basePath: 'assembly'
+  splitStacks:
+    perFunction: true
+    perType: false
+    perGroupFunction: false
   $<<: ${file(../global-config-${self:provider.stage}.yml):custom}
 
 service: ${self:provider.stage}-${self:custom.fullServiceName}
@@ -23,6 +27,7 @@ plugins:
   - serverless-offline
   - serverless-domain-manager
   - ../../plugins/serverless-cors-defaults.js
+  - serverless-plugin-split-stacks
 
 functions: ${file(assembly-endpoints.yml)}
 

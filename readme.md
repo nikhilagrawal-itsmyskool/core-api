@@ -7,8 +7,8 @@ npm --version
 # Serverless
 ```bash
 $env:AWS_PROFILE = 'prod-itsmyskool-nikhil.agrawal'
-& "H:\github\itsmyskool\core-api\node_modules\.bin\serverless.cmd" create_domain --stage prod --region ap-south-1
 & "H:\github\itsmyskool\core-api\node_modules\.bin\serverless.cmd" deploy --stage prod --verbose --region ap-south-1
+& "H:\github\itsmyskool\core-api\node_modules\.bin\serverless.cmd" create_domain --stage prod --region ap-south-1
 ```
 
 # Module start/stop

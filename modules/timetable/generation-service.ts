@@ -779,22 +779,27 @@ class GenerationService {
       [pt.uuid, schoolId],
     );
 
-    // Resolve the grid config via the source candidate's run.
+    // Resolve the grid config via the source candidate's run. The run id is also
+    // returned so the UI can reuse that run's already-rendered S3 export (xlsx/pdf)
+    // as the published master download — see GET /runs/{id}/export.
     let config = null;
+    let sourceRunId = null;
     if (pt.sourceCandidateId) {
       const rows = await DB.query(
         singleLineString`
-          select r.config_id from timetable_candidate c
+          select r.uuid as run_id, r.config_id from timetable_candidate c
           join generation_run r on r.uuid = c.generation_run_id
           where c.uuid = $1 and c.school_id = $2
         `,
         [pt.sourceCandidateId, schoolId],
       );
-      if (rows.length > 0)
+      if (rows.length > 0) {
+        sourceRunId = rows[0].runId;
         config = await configService.getConfigById(rows[0].configId, schoolId);
+      }
     }
 
-    return { publishedTimetable: pt, entries, config };
+    return { publishedTimetable: pt, entries, config, sourceRunId };
   }
 
   // All active published masters for a year (whole-school + each wing), with the
