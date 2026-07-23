@@ -79,6 +79,17 @@ class AssemblyWeekHandler {
     } catch (err: any) { ResponseBuilder.handleError(err, callback); }
   };
 
+  public lock = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
+    _context.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const ctx = await resolveSchool(event, callback); if (!ctx) return;
+      const id = requireParam(event, 'id', callback); if (!id) return;
+      const result = await assemblyWeekService.lock(id, ctx.schoolId, ctx.userId);
+      if (!result) { ResponseBuilder.notFound(ErrorCode.InvalidId, 'Week not found', callback); return; }
+      ResponseBuilder.ok(result, callback);
+    } catch (err: any) { ResponseBuilder.handleError(err, callback); }
+  };
+
   public unlock = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
     _context.callbackWaitsForEmptyEventLoop = false;
     try {
@@ -100,4 +111,5 @@ export const getById = handler.getById;
 export const saveRoster = handler.saveRoster;
 export const submit = handler.submit;
 export const approve = handler.approve;
+export const lock = handler.lock;
 export const unlock = handler.unlock;

@@ -116,6 +116,14 @@
           path: weeks/{id}/approve
           method: post
           cors: true
+  lock-week:
+    handler: assembly-week-handler.lock
+    name: ${self:service}-lock-week
+    events:
+      - http:
+          path: weeks/{id}/lock
+          method: post
+          cors: true
   unlock-week:
     handler: assembly-week-handler.unlock
     name: ${self:service}-unlock-week

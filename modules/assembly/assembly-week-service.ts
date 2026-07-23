@@ -223,7 +223,19 @@ class AssemblyWeekService {
     return this.getWeek(weekId, schoolId);
   }
 
-  // Re-open a locked (approved) or past-deadline week for late edits. Recorded.
+  // Manually lock a week (admin) — no further roster edits until unlocked. Works on
+  // any not-yet-locked week, independent of the submit/approve flow.
+  public async lock(weekId: string, schoolId: string, userId: string): Promise<AssemblyWeekDetail | null> {
+    const week = await this.weekOr404(weekId, schoolId); if (!week) return null;
+    if (week.locked) throw new BusinessErrorResult(ErrorCode.BusinessError, 'Week is already locked');
+    const now = new Date();
+    await DB.query(singleLineString`update assembly_week set locked = true, updatedby_userid = $1, updated_at = $2 where uuid = $3`, [userId, now, weekId]);
+    return this.getWeek(weekId, schoolId);
+  }
+
+  // Re-open a locked (approved) or past-deadline week for late edits. Recorded. Once
+  // unlocked the Wed-deadline auto-lock no longer applies (late_unlocked) — only a
+  // manual lock will close it again.
   public async unlock(weekId: string, reason: string | undefined, schoolId: string, userId: string): Promise<AssemblyWeekDetail | null> {
     const week = await this.weekOr404(weekId, schoolId); if (!week) return null;
     if (!week.locked && !week.pastDeadline) throw new BusinessErrorResult(ErrorCode.BusinessError, 'Week is already open for editing');
