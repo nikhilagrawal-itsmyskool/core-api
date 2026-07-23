@@ -48,8 +48,22 @@ class AssemblyWeekService {
     const plan = await this.planRow(planId, schoolId);
     const weekStart = mondayOf(weekStartInput);
 
-    const existing = await DB.query(singleLineString`select uuid from assembly_week where plan_id = $1 and week_start = $2`, [planId, weekStart]);
-    if (existing.length > 0) return (await this.getWeek(existing[0].uuid, schoolId))!;
+    const existing = await DB.query(singleLineString`select uuid, house_id, locked from assembly_week where plan_id = $1 and week_start = $2`, [planId, weekStart]);
+    if (existing.length > 0) {
+      // Self-heal: a week ensured BEFORE its rotation was pinned snapshotted a null
+      // house. While still unlocked, re-resolve the house-on-duty and backfill it so
+      // duty derivation (myDuties / canEditWeek) recognises the correct house.
+      if (!existing[0].houseId && existing[0].locked !== true) {
+        const resolved = await assemblyHouseService.houseForWeek(planId, schoolId, weekStart);
+        if (resolved?.houseId) {
+          await DB.query(
+            singleLineString`update assembly_week set house_id = $1, house_name = $2, updated_at = $3 where uuid = $4 and school_id = $5`,
+            [resolved.houseId, resolved.houseName ?? null, new Date(), existing[0].uuid, schoolId],
+          );
+        }
+      }
+      return (await this.getWeek(existing[0].uuid, schoolId))!;
+    }
 
     const house = await assemblyHouseService.houseForWeek(planId, schoolId, weekStart);
     const now = new Date();

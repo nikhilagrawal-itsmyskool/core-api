@@ -50,10 +50,15 @@ class AssemblyDutiesService {
 
   // May this employee author/act on the given week? (belongs to its house-on-duty)
   public async canEditWeek(schoolId: string, employeeId: string, weekId: string): Promise<boolean> {
-    const rows = await DB.query(singleLineString`select house_id from assembly_week where uuid = $1 and school_id = $2`, [weekId, schoolId]);
-    if (rows.length === 0 || !rows[0].houseId) return false;
+    const rows = await DB.query(singleLineString`select plan_id, week_start::text as week_start, house_id from assembly_week where uuid = $1 and school_id = $2`, [weekId, schoolId]);
+    if (rows.length === 0) return false;
+    // Fall back to the computed rotation when the week's house snapshot is null
+    // (week ensured before the rotation was pinned).
+    let houseId = rows[0].houseId;
+    if (!houseId) houseId = (await assemblyHouseService.houseForWeek(rows[0].planId, schoolId, rows[0].weekStart))?.houseId;
+    if (!houseId) return false;
     const mine = await this.myHouseIds(schoolId, employeeId);
-    return mine.has(rows[0].houseId);
+    return mine.has(houseId);
   }
 
   // May this employee START (ensure) the week for (plan, weekStart)? (belongs to the
@@ -97,16 +102,20 @@ class AssemblyDutiesService {
         const byWeek = new Map(weeks.map((w) => [w.weekStart, w]));
 
         if (houseIds.size > 0) {
+          const cal = await assemblyHouseService.weekCalendar(plan.uuid, schoolId, from, to);
+          const calByWeek = new Map(cal.map((m) => [m.weekStart, m]));
           for (const w of weeks) {
-            if (w.houseId && houseIds.has(w.houseId)) {
+            // Fall back to the computed rotation when the week's house snapshot is
+            // null (ensured before the rotation was pinned).
+            const eff = w.houseId ? { houseId: w.houseId, houseName: w.houseName } : calByWeek.get(w.weekStart);
+            if (eff?.houseId && houseIds.has(eff.houseId)) {
               rosterDuties.push({
                 planId: plan.uuid, planName: plan.name, weekStart: w.weekStart,
-                houseId: w.houseId, houseName: w.houseName,
+                houseId: eff.houseId, houseName: eff.houseName,
                 weekId: w.uuid, status: w.status, editable: w.editable, deadlineAt: w.deadlineAt,
               });
             }
           }
-          const cal = await assemblyHouseService.weekCalendar(plan.uuid, schoolId, from, to);
           for (const m of cal) {
             if (m.houseId && houseIds.has(m.houseId) && !byWeek.has(m.weekStart)) {
               rosterDuties.push({

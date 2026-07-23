@@ -78,18 +78,21 @@ class AssemblyChecklistHandler {
       const weekId = requireParam(event, 'id', callback); if (!weekId) return;
       const body = (event.body ? parseBody<SignoffRequest>(event, callback) : {}) as SignoffRequest | null;
       if (body === null) return;
-      const result = await assemblyChecklistService.signoff(weekId, body.note, ctx.schoolId, ctx.userId);
+      // Admin sign-off is unrestricted (no submit-lock).
+      const result = await assemblyChecklistService.signoff(weekId, body, ctx.schoolId, ctx.userId);
       if (!result) { ResponseBuilder.notFound(ErrorCode.InvalidId, 'Week not found', callback); return; }
       ResponseBuilder.ok(result, callback);
     } catch (err: any) { ResponseBuilder.handleError(err, callback); }
   };
 
+  // Reopen a sign-off — admin/god only. ?date=yyyy-mm-dd clears that day; omitted = weekly.
   public clearSignoff = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
     _context.callbackWaitsForEmptyEventLoop = false;
     try {
       const ctx = await resolveSchool(event, callback); if (!ctx) return;
       const weekId = requireParam(event, 'id', callback); if (!weekId) return;
-      const result = await assemblyChecklistService.clearSignoff(weekId, ctx.schoolId);
+      const date = event.queryStringParameters?.date || null;
+      const result = await assemblyChecklistService.clearSignoff(weekId, ctx.schoolId, date);
       if (!result) { ResponseBuilder.notFound(ErrorCode.InvalidId, 'Week not found', callback); return; }
       ResponseBuilder.ok(result, callback);
     } catch (err: any) { ResponseBuilder.handleError(err, callback); }

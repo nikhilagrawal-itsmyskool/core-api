@@ -63,14 +63,15 @@ class AssemblyDutiesHandler {
   public saveChecklist = (event: ApiEvent, _c: ApiContext, callback: ApiCallback) => {
     _c.callbackWaitsForEmptyEventLoop = false;
     const body = parseBody<SaveChecklistRequest>(event, callback); if (!body) return;
-    return this.guardedWeek(event, callback, (id, s, e) => assemblyChecklistService.saveTicks(id, body, s, e)).catch((err) => ResponseBuilder.handleError(err, callback));
+    // PWA is submit-locked: a submitted partition can't be changed here (admin only).
+    return this.guardedWeek(event, callback, (id, s, e) => assemblyChecklistService.saveTicks(id, body, s, e, true)).catch((err) => ResponseBuilder.handleError(err, callback));
   };
 
   public signoff = (event: ApiEvent, _c: ApiContext, callback: ApiCallback) => {
     _c.callbackWaitsForEmptyEventLoop = false;
     const body = (event.body ? parseBody<SignoffRequest>(event, callback) : {}) as SignoffRequest | null;
     if (body === null) return;
-    return this.guardedWeek(event, callback, (id, s, e) => assemblyChecklistService.signoff(id, body.note, s, e)).catch((err) => ResponseBuilder.handleError(err, callback));
+    return this.guardedWeek(event, callback, (id, s, e) => assemblyChecklistService.signoff(id, body, s, e, true)).catch((err) => ResponseBuilder.handleError(err, callback));
   };
 
   // POST /me/assembly/plans/{id}/weeks — start (ensure) MY house's week for a date.

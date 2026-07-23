@@ -3,7 +3,7 @@ import { BusinessErrorResult } from '../../shared/lib/errors';
 import { ErrorCode } from '../../shared/lib/error-codes';
 import {
   ChecklistItem, CreateChecklistItemRequest, UpdateChecklistItemRequest,
-  WeekChecklist, ChecklistTickView, SaveChecklistRequest,
+  WeekChecklist, ChecklistTickView, SaveChecklistRequest, SignoffRequest,
 } from './assembly-interfaces';
 import { CHECKLIST_SCOPES, WEEKDAY_VALUES, Weekday } from './assembly-constants';
 const { generateShortUuid } = require('../../shared/util/generate-uuid.js');
@@ -83,32 +83,51 @@ class AssemblyChecklistService {
       checkedAt: r.checkedAt ? new Date(r.checkedAt).toISOString() : undefined,
     }));
 
-    const signRows = await DB.query(singleLineString`select note, signedby_userid, signed_at from assembly_checklist_signoff where week_id = $1`, [weekId]);
-    const signoff = signRows.length > 0 ? {
-      note: signRows[0].note || undefined,
-      signedbyUserid: signRows[0].signedbyUserid || undefined,
-      signedAt: signRows[0].signedAt ? new Date(signRows[0].signedAt).toISOString() : undefined,
-    } : undefined;
+    const signRows = await DB.query(singleLineString`select entry_date::text as entry_date, note, signedby_userid, signed_at from assembly_checklist_signoff where week_id = $1`, [weekId]);
+    const toSign = (r: any) => ({
+      note: r.note || undefined,
+      signedbyUserid: r.signedbyUserid || undefined,
+      signedAt: r.signedAt ? new Date(r.signedAt).toISOString() : undefined,
+    });
+    const weeklyRow = signRows.find((r: any) => !r.entryDate);
+    const signoff = weeklyRow ? toSign(weeklyRow) : undefined;
+    const daySignoffs = signRows.filter((r: any) => r.entryDate).map((r: any) => ({ date: r.entryDate, ...toSign(r) }));
 
     return {
       weekId,
       weekItems: items.filter(it => it.scope === 'week'),
       dayItems: items.filter(it => it.scope === 'day'),
-      dates, ticks, signoff,
+      dates, ticks, signoff, daySignoffs,
     };
   }
 
   // Replace the week's ticks with exactly the CHECKED items provided.
-  public async saveTicks(weekId: string, data: SaveChecklistRequest, schoolId: string, userId: string): Promise<WeekChecklist | null> {
+  public async saveTicks(weekId: string, data: SaveChecklistRequest, schoolId: string, userId: string, lockSubmitted = false): Promise<WeekChecklist | null> {
     const week = await this.weekRow(weekId, schoolId);
     if (!week) return null;
     if (!Array.isArray(data.ticks)) throw new BusinessErrorResult(ErrorCode.BusinessError, 'ticks array is required');
+    if (lockSubmitted && data.scope) {
+      const entryDate = data.scope === 'day' ? (data.date ?? null) : null;
+      if (await this.partitionSignedOff(weekId, entryDate)) {
+        throw new BusinessErrorResult(ErrorCode.BusinessError, 'Already submitted. Ask an admin to reopen it to make changes.');
+      }
+    }
     const dates = new Set(await this.weekDates(week.planId, schoolId, week.weekStart));
     const items = new Map((await this.listItems(schoolId)).map(it => [it.uuid, it]));
 
     const now = new Date();
-    const queries: string[] = [singleLineString`delete from assembly_checklist_tick where week_id = $1`];
-    const params: any[][] = [[weekId]];
+    // Scope the replace to a partition so weekly and per-day saves are independent.
+    let del = singleLineString`delete from assembly_checklist_tick where week_id = $1`;
+    const delParams: any[] = [weekId];
+    if (data.scope === 'week') {
+      del = singleLineString`delete from assembly_checklist_tick where week_id = $1 and entry_date is null`;
+    } else if (data.scope === 'day') {
+      if (!data.date || !dates.has(data.date)) throw new BusinessErrorResult(ErrorCode.BusinessError, 'A day-scoped save needs a valid assembly date');
+      del = singleLineString`delete from assembly_checklist_tick where week_id = $1 and entry_date = $2`;
+      delParams.push(data.date);
+    }
+    const queries: string[] = [del];
+    const params: any[][] = [delParams];
     const seen = new Set<string>();
     for (const t of data.ticks) {
       const item = items.get(t.itemId);
@@ -129,23 +148,47 @@ class AssemblyChecklistService {
     return this.getWeekChecklist(weekId, schoolId);
   }
 
-  public async signoff(weekId: string, note: string | undefined, schoolId: string, userId: string): Promise<WeekChecklist | null> {
+  // Is a partition (weekly = null date, or a specific day) already signed off?
+  private async partitionSignedOff(weekId: string, entryDate: string | null): Promise<boolean> {
+    const rows = await DB.query(
+      singleLineString`select 1 from assembly_checklist_signoff where week_id = $1 and coalesce(entry_date, date '1900-01-01') = coalesce($2::date, date '1900-01-01')`,
+      [weekId, entryDate],
+    );
+    return rows.length > 0;
+  }
+
+  // Sign off a partition: scope 'day' + date signs off that assembly day; otherwise
+  // the week. Keyed by (week, entry_date) so weekly + per-day sign-offs coexist.
+  // lockSubmitted (PWA) rejects re-submitting an already-submitted partition.
+  public async signoff(weekId: string, data: SignoffRequest, schoolId: string, userId: string, lockSubmitted = false): Promise<WeekChecklist | null> {
     const week = await this.weekRow(weekId, schoolId);
     if (!week) return null;
+    const entryDate = data.scope === 'day' ? (data.date ?? null) : null;
+    if (data.scope === 'day') {
+      const dates = new Set(await this.weekDates(week.planId, schoolId, week.weekStart));
+      if (!entryDate || !dates.has(entryDate)) throw new BusinessErrorResult(ErrorCode.BusinessError, 'A day sign-off needs a valid assembly date');
+    }
+    if (lockSubmitted && await this.partitionSignedOff(weekId, entryDate)) {
+      throw new BusinessErrorResult(ErrorCode.BusinessError, 'Already submitted. Ask an admin to reopen it to make changes.');
+    }
     const now = new Date();
-    const existing = await DB.query(singleLineString`select week_id from assembly_checklist_signoff where week_id = $1`, [weekId]);
+    const existing = await DB.query(singleLineString`select 1 from assembly_checklist_signoff where week_id = $1 and coalesce(entry_date, date '1900-01-01') = coalesce($2::date, date '1900-01-01')`, [weekId, entryDate]);
     if (existing.length === 0) {
-      await DB.query(singleLineString`insert into assembly_checklist_signoff (week_id, school_id, note, signedby_userid, signed_at) values ($1,$2,$3,$4,$5)`, [weekId, schoolId, note?.trim() || null, userId, now]);
+      await DB.query(singleLineString`insert into assembly_checklist_signoff (week_id, school_id, entry_date, note, signedby_userid, signed_at) values ($1,$2,$3,$4,$5,$6)`, [weekId, schoolId, entryDate, data.note?.trim() || null, userId, now]);
     } else {
-      await DB.query(singleLineString`update assembly_checklist_signoff set note = $1, signedby_userid = $2, signed_at = $3 where week_id = $4`, [note?.trim() || null, userId, now, weekId]);
+      await DB.query(singleLineString`update assembly_checklist_signoff set note = $1, signedby_userid = $2, signed_at = $3 where week_id = $4 and coalesce(entry_date, date '1900-01-01') = coalesce($5::date, date '1900-01-01')`, [data.note?.trim() || null, userId, now, weekId, entryDate]);
     }
     return this.getWeekChecklist(weekId, schoolId);
   }
 
-  public async clearSignoff(weekId: string, schoolId: string): Promise<WeekChecklist | null> {
+  // Reopen (clear) a sign-off partition — admin only. date null = the weekly block.
+  public async clearSignoff(weekId: string, schoolId: string, date?: string | null): Promise<WeekChecklist | null> {
     const week = await this.weekRow(weekId, schoolId);
     if (!week) return null;
-    await DB.query(singleLineString`delete from assembly_checklist_signoff where week_id = $1 and school_id = $2`, [weekId, schoolId]);
+    await DB.query(
+      singleLineString`delete from assembly_checklist_signoff where week_id = $1 and school_id = $2 and coalesce(entry_date, date '1900-01-01') = coalesce($3::date, date '1900-01-01')`,
+      [weekId, schoolId, date ?? null],
+    );
     return this.getWeekChecklist(weekId, schoolId);
   }
 

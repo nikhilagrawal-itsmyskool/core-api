@@ -20,9 +20,14 @@ class ClassHandler {
         return;
       }
 
-      const name = event.queryStringParameters?.name;
+      const qp = event.queryStringParameters || {};
+      const name = qp.name;
+      const academicYearId = qp.academicYearId || qp.academic_year_id || undefined;
+      // Cohort/composite classes (class.class_group_id set) are timetable-internal
+      // and hidden from ordinary dropdowns unless explicitly requested.
+      const includeCohort = qp.includeCohort === '1' || qp.includeCohort === 'true';
 
-      const results = await classService.search(schoolId, name);
+      const results = await classService.search(schoolId, name, academicYearId, includeCohort);
       ResponseBuilder.ok(results, callback);
     } catch (err: any) {
       ResponseBuilder.handleError(err, callback);

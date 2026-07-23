@@ -219,20 +219,32 @@ export interface WeekChecklist {
   dayItems: ChecklistItem[];
   dates: string[];
   ticks: ChecklistTickView[];
-  signoff?: ChecklistSignoffView;
+  signoff?: ChecklistSignoffView;          // the WEEKLY sign-off (entry_date null)
+  daySignoffs?: DayChecklistSignoffView[];  // per-day sign-offs
 }
 export interface ChecklistSignoffView {
   note?: string;
   signedbyUserid?: string;
   signedAt?: string;
 }
+export interface DayChecklistSignoffView extends ChecklistSignoffView {
+  date: string;
+}
 
-// Bulk-set the week's ticks (replace: send exactly the CHECKED items).
+// Bulk-set the week's ticks (replace within a partition: send exactly the CHECKED
+// items). scope+date pick the partition to replace: 'week' replaces the weekly
+// ticks; 'day' with a date replaces just that day's ticks. Omitting scope replaces
+// ALL ticks (legacy behaviour).
 export interface SaveChecklistRequest {
   ticks: { itemId: string; date?: string | null }[];
+  scope?: ChecklistScope;
+  date?: string | null;
 }
+// Sign off a partition: scope 'day' + date signs off that day; otherwise the week.
 export interface SignoffRequest {
   note?: string;
+  scope?: ChecklistScope;
+  date?: string | null;
 }
 
 // ── House mode Phase D: grading + house-of-the-month ─────────────────────────
