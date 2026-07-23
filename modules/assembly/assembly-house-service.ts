@@ -128,7 +128,38 @@ class AssemblyHouseService {
         [data.houseId ?? null, userId, now, existing[0].uuid],
       );
     }
+    // A pin change (skip / re-anchor) re-computes the whole cycle. Re-sync the house
+    // snapshot on already-created UNLOCKED weeks so a started-then-skipped week loses
+    // its house (skip -> null) and re-anchored weeks follow the new rotation. Locked
+    // (approved) weeks keep their finalised snapshot.
+    await this.syncWeekSnapshots(planId, schoolId, userId);
     return this.weekCalendar(planId, schoolId, addWeeks(weekStart, -4), addWeeks(weekStart, 8));
+  }
+
+  // Bring every unlocked assembly_week's house snapshot back in line with the current
+  // rotation calendar (null when the week resolves to a skip / before the cycle start).
+  private async syncWeekSnapshots(planId: string, schoolId: string, userId: string): Promise<void> {
+    const weeks = await DB.query(
+      singleLineString`select uuid, week_start::text as week_start, house_id, locked from assembly_week where plan_id = $1 and school_id = $2`,
+      [planId, schoolId],
+    );
+    const unlocked = weeks.filter((w: any) => w.locked !== true);
+    if (unlocked.length === 0) return;
+    const starts = unlocked.map((w: any) => mondayOf(w.weekStart)).sort();
+    const cal = await this.weekCalendar(planId, schoolId, starts[0], starts[starts.length - 1]);
+    const byWeek = new Map(cal.map((c) => [c.weekStart, c]));
+    const now = new Date();
+    for (const w of unlocked) {
+      const resolved = byWeek.get(mondayOf(w.weekStart));
+      const newHouseId = resolved?.houseId ?? null;
+      const newHouseName = resolved?.houseName ?? null;
+      if ((w.houseId ?? null) !== newHouseId) {
+        await DB.query(
+          singleLineString`update assembly_week set house_id = $1, house_name = $2, updatedby_userid = $3, updated_at = $4 where uuid = $5`,
+          [newHouseId, newHouseName, userId, now, w.uuid],
+        );
+      }
+    }
   }
 
   // The house-on-duty for each Monday in [fromWeek, toWeek]. The rotation cycles
