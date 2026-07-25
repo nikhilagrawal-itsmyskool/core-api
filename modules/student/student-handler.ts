@@ -1,7 +1,9 @@
 import { ApiCallback, ApiContext, ApiEvent } from '../../shared/lib/api.interfaces';
 import { ResponseBuilder } from '../../shared/lib/response-builder';
 import { ErrorCode } from '../../shared/lib/error-codes';
-import { validateSchoolCodeHeader } from '../auth/auth-utils';
+import { validateSchoolCodeHeader, getCallerContext } from '../auth/auth-utils';
+import { maskContactFields } from '../../shared/util/mask-phone';
+import { STUDENT_PHONE_FIELDS } from './student-constants';
 import { studentService } from './student-service';
 import { getSignedPhotoUrl } from '../../shared/lib/file-storage';
 
@@ -46,6 +48,11 @@ class StudentHandler {
         }
       }
       (results as any[]).forEach((r: any) => delete r.photoStorageKey);
+      // Contact numbers are admin/god-only on the roster/search surface.
+      const reveal = getCallerContext(event).isAdminGod;
+      (results as any[]).forEach((r: any) =>
+        maskContactFields(r, [...STUDENT_PHONE_FIELDS], reveal)
+      );
       ResponseBuilder.ok(results, callback);
     } catch (err: any) {
       ResponseBuilder.handleError(err, callback);

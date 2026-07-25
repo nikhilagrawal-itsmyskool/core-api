@@ -2,6 +2,9 @@ import { ApiCallback, ApiContext, ApiEvent } from '../../shared/lib/api.interfac
 import { ResponseBuilder } from '../../shared/lib/response-builder';
 import { ErrorCode } from '../../shared/lib/error-codes';
 import { resolveSchool, parseBody, requireParam } from './handler-util';
+import { getCallerContext } from '../auth/auth-utils';
+import { maskContactFields } from '../../shared/util/mask-phone';
+import { TRANSPORT_PHONE_FIELDS } from './transport-constants';
 import { transportRouteService } from './transport-route-service';
 import {
   AddRouteStopsRequest, CreateRouteRequest, ReorderRouteStopsRequest, UpdateRouteRequest,
@@ -72,6 +75,7 @@ class TransportRouteHandler {
       if (!id) return;
       const result = await transportRouteService.getById(id, ctx.schoolId);
       if (!result) { ResponseBuilder.notFound(ErrorCode.InvalidId, 'Route not found', callback); return; }
+      maskContactFields(result, [...TRANSPORT_PHONE_FIELDS], getCallerContext(event).isAdminGod);
       ResponseBuilder.ok(result, callback);
     } catch (err: any) {
       ResponseBuilder.handleError(err, callback);
@@ -89,6 +93,8 @@ class TransportRouteHandler {
         return;
       }
       const results = await transportRouteService.list(ctx.schoolId, q.direction);
+      const reveal = getCallerContext(event).isAdminGod;
+      (results as any[]).forEach((r: any) => maskContactFields(r, [...TRANSPORT_PHONE_FIELDS], reveal));
       ResponseBuilder.ok(results, callback);
     } catch (err: any) {
       ResponseBuilder.handleError(err, callback);

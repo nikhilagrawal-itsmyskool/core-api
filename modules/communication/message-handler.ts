@@ -2,6 +2,8 @@ import { ApiCallback, ApiContext, ApiEvent } from '../../shared/lib/api.interfac
 import { ResponseBuilder } from '../../shared/lib/response-builder';
 import { ErrorCode } from '../../shared/lib/error-codes';
 import { resolveSchool, parseBody, requireParam } from './handler-util';
+import { getCallerContext } from '../auth/auth-utils';
+import { maskContactFields } from '../../shared/util/mask-phone';
 import { messageService } from './message-service';
 import { SendMessageRequest, PreviewRequest } from './communication-interfaces';
 
@@ -29,6 +31,8 @@ class MessageHandler {
       if (!body) return;
       if (!body.templateKey) { ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'templateKey is required', callback); return; }
       const result = await messageService.preview(ctx.schoolId, body);
+      const reveal = getCallerContext(event).isAdminGod;
+      for (const r of (result as any)?.recipients || []) maskContactFields(r, ['toNumber'], reveal);
       ResponseBuilder.ok(result, callback);
     } catch (err: any) {
       ResponseBuilder.handleError(err, callback);
@@ -56,6 +60,8 @@ class MessageHandler {
       if (!id) return;
       const job = await messageService.getById(id, ctx.schoolId);
       if (!job) { ResponseBuilder.notFound(ErrorCode.InvalidId, 'Message job not found', callback); return; }
+      const reveal = getCallerContext(event).isAdminGod;
+      for (const r of (job as any)?.recipients || []) maskContactFields(r, ['toNumber'], reveal);
       ResponseBuilder.ok(job, callback);
     } catch (err: any) {
       ResponseBuilder.handleError(err, callback);

@@ -2,9 +2,11 @@ import { ApiCallback, ApiContext, ApiEvent } from '../../shared/lib/api.interfac
 import { ResponseBuilder } from '../../shared/lib/response-builder';
 import { ErrorCode } from '../../shared/lib/error-codes';
 import { resolveSchool, parseBody, requireParam } from './handler-util';
+import { getCallerContext } from '../auth/auth-utils';
+import { maskContactFields } from '../../shared/util/mask-phone';
 import { transportVehicleService } from './transport-vehicle-service';
 import { CreateVehicleRequest, UpdateVehicleRequest } from './transport-interfaces';
-import { OWNERSHIP_VALUES, VEHICLE_TYPE_VALUES } from './transport-constants';
+import { OWNERSHIP_VALUES, VEHICLE_TYPE_VALUES, TRANSPORT_PHONE_FIELDS } from './transport-constants';
 
 class TransportVehicleHandler {
   public create = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
@@ -82,6 +84,7 @@ class TransportVehicleHandler {
       if (!id) return;
       const result = await transportVehicleService.getById(id, ctx.schoolId);
       if (!result) { ResponseBuilder.notFound(ErrorCode.InvalidId, 'Vehicle not found', callback); return; }
+      maskContactFields(result, [...TRANSPORT_PHONE_FIELDS], getCallerContext(event).isAdminGod);
       ResponseBuilder.ok(result, callback);
     } catch (err: any) {
       ResponseBuilder.handleError(err, callback);
@@ -95,6 +98,8 @@ class TransportVehicleHandler {
       if (!ctx) return;
       const q = event.queryStringParameters || {};
       const results = await transportVehicleService.list(ctx.schoolId, q.search);
+      const reveal = getCallerContext(event).isAdminGod;
+      (results as any[]).forEach((r: any) => maskContactFields(r, [...TRANSPORT_PHONE_FIELDS], reveal));
       ResponseBuilder.ok(results, callback);
     } catch (err: any) {
       ResponseBuilder.handleError(err, callback);

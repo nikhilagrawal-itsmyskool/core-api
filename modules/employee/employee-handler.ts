@@ -1,7 +1,8 @@
 import { ApiCallback, ApiContext, ApiEvent } from '../../shared/lib/api.interfaces';
 import { ResponseBuilder } from '../../shared/lib/response-builder';
 import { ErrorCode } from '../../shared/lib/error-codes';
-import { validateSchoolCodeHeader } from '../auth/auth-utils';
+import { validateSchoolCodeHeader, getCallerContext, revealEmployee } from '../auth/auth-utils';
+import { maskContactFields } from '../../shared/util/mask-phone';
 import { employeeService } from './employee-service';
 import { CreateEmployeeRequest, UpdateEmployeeRequest } from './employee-interfaces';
 
@@ -19,6 +20,10 @@ class EmployeeHandler {
       const includeDeleted = event.queryStringParameters?.includeDeleted === 'true';
 
       const results = await employeeService.search(schoolId, name, includeDeleted);
+      const ctx = getCallerContext(event);
+      for (const r of results || []) {
+        maskContactFields(r, ['mobile', 'whatsapp'], revealEmployee(ctx, r.uuid));
+      }
       ResponseBuilder.ok(results, callback);
     } catch (err: any) {
       ResponseBuilder.handleError(err, callback);
@@ -84,6 +89,8 @@ class EmployeeHandler {
         ResponseBuilder.notFound(ErrorCode.InvalidId, 'Employee not found', callback);
         return;
       }
+      const ctx = getCallerContext(event);
+      maskContactFields(result, ['mobile', 'whatsapp'], revealEmployee(ctx, result.uuid));
       ResponseBuilder.ok(result, callback);
     } catch (err: any) {
       ResponseBuilder.handleError(err, callback);

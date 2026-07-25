@@ -59,6 +59,41 @@ export function getAuthorizationHeader(event: ApiEvent): string | undefined {
   return headers['Authorization'] || headers['authorization'] || undefined;
 }
 
+// ---- Contact-visibility context ----
+// Who is allowed to see un-masked mobile/WhatsApp numbers. Derived purely from the
+// verified bearer token (no DB round-trip). A missing/invalid token yields the most
+// restrictive context (nothing revealed) — safe by default.
+
+export interface CallerContext {
+  isAdminGod: boolean; // employee with the 'admin' or 'god' role → sees every number
+  employeeId?: string; // own employee uuid → sees own number (self exception)
+  familyStudentIds: string[]; // family login's child allowlist → sees own family numbers
+}
+
+export function getCallerContext(event: ApiEvent): CallerContext {
+  const token = extractAndVerifyToken(getAuthorizationHeader(event));
+  if (!token) {
+    return { isAdminGod: false, familyStudentIds: [] };
+  }
+  const roles = Array.isArray(token.roles) ? token.roles : [];
+  return {
+    isAdminGod: token.type === 'employee' && (roles.includes('admin') || roles.includes('god')),
+    employeeId: token.employee_id,
+    familyStudentIds: Array.isArray(token.students) ? token.students.map((s) => s.id) : [],
+  };
+}
+
+// Reveal an employee's own number: admin/god, or the caller viewing their own record.
+export function revealEmployee(ctx: CallerContext, employeeId: string | null | undefined): boolean {
+  return ctx.isAdminGod || (!!employeeId && ctx.employeeId === employeeId);
+}
+
+// Reveal a student's / their guardian's number: admin/god, or a family login that
+// includes that student.
+export function revealStudent(ctx: CallerContext, studentId: string | null | undefined): boolean {
+  return ctx.isAdminGod || (!!studentId && ctx.familyStudentIds.includes(studentId));
+}
+
 export interface ActiveStudentAuth {
   token: DecodedToken;
   activeStudentId: string;

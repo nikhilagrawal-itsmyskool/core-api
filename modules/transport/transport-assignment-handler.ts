@@ -4,8 +4,9 @@ import { ErrorCode } from '../../shared/lib/error-codes';
 import { resolveSchool, parseBody, requireParam } from './handler-util';
 import { transportAssignmentService } from './transport-assignment-service';
 import { CreateAssignmentRequest, UpdateAssignmentRequest } from './transport-interfaces';
-import { DIRECTION_VALUES } from './transport-constants';
-import { guardActiveStudent } from '../auth/auth-utils';
+import { DIRECTION_VALUES, TRANSPORT_PHONE_FIELDS } from './transport-constants';
+import { guardActiveStudent, getCallerContext } from '../auth/auth-utils';
+import { maskContactFields } from '../../shared/util/mask-phone';
 
 class TransportAssignmentHandler {
   public create = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
@@ -102,6 +103,9 @@ class TransportAssignmentHandler {
       if (!studentId) return;
       const q = event.queryStringParameters || {};
       const result = await transportAssignmentService.studentReport(ctx.schoolId, studentId, q.academicYearId);
+      const reveal = getCallerContext(event).isAdminGod;
+      maskContactFields((result as any)?.morning, [...TRANSPORT_PHONE_FIELDS], reveal);
+      maskContactFields((result as any)?.evening, [...TRANSPORT_PHONE_FIELDS], reveal);
       ResponseBuilder.ok(result, callback);
     } catch (err: any) {
       ResponseBuilder.handleError(err, callback);
@@ -122,6 +126,10 @@ class TransportAssignmentHandler {
       const q = event.queryStringParameters || {};
 
       const result = await transportAssignmentService.studentReport(schoolId, studentId, q.academicYearId);
+      // Family/student callers are never admin/god → driver/conductor numbers masked.
+      const reveal = getCallerContext(event).isAdminGod;
+      maskContactFields((result as any)?.morning, [...TRANSPORT_PHONE_FIELDS], reveal);
+      maskContactFields((result as any)?.evening, [...TRANSPORT_PHONE_FIELDS], reveal);
       ResponseBuilder.ok(result, callback);
     } catch (err: any) {
       ResponseBuilder.handleError(err, callback);

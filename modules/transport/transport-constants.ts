@@ -1,6 +1,10 @@
 // Transport module constants (dropdown catalogs + defaults).
 // value/label(/description) arrays mirror the pattern in hiring/fine constants.
 
+// camelCase response keys carrying a driver/conductor phone number. Masked for
+// non admin/god callers (drivers/conductors are personal contacts, not public).
+export const TRANSPORT_PHONE_FIELDS = ['driverPhone', 'conductorPhone'] as const;
+
 export const VEHICLE_TYPES = [
   { value: 'bus', label: 'Bus' },
   { value: 'van', label: 'Van' },

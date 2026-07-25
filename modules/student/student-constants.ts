@@ -8,6 +8,21 @@ export const STATUS_VALUES = ['active', 'inactive', 'deleted'] as const;
 
 export const GUARDIAN_RELATIONS = ['father', 'mother', 'guardian', 'other'] as const;
 
+// camelCase response keys that carry a phone/WhatsApp number on a student row.
+// Masked for non admin/god callers. `familyUniqueNumber` is included because for
+// students it is the father's mobile (used as the family-login username).
+export const STUDENT_PHONE_FIELDS = [
+  'studentMobile',
+  'studentWhatsapp',
+  'fatherMobile',
+  'fatherWhatsapp',
+  'motherMobile',
+  'motherWhatsapp',
+  'guardianMobile',
+  'guardianWhatsapp',
+  'familyUniqueNumber',
+] as const;
+
 export const GENDERS = ['M', 'F', 'O'] as const;
 
 // Photo upload guards (student & guardian photos go to shared file_storage).

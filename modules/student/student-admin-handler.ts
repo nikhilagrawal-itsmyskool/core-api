@@ -1,7 +1,9 @@
 import { ApiCallback, ApiContext, ApiEvent } from '../../shared/lib/api.interfaces';
 import { ResponseBuilder } from '../../shared/lib/response-builder';
 import { ErrorCode } from '../../shared/lib/error-codes';
-import { validateSchoolCodeHeader } from '../auth/auth-utils';
+import { validateSchoolCodeHeader, getCallerContext, revealStudent } from '../auth/auth-utils';
+import { maskContactFields } from '../../shared/util/mask-phone';
+import { STUDENT_PHONE_FIELDS } from './student-constants';
 import { studentService } from './student-service';
 import { studentAdminService } from './student-admin-service';
 import { CreateStudentRequest, UpdateStudentRequest } from './student-interfaces';
@@ -35,6 +37,10 @@ class StudentAdminHandler {
         admissionNumber: q.admissionNumber,
         phone: q.phone,
       });
+      const reveal = getCallerContext(event).isAdminGod;
+      (results as any[]).forEach((r: any) =>
+        maskContactFields(r, [...STUDENT_PHONE_FIELDS], reveal)
+      );
       ResponseBuilder.ok({ students: results }, callback);
     } catch (err: any) {
       ResponseBuilder.handleError(err, callback);
@@ -52,6 +58,17 @@ class StudentAdminHandler {
 
       const result = await studentAdminService.getDetail(id, schoolId);
       if (!result) { ResponseBuilder.notFound(ErrorCode.InvalidId, 'Student not found', callback); return; }
+      // Student + guardian numbers: admin/god, or the family login that owns this
+      // student. Class-teacher number is an employee's — admin/god only.
+      const ctx = getCallerContext(event);
+      const revealOwn = revealStudent(ctx, id);
+      maskContactFields(result as any, ['studentMobile', 'studentWhatsapp', 'familyUniqueNumber'], revealOwn);
+      if ((result as any).classTeacher) {
+        maskContactFields((result as any).classTeacher, ['mobile', 'whatsapp'], ctx.isAdminGod);
+      }
+      for (const g of (result as any).guardians || []) {
+        maskContactFields(g, ['mobile', 'whatsapp'], revealOwn);
+      }
       ResponseBuilder.ok(result, callback);
     } catch (err: any) {
       ResponseBuilder.handleError(err, callback);
