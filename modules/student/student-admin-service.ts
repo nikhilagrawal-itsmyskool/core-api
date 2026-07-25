@@ -6,6 +6,7 @@ import {
   CreateStudentRequest,
   UpdateStudentRequest,
   StudentDetail,
+  EnrollmentRow,
 } from './student-interfaces';
 import { DEFAULTS, DEFAULT_PASSWORD } from './student-constants';
 import { studentGuardianService } from './student-guardian-service';
@@ -304,6 +305,7 @@ class StudentAdminService {
           cur.class_id as current_class_id,
           cur.class_name as current_class_name,
           cur.stream_code as current_stream_code,
+          cur.stream_name as current_stream_name,
           cur.roll_number as current_roll_number,
           ct.class_teacher_name, ct.class_teacher_mobile, ct.class_teacher_whatsapp,
           ct.class_teacher_subjects,
@@ -319,10 +321,11 @@ class StudentAdminService {
         left join house h on s.house_id = h.uuid
         left join lateral (
           select sc.academic_year_id, ay.name as academic_year_name,
-                 sc.class_id, c.name as class_name, sc.stream_code, sc.roll_number
+                 sc.class_id, c.name as class_name, sc.stream_code, cs.name as stream_name, sc.roll_number
           from student_class sc
           join academic_year ay on sc.academic_year_id = ay.uuid
           left join class c on sc.class_id = c.uuid
+          left join class_stream cs on cs.school_id = sc.school_id and lower(cs.code) = lower(sc.stream_code) and cs.status = 'active'
           where sc.student_id = s.uuid and (sc.status is null or sc.status <> 'deleted')
           order by ay.start_date desc nulls last limit 1
         ) cur on true
@@ -348,17 +351,24 @@ class StudentAdminService {
     if (rows.length === 0) return null;
     const r = rows[0];
 
-    const enrollments = await DB.query(
+    const currentEnrollments = (await DB.query(
       singleLineString`
         select sc.uuid, sc.academic_year_id, ay.name as academic_year_name,
-               sc.class_id, c.name as class_name, sc.stream_code, sc.roll_number, sc.join_date, sc.status
+               sc.class_id, c.name as class_name, sc.stream_code, cs.name as stream_name, sc.roll_number, sc.join_date, sc.status
         from student_class sc
         left join academic_year ay on sc.academic_year_id = ay.uuid
         left join class c on sc.class_id = c.uuid
+        left join class_stream cs on cs.school_id = sc.school_id and lower(cs.code) = lower(sc.stream_code) and cs.status = 'active'
         where sc.student_id = $1 and sc.school_id = $2 and (sc.status is null or sc.status <> 'deleted')
         order by ay.start_date desc nulls last
       `,
       [id, schoolId]
+    )) as EnrollmentRow[];
+    const enrollments = await this.buildEnrollmentHistory(
+      id,
+      schoolId,
+      r.oldAdmissionNumber,
+      currentEnrollments
     );
 
     const guardians = await studentGuardianService.list(id, schoolId);
@@ -394,6 +404,79 @@ class StudentAdminService {
     }
 
     return { ...rest, currentEffectiveClassId, classTeacher, enrollments, guardians, addresses, siblings } as StudentDetail;
+  }
+
+  // Stitches a re-admitted student's earlier years (which live under a separate,
+  // now-inactive student row linked by old_admission_number) into one timeline,
+  // marking the empty academic years between the two spans as 'gap'.
+  //
+  // A J->S promotion student (renumbered on reaching Class I, NO break) also carries
+  // an old_admission_number, but their old record's last year is ADJACENT to the new
+  // record's first year — so gapYears comes back empty and we return the current
+  // enrollments unchanged: no historical rows, no gap rows, zero behaviour change.
+  private async buildEnrollmentHistory(
+    studentId: string,
+    schoolId: string,
+    oldAdmissionNumber: string | null | undefined,
+    current: EnrollmentRow[]
+  ): Promise<EnrollmentRow[]> {
+    const currentTagged: EnrollmentRow[] = current.map((e) => ({ ...e, kind: 'current' }));
+    if (!oldAdmissionNumber || current.length === 0) return currentTagged;
+
+    // Old (superseded) record's years — already EnrollmentRow-shaped after case transform.
+    const oldRows = (await DB.query(
+      singleLineString`
+        select sc.uuid, sc.academic_year_id, ay.name as academic_year_name,
+               sc.class_id, c.name as class_name, sc.stream_code, sc.roll_number, sc.join_date, sc.status
+        from student prev
+        join student_class sc on sc.student_id = prev.uuid and sc.school_id = prev.school_id
+          and (sc.status is null or sc.status <> 'deleted')
+        join academic_year ay on ay.uuid = sc.academic_year_id
+        left join class c on c.uuid = sc.class_id
+        where prev.school_id = $1 and lower(prev.admission_number) = lower($2)
+        order by ay.start_date desc
+      `,
+      [schoolId, oldAdmissionNumber]
+    )) as EnrollmentRow[];
+    if (oldRows.length === 0) return currentTagged;
+
+    // The gap = academic years the school ran STRICTLY BETWEEN the old record's last
+    // year and the current record's first year. For a J->S promotion this is empty.
+    const gapYears = (await DB.query(
+      singleLineString`
+        select ay.uuid, ay.name from academic_year ay
+        where ay.school_id = $1
+          and ay.start_date > (
+            select max(a2.start_date) from student_class sc2
+            join academic_year a2 on a2.uuid = sc2.academic_year_id
+            join student prev on prev.uuid = sc2.student_id and prev.school_id = sc2.school_id
+            where prev.school_id = $1 and lower(prev.admission_number) = lower($2)
+              and (sc2.status is null or sc2.status <> 'deleted'))
+          and ay.start_date < (
+            select min(a3.start_date) from student_class sc3
+            join academic_year a3 on a3.uuid = sc3.academic_year_id
+            where sc3.student_id = $3 and sc3.school_id = $1
+              and (sc3.status is null or sc3.status <> 'deleted'))
+        order by ay.start_date desc
+      `,
+      [schoolId, oldAdmissionNumber, studentId]
+    )) as Array<{ uuid: string; name: string }>;
+
+    // The J->S guard: no empty year in between → contiguous renumbering, not a
+    // return. Emit exactly what we do today.
+    if (gapYears.length === 0) return currentTagged;
+
+    const gapRows: EnrollmentRow[] = gapYears.map((g) => ({
+      uuid: `gap-${g.uuid}`,
+      academicYearId: g.uuid,
+      academicYearName: g.name,
+      status: 'gap',
+      kind: 'gap',
+    }));
+    const historicalRows: EnrollmentRow[] = oldRows.map((e) => ({ ...e, kind: 'historical' }));
+
+    // newest-first: current years, then the gap markers, then the old years
+    return [...currentTagged, ...gapRows, ...historicalRows];
   }
 
   // ---- Credentials (god/admin only, gated in the UI — mirrors employee) ----

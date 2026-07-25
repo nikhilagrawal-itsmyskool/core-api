@@ -108,14 +108,23 @@ class AssemblyResolveService {
       [weekId, result.date],
     );
     const anchors: ResolvedAnchor[] = [];
+    const commanders: ResolvedAnchor[] = [];
+    const drummers: ResolvedAnchor[] = [];
     const dayOwners: { employeeId?: string; name?: string }[] = [];
+    const asPerson = (p: any): ResolvedAnchor => ({
+      studentId: p.targetType === 'student' ? (p.targetId || undefined) : undefined,
+      name: p.targetName || p.targetText || undefined,
+      className: p.targetClass || undefined,
+    });
     for (const p of dayParts) {
       if (p.role === 'day-owner') dayOwners.push({ employeeId: p.targetId || undefined, name: p.targetName || p.targetText || undefined });
-      // commander/drummer are roster-editor roles; not surfaced on the published assembly yet.
-      else if (p.role === 'commander' || p.role === 'drummer') continue;
-      else anchors.push({ studentId: p.targetType === 'student' ? (p.targetId || undefined) : undefined, name: p.targetName || p.targetText || undefined, className: p.targetClass || undefined });
+      else if (p.role === 'commander') commanders.push(asPerson(p));
+      else if (p.role === 'drummer') drummers.push(asPerson(p));
+      else anchors.push(asPerson(p));
     }
     if (anchors.length) result.anchors = anchors;
+    if (commanders.length) result.commanders = commanders;
+    if (drummers.length) result.drummers = drummers;
     if (dayOwners.length) result.dayOwners = dayOwners;
 
     // Roster only overlays the recurring template — specials are standalone.

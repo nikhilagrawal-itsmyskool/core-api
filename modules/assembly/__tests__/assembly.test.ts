@@ -346,7 +346,9 @@ describe('house mode: weekly roster', () => {
     expect(r.body.mode).toBe('house');
     expect(r.body.rosterApproved).toBe(true);
     expect((r.body.anchors || []).map((a: any) => a.name)).toContain('Head Girl');
-    // commander/drummer are roster-only roles — they must NOT leak into resolved anchors.
+    // commander/drummer surface on their own arrays, and must NOT leak into anchors.
+    expect((r.body.commanders || []).map((a: any) => a.name)).toContain('Cmdr Rai');
+    expect((r.body.drummers || []).map((a: any) => a.name)).toContain('Drummer Das');
     expect((r.body.anchors || []).map((a: any) => a.name)).not.toContain('Cmdr Rai');
     expect((r.body.anchors || []).map((a: any) => a.name)).not.toContain('Drummer Das');
     const pres = r.body.nodes.find((n: any) => n.title === 'Presentation');

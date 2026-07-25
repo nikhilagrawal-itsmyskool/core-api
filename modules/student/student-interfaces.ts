@@ -97,6 +97,7 @@ export interface StudentDetail {
   currentClassId?: string;
   currentClassName?: string;
   currentStreamCode?: string;
+  currentStreamName?: string; // class_stream display name (e.g. Science) for currentStreamCode
   currentEffectiveClassId?: string; // stream-specific class (base when no stream); for timetable/syllabus
   currentRollNumber?: number;
   classTeacher?: ClassTeacherRef | null;
@@ -125,9 +126,11 @@ export interface EnrollmentRow {
   classId?: string;
   className?: string;
   streamCode?: string;
+  streamName?: string;
   rollNumber?: number;
   joinDate?: string;
   status?: string;
+  kind?: 'current' | 'historical' | 'gap'; // set when the history is a merged re-admission timeline
 }
 
 // ---- Addresses ----

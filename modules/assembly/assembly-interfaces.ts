@@ -609,6 +609,8 @@ export interface ResolvedAssembly {
   houseName?: string;
   rosterApproved?: boolean; // true when an approved roster was overlaid onto the template
   anchors?: ResolvedAnchor[];
+  commanders?: ResolvedAnchor[]; // assembly commander(s), students
+  drummers?: ResolvedAnchor[];   // assembly drummer(s), students
   dayOwners?: { employeeId?: string; name?: string }[];
 }
 
