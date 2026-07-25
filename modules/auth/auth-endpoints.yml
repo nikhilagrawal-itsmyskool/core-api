@@ -1,5 +1,6 @@
   verify-token:
     handler: verify-token.auth
+    name: ${self:service}-verify-token
 
   health:
     handler: health-handler.health

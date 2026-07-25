@@ -45,6 +45,12 @@ provider:
       - tests/**
 
 custom:
+  # Shared API authorizer (verify-token Lambda in the auth stack). Only enforced where
+  # the ../../plugins/serverless-authorizer.js plugin is added to a module's plugins list.
+  authorizer:
+    arn: arn:aws:lambda:${aws:region}:${aws:accountId}:function:${self:provider.stage}-itsmyskool-auth-service-verify-token
+    exemptPaths:
+      - health
   customDomains:
     - rest:
         domainName: api.dev.itsmyskool.com
