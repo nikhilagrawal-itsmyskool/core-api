@@ -120,8 +120,10 @@ export interface RosterSlot {
 export interface RosterDayView {
   date: string;         // yyyy-mm-dd
   weekday: Weekday;
-  anchors: RosterParticipantView[];  // scope='day', role 'anchor'
-  owners: RosterParticipantView[];   // scope='day', role 'day-owner'
+  anchors: RosterParticipantView[];     // scope='day', role 'anchor'
+  owners: RosterParticipantView[];      // scope='day', role 'day-owner'
+  commanders: RosterParticipantView[];  // scope='day', role 'commander' (student)
+  drummers: RosterParticipantView[];    // scope='day', role 'drummer' (student)
   slots: RosterSlot[];
 }
 
@@ -163,8 +165,10 @@ export interface SaveRosterRequest {
 }
 export interface SaveRosterDayInput {
   date: string;
-  anchors?: RosterParticipantInput[]; // role defaulted to 'anchor'
-  owners?: RosterParticipantInput[];  // role defaulted to 'day-owner'
+  anchors?: RosterParticipantInput[];    // role defaulted to 'anchor'
+  owners?: RosterParticipantInput[];     // role defaulted to 'day-owner'
+  commanders?: RosterParticipantInput[]; // role defaulted to 'commander'
+  drummers?: RosterParticipantInput[];   // role defaulted to 'drummer'
 }
 export interface SaveRosterEntryInput {
   date: string;

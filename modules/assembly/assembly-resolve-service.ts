@@ -111,6 +111,8 @@ class AssemblyResolveService {
     const dayOwners: { employeeId?: string; name?: string }[] = [];
     for (const p of dayParts) {
       if (p.role === 'day-owner') dayOwners.push({ employeeId: p.targetId || undefined, name: p.targetName || p.targetText || undefined });
+      // commander/drummer are roster-editor roles; not surfaced on the published assembly yet.
+      else if (p.role === 'commander' || p.role === 'drummer') continue;
       else anchors.push({ studentId: p.targetType === 'student' ? (p.targetId || undefined) : undefined, name: p.targetName || p.targetText || undefined, className: p.targetClass || undefined });
     }
     if (anchors.length) result.anchors = anchors;

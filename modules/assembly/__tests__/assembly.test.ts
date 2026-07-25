@@ -308,7 +308,12 @@ describe('house mode: weekly roster', () => {
     const save = await api('PUT', `/weeks/${weekId}/roster`, {
       // Day anchors (polymorphic participants, incl. a free-text anchor + a group).
       days: [
-        { date: MON, anchors: [{ targetType: 'text', targetText: 'Head Girl' }, { targetType: 'class', targetId: seed.classIds[0] }] },
+        {
+          date: MON,
+          anchors: [{ targetType: 'text', targetText: 'Head Girl' }, { targetType: 'class', targetId: seed.classIds[0] }],
+          commanders: [{ targetType: 'text', targetText: 'Cmdr Rai' }],
+          drummers: [{ targetType: 'text', targetText: 'Drummer Das' }],
+        },
       ],
       entries: [
         // A skit slot: content + a GROUP of performers (two classes) on one node.
@@ -325,6 +330,8 @@ describe('house mode: weekly roster', () => {
     expect(save.status).toBe(200);
     const monDay = save.body.days.find((d: any) => d.date === MON);
     expect(monDay.anchors).toHaveLength(2);           // N anchors, not capped at 2 columns
+    expect(monDay.commanders).toHaveLength(1);        // assembly commander (own day role)
+    expect(monDay.drummers).toHaveLength(1);          // assembly drummer (own day role)
     const savedSlot = monDay.slots.find((s: any) => s.nodeId === rosterNode);
     expect(savedSlot.participants).toHaveLength(2);    // a group on one slot
 
@@ -339,6 +346,9 @@ describe('house mode: weekly roster', () => {
     expect(r.body.mode).toBe('house');
     expect(r.body.rosterApproved).toBe(true);
     expect((r.body.anchors || []).map((a: any) => a.name)).toContain('Head Girl');
+    // commander/drummer are roster-only roles — they must NOT leak into resolved anchors.
+    expect((r.body.anchors || []).map((a: any) => a.name)).not.toContain('Cmdr Rai');
+    expect((r.body.anchors || []).map((a: any) => a.name)).not.toContain('Drummer Das');
     const pres = r.body.nodes.find((n: any) => n.title === 'Presentation');
     expect(pres.content).toBe('Speech on Courage');
     expect(pres.responsible).toHaveLength(2);          // the performer group

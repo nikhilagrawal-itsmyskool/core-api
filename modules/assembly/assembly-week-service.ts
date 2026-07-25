@@ -125,6 +125,8 @@ class AssemblyWeekService {
         date, weekday: wd,
         anchors: dp.filter(r => r.role === 'anchor').map(view),
         owners: dp.filter(r => r.role === 'day-owner').map(view),
+        commanders: dp.filter(r => r.role === 'commander').map(view),
+        drummers: dp.filter(r => r.role === 'drummer').map(view),
         slots,
       });
     }
@@ -175,6 +177,8 @@ class AssemblyWeekService {
         let idx = 0;
         for (const a of day.anchors || []) insertParticipant('day', day.date, null, a.role || 'anchor', await this.resolveParticipant(schoolId, a, week.academicYearId), idx++);
         for (const o of day.owners || []) insertParticipant('day', day.date, null, o.role || 'day-owner', await this.resolveParticipant(schoolId, o, week.academicYearId), idx++);
+        for (const c of day.commanders || []) insertParticipant('day', day.date, null, c.role || 'commander', await this.resolveParticipant(schoolId, c, week.academicYearId), idx++);
+        for (const dr of day.drummers || []) insertParticipant('day', day.date, null, dr.role || 'drummer', await this.resolveParticipant(schoolId, dr, week.academicYearId), idx++);
       }
     }
 
