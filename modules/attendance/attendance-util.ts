@@ -1,4 +1,5 @@
 import { ABSENT_TEMPLATE_KEY } from './attendance-constants';
+const { serviceAuthHeader } = require('../../shared/util/service-token');
 
 // Base URL of the communication module. Points at the gateway in deployed envs;
 // override with COMM_BASE_URL to target the module's own port for standalone runs.
@@ -16,7 +17,12 @@ export async function notifyAbsences(
   try {
     const res = await fetch(`${COMM_BASE_URL}/communication/messages`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-School-Code': schoolCode },
+      headers: {
+        'Content-Type': 'application/json',
+        'X-School-Code': schoolCode,
+        // Service token so this call passes the API authorizer once communication is protected.
+        Authorization: serviceAuthHeader({ name: 'attendance' }),
+      },
       body: JSON.stringify({
         templateKey: ABSENT_TEMPLATE_KEY,
         source: 'attendance',
