@@ -82,6 +82,8 @@ create unique index if not exists idx_assembly_plan_class_unique
     on assembly_plan_class(plan_id, class_id) where status = 'active';
 -- NOTE: no cross-plan uniqueness — a class may belong to overlapping dated plans
 -- (e.g. a Term-1 plan and an exam-block plan); resolution is narrowest-range-wins.
+-- Drop the old one-plan-per-class-per-year guard (dated overlapping plans allow it now).
+drop index if exists idx_assembly_plan_class_no_overlap;
 create index if not exists idx_assembly_plan_class_plan on assembly_plan_class(plan_id);
 create index if not exists idx_assembly_plan_class_school_year_class
     on assembly_plan_class(school_id, academic_year_id, class_id) where status = 'active';
@@ -256,8 +258,7 @@ create index if not exists idx_assembly_node_audit_node on assembly_node_audit(s
 
 -- ---------------------------------------------------------------------------
 -- House mode (Phase A). Optional per-school extension. These tables stay empty
--- and menus hidden for 'template' schools — zero added surface. Kept in parity
--- with assembly-migrate-3-house-mode.sql for fresh installs.
+-- and menus hidden for 'template' schools — zero added surface.
 -- ---------------------------------------------------------------------------
 
 -- Table 11: assembly_school_config (per-school mode + optional branding)
@@ -319,7 +320,6 @@ create unique index if not exists idx_assembly_node_day_content_unique on assemb
 
 -- ---------------------------------------------------------------------------
 -- House mode Phase B: the weekly roster (draft -> submitted -> approved=locked).
--- Kept in parity with assembly-migrate-4-roster.sql for fresh installs.
 -- ---------------------------------------------------------------------------
 
 -- Table 16: assembly_week (per plan/wing, per week roster instance)
@@ -400,7 +400,6 @@ create index if not exists idx_assembly_week_unlock_week on assembly_week_unlock
 
 -- ---------------------------------------------------------------------------
 -- House mode Phase C: the execution checklist (configurable; recorded, not gating).
--- Kept in parity with assembly-migrate-5-checklist.sql for fresh installs.
 -- ---------------------------------------------------------------------------
 
 -- Table 20: assembly_checklist_item (per-school checklist catalog; week/day scope)
@@ -434,18 +433,25 @@ create unique index if not exists idx_assembly_checklist_tick_unique
     on assembly_checklist_tick(week_id, item_id, (coalesce(entry_date, date '1900-01-01')));
 create index if not exists idx_assembly_checklist_tick_week on assembly_checklist_tick(week_id);
 
--- Table 22: assembly_checklist_signoff (week-level sign-off)
+-- Table 22: assembly_checklist_signoff (per (week, date) sign-off)
+-- entry_date null = the WEEKLY sign-off; entry_date set = that assembly DAY's sign-off.
 create table if not exists assembly_checklist_signoff (
-    week_id varchar(12) primary key,
+    week_id varchar(12) not null,
     school_id varchar(12) not null,
+    entry_date date,
     note text,
     signedby_userid varchar(12),
     signed_at timestamp(0)
 );
+-- Migrate older single-row-per-week installs: add the date column, drop the week-only pkey.
+alter table assembly_checklist_signoff add column if not exists entry_date date;
+alter table assembly_checklist_signoff drop constraint if exists assembly_checklist_signoff_pkey;
+-- One sign-off per (week, date); coalesce keeps the weekly (null-date) row unique.
+create unique index if not exists idx_assembly_checklist_signoff_unique
+    on assembly_checklist_signoff(week_id, (coalesce(entry_date, date '1900-01-01')));
 
 -- ---------------------------------------------------------------------------
 -- House mode Phase D: grading + house-of-the-month (configurable rubric).
--- Kept in parity with assembly-migrate-6-grading.sql for fresh installs.
 -- ---------------------------------------------------------------------------
 
 -- Table 23: assembly_rubric_metric (scoring metrics)
