@@ -1,9 +1,10 @@
 /**
  * Import daily attendance from the ERP "StudentAttendanceReport.xls" exports.
  *
- * The export is an HTML <table> saved with a .xls extension (NOT real Excel),
- * one file per class. Columns: Adm. No. | Name | Roll No | Class | <one column
- * per calendar day> | <summary columns>. Daily cell codes:
+ * The export is an HTML <table> saved with a .xls extension (NOT real Excel).
+ * A file may contain ONE class or MANY (each row carries its own Class in col 3;
+ * rows are grouped by that Class name). Columns: Adm. No. | Name | Roll No |
+ * Class | <one column per calendar day> | <summary columns>. Daily cell codes:
  *   P  -> present     A  -> absent
  *   HD/HL (half day)  -> present
  *   DL (duty leave)   -> leave       L (leave) -> leave
@@ -169,36 +170,47 @@ async function main() {
     });
 
     const dataRows = rows.filter((r) => ADM_RE.test((r[0] || '').trim()));
-    const className = (dataRows[0] || [])[3] || path.basename(fp);
-    const targetName = aliasMap.get(String(className).trim().toLowerCase()) || className;
-    const classId = classByName.get(String(targetName).trim().toLowerCase());
-    if (!classId) { problems.noClass.add(className); console.log(`  ${path.basename(fp)}: class "${className}" not found — skipped`); continue; }
-    const aliasNote = targetName !== className ? ` (→ ${targetName})` : '';
 
-    const sessions = new Map(); // iso -> [{studentId, status}]
+    // A file may hold MANY classes (each row carries its own Class in col 3).
+    // Group rows by their own class name and plan one class-block per group.
+    const rowsByClass = new Map(); // className -> rows[]
     for (const r of dataRows) {
-      const adm = (r[0] || '').trim().toLowerCase();
-      const studentId = studByAdm.get(adm);
-      if (!studentId) { problems.unmatchedAdm.add(`${r[0]} (${r[1]})`); continue; }
-      for (const dc of dateCols) {
-        const status = mapCode(r[dc.i]);
-        if (status === undefined) { const k = (r[dc.i] || '').trim(); problems.unknownCodes[k] = (problems.unknownCodes[k] || 0) + 1; continue; }
-        if (status === null) continue;
-        if (!sessions.has(dc.iso)) sessions.set(dc.iso, []);
-        sessions.get(dc.iso).push({ studentId, status });
+      const cn = (r[3] || '').trim() || path.basename(fp);
+      if (!rowsByClass.has(cn)) rowsByClass.set(cn, []);
+      rowsByClass.get(cn).push(r);
+    }
+
+    for (const [className, clsRows] of rowsByClass) {
+      const targetName = aliasMap.get(String(className).trim().toLowerCase()) || className;
+      const classId = classByName.get(String(targetName).trim().toLowerCase());
+      if (!classId) { problems.noClass.add(className); console.log(`  ${path.basename(fp)}: class "${className}" not found — skipped`); continue; }
+      const aliasNote = targetName !== className ? ` (→ ${targetName})` : '';
+
+      const sessions = new Map(); // iso -> [{studentId, status}]
+      for (const r of clsRows) {
+        const adm = (r[0] || '').trim().toLowerCase();
+        const studentId = studByAdm.get(adm);
+        if (!studentId) { problems.unmatchedAdm.add(`${r[0]} (${r[1]})`); continue; }
+        for (const dc of dateCols) {
+          const status = mapCode(r[dc.i]);
+          if (status === undefined) { const k = (r[dc.i] || '').trim(); problems.unknownCodes[k] = (problems.unknownCodes[k] || 0) + 1; continue; }
+          if (status === null) continue;
+          if (!sessions.has(dc.iso)) sessions.set(dc.iso, []);
+          sessions.get(dc.iso).push({ studentId, status });
+        }
       }
-    }
 
-    // tally
-    for (const [, marks] of sessions) {
-      tally.sessions++;
-      for (const m of marks) { tally.records++; tally[m.status]++; }
-    }
-    const markedDates = new Set([...sessions.keys()]);
-    tally.holidayDates += dateCols.length - markedDates.size;
+      // tally
+      for (const [, marks] of sessions) {
+        tally.sessions++;
+        for (const m of marks) { tally.records++; tally[m.status]++; }
+      }
+      const markedDates = new Set([...sessions.keys()]);
+      tally.holidayDates += dateCols.length - markedDates.size;
 
-    plan.push({ className, classId, fileName: path.basename(fp), sessions });
-    console.log(`  ${path.basename(fp)}: class ${className}${aliasNote} | ${dataRows.length} students | ${markedDates.size} working-day sessions | ${[...sessions.values()].reduce((s, a) => s + a.length, 0)} records`);
+      plan.push({ className, classId, fileName: path.basename(fp), sessions });
+      console.log(`  ${path.basename(fp)}: class ${className}${aliasNote} | ${clsRows.length} students | ${markedDates.size} working-day sessions | ${[...sessions.values()].reduce((s, a) => s + a.length, 0)} records`);
+    }
   }
 
   // report problems
