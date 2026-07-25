@@ -3,7 +3,7 @@ import { ResponseBuilder } from '../../shared/lib/response-builder';
 import { ErrorCode } from '../../shared/lib/error-codes';
 import { validateSchoolCodeHeader, getCallerContext, revealStudent } from '../auth/auth-utils';
 import { maskContactFields } from '../../shared/util/mask-phone';
-import { STUDENT_PHONE_FIELDS } from './student-constants';
+import { STUDENT_MASKED_FIELDS } from './student-constants';
 import { studentService } from './student-service';
 import { studentAdminService } from './student-admin-service';
 import { CreateStudentRequest, UpdateStudentRequest } from './student-interfaces';
@@ -39,7 +39,7 @@ class StudentAdminHandler {
       });
       const reveal = getCallerContext(event).isAdminGod;
       (results as any[]).forEach((r: any) =>
-        maskContactFields(r, [...STUDENT_PHONE_FIELDS], reveal)
+        maskContactFields(r, [...STUDENT_MASKED_FIELDS], reveal)
       );
       ResponseBuilder.ok({ students: results }, callback);
     } catch (err: any) {
@@ -62,7 +62,7 @@ class StudentAdminHandler {
       // student. Class-teacher number is an employee's — admin/god only.
       const ctx = getCallerContext(event);
       const revealOwn = revealStudent(ctx, id);
-      maskContactFields(result as any, ['studentMobile', 'studentWhatsapp', 'familyUniqueNumber'], revealOwn);
+      maskContactFields(result as any, ['studentMobile', 'studentWhatsapp', 'familyUniqueNumber', 'aadhaarNumber'], revealOwn);
       if ((result as any).classTeacher) {
         maskContactFields((result as any).classTeacher, ['mobile', 'whatsapp'], ctx.isAdminGod);
       }

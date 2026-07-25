@@ -8,10 +8,10 @@ export const STATUS_VALUES = ['active', 'inactive', 'deleted'] as const;
 
 export const GUARDIAN_RELATIONS = ['father', 'mother', 'guardian', 'other'] as const;
 
-// camelCase response keys that carry a phone/WhatsApp number on a student row.
-// Masked for non admin/god callers. `familyUniqueNumber` is included because for
-// students it is the father's mobile (used as the family-login username).
-export const STUDENT_PHONE_FIELDS = [
+// camelCase response keys carrying a sensitive contact/identity value on a student
+// row. Masked for non admin/god callers. `familyUniqueNumber` = father's mobile
+// (family-login username); `aadhaarNumber` = national ID (more sensitive than a phone).
+export const STUDENT_MASKED_FIELDS = [
   'studentMobile',
   'studentWhatsapp',
   'fatherMobile',
@@ -21,6 +21,7 @@ export const STUDENT_PHONE_FIELDS = [
   'guardianMobile',
   'guardianWhatsapp',
   'familyUniqueNumber',
+  'aadhaarNumber',
 ] as const;
 
 export const GENDERS = ['M', 'F', 'O'] as const;

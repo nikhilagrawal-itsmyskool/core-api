@@ -22,7 +22,8 @@ class EmployeeHandler {
       const results = await employeeService.search(schoolId, name, includeDeleted);
       const ctx = getCallerContext(event);
       for (const r of results || []) {
-        maskContactFields(r, ['mobile', 'whatsapp'], revealEmployee(ctx, r.uuid));
+        // familyUniqueNumber is the login id — but it is the employee's mobile number.
+        maskContactFields(r, ['mobile', 'whatsapp', 'familyUniqueNumber'], revealEmployee(ctx, r.uuid));
       }
       ResponseBuilder.ok(results, callback);
     } catch (err: any) {
@@ -90,7 +91,7 @@ class EmployeeHandler {
         return;
       }
       const ctx = getCallerContext(event);
-      maskContactFields(result, ['mobile', 'whatsapp'], revealEmployee(ctx, result.uuid));
+      maskContactFields(result, ['mobile', 'whatsapp', 'familyUniqueNumber'], revealEmployee(ctx, result.uuid));
       ResponseBuilder.ok(result, callback);
     } catch (err: any) {
       ResponseBuilder.handleError(err, callback);
