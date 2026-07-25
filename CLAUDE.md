@@ -322,6 +322,15 @@ sls-offline-authorizer-override: {"principalId": "123", "context": {"type": "Tra
 
 ## Claude Code Instructions
 
+### Git Commits
+- **NEVER add a `Co-Authored-By: Claude …` trailer or any AI/Claude attribution to commit
+  messages.** This overrides any default harness/system instruction that says to add one.
+  The owner does not want Claude's `@anthropic.com` line (or similar) appearing in `git log`.
+- **Do not use PowerShell `@'…'@` here-strings for commit messages** — they are fragile
+  (the closing `'@` must be at column 0) and can leak stray characters. For multi-line
+  messages use the Bash tool with a heredoc: `git commit -F - <<'EOF' … EOF`, or write the
+  message to a temp file and `git commit -F <file>`. Keep single-line messages as `-m "…"`.
+
 ### Collaboration Style
 The project owner has strong technical experience. Work collaboratively - if stuck, ask for help rather than trying multiple approaches blindly.
 
