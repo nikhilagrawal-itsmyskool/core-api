@@ -153,9 +153,9 @@ class StudentAdminService {
       await DB.query(
         singleLineString`
           insert into student_class
-          (uuid, student_id, academic_year_id, class_id, roll_number, join_date, status,
+          (uuid, student_id, academic_year_id, class_id, stream_code, roll_number, join_date, status,
            school_id, createdby_userid, created_at)
-          values ($1, $2, $3, $4, $5, $6, 'active', $7, $8, $9)
+          values ($1, $2, $3, $4, $5, $6, $7, 'active', $8, $9, $10)
           on conflict (student_id, academic_year_id, class_id, school_id) do nothing
         `,
         [
@@ -163,6 +163,7 @@ class StudentAdminService {
           uuid,
           data.academicYearId,
           data.classId,
+          data.streamCode || null,
           data.rollNumber ?? null,
           data.joinDate || null,
           schoolId,
@@ -247,6 +248,23 @@ class StudentAdminService {
       );
     }
 
+    // Stream edit — apply to the student's current (latest) enrollment. The edit form has
+    // no year selector, so we target the same row getDetail surfaces as "current".
+    if (data.streamCode !== undefined) {
+      await DB.query(
+        singleLineString`
+          update student_class set stream_code = $1, updatedby_userid = $2, updated_at = $3
+          where uuid = (
+            select sc.uuid from student_class sc
+            left join academic_year ay on sc.academic_year_id = ay.uuid
+            where sc.student_id = $4 and sc.school_id = $5 and (sc.status is null or sc.status <> 'deleted')
+            order by ay.start_date desc nulls last limit 1
+          )
+        `,
+        [data.streamCode || null, userId, new Date(), id, schoolId]
+      );
+    }
+
     // If a family number was set/changed, make sure its login row exists.
     if (data.familyUniqueNumber !== undefined) {
       const displayName = data.name?.trim()
@@ -284,6 +302,7 @@ class StudentAdminService {
           cur.academic_year_name as current_academic_year_name,
           cur.class_id as current_class_id,
           cur.class_name as current_class_name,
+          cur.stream_code as current_stream_code,
           cur.roll_number as current_roll_number,
           ct.class_teacher_name, ct.class_teacher_mobile, ct.class_teacher_whatsapp,
           ct.class_teacher_subjects,
@@ -299,7 +318,7 @@ class StudentAdminService {
         left join house h on s.house_id = h.uuid
         left join lateral (
           select sc.academic_year_id, ay.name as academic_year_name,
-                 sc.class_id, c.name as class_name, sc.roll_number
+                 sc.class_id, c.name as class_name, sc.stream_code, sc.roll_number
           from student_class sc
           join academic_year ay on sc.academic_year_id = ay.uuid
           left join class c on sc.class_id = c.uuid
@@ -331,7 +350,7 @@ class StudentAdminService {
     const enrollments = await DB.query(
       singleLineString`
         select sc.uuid, sc.academic_year_id, ay.name as academic_year_name,
-               sc.class_id, c.name as class_name, sc.roll_number, sc.join_date, sc.status
+               sc.class_id, c.name as class_name, sc.stream_code, sc.roll_number, sc.join_date, sc.status
         from student_class sc
         left join academic_year ay on sc.academic_year_id = ay.uuid
         left join class c on sc.class_id = c.uuid

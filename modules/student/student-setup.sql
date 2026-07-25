@@ -109,6 +109,12 @@ alter table student add column if not exists withdrawal_remarks varchar(512);
 -- student_class.join_date — "Date Of Joining" for that enrollment.
 alter table student_class add column if not exists join_date date;
 
+-- student_class.stream_code — the student's stream for this enrollment (e.g. SCI / COM
+-- for XI/XII); null for classes without streams. Set at admission/edit (that flow lands
+-- later); the shared effective-class resolver maps (class_id + stream_code) to the
+-- stream-child class row. Matches a class_stream.code within the school (no FK).
+alter table student_class add column if not exists stream_code varchar(16);
+
 -- student_guardian — parent/guardian extended attributes.
 alter table student_guardian add column if not exists relationship varchar(64);  -- specific label: uncle/sister/...
 alter table student_guardian add column if not exists designation varchar(128);

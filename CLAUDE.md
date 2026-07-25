@@ -20,6 +20,19 @@ npx serverless deploy --stage {dev|qa|prod}
 npx prettier --write .
 ```
 
+### Prod Deploy (Windows / PowerShell) — the command that actually works here
+
+Run from the **module directory** (`cd modules/<module>` first). `npx serverless` is unreliable
+on Windows and the prod account needs an explicit AWS profile + region (ap-south-1):
+
+```powershell
+$env:AWS_PROFILE = 'prod-itsmyskool-nikhil.agrawal'
+& "H:\github\itsmyskool\core-api\node_modules\.bin\serverless.cmd" deploy --stage prod --verbose --region ap-south-1
+```
+
+Profile: `prod-itsmyskool-nikhil.agrawal` · Region: `ap-south-1`. No `reservedConcurrency`
+(account has the min-10 unreserved-limit).
+
 ## NPM Scripts
 
 ### Module Commands (auth, medical, lab, student, employee, class, academic-year, fine, supplies, attendance, communication)
@@ -220,6 +233,14 @@ export const service = new MyService();
 - **Enum-like fields** use VARCHAR with CHECK constraints (e.g., `status varchar(16) check (status in ('active', 'deleted'))`)
 - **UUID generation** via `shared/util/generate-uuid.js` → `generateShortUuid(12)`
 - **Schema files** kept in module folder (e.g., `modules/medical/medical-setup.sql`)
+- **Prefer `<module>-setup.sql` over one-off migrate files.** Every schema statement must be
+  additive + idempotent (`add column if not exists`, `create table if not exists`,
+  `create ... index if not exists`) so the setup file is safe to re-run and is the single
+  canonical source for the module's schema. Do **not** accumulate `<module>-migrate-N-*.sql`
+  files — add new DDL directly to setup.sql. If a migrate file already exists and has been
+  applied, fold its statements into setup.sql and delete the migrate file. Apply via
+  `node scripts/run-sql.js --stage <stage> --file modules/<module>/<module>-setup.sql`.
+  (Core `class`/`student`/`student_class` base tables live in `modules/db/db-create-1.sql`.)
 
 ### Module Database Setup Pattern
 Each module with database tables should have:

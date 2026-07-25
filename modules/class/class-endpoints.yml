@@ -14,3 +14,12 @@
           path: search
           method: get
           cors: true
+
+  streams-class:
+    handler: class-handler.streams
+    name: ${self:service}-streams-class
+    events:
+      - http:
+          path: streams
+          method: get
+          cors: true

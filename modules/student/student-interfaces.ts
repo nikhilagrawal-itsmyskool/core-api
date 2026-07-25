@@ -49,6 +49,7 @@ export interface CreateStudentRequest extends StudentCoreFields {
   // Optional initial enrollment
   academicYearId?: string;
   classId?: string;
+  streamCode?: string;
   rollNumber?: number;
   joinDate?: string;
   // Optional inline guardians / addresses
@@ -60,6 +61,8 @@ export interface UpdateStudentRequest extends StudentCoreFields {
   name?: string;
   admissionNumber?: string;
   status?: string;
+  // Stream for the student's current enrollment (applied to the latest student_class row).
+  streamCode?: string;
 }
 
 export interface StudentDetail {
@@ -93,6 +96,7 @@ export interface StudentDetail {
   currentAcademicYearName?: string;
   currentClassId?: string;
   currentClassName?: string;
+  currentStreamCode?: string;
   currentRollNumber?: number;
   classTeacher?: ClassTeacherRef | null;
   guardians: Guardian[];
@@ -119,6 +123,7 @@ export interface EnrollmentRow {
   academicYearName?: string;
   classId?: string;
   className?: string;
+  streamCode?: string;
   rollNumber?: number;
   joinDate?: string;
   status?: string;

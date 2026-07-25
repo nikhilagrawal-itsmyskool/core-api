@@ -11,12 +11,14 @@ class ClassService {
   }
 
   // Class dropdown search.
-  //   - Cohort/composite classes (class.class_group_id set, created for timetable
-  //     co-scheduling) are hidden unless includeCohort is set.
-  //   - When academicYearId is given, restricts to that session's classes. A "real"
-  //     class belongs to the year if it has active student enrolment that year (the
-  //     same rule as class-strength); a cohort class belongs to the year via its
-  //     class_group's academic_year_id (cohort classes carry no enrolment).
+  //   - A "real"/pickable class is one that is NOT a stream child, i.e. class.base_class_id
+  //     is null. Stream-child rows (e.g. XI-A's SCI/COM splits, base_class_id set) are hidden.
+  //   - includeCohort additionally surfaces timetable cohort/composite classes (class_group_id
+  //     set) — that branch still keys on class_group_id, which the timetable module owns.
+  //   - When academicYearId is given, restricts to that session's classes. A real class
+  //     belongs to the year if it has active student enrolment that year (the same rule as
+  //     class-strength); a cohort class belongs to the year via its class_group's
+  //     academic_year_id (cohort classes carry no enrolment).
   public async search(schoolId: string, name?: string, academicYearId?: string, includeCohort = false): Promise<ClassDropdownItem[]> {
     const searchPattern = name && name.trim() ? `%${name.trim()}%` : '%';
     const params: any[] = [schoolId, searchPattern];
@@ -26,7 +28,7 @@ class ClassService {
       params.push(academicYearId);
       const ay = `$${params.length}`;
       const realInYear = singleLineString`
-        c.class_group_id is null and exists (
+        c.base_class_id is null and exists (
           select 1 from student_class sc
           join student s on s.uuid = sc.student_id and s.school_id = sc.school_id and s.status <> 'deleted'
           where sc.class_id = c.uuid and sc.school_id = c.school_id and sc.academic_year_id = ${ay}
@@ -43,7 +45,7 @@ class ClassService {
         conds.push(`(${realInYear})`);
       }
     } else if (!includeCohort) {
-      conds.push(`c.class_group_id is null`);
+      conds.push(`c.base_class_id is null`);
     }
 
     const query = singleLineString`
@@ -52,6 +54,21 @@ class ClassService {
       order by c.seq asc nulls last, c.name
     `;
     return DB.query(query, params);
+  }
+
+  // Streams offered under a base class — the stream-child class rows (base_class_id set)
+  // resolved to their stream code + display name (from the class_stream lookup). Empty
+  // when the class has no streams. Drives the stream picker on student admission/edit.
+  public async getStreams(schoolId: string, baseClassId: string): Promise<{ code: string; name: string }[]> {
+    const query = singleLineString`
+      select c.stream_code as code, coalesce(cs.name, c.stream_code) as name
+      from class c
+      left join class_stream cs
+        on cs.school_id = c.school_id and lower(cs.code) = lower(c.stream_code) and cs.status = 'active'
+      where c.school_id = $1 and c.base_class_id = $2 and c.stream_code is not null
+      order by cs.seq asc nulls last, c.stream_code
+    `;
+    return DB.query(query, [schoolId, baseClassId]);
   }
 }
 
