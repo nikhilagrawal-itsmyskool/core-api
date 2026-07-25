@@ -35,6 +35,10 @@ const SCHOOL_CODE = process.env.SCHOOL_CODE || 'SS1';
 const GATEWAY = (process.env.GATEWAY || 'http://localhost:3000').replace(/\/$/, '');
 const STAGE = process.env.STAGE || 'local';
 const ASSIGN_CLASSES = process.env.ASSIGN_CLASSES !== '0';
+// Service-token header so this passes the API authorizer when targeting a protected
+// stage (empty for local). See scripts/lib/service-auth.js.
+const { serviceAuthHeaders } = require('./lib/service-auth.js');
+const AUTH_HEADERS = serviceAuthHeaders(STAGE, 'seed-assembly');
 
 const PLAN_NAME = 'The Morning Meridian';
 const PLAN_TITLE = 'The Morning Meridian';
@@ -44,7 +48,7 @@ const PLAN_SUBTITLE = 'Where Time, Mind and Expression Align';
 async function req(method, url, body) {
   const res = await fetch(`${GATEWAY}${url}`, {
     method,
-    headers: { 'Content-Type': 'application/json', 'X-School-Code': SCHOOL_CODE },
+    headers: { 'Content-Type': 'application/json', 'X-School-Code': SCHOOL_CODE, ...AUTH_HEADERS },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
   const text = await res.text();

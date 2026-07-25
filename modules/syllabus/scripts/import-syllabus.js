@@ -185,8 +185,8 @@ function baseUrlFor(stage, override) {
     : stage === 'dev' ? 'https://api-dev.itsmyskool.com'
       : 'http://localhost:3000';
 }
-async function seed(plan, { baseUrl, school, mode, academicYearId, gradeOverride, subjectOverride }) {
-  const H = { 'Content-Type': 'application/json', 'X-School-Code': school };
+async function seed(plan, { baseUrl, school, mode, academicYearId, gradeOverride, subjectOverride, authHeaders }) {
+  const H = { 'Content-Type': 'application/json', 'X-School-Code': school, ...(authHeaders || {}) };
   const j = async (res) => { const t = await res.text(); let b; try { b = JSON.parse(t); } catch { b = t; } if (!res.ok) throw new Error(`${res.status} ${JSON.stringify(b)}`); return b; };
   const get = (p) => fetch(`${baseUrl}${p}`, { headers: H }).then(j);
   const post = (p, body) => fetch(`${baseUrl}${p}`, { method: 'POST', headers: H, body: JSON.stringify(body) }).then(j);
@@ -251,6 +251,8 @@ async function main() {
   if (files.length === 0) { console.error('Provide --file <doc.docx> or --dir <folder>'); process.exit(1); }
 
   const baseUrl = baseUrlFor(o.stage, o['base-url']);
+  const { serviceAuthHeaders } = require(path.join(__dirname, '..', '..', '..', 'scripts', 'lib', 'service-auth.js'));
+  const authHeaders = serviceAuthHeaders(o.stage, 'import-syllabus');
   if (!o.dryRun && !o.school) { console.error('--school <code> is required (or use --dry-run)'); process.exit(1); }
   if (!o.dryRun) console.log(`Target: ${baseUrl}  (school ${o.school}, mode ${o.mode})`);
 
@@ -260,7 +262,7 @@ async function main() {
       summarize(plan, file);
       if (o.dryRun) { printEntries(plan); continue; }
       const r = await seed(plan, {
-        baseUrl, school: o.school, mode: o.mode,
+        baseUrl, school: o.school, mode: o.mode, authHeaders,
         academicYearId: o['academic-year-id'], gradeOverride: o.grade, subjectOverride: o.subject,
       });
       console.log(`   ✓ seeded plan ${r.syllabusId} — ${r.count} entries`);
