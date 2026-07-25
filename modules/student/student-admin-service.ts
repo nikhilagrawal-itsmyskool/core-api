@@ -1,4 +1,5 @@
 import { DB, singleLineString } from '../../shared/lib/db';
+import { resolveEffectiveClassId } from '../../shared/lib/effective-class';
 import { BusinessErrorResult } from '../../shared/lib/errors';
 import { ErrorCode } from '../../shared/lib/error-codes';
 import {
@@ -383,7 +384,16 @@ class StudentAdminService {
         }
       : null;
 
-    return { ...rest, classTeacher, enrollments, guardians, addresses, siblings } as StudentDetail;
+    // Effective (stream-specific) class for the current enrolment — the class whose
+    // timetable/syllabus applies. Falls back to the base class when there is no stream.
+    // Uses the shared resolver so this stays consistent with syllabus/timetable.
+    let currentEffectiveClassId: string | undefined = rest.currentClassId || undefined;
+    if (rest.currentClassId && rest.currentAcademicYearId) {
+      const eff = await resolveEffectiveClassId(schoolId, id, rest.currentAcademicYearId);
+      if (eff) currentEffectiveClassId = eff.classId;
+    }
+
+    return { ...rest, currentEffectiveClassId, classTeacher, enrollments, guardians, addresses, siblings } as StudentDetail;
   }
 
   // ---- Credentials (god/admin only, gated in the UI — mirrors employee) ----

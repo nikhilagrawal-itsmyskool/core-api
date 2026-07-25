@@ -97,6 +97,7 @@ export interface StudentDetail {
   currentClassId?: string;
   currentClassName?: string;
   currentStreamCode?: string;
+  currentEffectiveClassId?: string; // stream-specific class (base when no stream); for timetable/syllabus
   currentRollNumber?: number;
   classTeacher?: ClassTeacherRef | null;
   guardians: Guardian[];
