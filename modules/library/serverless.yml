@@ -22,6 +22,7 @@ plugins:
   - serverless-offline
   - serverless-domain-manager
   - ../../plugins/serverless-cors-defaults.js
+  - ../../plugins/serverless-authorizer.js
 
 functions: ${file(library-endpoints.yml)}
 
