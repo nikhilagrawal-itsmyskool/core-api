@@ -313,3 +313,31 @@
           path: me/papers/docs/{id}/file
           method: get
           cors: true
+
+  # ── Model-paper PDF conversion worker (docx -> pdf) ────────────────────────
+  # HTTP entrypoint for the local poller (scripts/local/syllabus-conversion-worker.js).
+  process-next-conversion:
+    handler: syllabus-model-paper-handler.processNext
+    name: ${self:service}-process-next-conversion
+    timeout: 120
+    events:
+      - http:
+          path: model-papers/process-next
+          method: post
+          cors: true
+
+  # AWS worker: EventBridge drains pending docs to PDF. DISABLED until the PDF
+  # part is enabled — to activate: attach the LibreOffice layer (from iac
+  # live/prod/lambda-layer-libreoffice) and set SYLLABUS_CONVERT_ENABLED=true, then
+  # flip `enabled` to true. Overlap-safe via `for update skip locked`.
+  #   layers:
+  #     - <libreoffice layer arn from terragrunt output>
+  drain-conversions:
+    handler: syllabus-model-paper-handler.drain
+    name: ${self:service}-drain-conversions
+    timeout: 120
+    memorySize: 2048
+    events:
+      - schedule:
+          rate: rate(1 minute)
+          enabled: false

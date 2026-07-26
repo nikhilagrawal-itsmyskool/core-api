@@ -159,7 +159,7 @@ create table if not exists syllabus_model_paper_doc (
     doc_type varchar(16) not null check (doc_type in ('model_paper', 'answer_key', 'blueprint')),
     docx_file_id varchar(12),
     pdf_file_id varchar(12),
-    pdf_status varchar(16) not null check (pdf_status in ('pending', 'ready', 'failed', 'none')),
+    pdf_status varchar(16) not null check (pdf_status in ('pending', 'converting', 'ready', 'failed', 'none')),
     pdf_attempts integer,
     pdf_error text,
     status varchar(16) not null check (status in ('active', 'deleted')),
@@ -175,3 +175,9 @@ create unique index if not exists idx_model_paper_doc_unique
 -- Conversion queue lookup: pending docs that still need a PDF.
 create index if not exists idx_model_paper_doc_pending
     on syllabus_model_paper_doc(school_id) where status = 'active' and pdf_status = 'pending';
+
+-- Widen the pdf_status check on already-created tables to include the transient
+-- 'converting' claim state (drop+add is idempotent across re-runs).
+alter table syllabus_model_paper_doc drop constraint if exists syllabus_model_paper_doc_pdf_status_check;
+alter table syllabus_model_paper_doc add constraint syllabus_model_paper_doc_pdf_status_check
+    check (pdf_status in ('pending', 'converting', 'ready', 'failed', 'none'));

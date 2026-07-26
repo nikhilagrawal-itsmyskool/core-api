@@ -6,7 +6,17 @@ import { DOC_TYPE_VALUES, EXAM_VALUES } from "./syllabus-constants";
 import { ModelPaper, ModelPaperDoc, UploadPaperDocRequest } from "./syllabus-interfaces";
 import { academicYearExists, findStudentClass, streamExists } from "./syllabus-common";
 import { parseGrade } from "./syllabus-util";
+import { convertDocxToPdf, isConversionAvailable } from "./syllabus-convert";
 const { generateShortUuid } = require("../../shared/util/generate-uuid.js");
+
+const MAX_CONVERT_ATTEMPTS = 3;
+const PDF_MIME_OUT = "application/pdf";
+export type ConvertResult =
+  | { status: "converted"; docId: string }
+  | { status: "retry"; docId: string; error: string }
+  | { status: "failed"; docId: string; error: string }
+  | { status: "idle" }
+  | { status: "skipped"; reason: string };
 
 export type DownloadResult =
   | { status: "ok"; fileName: string; mimeType: string; base64: string }
@@ -354,6 +364,87 @@ class SyllabusModelPaperService {
         };
       })
       .filter((p: any) => p.docs.length > 0);
+  }
+
+  // ── Conversion worker (docx -> pdf) ────────────────────────────────────────
+  // Claim one pending doc (for update skip locked, overlap-safe across drains),
+  // convert its Word to PDF, store it, mark ready. Transient failures go back to
+  // 'pending' until MAX_CONVERT_ATTEMPTS, then 'failed'. When the converter is
+  // not enabled yet, we DON'T claim anything (so nothing is marked failed).
+  public async processNextConversion(): Promise<ConvertResult> {
+    if (!isConversionAvailable()) {
+      return { status: "skipped", reason: "converter not enabled" };
+    }
+    const claimed = await DB.query(
+      singleLineString`
+        update syllabus_model_paper_doc
+        set pdf_status = 'converting', pdf_attempts = coalesce(pdf_attempts, 0) + 1, updated_at = now()
+        where uuid = (
+          select uuid from syllabus_model_paper_doc
+          where status = 'active' and pdf_status = 'pending' and docx_file_id is not null
+          order by created_at asc nulls first
+          limit 1
+          for update skip locked
+        )
+        returning uuid, school_id, docx_file_id, coalesce(pdf_attempts, 0) as pdf_attempts
+      `,
+      [],
+    );
+    if (claimed.length === 0) return { status: "idle" };
+    const doc = claimed[0];
+
+    try {
+      const src = await fileStorageService.getWithData(doc.docxFileId, doc.schoolId);
+      if (!src) throw new Error("source Word file missing");
+      const pdfBase64 = await convertDocxToPdf(src.data, src.fileName);
+      const pdf = await fileStorageService.upload({
+        fileName: (src.fileName || "paper").replace(/\.docx?$/i, "") + ".pdf",
+        mimeType: PDF_MIME_OUT,
+        base64Data: pdfBase64,
+        entityType: "syllabus_model_paper_doc",
+        entityId: doc.uuid,
+        schoolId: doc.schoolId,
+        userId: "0",
+      });
+      await DB.query(
+        singleLineString`
+          update syllabus_model_paper_doc
+          set pdf_file_id = $1, pdf_status = 'ready', pdf_error = null, updated_at = now()
+          where uuid = $2
+        `,
+        [pdf.uuid, doc.uuid],
+      );
+      return { status: "converted", docId: doc.uuid };
+    } catch (e: any) {
+      const message = String(e?.message || e).slice(0, 500);
+      const giveUp = doc.pdfAttempts >= MAX_CONVERT_ATTEMPTS;
+      await DB.query(
+        singleLineString`
+          update syllabus_model_paper_doc set pdf_status = $1, pdf_error = $2, updated_at = now() where uuid = $3
+        `,
+        [giveUp ? "failed" : "pending", message, doc.uuid],
+      );
+      return giveUp
+        ? { status: "failed", docId: doc.uuid, error: message }
+        : { status: "retry", docId: doc.uuid, error: message };
+    }
+  }
+
+  // Drain the queue until empty, the converter is unavailable, or the time
+  // budget runs out (EventBridge on AWS; a poller script drives it locally).
+  public async drainConversions(maxMs = 50000): Promise<{ converted: number; failed: number; skipped: boolean }> {
+    const start = Date.now();
+    let converted = 0;
+    let failed = 0;
+    while (Date.now() - start < maxMs) {
+      const r = await this.processNextConversion();
+      if (r.status === "idle") break;
+      if (r.status === "skipped") return { converted, failed, skipped: true };
+      if (r.status === "converted") converted += 1;
+      if (r.status === "failed") failed += 1;
+      // 'retry' loops again
+    }
+    return { converted, failed, skipped: false };
   }
 }
 

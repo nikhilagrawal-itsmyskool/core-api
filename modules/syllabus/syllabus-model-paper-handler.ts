@@ -138,10 +138,37 @@ class SyllabusModelPaperHandler {
       ResponseBuilder.handleError(err, cb);
     }
   };
+
+  // POST /model-papers/process-next — convert one pending doc (local poller).
+  public processNext = async (event: ApiEvent, _c: ApiContext, cb: ApiCallback) => {
+    _c.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const r = await syllabusModelPaperService.processNextConversion();
+      ResponseBuilder.ok(r, cb);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, cb);
+    }
+  };
+
+  // Scheduled drain (EventBridge on AWS). Loops processNext until empty/timeout.
+  // Not an HTTP handler — invoked by the schedule event; safe under overlap via
+  // `for update skip locked`. Inert while the converter is disabled.
+  public drain = async (_event: ApiEvent, _c: ApiContext, cb: ApiCallback) => {
+    _c.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const summary = await syllabusModelPaperService.drainConversions();
+      if (typeof cb === "function") ResponseBuilder.ok(summary, cb);
+    } catch (err: any) {
+      console.error("drain-conversions error", err);
+      if (typeof cb === "function") ResponseBuilder.handleError(err, cb);
+    }
+  };
 }
 
 const handler = new SyllabusModelPaperHandler();
 export const list = handler.list;
+export const processNext = handler.processNext;
+export const drain = handler.drain;
 export const upload = handler.upload;
 export const setAnswerKey = handler.setAnswerKey;
 export const deleteDoc = handler.deleteDoc;

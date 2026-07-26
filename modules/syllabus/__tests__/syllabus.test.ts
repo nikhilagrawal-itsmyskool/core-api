@@ -462,6 +462,13 @@ describe("Syllabus module", () => {
       const d = await res.json();
       expect(d.released).toBe(true);
     });
+
+    it("conversion worker is inert while the PDF part is disabled", async () => {
+      const res = await post("/model-papers/process-next", {});
+      expect(res.status).toBe(200);
+      const d = await res.json();
+      expect(d.status).toBe("skipped"); // converter not enabled -> nothing claimed
+    });
   });
 
   describe("Cleanup", () => {
