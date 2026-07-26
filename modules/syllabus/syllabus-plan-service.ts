@@ -20,12 +20,12 @@ import {
   TERM_VALUES,
   Term,
 } from "./syllabus-constants";
-import { academicYearExists, listClasses } from "./syllabus-common";
+import { academicYearExists, listBaseClasses, streamExists } from "./syllabus-common";
 import { gradeEquals } from "./syllabus-util";
 const { generateShortUuid } = require("../../shared/util/generate-uuid.js");
 
 const SYLLABUS_COLS = singleLineString`
-  uuid, school_id, academic_year_id, grade, subject_id, book, layout, note, status
+  uuid, school_id, academic_year_id, grade, stream_code, subject_id, book, layout, note, status
 `;
 const ENTRY_COLS = singleLineString`
   uuid, syllabus_id, seq, month, entry_type, topic_no, title, theme, page_ref, term
@@ -93,10 +93,18 @@ class SyllabusPlanService {
         `Grade "${data.grade.trim()}" has no class sections`,
       );
     }
+    const streamCode = data.streamCode?.trim() || null;
+    if (streamCode && !(await streamExists(schoolId, streamCode))) {
+      throw new BusinessErrorResult(
+        ErrorCode.BusinessError,
+        `Unknown stream "${streamCode}"`,
+      );
+    }
     await this.assertPlanFree(
       schoolId,
       data.academicYearId,
       data.grade,
+      streamCode,
       data.subjectId,
       null,
     );
@@ -105,8 +113,8 @@ class SyllabusPlanService {
     const rows = await DB.query(
       singleLineString`
         insert into syllabus
-        (uuid, school_id, academic_year_id, grade, subject_id, book, layout, note, status, createdby_userid, created_at)
-        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        (uuid, school_id, academic_year_id, grade, stream_code, subject_id, book, layout, note, status, createdby_userid, created_at)
+        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
         returning ${SYLLABUS_COLS}
       `,
       [
@@ -114,6 +122,7 @@ class SyllabusPlanService {
         schoolId,
         data.academicYearId,
         data.grade.trim(),
+        streamCode,
         data.subjectId,
         data.book?.trim() || null,
         data.layout,
@@ -141,25 +150,40 @@ class SyllabusPlanService {
       );
     }
 
-    // Grade is editable, but must be a real grade (has class sections) and stay
-    // unique per (year, grade, subject). A grade change invalidates the plan's
-    // section-scoped data (teacher assignments + coverage), which we clear below.
+    // Grade and stream are editable, but must be real (grade has class sections;
+    // stream is a defined class_stream code) and stay unique per
+    // (year, grade, stream, subject). A grade OR stream change re-scopes the plan
+    // and invalidates its section-scoped data (teacher assignments + coverage),
+    // which we clear below.
     let gradeChanging = false;
+    let streamChanging = false;
+    let newGrade = existing.grade;
+    let newStream: string | null = existing.streamCode ?? null;
     if (data.grade !== undefined) {
-      const newGrade = (data.grade || "").trim();
+      newGrade = (data.grade || "").trim();
       if (!newGrade) {
         throw new BusinessErrorResult(ErrorCode.BusinessError, "grade cannot be blank");
       }
       gradeChanging = newGrade.toLowerCase() !== existing.grade.toLowerCase();
-      if (gradeChanging) {
-        if (!(await this.gradeExists(schoolId, newGrade))) {
-          throw new BusinessErrorResult(
-            ErrorCode.BusinessError,
-            `Grade "${newGrade}" has no class sections`,
-          );
-        }
-        await this.assertPlanFree(schoolId, existing.academicYearId, newGrade, existing.subjectId, id);
+      if (gradeChanging && !(await this.gradeExists(schoolId, newGrade))) {
+        throw new BusinessErrorResult(
+          ErrorCode.BusinessError,
+          `Grade "${newGrade}" has no class sections`,
+        );
       }
+    }
+    if (data.streamCode !== undefined) {
+      newStream = data.streamCode?.trim() || null;
+      streamChanging =
+        (newStream || "").toLowerCase() !== (existing.streamCode || "").toLowerCase();
+      if (streamChanging && newStream && !(await streamExists(schoolId, newStream))) {
+        throw new BusinessErrorResult(ErrorCode.BusinessError, `Unknown stream "${newStream}"`);
+      }
+    }
+    if (gradeChanging || streamChanging) {
+      await this.assertPlanFree(
+        schoolId, existing.academicYearId, newGrade, newStream, existing.subjectId, id,
+      );
     }
 
     const updates: string[] = [];
@@ -173,17 +197,18 @@ class SyllabusPlanService {
     if (data.book !== undefined) set("book", data.book?.trim() || null);
     if (data.layout !== undefined) set("layout", data.layout);
     if (data.note !== undefined) set("note", data.note?.trim() || null);
-    if (gradeChanging) set("grade", (data.grade as string).trim());
+    if (gradeChanging) set("grade", newGrade);
+    if (streamChanging) set("stream_code", newStream);
 
     if (updates.length === 0) return existing;
     set("updatedby_userid", userId);
     set("updated_at", new Date());
     params.push(id, schoolId);
 
-    // On a grade change, drop teacher assignments and coverage — both point at the
-    // old grade's sections and are meaningless for the new grade. Entries (the
-    // subject content) are kept.
-    if (gradeChanging) {
+    // On a grade or stream change, drop teacher assignments and coverage — both
+    // point at the old scope's sections and are meaningless for the new one.
+    // Entries (the subject content) are kept.
+    if (gradeChanging || streamChanging) {
       await DB.queriesInTransaction(
         [
           singleLineString`delete from syllabus_plan_teacher where syllabus_id = $1 and school_id = $2`,
@@ -253,11 +278,11 @@ class SyllabusPlanService {
 
   public async listSyllabi(
     schoolId: string,
-    filters: { academicYearId?: string; grade?: string; subjectId?: string },
+    filters: { academicYearId?: string; grade?: string; streamCode?: string; subjectId?: string },
   ): Promise<any[]> {
     const params: any[] = [schoolId];
     let query = singleLineString`
-      select s.uuid, s.school_id, s.academic_year_id, s.grade, s.subject_id,
+      select s.uuid, s.school_id, s.academic_year_id, s.grade, s.stream_code, s.subject_id,
              s.book, s.layout, s.note, s.status, sub.name as subject_name
       from syllabus s
       left join syllabus_subject sub on sub.uuid = s.subject_id
@@ -272,11 +297,22 @@ class SyllabusPlanService {
       query += ` and lower(s.grade) = lower($${i++})`;
       params.push(filters.grade.trim());
     }
+    // streamCode filter: an explicit code matches that stream; the literal
+    // "common" (or "null") narrows to grade-wide plans (stream_code is null).
+    if (filters.streamCode) {
+      const sc = filters.streamCode.trim().toLowerCase();
+      if (sc === "common" || sc === "null") {
+        query += ` and s.stream_code is null`;
+      } else {
+        query += ` and lower(s.stream_code) = $${i++}`;
+        params.push(sc);
+      }
+    }
     if (filters.subjectId) {
       query += ` and s.subject_id = $${i++}`;
       params.push(filters.subjectId);
     }
-    query += ` order by s.grade, subject_name`;
+    query += ` order by s.grade, s.stream_code nulls first, subject_name`;
     return DB.query(query, params);
   }
 
@@ -608,7 +644,7 @@ class SyllabusPlanService {
   // A grade is valid only if at least one class section derives to it (e.g. "III"
   // requires an "III-A"/"III-B"). Keeps plans tied to grades that actually exist.
   private async gradeExists(schoolId: string, grade: string): Promise<boolean> {
-    const classes = await listClasses(schoolId);
+    const classes = await listBaseClasses(schoolId);
     return classes.some((c) => gradeEquals(c.name, grade));
   }
 
@@ -627,23 +663,32 @@ class SyllabusPlanService {
     schoolId: string,
     academicYearId: string,
     grade: string,
+    streamCode: string | null,
     subjectId: string,
     excludeId: string | null,
   ): Promise<void> {
-    const params: any[] = [schoolId, academicYearId, grade.trim(), subjectId];
+    const params: any[] = [
+      schoolId,
+      academicYearId,
+      grade.trim(),
+      (streamCode || "").toLowerCase(),
+      subjectId,
+    ];
     let query = singleLineString`
       select uuid from syllabus
-      where school_id = $1 and academic_year_id = $2 and lower(grade) = lower($3) and subject_id = $4 and status = 'active'
+      where school_id = $1 and academic_year_id = $2 and lower(grade) = lower($3)
+        and coalesce(lower(stream_code), '') = $4 and subject_id = $5 and status = 'active'
     `;
     if (excludeId) {
       params.push(excludeId);
-      query += ` and uuid != $5`;
+      query += ` and uuid != $6`;
     }
     const rows = await DB.query(query, params);
     if (rows.length > 0) {
+      const label = streamCode ? `${grade.trim()} (${streamCode})` : grade.trim();
       throw new BusinessErrorResult(
         ErrorCode.BusinessError,
-        `A syllabus for grade "${grade.trim()}" and this subject already exists for the year`,
+        `A syllabus for grade "${label}" and this subject already exists for the year`,
       );
     }
   }

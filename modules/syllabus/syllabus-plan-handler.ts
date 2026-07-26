@@ -52,6 +52,7 @@ class SyllabusPlanHandler {
       const results = await syllabusPlanService.listSyllabi(ctx.schoolId, {
         academicYearId: q.academicYearId,
         grade: q.grade,
+        streamCode: q.streamCode,
         subjectId: q.subjectId,
       });
       ResponseBuilder.ok(results, callback);

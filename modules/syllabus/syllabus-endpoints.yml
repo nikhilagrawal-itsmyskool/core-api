@@ -26,6 +26,15 @@
           method: get
           cors: true
 
+  get-streams:
+    handler: syllabus-lookup-handler.getStreams
+    name: ${self:service}-get-streams
+    events:
+      - http:
+          path: streams
+          method: get
+          cors: true
+
   # ── Subjects ──────────────────────────────────────────────────────────────
   create-subject:
     handler: syllabus-subject-handler.create

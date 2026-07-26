@@ -55,6 +55,50 @@ export async function listClasses(
   );
 }
 
+// The real teaching sections only — base classes (base_class_id is null),
+// excluding stream-child rows like "XI-A (Science)" and composite cohorts.
+// Syllabus grades/sections, teacher assignment, and coverage all operate on
+// these base sections (stream is a filter on the subject, not a section).
+export async function listBaseClasses(
+  schoolId: string,
+): Promise<{ uuid: string; name: string; seq: number | null }[]> {
+  return DB.query(
+    singleLineString`
+      select uuid, name, seq from class
+      where school_id = $1 and base_class_id is null
+      order by seq asc nulls last, name
+    `,
+    [schoolId],
+  );
+}
+
+// Per-school stream lookup (class_stream), e.g. SCI -> Science, COM -> Commerce.
+// Drives the stream picker when authoring subjects/plans for senior grades.
+export async function listStreams(
+  schoolId: string,
+): Promise<{ code: string; name: string; seq: number | null }[]> {
+  return DB.query(
+    singleLineString`
+      select code, name, seq from class_stream
+      where school_id = $1 and status = 'active'
+      order by seq asc nulls last, name
+    `,
+    [schoolId],
+  );
+}
+
+// True when a stream code is defined for the school (case-insensitive).
+export async function streamExists(
+  schoolId: string,
+  code: string,
+): Promise<boolean> {
+  const rows = await DB.query(
+    singleLineString`select 1 from class_stream where school_id = $1 and lower(code) = lower($2) and status = 'active'`,
+    [schoolId, code],
+  );
+  return rows.length > 0;
+}
+
 // A single class (section) by uuid, or null.
 export async function findClass(
   schoolId: string,
@@ -80,23 +124,27 @@ export async function findEmployee(
 }
 
 // The section a student is placed in for a given academic year, or null.
+// Also returns the enrolment stream_code (SCI/COM/…), null when unstreamed —
+// used to filter the timeline to the student's stream + common subjects.
+// Coverage stays keyed on the BASE class (class_id), by design.
 export async function findStudentClass(
   schoolId: string,
   studentId: string,
   academicYearId: string,
-): Promise<{ classId: string; className: string } | null> {
+): Promise<{ classId: string; className: string; streamCode: string | null } | null> {
   const rows = await DB.query(
     singleLineString`
-      select sc.class_id as class_id, c.name as class_name
+      select sc.class_id as class_id, c.name as class_name, sc.stream_code as stream_code
       from student_class sc
       join class c on c.uuid = sc.class_id
       where sc.student_id = $1 and sc.academic_year_id = $2 and sc.school_id = $3
+        and (sc.status is null or sc.status <> 'deleted')
       limit 1
     `,
     [studentId, academicYearId, schoolId],
   );
   return rows.length > 0
-    ? { classId: rows[0].classId, className: rows[0].className }
+    ? { classId: rows[0].classId, className: rows[0].className, streamCode: rows[0].streamCode || null }
     : null;
 }
 

@@ -21,6 +21,7 @@ class SyllabusMeService {
       return {
         academicYearId: null,
         grade: null,
+        streamCode: null,
         classId: null,
         className: null,
         currentMonth: anchor,
@@ -32,6 +33,7 @@ class SyllabusMeService {
       return {
         academicYearId: yearId,
         grade: null,
+        streamCode: null,
         classId: null,
         className: null,
         currentMonth: anchor,
@@ -39,16 +41,23 @@ class SyllabusMeService {
       };
     }
     const grade = parseGrade(placement.className);
+    const streamCode = placement.streamCode;
 
+    // Show the grade's plans that apply to this student: common subjects
+    // (stream_code is null) plus the student's own stream. An unstreamed
+    // student ($4 null) sees only common subjects. Coverage overlays on the
+    // student's BASE class (placement.classId) — stream is a subject filter,
+    // not a section.
     const plans = await DB.query(
       singleLineString`
-        select s.uuid, s.subject_id, s.book, s.layout, s.note, sub.name as subject_name
+        select s.uuid, s.subject_id, s.stream_code, s.book, s.layout, s.note, sub.name as subject_name
         from syllabus s
         left join syllabus_subject sub on sub.uuid = s.subject_id
         where s.school_id = $1 and s.academic_year_id = $2 and lower(s.grade) = lower($3) and s.status = 'active'
+          and (s.stream_code is null or lower(s.stream_code) = lower($4))
         order by sub.name
       `,
-      [schoolId, yearId, grade],
+      [schoolId, yearId, grade, streamCode],
     );
 
     const subjects = [];
@@ -76,6 +85,7 @@ class SyllabusMeService {
       subjects.push({
         syllabusId: plan.uuid,
         subjectId: plan.subjectId,
+        streamCode: plan.streamCode,
         subjectName: plan.subjectName,
         layout: plan.layout,
         book: plan.book,
@@ -87,6 +97,7 @@ class SyllabusMeService {
     return {
       academicYearId: yearId,
       grade,
+      streamCode,
       classId: placement.classId,
       className: placement.className,
       currentMonth: anchor,

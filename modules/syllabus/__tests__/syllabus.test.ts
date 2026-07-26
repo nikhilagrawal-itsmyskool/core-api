@@ -1,4 +1,4 @@
-import { BASE_URL, headers, getSeed, closePool, rnd, Seed } from "./helpers";
+import { BASE_URL, headers, getSeed, closePool, rnd, ensureStream, Seed } from "./helpers";
 
 const get = (p: string) => fetch(`${BASE_URL}${p}`, { headers });
 const post = (p: string, body: any) =>
@@ -288,6 +288,91 @@ describe("Syllabus module", () => {
         status: "covered",
       });
       expect(res.status).toBeGreaterThanOrEqual(400);
+    });
+  });
+
+  describe("Streams", () => {
+    let streamSubjectId: string;
+    let commonPlanId: string;
+    let sciPlanId: string;
+
+    beforeAll(async () => {
+      await ensureStream("SCI", "Science");
+      const res = await post("/subjects", { name: `Physics ${tag}` });
+      streamSubjectId = (await res.json()).uuid;
+    });
+
+    afterAll(async () => {
+      if (sciPlanId) await del(`/syllabi/${sciPlanId}`);
+      if (commonPlanId) await del(`/syllabi/${commonPlanId}`);
+      if (streamSubjectId) await del(`/subjects/${streamSubjectId}`);
+    });
+
+    it("lists the school's streams", async () => {
+      const res = await get("/streams");
+      expect(res.status).toBe(200);
+      const d = await res.json();
+      expect(Array.isArray(d)).toBe(true);
+      expect(d.some((s: any) => s.code.toLowerCase() === "sci")).toBe(true);
+    });
+
+    it("creates a common (no-stream) plan for the grade + subject", async () => {
+      const res = await post("/syllabi", {
+        academicYearId: seed.academicYearId,
+        grade: seed.grade,
+        subjectId: streamSubjectId,
+        layout: "senior",
+      });
+      expect(res.status).toBe(200);
+      const d = await res.json();
+      expect(d.streamCode).toBeNull();
+      commonPlanId = d.uuid;
+    });
+
+    it("allows a stream plan for the same grade + subject (separate slot)", async () => {
+      const res = await post("/syllabi", {
+        academicYearId: seed.academicYearId,
+        grade: seed.grade,
+        streamCode: "SCI",
+        subjectId: streamSubjectId,
+        layout: "senior",
+      });
+      expect(res.status).toBe(200);
+      const d = await res.json();
+      expect(d.streamCode).toBe("SCI");
+      sciPlanId = d.uuid;
+    });
+
+    it("rejects a duplicate stream plan (same grade + stream + subject)", async () => {
+      const res = await post("/syllabi", {
+        academicYearId: seed.academicYearId,
+        grade: seed.grade,
+        streamCode: "SCI",
+        subjectId: streamSubjectId,
+        layout: "senior",
+      });
+      expect(res.status).toBeGreaterThanOrEqual(400);
+    });
+
+    it("rejects an unknown stream code", async () => {
+      const res = await post("/syllabi", {
+        academicYearId: seed.academicYearId,
+        grade: seed.grade,
+        streamCode: "ZZZ",
+        subjectId: streamSubjectId,
+        layout: "senior",
+      });
+      expect(res.status).toBeGreaterThanOrEqual(400);
+    });
+
+    it("filters the plan list by stream (excludes the common plan)", async () => {
+      const res = await get(
+        `/syllabi?academicYearId=${seed.academicYearId}&grade=${encodeURIComponent(seed.grade)}&streamCode=SCI`,
+      );
+      expect(res.status).toBe(200);
+      const d = await res.json();
+      expect(d.some((p: any) => p.uuid === sciPlanId)).toBe(true);
+      expect(d.some((p: any) => p.uuid === commonPlanId)).toBe(false);
     });
   });
 

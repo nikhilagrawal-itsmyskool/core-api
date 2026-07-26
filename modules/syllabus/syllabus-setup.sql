@@ -44,9 +44,16 @@ create table if not exists syllabus (
     updated_at timestamp(0)
 );
 
--- One plan per grade+subject per academic year (soft-delete aware).
+-- Stream dimension (senior grades XI/XII): a plan may be scoped to a stream_code
+-- (matches class_stream.code, e.g. SCI/COM). null = common subject, shown to
+-- every stream of the grade. Added idempotently for existing deployments.
+alter table syllabus add column if not exists stream_code varchar(16);
+
+-- One plan per grade+stream+subject per academic year (soft-delete aware).
+-- coalesce so a null stream (common) participates in uniqueness as a single slot.
+drop index if exists idx_syllabus_unique;
 create unique index if not exists idx_syllabus_unique
-    on syllabus(school_id, academic_year_id, lower(grade), subject_id) where status = 'active';
+    on syllabus(school_id, academic_year_id, lower(grade), coalesce(lower(stream_code), ''), subject_id) where status = 'active';
 create index if not exists idx_syllabus_school_year on syllabus(school_id, academic_year_id);
 create index if not exists idx_syllabus_subject on syllabus(subject_id);
 

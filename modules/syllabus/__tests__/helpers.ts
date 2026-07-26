@@ -113,3 +113,30 @@ export async function getSeed(): Promise<Seed> {
 export function rnd(): string {
   return Math.random().toString(36).slice(2, 8);
 }
+
+// Ensure a stream (class_stream) exists+active for the test school, so plan
+// stream tests have a valid code to reference. Idempotent.
+export async function ensureStream(code: string, name: string): Promise<void> {
+  const schoolRow = await getPool().query(
+    `select uuid from school where lower(code) = lower($1)`,
+    [TEST_SCHOOL_CODE],
+  );
+  if (schoolRow.rows.length === 0)
+    throw new Error(`No school ${TEST_SCHOOL_CODE} — run sample-school-setup`);
+  const schoolId = schoolRow.rows[0].uuid;
+  const existing = await getPool().query(
+    `select uuid from class_stream where school_id = $1 and lower(code) = lower($2)`,
+    [schoolId, code],
+  );
+  if (existing.rows.length > 0) {
+    await getPool().query(`update class_stream set status = 'active' where uuid = $1`, [
+      existing.rows[0].uuid,
+    ]);
+    return;
+  }
+  const { generateShortUuid } = require("../../../shared/util/generate-uuid.js");
+  await getPool().query(
+    `insert into class_stream (uuid, school_id, code, name, seq, status) values ($1, $2, $3, $4, $5, 'active')`,
+    [generateShortUuid(12), schoolId, code, name, 1],
+  );
+}

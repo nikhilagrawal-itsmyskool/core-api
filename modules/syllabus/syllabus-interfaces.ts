@@ -31,6 +31,7 @@ export interface Syllabus {
   schoolId: string;
   academicYearId: string;
   grade: string;
+  streamCode: string | null;
   subjectId: string;
   book: string | null;
   layout: Layout;
@@ -41,6 +42,7 @@ export interface Syllabus {
 export interface CreateSyllabusRequest {
   academicYearId: string;
   grade: string;
+  streamCode?: string | null;
   subjectId: string;
   layout: Layout;
   book?: string;
@@ -49,6 +51,7 @@ export interface CreateSyllabusRequest {
 
 export interface UpdateSyllabusRequest {
   grade?: string;
+  streamCode?: string | null;
   book?: string;
   layout?: Layout;
   note?: string;
