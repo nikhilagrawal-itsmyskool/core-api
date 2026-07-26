@@ -1,5 +1,7 @@
 import {
+  DocType,
   EntryType,
+  Exam,
   Layout,
   Month,
   ProgressStatus,
@@ -113,4 +115,41 @@ export interface EntryWithProgress extends SyllabusEntry {
   covered: boolean;
   coveredDate: string | null;
   remark: string | null;
+}
+
+// ── Model papers ────────────────────────────────────────────────────────────
+export interface ModelPaperDoc {
+  uuid: string;
+  docType: DocType;
+  pdfStatus: string; // pending | ready | failed | none
+  hasDocx: boolean;
+  hasPdf: boolean;
+  docxFileId: string | null;
+  pdfFileId: string | null;
+}
+
+export interface ModelPaper {
+  uuid: string;
+  academicYearId: string;
+  grade: string;
+  streamCode: string | null;
+  subjectId: string;
+  subjectName?: string | null;
+  exam: Exam;
+  answerKeyReleased: boolean;
+  docs: ModelPaperDoc[];
+}
+
+export interface UploadPaperDocRequest {
+  academicYearId: string;
+  grade: string;
+  streamCode?: string | null;
+  subjectId: string;
+  exam: Exam;
+  docType: DocType;
+  fileName: string;
+  mimeType?: string;
+  base64Data: string; // the .docx (or a PDF if that's all there is)
+  pdfFileName?: string; // optional: attach a ready-made PDF, skipping conversion
+  pdfBase64Data?: string;
 }

@@ -8,7 +8,9 @@ import { resolveSchool } from "./handler-util";
 import { listBaseClasses, listStreams } from "./syllabus-common";
 import { parseGrade } from "./syllabus-util";
 import {
+  DOC_TYPES,
   ENTRY_TYPES,
+  EXAMS,
   LAYOUTS,
   MONTHS,
   PROGRESS_STATUSES,
@@ -33,6 +35,8 @@ class SyllabusLookupHandler {
           terms: TERMS,
           layouts: LAYOUTS,
           progressStatuses: PROGRESS_STATUSES,
+          exams: EXAMS,
+          docTypes: DOC_TYPES,
         },
         callback,
       );

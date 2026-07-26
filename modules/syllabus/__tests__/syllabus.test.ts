@@ -376,6 +376,94 @@ describe("Syllabus module", () => {
     });
   });
 
+  describe("Model papers", () => {
+    let mpSubjectId: string;
+    let paperId: string;
+    let modelDocId: string;
+    let answerDocId: string;
+    const b64 = Buffer.from('fake-docx-bytes').toString('base64');
+
+    beforeAll(async () => {
+      mpSubjectId = (await (await post("/subjects", { name: `Social Studies ${tag}` })).json()).uuid;
+    });
+
+    afterAll(async () => {
+      if (modelDocId) await del(`/model-papers/docs/${modelDocId}`);
+      if (answerDocId) await del(`/model-papers/docs/${answerDocId}`);
+      if (mpSubjectId) await del(`/subjects/${mpSubjectId}`);
+    });
+
+    it("uploads a model paper (Word) and queues its PDF", async () => {
+      const res = await post("/model-papers/upload", {
+        academicYearId: seed.academicYearId,
+        grade: seed.grade,
+        subjectId: mpSubjectId,
+        exam: "half_yearly",
+        docType: "model_paper",
+        fileName: "Model Paper.docx",
+        base64Data: b64,
+      });
+      expect(res.status).toBe(200);
+      const d = await res.json();
+      paperId = d.uuid;
+      expect(d.answerKeyReleased).toBe(false);
+      const doc = d.docs.find((x: any) => x.docType === "model_paper");
+      expect(doc).toBeTruthy();
+      expect(doc.hasDocx).toBe(true);
+      expect(doc.pdfStatus).toBe("pending"); // no PDF yet — awaiting conversion
+      modelDocId = doc.uuid;
+    });
+
+    it("rejects an invalid exam", async () => {
+      const res = await post("/model-papers/upload", {
+        academicYearId: seed.academicYearId, grade: seed.grade, subjectId: mpSubjectId,
+        exam: "bogus", docType: "model_paper", fileName: "x.docx", base64Data: b64,
+      });
+      expect(res.status).toBeGreaterThanOrEqual(400);
+    });
+
+    it("lists the paper for the grade", async () => {
+      const res = await get(`/model-papers?academicYearId=${seed.academicYearId}&grade=${encodeURIComponent(seed.grade)}`);
+      expect(res.status).toBe(200);
+      const d = await res.json();
+      expect(d.some((p: any) => p.uuid === paperId)).toBe(true);
+    });
+
+    it("downloads the Word source (base64)", async () => {
+      const res = await get(`/model-papers/docs/${modelDocId}/file?format=docx`);
+      expect(res.status).toBe(200);
+      const d = await res.json();
+      expect(d.base64Data).toBe(b64);
+    });
+
+    it("404s the PDF while it is still pending", async () => {
+      const res = await get(`/model-papers/docs/${modelDocId}/file?format=pdf`);
+      expect(res.status).toBe(404);
+    });
+
+    it("serves a directly-attached PDF as ready", async () => {
+      const res = await post("/model-papers/upload", {
+        academicYearId: seed.academicYearId, grade: seed.grade, subjectId: mpSubjectId,
+        exam: "half_yearly", docType: "answer_key",
+        fileName: "Answer Key.docx", base64Data: b64,
+        pdfFileName: "Answer Key.pdf", pdfBase64Data: b64,
+      });
+      const d = await res.json();
+      const doc = d.docs.find((x: any) => x.docType === "answer_key");
+      expect(doc.pdfStatus).toBe("ready");
+      answerDocId = doc.uuid;
+      const pdf = await get(`/model-papers/docs/${answerDocId}/file?format=pdf`);
+      expect(pdf.status).toBe(200);
+    });
+
+    it("toggles answer-key release", async () => {
+      const res = await put(`/model-papers/${paperId}/answer-key`, { released: true });
+      expect(res.status).toBe(200);
+      const d = await res.json();
+      expect(d.released).toBe(true);
+    });
+  });
+
   describe("Cleanup", () => {
     it("deletes the syllabus and its entries", async () => {
       const res = await del(`/syllabi/${syllabusId}`);

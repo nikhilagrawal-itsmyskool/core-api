@@ -123,3 +123,55 @@ create unique index if not exists idx_syllabus_plan_teacher_unique
     on syllabus_plan_teacher(syllabus_id, class_id, teacher_id) where status = 'active';
 create index if not exists idx_syllabus_plan_teacher_plan on syllabus_plan_teacher(syllabus_id) where status = 'active';
 create index if not exists idx_syllabus_plan_teacher_teacher on syllabus_plan_teacher(school_id, teacher_id) where status = 'active';
+
+-- Table 6: syllabus_model_paper (exam paper set per grade+stream+subject+exam).
+-- Independent of the month-wise plan; a subject can have papers with no plan.
+-- answer_key_released gates student visibility of the answer key (default false, app).
+create table if not exists syllabus_model_paper (
+    uuid varchar(12) primary key,
+    school_id varchar(12) not null,
+    academic_year_id varchar(12) not null,
+    grade varchar(32) not null,
+    stream_code varchar(16),
+    subject_id varchar(12) not null,
+    exam varchar(32) not null,
+    answer_key_released boolean not null,
+    status varchar(16) not null check (status in ('active', 'deleted')),
+    createdby_userid varchar(12),
+    created_at timestamp(0),
+    updatedby_userid varchar(12),
+    updated_at timestamp(0)
+);
+
+-- One paper set per (grade, stream, subject, exam) per year (coalesce null stream).
+create unique index if not exists idx_model_paper_unique
+    on syllabus_model_paper(school_id, academic_year_id, lower(grade), coalesce(lower(stream_code), ''), subject_id, lower(exam)) where status = 'active';
+create index if not exists idx_model_paper_scope on syllabus_model_paper(school_id, academic_year_id, lower(grade)) where status = 'active';
+
+-- Table 7: syllabus_model_paper_doc (the 3 documents of a paper set). Each holds a
+-- Word (docx_file_id) and a generated PDF (pdf_file_id), both file_storage uuids.
+-- pdf_status doubles as the conversion queue: 'pending' rows with a docx are picked
+-- up by the LibreOffice worker, which sets pdf_file_id + 'ready' (or 'failed').
+create table if not exists syllabus_model_paper_doc (
+    uuid varchar(12) primary key,
+    school_id varchar(12) not null,
+    model_paper_id varchar(12) not null,
+    doc_type varchar(16) not null check (doc_type in ('model_paper', 'answer_key', 'blueprint')),
+    docx_file_id varchar(12),
+    pdf_file_id varchar(12),
+    pdf_status varchar(16) not null check (pdf_status in ('pending', 'ready', 'failed', 'none')),
+    pdf_attempts integer,
+    pdf_error text,
+    status varchar(16) not null check (status in ('active', 'deleted')),
+    createdby_userid varchar(12),
+    created_at timestamp(0),
+    updatedby_userid varchar(12),
+    updated_at timestamp(0)
+);
+
+-- One active doc per (paper, doc_type).
+create unique index if not exists idx_model_paper_doc_unique
+    on syllabus_model_paper_doc(model_paper_id, doc_type) where status = 'active';
+-- Conversion queue lookup: pending docs that still need a PDF.
+create index if not exists idx_model_paper_doc_pending
+    on syllabus_model_paper_doc(school_id) where status = 'active' and pdf_status = 'pending';

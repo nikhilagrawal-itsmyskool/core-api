@@ -248,3 +248,68 @@
           path: me/timeline
           method: get
           cors: true
+
+  # ── Model papers (admin/teacher) ──────────────────────────────────────────
+  list-model-papers:
+    handler: syllabus-model-paper-handler.list
+    name: ${self:service}-list-model-papers
+    events:
+      - http:
+          path: model-papers
+          method: get
+          cors: true
+
+  upload-model-paper:
+    handler: syllabus-model-paper-handler.upload
+    name: ${self:service}-upload-model-paper
+    events:
+      - http:
+          path: model-papers/upload
+          method: post
+          cors: true
+
+  set-model-paper-answer-key:
+    handler: syllabus-model-paper-handler.setAnswerKey
+    name: ${self:service}-set-model-paper-answer-key
+    events:
+      - http:
+          path: model-papers/{id}/answer-key
+          method: put
+          cors: true
+
+  delete-model-paper-doc:
+    handler: syllabus-model-paper-handler.deleteDoc
+    name: ${self:service}-delete-model-paper-doc
+    events:
+      - http:
+          path: model-papers/docs/{id}
+          method: delete
+          cors: true
+
+  download-model-paper-staff:
+    handler: syllabus-model-paper-handler.downloadStaff
+    name: ${self:service}-download-model-paper-staff
+    events:
+      - http:
+          path: model-papers/docs/{id}/file
+          method: get
+          cors: true
+
+  # ── Model papers (student/parent app) ─────────────────────────────────────
+  my-papers:
+    handler: syllabus-model-paper-handler.myPapers
+    name: ${self:service}-my-papers
+    events:
+      - http:
+          path: me/papers
+          method: get
+          cors: true
+
+  download-model-paper-student:
+    handler: syllabus-model-paper-handler.downloadStudent
+    name: ${self:service}-download-model-paper-student
+    events:
+      - http:
+          path: me/papers/docs/{id}/file
+          method: get
+          cors: true

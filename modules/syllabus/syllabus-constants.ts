@@ -47,17 +47,34 @@ export const PROGRESS_STATUSES = [
   { value: "covered", label: "Covered" },
 ] as const;
 
+// Exams a model-paper set can belong to.
+export const EXAMS = [
+  { value: "half_yearly", label: "Half Yearly" },
+  { value: "annual", label: "Annual" },
+] as const;
+
+// The three documents in a model-paper set.
+export const DOC_TYPES = [
+  { value: "model_paper", label: "Model Paper" },
+  { value: "answer_key", label: "Answer Key" },
+  { value: "blueprint", label: "Blueprint" },
+] as const;
+
 export const MONTH_VALUES = MONTHS.map((m) => m.value);
 export const ENTRY_TYPE_VALUES = ENTRY_TYPES.map((e) => e.value);
 export const TERM_VALUES = TERMS.map((t) => t.value);
 export const LAYOUT_VALUES = LAYOUTS.map((l) => l.value);
 export const PROGRESS_STATUS_VALUES = PROGRESS_STATUSES.map((s) => s.value);
+export const EXAM_VALUES = EXAMS.map((e) => e.value);
+export const DOC_TYPE_VALUES = DOC_TYPES.map((d) => d.value);
 
 export type Month = (typeof MONTH_VALUES)[number];
 export type EntryType = (typeof ENTRY_TYPE_VALUES)[number];
 export type Term = (typeof TERM_VALUES)[number];
 export type Layout = (typeof LAYOUT_VALUES)[number];
 export type ProgressStatus = (typeof PROGRESS_STATUS_VALUES)[number];
+export type Exam = (typeof EXAM_VALUES)[number];
+export type DocType = (typeof DOC_TYPE_VALUES)[number];
 
 export const DEFAULTS = {
   STATUS: "active" as const,
