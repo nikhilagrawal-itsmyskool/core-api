@@ -370,6 +370,22 @@ describe('house mode: weekly roster', () => {
     expect((await api('PUT', `/weeks/${weekId}/roster`, { entries: [] })).status).toBe(200);
   });
 
+  it('freezes a submitted roster (read-only) and recalls it back to draft', async () => {
+    // Submit -> submitted, and now read-only: a save is rejected.
+    expect((await api('POST', `/weeks/${weekId}/submit`)).body.status).toBe('submitted');
+    expect((await api('PUT', `/weeks/${weekId}/roster`, { entries: [] })).status).toBe(400);
+
+    // Recall -> back to draft, editable again, and a save now succeeds.
+    const recalled = await api('POST', `/weeks/${weekId}/recall`);
+    expect(recalled.status).toBe(200);
+    expect(recalled.body.status).toBe('draft');
+    expect(recalled.body.editable).toBe(true);
+    expect((await api('PUT', `/weeks/${weekId}/roster`, { entries: [] })).status).toBe(200);
+
+    // Recall is only valid from 'submitted'.
+    expect((await api('POST', `/weeks/${weekId}/recall`)).status).toBe(400);
+  });
+
   it('configures a checklist, ticks it for the week, and signs off', async () => {
     const weekItem = await api('POST', '/checklist/items', { scope: 'week', text: 'Roster approved on time', phase: 'Before' });
     expect(weekItem.status).toBe(200);

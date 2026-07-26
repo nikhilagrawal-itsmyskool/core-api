@@ -55,6 +55,12 @@ class AssemblyDutiesHandler {
     return this.guardedWeek(event, callback, (id, s, e) => assemblyWeekService.submit(id, s, e)).catch((err) => ResponseBuilder.handleError(err, callback));
   };
 
+  // POST /me/assembly/weeks/{id}/recall — pull a submitted roster back to draft (my house).
+  public recall = (event: ApiEvent, _c: ApiContext, callback: ApiCallback) => {
+    _c.callbackWaitsForEmptyEventLoop = false;
+    return this.guardedWeek(event, callback, (id, s, e) => assemblyWeekService.recall(id, s, e)).catch((err) => ResponseBuilder.handleError(err, callback));
+  };
+
   public getChecklist = (event: ApiEvent, _c: ApiContext, callback: ApiCallback) => {
     _c.callbackWaitsForEmptyEventLoop = false;
     return this.guardedWeek(event, callback, (id, s) => assemblyChecklistService.getWeekChecklist(id, s)).catch((e) => ResponseBuilder.handleError(e, callback));
@@ -126,6 +132,7 @@ export const ensureWeek = handler.ensureWeek;
 export const getWeek = handler.getWeek;
 export const saveRoster = handler.saveRoster;
 export const submit = handler.submit;
+export const recall = handler.recall;
 export const getChecklist = handler.getChecklist;
 export const saveChecklist = handler.saveChecklist;
 export const signoff = handler.signoff;

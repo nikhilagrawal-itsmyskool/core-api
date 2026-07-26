@@ -257,6 +257,22 @@ class AssemblyWeekService {
     return this.getWeek(weekId, schoolId);
   }
 
+  // Recall a SUBMITTED roster back to draft so the house can edit it again. Valid only
+  // while 'submitted' — once approved/locked, reopening is the admin Unlock flow. Used by
+  // the on-duty house (self-recall) and by god/admin (return a submission for changes).
+  public async recall(weekId: string, schoolId: string, userId: string): Promise<AssemblyWeekDetail | null> {
+    const week = await this.weekOr404(weekId, schoolId); if (!week) return null;
+    if (week.status !== 'submitted') {
+      throw new BusinessErrorResult(ErrorCode.BusinessError, 'Only a submitted roster can be recalled');
+    }
+    const now = new Date();
+    await DB.query(
+      singleLineString`update assembly_week set status = 'draft', submittedby_userid = null, submitted_at = null, updatedby_userid = $1, updated_at = $2 where uuid = $3`,
+      [userId, now, weekId],
+    );
+    return this.getWeek(weekId, schoolId);
+  }
+
   // ── Internal helpers ─────────────────────────────────────────────────────────
 
   private async weekOr404(weekId: string, schoolId: string): Promise<AssemblyWeek | null> {
@@ -271,7 +287,9 @@ class AssemblyWeekService {
     const deadline: Date | null = r.deadlineAt ? new Date(r.deadlineAt) : null;
     const now = new Date();
     const pastDeadline = !!deadline && now.getTime() > deadline.getTime();
-    const editable = !locked && status !== 'approved' && (!pastDeadline || lateUnlocked);
+    // Editable ONLY while draft: submitting freezes the roster (read-only) until it is
+    // approved (public) or recalled back to draft. Approved/locked are never editable.
+    const editable = !locked && status === 'draft' && (!pastDeadline || lateUnlocked);
     return {
       uuid: r.uuid, planId: r.planId, academicYearId: r.academicYearId, weekStart: r.weekStart,
       houseId: r.houseId || undefined, houseName: r.houseName || undefined,

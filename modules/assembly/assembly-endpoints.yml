@@ -116,6 +116,14 @@
           path: weeks/{id}/approve
           method: post
           cors: true
+  recall-week:
+    handler: assembly-week-handler.recall
+    name: ${self:service}-recall-week
+    events:
+      - http:
+          path: weeks/{id}/recall
+          method: post
+          cors: true
   lock-week:
     handler: assembly-week-handler.lock
     name: ${self:service}-lock-week
@@ -698,6 +706,14 @@
     events:
       - http:
           path: me/assembly/weeks/{id}/submit
+          method: post
+          cors: true
+  my-assembly-recall-week:
+    handler: assembly-duties-handler.recall
+    name: ${self:service}-my-assembly-recall-week
+    events:
+      - http:
+          path: me/assembly/weeks/{id}/recall
           method: post
           cors: true
   my-assembly-week-checklist:
