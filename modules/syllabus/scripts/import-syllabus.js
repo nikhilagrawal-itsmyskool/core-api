@@ -251,7 +251,7 @@ async function main() {
   if (files.length === 0) { console.error('Provide --file <doc.docx> or --dir <folder>'); process.exit(1); }
 
   const baseUrl = baseUrlFor(o.stage, o['base-url']);
-  const { serviceAuthHeaders } = require(path.join(__dirname, '..', '..', '..', 'scripts', 'lib', 'service-auth.js'));
+  const { serviceAuthHeaders } = require(path.join(__dirname, '..', '..', '..', 'scripts', 'service-auth.js'));
   const authHeaders = serviceAuthHeaders(o.stage, 'import-syllabus');
   if (!o.dryRun && !o.school) { console.error('--school <code> is required (or use --dry-run)'); process.exit(1); }
   if (!o.dryRun) console.log(`Target: ${baseUrl}  (school ${o.school}, mode ${o.mode})`);

@@ -27,6 +27,7 @@ plugins:
   - serverless-offline
   - serverless-domain-manager
   - ../../plugins/serverless-cors-defaults.js
+  - ../../plugins/serverless-authorizer.js
   - serverless-plugin-split-stacks
 
 functions: ${file(assembly-endpoints.yml)}

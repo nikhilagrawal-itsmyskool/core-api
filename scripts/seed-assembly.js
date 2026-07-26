@@ -37,7 +37,7 @@ const STAGE = process.env.STAGE || 'local';
 const ASSIGN_CLASSES = process.env.ASSIGN_CLASSES !== '0';
 // Service-token header so this passes the API authorizer when targeting a protected
 // stage (empty for local). See scripts/lib/service-auth.js.
-const { serviceAuthHeaders } = require('./lib/service-auth.js');
+const { serviceAuthHeaders } = require('./service-auth.js');
 const AUTH_HEADERS = serviceAuthHeaders(STAGE, 'seed-assembly');
 
 const PLAN_NAME = 'The Morning Meridian';

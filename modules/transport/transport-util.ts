@@ -1,5 +1,5 @@
 import { ABSENT_TEMPLATE_KEY } from './transport-constants';
-const { serviceAuthHeader } = require('../../shared/util/service-token');
+const { serviceAuthHeader } = require('../../shared/util/service-token.js');
 
 // Base URL of the communication module. Points at the gateway in deployed envs;
 // override with COMM_BASE_URL to target the module's own port for standalone runs.
