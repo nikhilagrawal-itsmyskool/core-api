@@ -33,8 +33,13 @@ class ServerlessAuthorizer {
       this.serverless.cli.log('[authorizer] custom.authorizer.arn not set — skipping (routes left public)')
       return
     }
+    // Base exempt paths (global) + any module-local additions (custom.authorizerExtraExempt).
+    // Module-local is a separate key so it doesn't fight the global-config custom merge —
+    // e.g. communication exempts its external provider webhook.
+    const extra = svc.custom && svc.custom.authorizerExtraExempt
     const exempt = new Set(
-      (cfg.exemptPaths || ['health']).map((p) => String(p).replace(/^\/+|\/+$/g, ''))
+      [...(cfg.exemptPaths || ['health']), ...(Array.isArray(extra) ? extra : [])]
+        .map((p) => String(p).replace(/^\/+|\/+$/g, ''))
     )
     const fns = svc.functions
     if (!isPlainObject(fns)) return

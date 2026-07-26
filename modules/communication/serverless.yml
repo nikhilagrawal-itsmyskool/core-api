@@ -12,6 +12,10 @@ custom:
   fullServiceName: ${self:custom.prefix}-${self:custom.baseServiceName}
   customDomain:
    basePath: 'communication'
+  # The provider (MSG91) delivery-status webhook is called by an external service with
+  # no JWT — exempt it from the authorizer (health is exempt via the global default).
+  authorizerExtraExempt:
+    - webhooks/{provider}
   $<<: ${file(../global-config-${self:provider.stage}.yml):custom}
 
 service: ${self:provider.stage}-${self:custom.fullServiceName}
@@ -23,6 +27,7 @@ plugins:
   - serverless-offline
   - serverless-domain-manager
   - ../../plugins/serverless-cors-defaults.js
+  - ../../plugins/serverless-authorizer.js
 
 functions: ${file(communication-endpoints.yml)}
 
