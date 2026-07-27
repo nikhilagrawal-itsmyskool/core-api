@@ -68,9 +68,21 @@ export interface MyHomeworkClass {
   source: "override" | "timetable";
 }
 
+// A class homework can be posted for: a non-streamed base class, or a stream-child
+// class (XI-A Science / Commerce) of an enrolled streamed base class.
+export interface PostableClass {
+  classId: string;
+  name: string;
+  baseClassId: string | null;
+  streamCode: string | null;
+  streamName: string | null;
+}
+
 export interface ClassTeacherMapRow {
   classId: string;
   className: string;
+  streamCode: string | null;
+  streamName: string | null;
   teacherId: string | null;
   teacherName: string | null;
   source: "override" | "timetable" | "none";

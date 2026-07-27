@@ -27,38 +27,30 @@ export async function getCurrentAcademicYearId(schoolId: string): Promise<string
   return rows.length > 0 ? rows[0].uuid : null;
 }
 
-// The BASE section a student is placed in for a given academic year, or null.
-// Homework is keyed on the base class (class_id), so streams share one set.
-export async function findStudentClass(
-  schoolId: string,
-  studentId: string,
-  academicYearId: string,
-): Promise<{ classId: string; className: string } | null> {
-  const rows = await DB.query(
-    singleLineString`
-      select sc.class_id as class_id, c.name as class_name
-      from student_class sc
-      join class c on c.uuid = sc.class_id
-      where sc.student_id = $1 and sc.academic_year_id = $2 and sc.school_id = $3
-        and (sc.status is null or sc.status <> 'deleted')
-      limit 1
-    `,
-    [studentId, academicYearId, schoolId],
-  );
-  return rows.length > 0 ? { classId: rows[0].classId, className: rows[0].className } : null;
-}
-
-// A base class (section) by uuid, or null. base_class_id is null = a real section
-// (excludes stream-child rows like "XI-A (Science)").
-export async function findBaseClass(
+// A class homework can be posted for: a real base teaching class (no streams) OR a
+// stream-child class (e.g. "XI-A (Science)"). Cohort/composite rows (class_group_id)
+// are rejected. Streamed senior sections post per stream — the stream-child class is
+// the unit, since the timetable class_teacher and the students' stream both live there.
+export async function findPostableClass(
   schoolId: string,
   classId: string,
 ): Promise<{ uuid: string; name: string } | null> {
   const rows = await DB.query(
-    singleLineString`select uuid, name from class where uuid = $1 and school_id = $2 and base_class_id is null`,
+    singleLineString`select uuid, name from class
+      where uuid = $1 and school_id = $2
+        and (stream_code is not null or (base_class_id is null and class_group_id is null))`,
     [classId, schoolId],
   );
   return rows.length > 0 ? rows[0] : null;
+}
+
+// A class name by uuid (works for base or stream-child rows), or null.
+export async function findClassName(schoolId: string, classId: string): Promise<string | null> {
+  const rows = await DB.query(
+    singleLineString`select name from class where uuid = $1 and school_id = $2`,
+    [classId, schoolId],
+  );
+  return rows.length > 0 ? rows[0].name : null;
 }
 
 // An active employee (teacher) by uuid, or null.

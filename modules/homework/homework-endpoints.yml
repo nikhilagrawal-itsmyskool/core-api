@@ -86,6 +86,16 @@
           method: get
           cors: true
 
+  # ── Postable classes (base + stream children) for the pickers ──────────────
+  list-classes:
+    handler: homework-handler.listClasses
+    name: ${self:service}-list-classes
+    events:
+      - http:
+          path: classes
+          method: get
+          cors: true
+
   # ── Admin: class → class-teacher mapping override ──────────────────────────
   class-teacher-map:
     handler: homework-handler.classTeacherMap

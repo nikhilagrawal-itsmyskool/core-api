@@ -162,6 +162,23 @@ class HomeworkHandler {
     }
   };
 
+  // GET /homework/classes?academicYearId= — classes homework can be posted for
+  // (non-streamed base classes + stream-child classes of streamed sections).
+  public listClasses = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const auth = await resolveSchool(event, callback);
+      if (!auth) return;
+      const q = event.queryStringParameters || {};
+      const ay = q.academicYearId || (await getCurrentAcademicYearId(auth.schoolId));
+      if (!ay) return ResponseBuilder.ok([], callback);
+      const rows = await homeworkService.listPostableClasses(auth.schoolId, ay);
+      ResponseBuilder.ok(rows, callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
   // GET /homework/class-teachers?academicYearId=
   public classTeacherMap = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
     ctx.callbackWaitsForEmptyEventLoop = false;
@@ -244,6 +261,7 @@ export const removeItem = h.removeItem;
 export const getItemImage = h.getItemImage;
 export const publish = h.publish;
 export const unpublish = h.unpublish;
+export const listClasses = h.listClasses;
 export const classTeacherMap = h.classTeacherMap;
 export const setClassTeacher = h.setClassTeacher;
 export const clearClassTeacher = h.clearClassTeacher;

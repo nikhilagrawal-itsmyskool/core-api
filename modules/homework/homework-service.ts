@@ -2,10 +2,11 @@ import { DB, singleLineString } from "../../shared/lib/db";
 import { BusinessErrorResult } from "../../shared/lib/errors";
 import { ErrorCode } from "../../shared/lib/error-codes";
 import { fileStorageService, getSignedPhotoUrl } from "../../shared/lib/file-storage";
+import { resolveEffectiveClassId } from "../../shared/lib/effective-class";
 import {
   getCurrentAcademicYearId,
-  findStudentClass,
-  findBaseClass,
+  findPostableClass,
+  findClassName,
   findEmployee,
 } from "./homework-common";
 import {
@@ -20,6 +21,7 @@ import {
   HomeworkItemView,
   MyHomeworkClass,
   ClassTeacherMapRow,
+  PostableClass,
   StudentHomeworkView,
   HomeworkAuditRow,
 } from "./homework-interfaces";
@@ -77,22 +79,55 @@ class HomeworkService {
       .sort((a, b) => (a.className || "").localeCompare(b.className || ""));
   }
 
-  // Admin view: every base class + its resolved class teacher (override vs timetable).
-  async classTeacherMap(schoolId: string, ay: string): Promise<ClassTeacherMapRow[]> {
-    // Only base classes that actually run in this academic year — i.e. that have
-    // active student enrolment that year (the same rule the class dropdown uses).
-    const classes = await DB.query(
-      singleLineString`select c.uuid, c.name from class c
-        where c.school_id = $1 and c.base_class_id is null
-          and exists (
-            select 1 from student_class sc
-            join student s on s.uuid = sc.student_id and s.school_id = sc.school_id and s.status <> 'deleted'
-            where sc.class_id = c.uuid and sc.school_id = c.school_id and sc.academic_year_id = $2
-              and (sc.status is null or sc.status <> 'deleted')
-          )
-        order by c.seq asc nulls last, c.name`,
+  // Classes homework can be posted for this year: non-streamed base classes that run
+  // this year, plus the stream-child classes (XI-A Science / Commerce) of any enrolled
+  // streamed base class. A streamed base is replaced by its stream children — each has
+  // its own class teacher + student audience. Non-streamed classes are unchanged.
+  async listPostableClasses(schoolId: string, ay: string): Promise<PostableClass[]> {
+    const rows = await DB.query(
+      singleLineString`
+        select class_id, name, base_class_id, stream_code, stream_name, seq from (
+          select c.uuid as class_id, c.name, null::varchar as base_class_id,
+                 null::varchar as stream_code, null::varchar as stream_name, c.seq
+          from class c
+          where c.school_id = $1 and c.base_class_id is null and c.class_group_id is null
+            and exists (
+              select 1 from student_class sc
+              join student s on s.uuid = sc.student_id and s.school_id = sc.school_id and s.status <> 'deleted'
+              where sc.class_id = c.uuid and sc.school_id = c.school_id and sc.academic_year_id = $2
+                and (sc.status is null or sc.status <> 'deleted')
+            )
+            and not exists (
+              select 1 from class ch
+              where ch.school_id = c.school_id and ch.base_class_id = c.uuid and ch.stream_code is not null
+            )
+          union all
+          select ch.uuid as class_id, ch.name, ch.base_class_id, ch.stream_code, cs.name as stream_name, ch.seq
+          from class ch
+          left join class_stream cs on cs.school_id = ch.school_id and lower(cs.code) = lower(ch.stream_code) and cs.status = 'active'
+          where ch.school_id = $1 and ch.base_class_id is not null and ch.stream_code is not null
+            and exists (
+              select 1 from student_class sc
+              join student s on s.uuid = sc.student_id and s.school_id = sc.school_id and s.status <> 'deleted'
+              where sc.class_id = ch.base_class_id and sc.school_id = ch.school_id and sc.academic_year_id = $2
+                and (sc.status is null or sc.status <> 'deleted')
+            )
+        ) q
+        order by seq asc nulls last, name`,
       [schoolId, ay],
     );
+    return rows.map((r: any) => ({
+      classId: r.classId,
+      name: r.name,
+      baseClassId: r.baseClassId || null,
+      streamCode: r.streamCode || null,
+      streamName: r.streamName || null,
+    }));
+  }
+
+  // Admin view: every postable class + its resolved class teacher (override vs timetable).
+  async classTeacherMap(schoolId: string, ay: string): Promise<ClassTeacherMapRow[]> {
+    const classes = await this.listPostableClasses(schoolId, ay);
     const overrides = await DB.query(
       singleLineString`select class_id, teacher_id from homework_class_teacher
         where school_id = $1 and academic_year_id = $2 and status = 'active'`,
@@ -109,18 +144,26 @@ class HomeworkService {
     const tnames = teacherIds.length
       ? await DB.query(singleLineString`select uuid, name from employee where school_id = $1 and uuid = any($2)`, [schoolId, teacherIds])
       : [];
-    const tmap = new Map(tnames.map((t: any) => [t.uuid, t.name]));
-    return classes.map((c: any) => {
+    const tmap = new Map<string, string>(tnames.map((t: any) => [t.uuid, t.name]));
+    return classes.map((c) => {
       let teacherId: string | null = null;
       let source: "override" | "timetable" | "none" = "none";
-      if (ovMap.has(c.uuid)) { teacherId = ovMap.get(c.uuid) as string; source = "override"; }
-      else if (ctMap.has(c.uuid)) { teacherId = ctMap.get(c.uuid) as string; source = "timetable"; }
-      return { classId: c.uuid, className: c.name, teacherId, teacherName: teacherId ? tmap.get(teacherId) || null : null, source };
+      if (ovMap.has(c.classId)) { teacherId = ovMap.get(c.classId) as string; source = "override"; }
+      else if (ctMap.has(c.classId)) { teacherId = ctMap.get(c.classId) as string; source = "timetable"; }
+      return {
+        classId: c.classId,
+        className: c.name,
+        streamCode: c.streamCode,
+        streamName: c.streamName,
+        teacherId,
+        teacherName: teacherId ? tmap.get(teacherId) || null : null,
+        source,
+      };
     });
   }
 
   async setClassTeacherOverride(schoolId: string, ay: string, classId: string, teacherId: string, userId: string): Promise<void> {
-    if (!(await findBaseClass(schoolId, classId))) throw new BusinessErrorResult(ErrorCode.BusinessError, "Invalid class");
+    if (!(await findPostableClass(schoolId, classId))) throw new BusinessErrorResult(ErrorCode.BusinessError, "Invalid class");
     if (!(await findEmployee(schoolId, teacherId))) throw new BusinessErrorResult(ErrorCode.BusinessError, "Invalid teacher");
     const now = new Date();
     await DB.queriesInTransaction(
@@ -201,9 +244,8 @@ class HomeworkService {
   }
 
   private async dayResult(schoolId: string, ay: string, classId: string, date: string): Promise<HomeworkDayResult> {
-    const cls = await findBaseClass(schoolId, classId);
+    const className = await findClassName(schoolId, classId);
     const dayRow = await this.findDayRow(schoolId, ay, classId, date);
-    const className = cls?.name || null;
     if (!dayRow) return { classId, date, className, day: null };
     return {
       classId,
@@ -231,7 +273,7 @@ class HomeworkService {
   async addItem(schoolId: string, req: AddItemRequest, userId: string): Promise<HomeworkDayResult> {
     const year = req.academicYearId || (await getCurrentAcademicYearId(schoolId));
     if (!year) throw new BusinessErrorResult(ErrorCode.BusinessError, "No current academic year");
-    if (!(await findBaseClass(schoolId, req.classId))) throw new BusinessErrorResult(ErrorCode.BusinessError, "Invalid class");
+    if (!(await findPostableClass(schoolId, req.classId))) throw new BusinessErrorResult(ErrorCode.BusinessError, "Invalid class");
     const img = req.image;
     if (!img?.base64Data || !img?.mimeType) throw new BusinessErrorResult(ErrorCode.BusinessError, "image (mimeType + base64Data) is required");
     if (!(HW_IMAGE_ALLOWED_MIME as readonly string[]).includes(img.mimeType)) {
@@ -364,16 +406,20 @@ class HomeworkService {
 
   async studentToday(schoolId: string, studentId: string, date: string, academicYearId?: string): Promise<StudentHomeworkView> {
     const ay = academicYearId || (await getCurrentAcademicYearId(schoolId));
-    const placement = ay ? await findStudentClass(schoolId, studentId, ay) : null;
-    if (!ay || !placement) return { date, classId: null, className: null, published: false, items: [] };
-    const day = await this.findDayRow(schoolId, ay, placement.classId, date);
+    // Resolve the student's EFFECTIVE class — the stream-child class (XI-A Science)
+    // for a streamed student, the base class otherwise. Homework is posted per that
+    // class, so this is where the child's homework lives.
+    const eff = ay ? await resolveEffectiveClassId(schoolId, studentId, ay) : null;
+    if (!ay || !eff) return { date, classId: null, className: null, published: false, items: [] };
+    const className = await findClassName(schoolId, eff.classId);
+    const day = await this.findDayRow(schoolId, ay, eff.classId, date);
     if (!day || day.status !== "published") {
-      return { date, classId: placement.classId, className: placement.className, published: false, items: [] };
+      return { date, classId: eff.classId, className, published: false, items: [] };
     }
     return {
       date,
-      classId: placement.classId,
-      className: placement.className,
+      classId: eff.classId,
+      className,
       published: true,
       items: await this.itemsForDay(schoolId, day.uuid),
     };
