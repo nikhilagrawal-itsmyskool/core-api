@@ -288,6 +288,13 @@ async function persist(o, plans) {
       let plan = (await q("select uuid from syllabus where school_id=$1 and academic_year_id=$2 and lower(grade)=lower($3) and coalesce(lower(stream_code),'')='' and subject_id=$4 and status='active'", [sid, ay.uuid, p.grade, subj.uuid]))[0];
       if (!plan) { const u = generateShortUuid(12); await q("insert into syllabus (uuid,school_id,academic_year_id,grade,subject_id,layout,component_layout,status,createdby_userid,created_at) values ($1,$2,$3,$4,$5,$6,$7,'active','0',$8)", [u, sid, ay.uuid, p.grade, subj.uuid, layout, compLayout, now]); plan = { uuid: u }; }
       else { await q('update syllabus set component_layout=$1, layout=$2, updatedby_userid=$3, updated_at=$4 where uuid=$5', [compLayout, layout, '0', now, plan.uuid]); }
+      // Retire any OTHER active plan for the same (grade, subject name) under a
+      // different subject row — e.g. a pre-grade-scoped duplicate — so re-imports
+      // don't leave two plans for the same subject.
+      await q(`update syllabus set status='deleted', updatedby_userid='0', updated_at=$5
+               where school_id=$1 and academic_year_id=$2 and lower(grade)=lower($3) and status='active'
+                 and uuid <> $4 and subject_id in (select uuid from syllabus_subject where school_id=$1 and lower(name)=lower($6))`,
+        [sid, ay.uuid, p.grade, plan.uuid, now, p.subject]);
 
       // store source .docx in file_storage (postgres blob locally; S3 in prod via FILE_STORAGE_BUCKET)
       const bytes = fs.readFileSync(p.file);
