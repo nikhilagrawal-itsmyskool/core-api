@@ -394,6 +394,71 @@ class SyllabusModelPaperService {
       .filter((p: any) => p.docs.length > 0);
   }
 
+  // ── Teacher PWA: papers for the subjects this teacher is assigned to ───────
+  // Scoped through the committed offerings mapping (syllabus_plan_teacher): the
+  // teacher's plans give (grade, subject_id, stream), and model papers share the
+  // same grade+subject_id. Staff, so answer keys are always included. Returns one
+  // entry per plan (syllabus_id) that has at least one paper with a document.
+  public async teacherPapers(schoolId: string, employeeId: string): Promise<any[]> {
+    const plans = await DB.query(
+      singleLineString`
+        select distinct s.uuid as syllabus_id, s.grade, s.subject_id, s.stream_code,
+               s.academic_year_id, sub.name as subject_name
+        from syllabus_plan_teacher spt
+        join syllabus s on s.uuid = spt.syllabus_id and s.status = 'active'
+        left join syllabus_subject sub on sub.uuid = s.subject_id
+        where spt.school_id = $1 and spt.teacher_id = $2 and spt.status = 'active'
+      `,
+      [schoolId, employeeId],
+    );
+    if (plans.length === 0) return [];
+
+    const out: any[] = [];
+    for (const p of plans) {
+      const papers = await DB.query(
+        singleLineString`
+          select uuid, stream_code, exam, answer_key_released
+          from syllabus_model_paper
+          where school_id = $1 and academic_year_id = $2 and lower(grade) = lower($3)
+            and subject_id = $4 and status = 'active'
+            and (stream_code is null or lower(stream_code) = lower($5))
+          order by exam
+        `,
+        [schoolId, p.academicYearId, p.grade, p.subjectId, p.streamCode || ""],
+      );
+      if (papers.length === 0) continue;
+
+      const ids = papers.map((x: any) => x.uuid);
+      const placeholders = ids.map((_: string, i: number) => `$${i + 2}`).join(", ");
+      const docRows = await DB.query(
+        singleLineString`
+          select model_paper_id, uuid, doc_type, docx_file_id, pdf_file_id, pdf_status
+          from syllabus_model_paper_doc
+          where school_id = $1 and status = 'active' and model_paper_id in (${placeholders})
+        `,
+        [schoolId, ...ids],
+      );
+      const byPaper = new Map<string, any[]>();
+      for (const d of docRows) {
+        if (!byPaper.has(d.modelPaperId)) byPaper.set(d.modelPaperId, []);
+        byPaper.get(d.modelPaperId)!.push({
+          uuid: d.uuid, docType: d.docType, pdfStatus: d.pdfStatus,
+          hasDocx: !!d.docxFileId, hasPdf: !!d.pdfFileId,
+        });
+      }
+      const withDocs = papers
+        .map((pp: any) => ({
+          uuid: pp.uuid, exam: pp.exam, streamCode: pp.streamCode || null,
+          answerKeyReleased: pp.answerKeyReleased, docs: byPaper.get(pp.uuid) || [],
+        }))
+        .filter((pp: any) => pp.docs.length > 0);
+      if (withDocs.length === 0) continue;
+
+      out.push({ syllabusId: p.syllabusId, subjectName: p.subjectName || null, grade: p.grade, papers: withDocs });
+    }
+    return out;
+  }
+
   // ── Conversion worker (docx -> pdf) ────────────────────────────────────────
   // Claim one pending doc (for update skip locked, overlap-safe across drains),
   // convert its Word to PDF, store it, mark ready. Transient failures go back to

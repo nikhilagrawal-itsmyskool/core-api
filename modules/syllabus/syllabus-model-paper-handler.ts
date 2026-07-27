@@ -5,7 +5,7 @@ import {
 } from "../../shared/lib/api.interfaces";
 import { ResponseBuilder } from "../../shared/lib/response-builder";
 import { ErrorCode } from "../../shared/lib/error-codes";
-import { resolveSchool, parseBody, requireParam, guardActiveStudent } from "./handler-util";
+import { resolveSchool, parseBody, requireParam, guardActiveStudent, resolveEmployee } from "./handler-util";
 import { syllabusModelPaperService } from "./syllabus-model-paper-service";
 import { UploadPaperDocRequest } from "./syllabus-interfaces";
 import { selfTest } from "./syllabus-convert";
@@ -123,6 +123,20 @@ class SyllabusModelPaperHandler {
     }
   };
 
+  // GET /my-papers — papers for the subjects the logged-in teacher is assigned to
+  // (offerings mapping). Staff, so answer keys are included.
+  public teacherPapers = async (event: ApiEvent, _c: ApiContext, cb: ApiCallback) => {
+    _c.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const auth = resolveEmployee(event, cb);
+      if (!auth) return;
+      const rows = await syllabusModelPaperService.teacherPapers(auth.schoolId, auth.employeeId);
+      ResponseBuilder.ok(rows, cb);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, cb);
+    }
+  };
+
   // GET /me/papers?subjectId=&exam= — the child's visible papers (student token).
   public myPapers = async (event: ApiEvent, _c: ApiContext, cb: ApiCallback) => {
     _c.callbackWaitsForEmptyEventLoop = false;
@@ -206,4 +220,5 @@ export const deleteDoc = handler.deleteDoc;
 export const deletePaper = handler.deletePaper;
 export const downloadStaff = handler.downloadStaff;
 export const myPapers = handler.myPapers;
+export const teacherPapers = handler.teacherPapers;
 export const downloadStudent = handler.downloadStudent;

@@ -322,6 +322,16 @@
           method: get
           cors: true
 
+  # ── Model papers (teacher PWA — scoped to assigned subjects) ───────────────
+  teacher-papers:
+    handler: syllabus-model-paper-handler.teacherPapers
+    name: ${self:service}-teacher-papers
+    events:
+      - http:
+          path: my-papers
+          method: get
+          cors: true
+
   # ── Model papers (student/parent app) ─────────────────────────────────────
   my-papers:
     handler: syllabus-model-paper-handler.myPapers
