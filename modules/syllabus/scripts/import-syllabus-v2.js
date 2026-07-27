@@ -121,6 +121,15 @@ function normMonth(text) {
 }
 const isBlank = (s) => !s || /^[-–—\s]+$/.test(s.trim());
 const extractPage = (s) => { const m = (s || '').match(/P\.?\s*([0-9][0-9\-–,\/\s]*)/i); return m ? m[1].replace(/[–]/g, '-').replace(/\s+/g, '').slice(0, 32) : null; };
+// A "Pages" column paired with an activity column holds that activity's page ref
+// ("P.133" or a bare "120-123"). Pull a page string from such a cell.
+const pageFromCell = (s) => {
+  if (!s) return null;
+  const p = extractPage(s);
+  if (p) return p;
+  const t = s.trim();
+  return /^[0-9][0-9\-–\/,.\s]*$/.test(t) ? t.replace(/\s+/g, '').replace(/[–]/g, '-').slice(0, 32) : null;
+};
 const RX_STRUCT = /revision|periodic|assessment|examination|half\s*yearly|annual\s*exam|\bexam\b|\btest\b|olympiad|refresher|पुनरावृत्ति|परीक्षा/i;
 const RX_UNIT = /^(unit|theme|topic)\b.*[:：]/i;
 const RX_CONT = /continue|continued|\.\.\.$|…$/i;
@@ -228,11 +237,18 @@ function parseDoc(file) {
     const { t, hi: thi, hdr: th, pagesIdx: tpi } = ti;
     const chapterIdx = 1;
     const compIdx = [];
+    // A column literally titled "Page(s)" that FOLLOWS an activity column is that
+    // activity's page reference (Grammar: Word Power | Pages | Writing Skill |
+    // Pages), not its own tickable activity — attach it to the preceding component.
+    let lastComp = null;
     for (let k = 0; k < th.length; k++) {
       if (k === 0 || k === chapterIdx || k === tpi) continue;
       const label = joinCell(th[k]);
       if (!label) continue;
-      compIdx.push({ k, label });
+      if (/^pages?$/i.test(label.trim())) { if (lastComp) lastComp.pageColK = k; continue; }
+      const comp = { k, label };
+      compIdx.push(comp);
+      lastComp = comp;
       if (!seenComp.has(label.toLowerCase())) { seenComp.add(label.toLowerCase()); components.push({ key: label.toLowerCase().replace(/\s+/g, '_').slice(0, 48), label }); }
     }
     let curMonth = null, curUnit = null, curChapter = null;
@@ -253,12 +269,16 @@ function parseDoc(file) {
       }
       if (curChapter) {
         for (const comp of compIdx) {
-          let lastTmp = null;
+          const pageParas = comp.pageColK != null ? (c[comp.pageColK] || []) : [];
+          const wholePage = pageParas.length ? pageFromCell(joinCell(pageParas)) : null;
+          let lastTmp = null, itemIdx = 0;
           for (const para of (c[comp.k] || [])) {
             if (isBlank(para)) continue;
             const cont = lastTmp != null && (/^\(/.test(para) || /^[a-z]/.test(para) || /^\(?\s*p\.?\s*[\d][\d\-–\/,\s]*\)?\s*$/i.test(para));
             if (cont) { const node = nodes.find((n) => n.tmp === lastTmp); node.heading = `${node.heading} ${para}`.slice(0, 4000); if (!node.pageRef) node.pageRef = extractPage(para); continue; }
-            lastTmp = add({ parent: curChapter, type: 'item', component: comp.label, month: curMonth, heading: para, pageRef: extractPage(para) });
+            const pageRef = extractPage(para) || pageFromCell(pageParas[itemIdx]) || wholePage;
+            lastTmp = add({ parent: curChapter, type: 'item', component: comp.label, month: curMonth, heading: para, pageRef });
+            itemIdx++;
           }
         }
       }
