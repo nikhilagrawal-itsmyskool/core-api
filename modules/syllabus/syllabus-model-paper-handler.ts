@@ -8,6 +8,7 @@ import { ErrorCode } from "../../shared/lib/error-codes";
 import { resolveSchool, parseBody, requireParam, guardActiveStudent } from "./handler-util";
 import { syllabusModelPaperService } from "./syllabus-model-paper-service";
 import { UploadPaperDocRequest } from "./syllabus-interfaces";
+import { selfTest } from "./syllabus-convert";
 
 class SyllabusModelPaperHandler {
   // GET /model-papers?academicYearId=&grade=&streamCode=&subjectId=&exam=
@@ -80,6 +81,25 @@ class SyllabusModelPaperHandler {
         return;
       }
       ResponseBuilder.ok({ message: "Document deleted" }, cb);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, cb);
+    }
+  };
+
+  // DELETE /model-papers/{id} — remove a whole paper row (all its documents).
+  public deletePaper = async (event: ApiEvent, _c: ApiContext, cb: ApiCallback) => {
+    _c.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const ctx = await resolveSchool(event, cb);
+      if (!ctx) return;
+      const id = requireParam(event, "id", cb);
+      if (!id) return;
+      const ok = await syllabusModelPaperService.deletePaper(ctx.schoolId, ctx.userId, id);
+      if (!ok) {
+        ResponseBuilder.notFound(ErrorCode.InvalidId, "Model paper not found", cb);
+        return;
+      }
+      ResponseBuilder.ok({ message: "Model paper deleted" }, cb);
     } catch (err: any) {
       ResponseBuilder.handleError(err, cb);
     }
@@ -163,15 +183,27 @@ class SyllabusModelPaperHandler {
       if (typeof cb === "function") ResponseBuilder.handleError(err, cb);
     }
   };
+
+  // Invoke-only: verify the LibreOffice layer runs on this runtime (AL2 binary
+  // on AL2023). Bypasses the feature flag. Run via `serverless invoke -f
+  // convert-selftest` before enabling SYLLABUS_CONVERT_ENABLED.
+  public selftest = async (_event: ApiEvent, _c: ApiContext, cb: ApiCallback) => {
+    _c.callbackWaitsForEmptyEventLoop = false;
+    const result = await selfTest();
+    if (typeof cb === "function") ResponseBuilder.ok(result, cb);
+    return result;
+  };
 }
 
 const handler = new SyllabusModelPaperHandler();
 export const list = handler.list;
 export const processNext = handler.processNext;
 export const drain = handler.drain;
+export const selftest = handler.selftest;
 export const upload = handler.upload;
 export const setAnswerKey = handler.setAnswerKey;
 export const deleteDoc = handler.deleteDoc;
+export const deletePaper = handler.deletePaper;
 export const downloadStaff = handler.downloadStaff;
 export const myPapers = handler.myPapers;
 export const downloadStudent = handler.downloadStudent;

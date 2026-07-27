@@ -295,6 +295,15 @@
           method: delete
           cors: true
 
+  delete-model-paper:
+    handler: syllabus-model-paper-handler.deletePaper
+    name: ${self:service}-delete-model-paper
+    events:
+      - http:
+          path: model-papers/{id}
+          method: delete
+          cors: true
+
   download-model-paper-staff:
     handler: syllabus-model-paper-handler.downloadStaff
     name: ${self:service}-download-model-paper-staff

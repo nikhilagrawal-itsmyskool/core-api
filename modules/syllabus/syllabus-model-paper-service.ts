@@ -302,6 +302,34 @@ class SyllabusModelPaperService {
     return true;
   }
 
+  // Delete a whole paper row (header + all its documents + stored files).
+  // Admin/god surface only. Idempotent: returns false if already gone.
+  public async deletePaper(schoolId: string, userId: string, paperId: string): Promise<boolean> {
+    const paper = await DB.query(
+      singleLineString`select uuid from syllabus_model_paper where uuid = $1 and school_id = $2 and status = 'active'`,
+      [paperId, schoolId],
+    );
+    if (paper.length === 0) return false;
+    const docs = await DB.query(
+      singleLineString`select docx_file_id, pdf_file_id from syllabus_model_paper_doc where model_paper_id = $1 and school_id = $2 and status = 'active'`,
+      [paperId, schoolId],
+    );
+    const now = new Date();
+    await DB.query(
+      singleLineString`update syllabus_model_paper_doc set status = 'deleted', updatedby_userid = $1, updated_at = $2 where model_paper_id = $3 and school_id = $4 and status = 'active'`,
+      [userId, now, paperId, schoolId],
+    );
+    await DB.query(
+      singleLineString`update syllabus_model_paper set status = 'deleted', updatedby_userid = $1, updated_at = $2 where uuid = $3 and school_id = $4`,
+      [userId, now, paperId, schoolId],
+    );
+    for (const d of docs) {
+      if (d.docxFileId) await fileStorageService.delete(d.docxFileId, schoolId);
+      if (d.pdfFileId) await fileStorageService.delete(d.pdfFileId, schoolId);
+    }
+    return true;
+  }
+
   // ── Student app: the papers a child can see for the year ───────────────────
   // Their grade + stream (common + own stream), only documents with a ready PDF,
   // and the answer key only when released.
