@@ -109,6 +109,15 @@
           method: get
           cors: true
 
+  get-syllabus-source:
+    handler: syllabus-plan-handler.getSource
+    name: ${self:service}-get-syllabus-source
+    events:
+      - http:
+          path: syllabi/{id}/source
+          method: get
+          cors: true
+
   update-syllabus:
     handler: syllabus-plan-handler.update
     name: ${self:service}-update-syllabus
@@ -320,24 +329,39 @@
     handler: syllabus-model-paper-handler.processNext
     name: ${self:service}-process-next-conversion
     timeout: 120
+    memorySize: 2048
+    ephemeralStorage: 2048
+    layers:
+      - arn:aws:lambda:ap-south-1:264318271546:layer:prod-itsmyskool-libreoffice:1
     events:
       - http:
           path: model-papers/process-next
           method: post
           cors: true
 
-  # AWS worker: EventBridge drains pending docs to PDF. DISABLED until the PDF
-  # part is enabled — to activate: attach the LibreOffice layer (from iac
-  # live/prod/lambda-layer-libreoffice) and set SYLLABUS_CONVERT_ENABLED=true, then
-  # flip `enabled` to true. Overlap-safe via `for update skip locked`.
-  #   layers:
-  #     - <libreoffice layer arn from terragrunt output>
+  # AWS worker: EventBridge drains pending docs to PDF. Schedule DISABLED until the
+  # runtime self-test passes and SYLLABUS_CONVERT_ENABLED=true — then flip
+  # `enabled` to true. Overlap-safe via `for update skip locked`.
   drain-conversions:
     handler: syllabus-model-paper-handler.drain
     name: ${self:service}-drain-conversions
     timeout: 120
     memorySize: 2048
+    ephemeralStorage: 2048
+    layers:
+      - arn:aws:lambda:ap-south-1:264318271546:layer:prod-itsmyskool-libreoffice:1
     events:
       - schedule:
           rate: rate(1 minute)
           enabled: false
+
+  # Invoke-only runtime check for the LibreOffice layer (AL2 binary on AL2023).
+  # Run: serverless invoke -f convert-selftest --stage prod --region ap-south-1
+  convert-selftest:
+    handler: syllabus-model-paper-handler.selftest
+    name: ${self:service}-convert-selftest
+    timeout: 120
+    memorySize: 2048
+    ephemeralStorage: 2048
+    layers:
+      - arn:aws:lambda:ap-south-1:264318271546:layer:prod-itsmyskool-libreoffice:1

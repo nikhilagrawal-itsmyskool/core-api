@@ -10,7 +10,7 @@ import { DEFAULTS } from "./syllabus-constants";
 const { generateShortUuid } = require("../../shared/util/generate-uuid.js");
 
 const SUBJECT_COLS = singleLineString`
-  uuid, school_id, name, description, status
+  uuid, school_id, grade, name, description, status
 `;
 
 class SyllabusSubjectService {
@@ -25,17 +25,19 @@ class SyllabusSubjectService {
         "name is required",
       );
     }
-    await this.assertNameFree(schoolId, data.name, null);
+    const grade = data.grade?.trim() || null;
+    await this.assertNameFree(schoolId, grade, data.name, null);
     const uuid = generateShortUuid(12);
     const rows = await DB.query(
       singleLineString`
-        insert into syllabus_subject (uuid, school_id, name, description, status, createdby_userid, created_at)
-        values ($1, $2, $3, $4, $5, $6, $7)
+        insert into syllabus_subject (uuid, school_id, grade, name, description, status, createdby_userid, created_at)
+        values ($1, $2, $3, $4, $5, $6, $7, $8)
         returning ${SUBJECT_COLS}
       `,
       [
         uuid,
         schoolId,
+        grade,
         data.name.trim(),
         data.description?.trim() || null,
         DEFAULTS.STATUS,
@@ -54,13 +56,15 @@ class SyllabusSubjectService {
   ): Promise<SyllabusSubject | null> {
     const existing = await this.getById(id, schoolId);
     if (!existing) return null;
-    if (data.name !== undefined) {
-      if (!data.name.trim())
+    const newGrade = data.grade !== undefined ? (data.grade?.trim() || null) : (existing.grade ?? null);
+    if (data.name !== undefined || data.grade !== undefined) {
+      const newName = data.name !== undefined ? data.name : existing.name;
+      if (!newName || !newName.trim())
         throw new BusinessErrorResult(
           ErrorCode.BusinessError,
           "name cannot be blank",
         );
-      await this.assertNameFree(schoolId, data.name, id);
+      await this.assertNameFree(schoolId, newGrade, newName, id);
     }
 
     const updates: string[] = [];
@@ -71,6 +75,7 @@ class SyllabusSubjectService {
       params.push(val);
     };
 
+    if (data.grade !== undefined) set("grade", newGrade);
     if (data.name !== undefined) set("name", data.name.trim());
     if (data.description !== undefined)
       set("description", data.description?.trim() || null);
@@ -131,36 +136,45 @@ class SyllabusSubjectService {
 
   public async list(
     schoolId: string,
-    search?: string,
+    opts: { grade?: string; search?: string } = {},
   ): Promise<SyllabusSubject[]> {
     const params: any[] = [schoolId];
     let query = singleLineString`select ${SUBJECT_COLS} from syllabus_subject where school_id = $1 and status = 'active'`;
-    if (search && search.trim()) {
-      params.push(`%${search.trim()}%`);
-      query += ` and lower(name) like lower($2)`;
+    let i = 2;
+    if (opts.grade && opts.grade.trim()) {
+      params.push(opts.grade.trim());
+      query += ` and lower(grade) = lower($${i++})`;
     }
-    query += ` order by name`;
+    if (opts.search && opts.search.trim()) {
+      params.push(`%${opts.search.trim()}%`);
+      query += ` and lower(name) like lower($${i++})`;
+    }
+    query += ` order by grade nulls first, name`;
     return DB.query(query, params);
   }
 
+  // Unique per (school, grade, name) — case-insensitive, coalescing a null grade.
   private async assertNameFree(
     schoolId: string,
+    grade: string | null,
     name: string,
     excludeId: string | null,
   ): Promise<void> {
-    const params: any[] = [schoolId, name.trim()];
+    const params: any[] = [schoolId, (grade || "").toLowerCase(), name.trim()];
     let query = singleLineString`
-      select uuid from syllabus_subject where school_id = $1 and lower(name) = lower($2) and status = 'active'
+      select uuid from syllabus_subject where school_id = $1
+        and coalesce(lower(grade), '') = $2 and lower(name) = lower($3) and status = 'active'
     `;
     if (excludeId) {
       params.push(excludeId);
-      query += ` and uuid != $3`;
+      query += ` and uuid != $4`;
     }
     const rows = await DB.query(query, params);
     if (rows.length > 0) {
+      const g = grade ? `grade ${grade} ` : "";
       throw new BusinessErrorResult(
         ErrorCode.BusinessError,
-        `A subject named "${name.trim()}" already exists`,
+        `A subject named "${name.trim()}" already exists ${g}`.trim(),
       );
     }
   }

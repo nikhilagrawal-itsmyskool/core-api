@@ -142,7 +142,7 @@ class SyllabusSubjectHandler {
       const ctx = await resolveSchool(event, callback);
       if (!ctx) return;
       const q = event.queryStringParameters || {};
-      const results = await syllabusSubjectService.list(ctx.schoolId, q.search);
+      const results = await syllabusSubjectService.list(ctx.schoolId, { grade: q.grade, search: q.search });
       ResponseBuilder.ok(results, callback);
     } catch (err: any) {
       ResponseBuilder.handleError(err, callback);

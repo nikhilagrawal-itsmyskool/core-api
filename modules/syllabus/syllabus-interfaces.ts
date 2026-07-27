@@ -12,17 +12,20 @@ import {
 export interface SyllabusSubject {
   uuid: string;
   schoolId: string;
+  grade: string | null;
   name: string;
   description: string | null;
   status: string;
 }
 
 export interface CreateSubjectRequest {
+  grade?: string | null;
   name: string;
   description?: string;
 }
 
 export interface UpdateSubjectRequest {
+  grade?: string | null;
   name?: string;
   description?: string;
 }
@@ -38,6 +41,8 @@ export interface Syllabus {
   book: string | null;
   layout: Layout;
   note: string | null;
+  componentLayout: { key: string; label: string }[] | null;
+  sourceFileId: string | null;
   status: string;
 }
 
@@ -63,6 +68,8 @@ export interface UpdateSyllabusRequest {
 export interface SyllabusEntry {
   uuid: string;
   syllabusId: string;
+  parentEntryId: string | null;
+  component: string | null;
   seq: number;
   month: Month;
   entryType: EntryType;

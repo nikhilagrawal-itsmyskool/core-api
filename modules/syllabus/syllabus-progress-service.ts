@@ -27,7 +27,8 @@ class SyllabusProgressService {
 
     const entries = await DB.query(
       singleLineString`
-        select e.uuid, e.syllabus_id, e.seq, e.month, e.entry_type, e.topic_no, e.title, e.theme, e.page_ref, e.term,
+        select e.uuid, e.syllabus_id, e.parent_entry_id, e.component, e.seq, e.month, e.entry_type,
+               e.topic_no, e.title, e.theme, e.page_ref, e.term,
                coalesce(p.status = 'covered', false) as covered, p.covered_date, p.remark
         from syllabus_entry e
         left join syllabus_progress p on p.syllabus_entry_id = e.uuid and p.class_id = $2
@@ -37,17 +38,19 @@ class SyllabusProgressService {
       [syllabusId, classId, schoolId],
     );
 
-    const topics = entries.filter((e: any) => e.entryType === "topic");
-    const coveredTopics = topics.filter((e: any) => e.covered === true).length;
+    // Coverage lives on LEAVES (an entry with no children) that carry content;
+    // chapters/units/sections and exam/revision markers don't count toward the %.
+    // A chapter's "done" is the roll-up of its item leaves (computed in the UI).
+    const parentIds = new Set(entries.filter((e: any) => e.parentEntryId).map((e: any) => e.parentEntryId));
+    const NON_CONTENT = new Set(["unit", "section", "exam", "revision"]);
+    const isContentLeaf = (e: any) => !parentIds.has(e.uuid) && !NON_CONTENT.has(e.entryType);
+    const leaves = entries.filter(isContentLeaf);
+    const covered = leaves.filter((e: any) => e.covered === true).length;
     return {
       syllabusId,
       classId,
       className: cls.name,
-      counts: {
-        total: topics.length,
-        covered: coveredTopics,
-        pending: topics.length - coveredTopics,
-      },
+      counts: { total: leaves.length, covered, pending: leaves.length - covered },
       entries,
     };
   }
@@ -70,6 +73,12 @@ class SyllabusProgressService {
       );
     }
     await this.assertEntry(schoolId, data.entryId);
+    if (await this.hasChildren(schoolId, data.entryId)) {
+      throw new BusinessErrorResult(
+        ErrorCode.BusinessError,
+        "This is a chapter/group — mark its items; the chapter completes automatically.",
+      );
+    }
     const cls = await findClass(schoolId, data.classId);
     if (!cls)
       throw new BusinessErrorResult(ErrorCode.BusinessError, "Invalid classId");
@@ -121,10 +130,16 @@ class SyllabusProgressService {
       [schoolId, ...entryIds],
     );
     const valid = new Set(found.map((r: any) => r.uuid));
+    // Skip any parent (chapter/group) entries — only leaves are markable.
+    const parents = await DB.query(
+      singleLineString`select distinct parent_entry_id from syllabus_entry where school_id = $1 and status = 'active' and parent_entry_id in (${placeholders})`,
+      [schoolId, ...entryIds],
+    );
+    const hasKids = new Set(parents.map((r: any) => r.parentEntryId));
 
     let marked = 0;
     for (const m of data.marks) {
-      if (!valid.has(m.entryId)) continue;
+      if (!valid.has(m.entryId) || hasKids.has(m.entryId)) continue;
       if (!PROGRESS_STATUS_VALUES.includes(m.status)) continue;
       await this.upsert(
         schoolId,
@@ -195,6 +210,15 @@ class SyllabusProgressService {
     );
     if (rows.length === 0)
       throw new BusinessErrorResult(ErrorCode.BusinessError, "Invalid entryId");
+  }
+
+  // True when the entry is a parent (chapter/unit) — coverage can't be set on it.
+  private async hasChildren(schoolId: string, entryId: string): Promise<boolean> {
+    const rows = await DB.query(
+      singleLineString`select 1 from syllabus_entry where parent_entry_id = $1 and school_id = $2 and status = 'active' limit 1`,
+      [entryId, schoolId],
+    );
+    return rows.length > 0;
   }
 }
 

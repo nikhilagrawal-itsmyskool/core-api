@@ -2,7 +2,11 @@
 
 A month-wise **syllabus planner**: for each grade + subject in an academic year, an ordered list of what gets taught and when (the digital form of the printed "Session 2026-27: Class III — General Knowledge" sheets). Teachers mark coverage **per section**; the student/parent app reads a **timeline anchored on today** — scroll back to see what's been covered, forward to see what's pending.
 
-> Status: **Phase 1 (backend)**. Subjects, plans, entries (with bulk add + reorder), per-section progress, and the student `/me` timeline are implemented with integration tests. Admin coverage rollups beyond a per-section count are deferred.
+> Status
+> - **Phase 1 (shipped)** — subjects, plans, entries (bulk add + reorder), per-section progress, student `/me` timeline. In prod; 8 GK plans (I–VIII) seeded.
+> - **Streams (shipped)** — plans carry a nullable `stream_code`; the student timeline shows common (`null`) + the child's stream; grades/sections use base classes only. See "Streams" below.
+> - **Model papers (shipped)** — per grade+stream+subject+exam, Word+PDF docs with visibility-gated download and an answer-key release; docx→pdf conversion worker (LibreOffice layer) wired, PDF-runtime enablement pending. See "Model papers" below.
+> - **Phase 2 — per-subject layouts & activity-level coverage (DESIGNED, not built)** — the section "Phase 2" below. This supersedes the flat junior/senior `entry_type` model for the non-GK subjects.
 
 ## Scope boundaries
 
@@ -28,6 +32,46 @@ Conventions: lowercase SQL, no FKs, no DDL defaults, `varchar(12)` uuids, `schoo
 - **syllabus** — the plan header: `academic_year_id`, `grade`, `subject_id`, optional `book`, `layout in (junior,senior)`, `note` (the "current affairs / assembly" footer). Unique `(school_id, academic_year_id, grade, subject_id)`.
 - **syllabus_entry** — `syllabus_id`, `seq`, `month in (april..march)`, `entry_type`, optional `topic_no` ("T-1"), `title`, optional `theme`, optional `page_ref` (free text: "177", "178-179"), optional `term in (half_yearly, annual)`. Index `(syllabus_id, seq)`.
 - **syllabus_progress** — one per `(syllabus_entry_id, class_id)`: `status in (pending, covered)`, optional `covered_date`, `marked_by` (employee), optional `remark`. Upserted on mark; absence of a `covered` row = pending. Unique `(syllabus_entry_id, class_id)`.
+
+## Phase 2 — Per-subject layouts & activity-level coverage (designed)
+
+**Why.** Beyond GK, every subject's document is a wide table — `Month | Chapter | Pages | …subject-specific columns…` — and those columns differ **per subject and per grade** (Class II English = Speaking/Listening/Writing/Phonics/Cursive; Class VIII English = Discussion Point/Vocabulary/Language in Use/Active Listening; Computer II has 10 columns, VIII has 11). Content also changes year to year. So the layout must be **data, not code**, and coverage must go finer than "chapter".
+
+**The owner's coverage rule (Class II Computer).** A chapter shows its **activities** (the non-empty pedagogy cells). The teacher ticks **each activity**; when all of a chapter's activities are ticked, the **chapter completes automatically**. The chapter itself is never clicked. Pages are meta, not tickable.
+
+**The model — one node tree, per-plan layout.** Every subject is the same tree at different depth; depth + columns are data.
+
+- **Per-plan component layout** — the plan (already `(year, grade, subject)`) stores its ordered list of **components** = the activity columns, read from the document header. No columns hardcoded.
+- **Node tree** — generalize `syllabus_entry` with `parent_entry_id` + `component`:
+  - `node_type in (unit, chapter, item, section, exam, revision, note)` (extends the current set).
+  - `parent_entry_id` links `unit → chapter → item` (unit optional).
+  - `heading` (title / cell content), `page_ref`, `month`, `seq`; `component` on items (which column); `theme` kept (GK).
+  - An **item** (leaf) is one non-empty component cell. A **chapter** groups items and may span months (item carries its own month).
+- **Coverage on leaves only** (`syllabus_progress` unchanged shape, keyed on the leaf `entry_id` + `class_id`). A parent's status is the **roll-up** of its leaves — computed, never stored, never directly marked.
+- **GK = the degenerate case** — flat leaf topics (no components, depth 0), ticked directly. Existing GK plans + coverage are already exactly this, so they keep working **unchanged** (a subject whose layout has zero components).
+
+**The three real shapes:** GK = flat leaves; Computer/English/Maths/Social Studies = chapter → items; EVS/Science = unit → chapter → items.
+
+**Two specials:** **Reasoning** = three parallel tracks (`Verbal | Pages | Non-Verbal | Pages | Quantitative | Pages`) — a layout variant, handled explicitly. **Devanagari** subjects (Hindi/Vyakaran) = identical structure, Hindi text + month names — same engine + Hindi month aliases.
+
+**Renders (all from the same data):**
+- **Admin** — a grid: chapters × the plan's components; cells are item content. (Generated from the stored layout.)
+- **Teacher (PWA)** — per chapter, a checklist of its item-leaves; ticking the last one auto-completes the chapter; subject % = chapters done. Reuses the batch-across-sections mark.
+- **Student app** — month timeline; chapters with rolled-up covered/pending; tap to see activities. (Student-app UI is a separate session.)
+
+Visual: artifact `syllabus-layout-model` (admin / teacher / student).
+
+**Source Word doc.** Every plan **stores its source `.docx`** (`syllabus.source_file_id` → `file_storage`, same as model papers), so anyone can **download** the original Word. This is **in scope now** — the bulk import saves each doc as it parses it. **Uploading stays a manual process for now:** re-parsing a plan is done by re-running the CLI importer (not a self-service admin upload). The **self-service loop** — edit in Word → re-upload → server re-parses, and **download a blank template → fill → upload** — is a **later phase**.
+
+**Schema delta (additive, backward-compatible):**
+- `syllabus_entry` — add `parent_entry_id varchar(12)`, `component varchar(64)`; widen `entry_type` check to include `unit`, `item`, `chapter`.
+- Per-plan layout — either a `syllabus_component (syllabus_id, key, label, seq)` table or an ordered JSON column on `syllabus`.
+- `syllabus` — add `source_file_id varchar(12)` (later phase).
+- `syllabus_progress` — unchanged; rows only ever on leaf entries. Roll-up is a query, not a column.
+
+**Importer changes:** parse the wide `Month | Chapter | Pages | components…` template — read the header → the plan's component layout; carry-forward month + chapter across rows; each non-empty component cell → an item (heading = cell content, `component` = column, `page_ref` from the cell); `Unit:`/`Theme:`/`Topic:` → grouping nodes; `Revision`/`Periodic Test`/`Examination` → structural nodes; Hindi month aliases for Devanagari. Reasoning gets a dedicated path.
+
+**Open points (to confirm before build):** structural rows (Periodic Test / Exam / Revision) tickable vs informational; whether students see item detail or just chapter status; exact treatment of Reasoning's parallel tracks.
 
 ## API
 

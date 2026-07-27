@@ -64,7 +64,7 @@ class SyllabusMeService {
     for (const plan of plans) {
       const entries = await DB.query(
         singleLineString`
-          select e.uuid, e.seq, e.month, e.entry_type, e.topic_no, e.title, e.theme, e.page_ref, e.term,
+          select e.uuid, e.parent_entry_id, e.component, e.seq, e.month, e.entry_type, e.topic_no, e.title, e.theme, e.page_ref, e.term,
                  coalesce(p.status = 'covered', false) as covered, p.covered_date
           from syllabus_entry e
           left join syllabus_progress p on p.syllabus_entry_id = e.uuid and p.class_id = $2

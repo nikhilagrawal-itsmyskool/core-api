@@ -22,13 +22,15 @@ import {
 } from "./syllabus-constants";
 import { academicYearExists, listBaseClasses, streamExists } from "./syllabus-common";
 import { gradeEquals } from "./syllabus-util";
+import { fileStorageService } from "../../shared/lib/file-storage";
 const { generateShortUuid } = require("../../shared/util/generate-uuid.js");
 
 const SYLLABUS_COLS = singleLineString`
-  uuid, school_id, academic_year_id, grade, stream_code, subject_id, book, layout, note, status
+  uuid, school_id, academic_year_id, grade, stream_code, subject_id, book, layout, note,
+  component_layout, source_file_id, status
 `;
 const ENTRY_COLS = singleLineString`
-  uuid, syllabus_id, seq, month, entry_type, topic_no, title, theme, page_ref, term
+  uuid, syllabus_id, parent_entry_id, component, seq, month, entry_type, topic_no, title, theme, page_ref, term
 `;
 
 // Half-yearly term spans April–August; the rest of the session is annual.
@@ -274,6 +276,18 @@ class SyllabusPlanService {
     const subjectName = await this.subjectName(schoolId, header.subjectId);
     const entries = await this.listEntries(id, schoolId);
     return { ...header, subjectName, entries };
+  }
+
+  // The stored source Word doc for a plan (for download), or null.
+  public async getSourceFile(
+    id: string,
+    schoolId: string,
+  ): Promise<{ fileName: string; mimeType: string; base64: string } | null> {
+    const header = await this.getSyllabusHeader(id, schoolId);
+    if (!header || !header.sourceFileId) return null;
+    const file = await fileStorageService.getWithData(header.sourceFileId, schoolId);
+    if (!file) return null;
+    return { fileName: file.fileName, mimeType: file.mimeType, base64: file.data };
   }
 
   public async listSyllabi(
@@ -608,6 +622,8 @@ class SyllabusPlanService {
       created.push({
         uuid,
         syllabusId,
+        parentEntryId: null,
+        component: null,
         seq,
         month,
         entryType,

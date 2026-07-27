@@ -87,6 +87,29 @@ class SyllabusPlanHandler {
     }
   };
 
+  // GET /syllabi/{id}/source — download the stored source Word doc (base64 JSON).
+  public getSource = async (
+    event: ApiEvent,
+    _context: ApiContext,
+    callback: ApiCallback,
+  ) => {
+    _context.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const ctx = await resolveSchool(event, callback);
+      if (!ctx) return;
+      const id = requireParam(event, "id", callback);
+      if (!id) return;
+      const file = await syllabusPlanService.getSourceFile(id, ctx.schoolId);
+      if (!file) {
+        ResponseBuilder.notFound(ErrorCode.InvalidId, "No source document for this plan", callback);
+        return;
+      }
+      ResponseBuilder.ok({ fileName: file.fileName, mimeType: file.mimeType, base64Data: file.base64 }, callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
   public update = async (
     event: ApiEvent,
     _context: ApiContext,
@@ -321,6 +344,7 @@ const handler = new SyllabusPlanHandler();
 export const create = handler.create;
 export const list = handler.list;
 export const getById = handler.getById;
+export const getSource = handler.getSource;
 export const update = handler.update;
 export const remove = handler.remove;
 export const addEntry = handler.addEntry;

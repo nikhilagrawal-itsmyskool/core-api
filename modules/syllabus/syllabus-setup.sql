@@ -22,9 +22,13 @@ create table if not exists syllabus_subject (
     updated_at timestamp(0)
 );
 
--- No duplicate subject name within a school (soft-delete aware, case-insensitive).
-create unique index if not exists idx_syllabus_subject_name_unique
-    on syllabus_subject(school_id, lower(name)) where status = 'active';
+-- Phase 2: subjects are scoped per grade (so "Computer" for II and VIII are
+-- distinct rows). grade nullable for legacy/shared subjects. Uniqueness is per
+-- (school, grade, name); coalesce so a null grade participates as one slot.
+alter table syllabus_subject add column if not exists grade varchar(32);
+drop index if exists idx_syllabus_subject_name_unique;
+create unique index if not exists idx_syllabus_subject_grade_name_unique
+    on syllabus_subject(school_id, coalesce(lower(grade), ''), lower(name)) where status = 'active';
 create index if not exists idx_syllabus_subject_school on syllabus_subject(school_id);
 
 -- Table 2: syllabus (plan header; one shared plan per grade + subject + year)
@@ -54,6 +58,11 @@ alter table syllabus add column if not exists stream_code varchar(16);
 drop index if exists idx_syllabus_unique;
 create unique index if not exists idx_syllabus_unique
     on syllabus(school_id, academic_year_id, lower(grade), coalesce(lower(stream_code), ''), subject_id) where status = 'active';
+
+-- Phase 2: per-plan component layout (ordered [{key,label}] read from the doc
+-- header — the subject-specific activity columns) + the stored source .docx.
+alter table syllabus add column if not exists component_layout jsonb;
+alter table syllabus add column if not exists source_file_id varchar(12);
 create index if not exists idx_syllabus_school_year on syllabus(school_id, academic_year_id);
 create index if not exists idx_syllabus_subject on syllabus(subject_id);
 
@@ -67,9 +76,10 @@ create table if not exists syllabus_entry (
         'april','may','june','july','august','september',
         'october','november','december','january','february','march')),
     entry_type varchar(16) not null check (entry_type in (
-        'topic','section','activity','revision','exam','refresher','note')),
+        'topic','section','activity','revision','exam','refresher','note',
+        'unit','chapter','item')),
     topic_no varchar(16),
-    title varchar(256) not null,
+    title text not null,
     theme varchar(128),
     page_ref varchar(32),
     term varchar(16) check (term in ('half_yearly','annual')),
@@ -82,6 +92,18 @@ create table if not exists syllabus_entry (
 
 create index if not exists idx_syllabus_entry_seq on syllabus_entry(syllabus_id, seq) where status = 'active';
 create index if not exists idx_syllabus_entry_school on syllabus_entry(school_id);
+
+-- Phase 2: node-tree columns. parent_entry_id links unit->chapter->item; component
+-- is the layout column an item came from (e.g. "Lab Activity"). Coverage stays on
+-- leaves; a parent's status is the roll-up. Applied idempotently for existing tables.
+alter table syllabus_entry add column if not exists parent_entry_id varchar(12);
+alter table syllabus_entry add column if not exists component varchar(64);
+alter table syllabus_entry alter column title type text;
+-- Widen the entry_type check on already-created tables to include unit/chapter/item.
+alter table syllabus_entry drop constraint if exists syllabus_entry_entry_type_check;
+alter table syllabus_entry add constraint syllabus_entry_entry_type_check
+    check (entry_type in ('topic','section','activity','revision','exam','refresher','note','unit','chapter','item'));
+create index if not exists idx_syllabus_entry_parent on syllabus_entry(parent_entry_id) where status = 'active';
 
 -- Table 4: syllabus_progress (per-section coverage against an entry)
 create table if not exists syllabus_progress (
