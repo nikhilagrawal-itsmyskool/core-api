@@ -79,10 +79,19 @@ class HomeworkService {
 
   // Admin view: every base class + its resolved class teacher (override vs timetable).
   async classTeacherMap(schoolId: string, ay: string): Promise<ClassTeacherMapRow[]> {
+    // Only base classes that actually run in this academic year — i.e. that have
+    // active student enrolment that year (the same rule the class dropdown uses).
     const classes = await DB.query(
-      singleLineString`select uuid, name from class where school_id = $1 and base_class_id is null
-        order by seq asc nulls last, name`,
-      [schoolId],
+      singleLineString`select c.uuid, c.name from class c
+        where c.school_id = $1 and c.base_class_id is null
+          and exists (
+            select 1 from student_class sc
+            join student s on s.uuid = sc.student_id and s.school_id = sc.school_id and s.status <> 'deleted'
+            where sc.class_id = c.uuid and sc.school_id = c.school_id and sc.academic_year_id = $2
+              and (sc.status is null or sc.status <> 'deleted')
+          )
+        order by c.seq asc nulls last, c.name`,
+      [schoolId, ay],
     );
     const overrides = await DB.query(
       singleLineString`select class_id, teacher_id from homework_class_teacher
