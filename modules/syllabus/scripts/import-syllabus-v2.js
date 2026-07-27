@@ -89,6 +89,20 @@ const joinCell = (cell) => (cell || []).join(' ').replace(/\s+/g, ' ').trim();
 function tableRows(xml) {
   return (xml.match(/<w:tr\b[\s\S]*?<\/w:tr>/g) || []).map((tr) => (tr.match(/<w:tc\b[\s\S]*?<\/w:tc>/g) || []).map(cellParas));
 }
+// Rows grouped per <w:tbl> so we can keep only the syllabus table(s) and ignore
+// secondary tables (e.g. a "Projects" appendix) that would otherwise merge in.
+function docTables(xml) {
+  const tbls = xml.match(/<w:tbl\b[\s\S]*?<\/w:tbl>/g) || [xml];
+  return tbls.map(tableRows);
+}
+function isSyllabusTable(rowsOfTable) {
+  const hdr = rowsOfTable.find((r) => r.some((cell) => /^(month|months|मास)$/i.test(joinCell(cell)))) || rowsOfTable[0] || [];
+  const H = hdr.map((h) => joinCell(h).toLowerCase());
+  const hasMonth = H.some((h) => /^(month|months|मास)$/.test(h));
+  const hasChap = H.some((h, i) => i >= 1 && /(chapters?|topics?|पाठ|grammar|aptitude)/.test(h));
+  const hasPages = H.some((h) => /(^pages?$|पृष्ठ|page)/.test(h));
+  return hasMonth || (hasChap && hasPages);
+}
 function plainText(xml) {
   return decodeEntities(xml.replace(/<\/w:p>/g, '\n').replace(/<[^>]+>/g, '')).replace(/[ \t]+/g, ' ');
 }
@@ -112,6 +126,19 @@ const RX_UNIT = /^(unit|theme|topic)\b.*[:：]/i;
 const RX_CONT = /continue|continued|\.\.\.$|…$/i;
 const structType = (s) => (/exam|examination|test|assessment|periodic|olympiad|परीक्षा/i.test(s) ? 'exam' : /refresher/i.test(s) ? 'refresher' : 'revision');
 
+// Re-order nodes into tree preorder (parent, then its children) and renumber seq,
+// so items merged from a secondary table sit under their chapter in the display.
+function resequence(nodes) {
+  const children = new Map();
+  const roots = [];
+  for (const n of nodes) { if (n.parent) { if (!children.has(n.parent)) children.set(n.parent, []); children.get(n.parent).push(n); } else roots.push(n); }
+  const out = [];
+  let s = 0;
+  const visit = (n) => { n.seq = s++; out.push(n); for (const ch of (children.get(n.tmp) || [])) visit(ch); };
+  for (const r of roots) visit(r);
+  return out;
+}
+
 // ── parse a doc into { subject, grade, layoutType, components, nodes } ─────────
 function parseDoc(file) {
   const xml = readZipEntry(fs.readFileSync(file), 'word/document.xml').toString('utf8');
@@ -123,7 +150,10 @@ function parseDoc(file) {
   subject = subject.replace(/\s+/g, ' ');
   const grade = (text.match(/Class\s+([A-Za-z0-9]+)/i) || [])[1]?.trim() || null;
 
-  const rows = tableRows(xml).filter((c) => c.length && !c.every((cell) => isBlank(joinCell(cell))));
+  const rows = docTables(xml)
+    .filter(isSyllabusTable)
+    .flat()
+    .filter((c) => c.length && !c.every((cell) => isBlank(joinCell(cell))));
   const hi = rows.findIndex((c) => c.some((x) => /^(month|months|मास)$/i.test(joinCell(x))));
   const hdr = hi >= 0 ? rows[hi] : (rows[1] || rows[0] || []);
   const H = hdr.map((h) => joinCell(h).toLowerCase());
@@ -164,6 +194,7 @@ function parseDoc(file) {
         const c = rows[r];
         const m = normMonth(joinCell(c[b.mi])); if (m) curMonth = m;
         const t = joinCell(c[b.ti]);
+        if (/^(chapters?|topics?|months?)$/i.test(t)) continue; // repeated header row
         if (isBlank(t)) continue;
         if (/^topic\s*[:：]/i.test(t)) { curSection = add({ parent: null, type: 'section', month: curMonth, heading: t.replace(/^topic\s*[:：]\s*/i, ''), pageRef: null }); continue; }
         if (RX_STRUCT.test(t) && !/^T\s*-?\s*\d/i.test(t)) { add({ parent: curSection, type: structType(t), month: curMonth, heading: t, pageRef: joinCell(c[b.pi]) || null }); continue; }
@@ -173,52 +204,70 @@ function parseDoc(file) {
     return { file, subject, grade, layoutType: 'gk', components: [], nodes };
   }
 
-  // ── wide chapter layout ──
-  const pagesIdx = H.findIndex((h, i) => i >= 1 && /(^pages?$|पृष्ठ|page)/.test(h));
-  const chapterIdx = 1;
-  const compIdx = [];
-  for (let k = 0; k < hdr.length; k++) {
-    if (k === 0 || k === chapterIdx || k === pagesIdx) continue;
-    const label = joinCell(hdr[k]);
-    if (label) compIdx.push({ k, label });
-  }
-  const components = compIdx.map((c) => ({ key: c.label.toLowerCase().replace(/\s+/g, '_').slice(0, 48), label: c.label }));
+  // ── wide chapter layout — may span multiple tables: a PRIMARY table (Month |
+  //    Chapter | Pages | components) plus SECONDARY tables that carry more component
+  //    columns (or a "Projects" appendix) for the SAME chapters. We build chapters
+  //    from the primary, then attach every other table's items to the matching
+  //    chapter (by name), taking the union of component columns.
+  const wideTables = docTables(xml).filter(isSyllabusTable);
+  const infos = wideTables.map((t) => {
+    const thi = t.findIndex((r) => r.some((cell) => /^(month|months|मास)$/i.test(joinCell(cell))));
+    const th = thi >= 0 ? t[thi] : (t[0] || []);
+    const TH = th.map((h) => joinCell(h).toLowerCase());
+    return { t, hi: thi, hdr: th, pagesIdx: TH.findIndex((h, i) => i >= 1 && /(^pages?$|पृष्ठ|page)/.test(h)) };
+  });
+  let primaryIdx = infos.findIndex((ti) => ti.pagesIdx >= 0);
+  if (primaryIdx < 0) primaryIdx = 0;
 
-  let curMonth = null, curUnit = null, curChapter = null;
-  for (let r = hi + 1; r < rows.length; r++) {
-    const c = rows[r];
-    const m = normMonth(joinCell(c[0])); if (m) curMonth = m;
-    const c1 = joinCell(c[chapterIdx]);
-    const pages = pagesIdx >= 0 ? (joinCell(c[pagesIdx]) || null) : null;
+  const components = [];
+  const seenComp = new Set();
+  const chapterMap = new Map(); // normalized chapter name -> chapter tmp id
+  const normName = (s) => (s || '').toLowerCase().replace(/continue.*$/i, '').replace(/\(.*?\)/g, '').replace(/[^a-z0-9]/g, '').slice(0, 40);
 
-    if (!isBlank(c1)) {
-      if (RX_UNIT.test(c1)) { curUnit = add({ parent: null, type: 'unit', month: curMonth, heading: c1, pageRef: null }); curChapter = null; continue; }
-      if (RX_STRUCT.test(c1) && !/^(ch|chapter|पाठ|अध्याय)\s*-?\s*\d/i.test(c1)) { add({ parent: curUnit, type: structType(c1), month: curMonth, heading: c1, pageRef: pages }); continue; }
-      if (!RX_CONT.test(c1) || !curChapter) { curChapter = add({ parent: curUnit, type: 'chapter', month: curMonth, heading: c1, pageRef: pages }); }
+  const processTable = (ti, isPrimary) => {
+    const { t, hi: thi, hdr: th, pagesIdx: tpi } = ti;
+    const chapterIdx = 1;
+    const compIdx = [];
+    for (let k = 0; k < th.length; k++) {
+      if (k === 0 || k === chapterIdx || k === tpi) continue;
+      const label = joinCell(th[k]);
+      if (!label) continue;
+      compIdx.push({ k, label });
+      if (!seenComp.has(label.toLowerCase())) { seenComp.add(label.toLowerCase()); components.push({ key: label.toLowerCase().replace(/\s+/g, '_').slice(0, 48), label }); }
     }
-    // items = each non-empty PARAGRAPH of each component cell = one tickable item.
-    // Merge a continuation paragraph (a bare page ref, or a line starting with "("
-    // or lowercase — a wrapped tail) into the previous item rather than splitting it.
-    if (curChapter) {
-      for (const comp of compIdx) {
-        const paras = c[comp.k] || [];
-        let lastTmp = null;
-        for (const para of paras) {
-          if (isBlank(para)) continue;
-          const cont = lastTmp != null && (/^\(/.test(para) || /^[a-z]/.test(para) || /^\(?\s*p\.?\s*[\d][\d\-–\/,\s]*\)?\s*$/i.test(para));
-          if (cont) {
-            const node = nodes.find((n) => n.tmp === lastTmp);
-            node.heading = `${node.heading} ${para}`.slice(0, 4000);
-            if (!node.pageRef) node.pageRef = extractPage(para);
-            continue;
+    let curMonth = null, curUnit = null, curChapter = null;
+    for (let r = thi + 1; r < t.length; r++) {
+      const c = t[r];
+      const m = normMonth(joinCell(c[0])); if (m) curMonth = m;
+      const c1 = joinCell(c[chapterIdx]);
+      if (/^(chapters?|topics?|months?|पाठ|मास|projects?)$/i.test(c1)) continue; // repeated/appendix header row
+      const pages = tpi >= 0 ? (joinCell(c[tpi]) || null) : null;
+      if (!isBlank(c1)) {
+        if (RX_UNIT.test(c1)) { if (isPrimary) { curUnit = add({ parent: null, type: 'unit', month: curMonth, heading: c1, pageRef: null }); } curChapter = null; continue; }
+        if (RX_STRUCT.test(c1) && !/^(ch|chapter|पाठ|अध्याय)\s*-?\s*\d/i.test(c1)) { if (isPrimary) add({ parent: curUnit, type: structType(c1), month: curMonth, heading: c1, pageRef: pages }); continue; }
+        const key = normName(c1);
+        if (isPrimary) {
+          if (!RX_CONT.test(c1) || !curChapter) { curChapter = add({ parent: curUnit, type: 'chapter', month: curMonth, heading: c1, pageRef: pages }); if (key) chapterMap.set(key, curChapter); }
+        } else if (key && chapterMap.has(key)) { curChapter = chapterMap.get(key); }
+        else if (!RX_CONT.test(c1)) { curChapter = add({ parent: null, type: 'chapter', month: curMonth, heading: c1, pageRef: pages }); if (key) chapterMap.set(key, curChapter); }
+      }
+      if (curChapter) {
+        for (const comp of compIdx) {
+          let lastTmp = null;
+          for (const para of (c[comp.k] || [])) {
+            if (isBlank(para)) continue;
+            const cont = lastTmp != null && (/^\(/.test(para) || /^[a-z]/.test(para) || /^\(?\s*p\.?\s*[\d][\d\-–\/,\s]*\)?\s*$/i.test(para));
+            if (cont) { const node = nodes.find((n) => n.tmp === lastTmp); node.heading = `${node.heading} ${para}`.slice(0, 4000); if (!node.pageRef) node.pageRef = extractPage(para); continue; }
+            lastTmp = add({ parent: curChapter, type: 'item', component: comp.label, month: curMonth, heading: para, pageRef: extractPage(para) });
           }
-          // Item page is its OWN page ref (e.g. "(P.4)") or none — never the chapter's range.
-          lastTmp = add({ parent: curChapter, type: 'item', component: comp.label, month: curMonth, heading: para, pageRef: extractPage(para) });
         }
       }
     }
-  }
-  return { file, subject, grade, layoutType: 'wide', components, nodes };
+  };
+
+  processTable(infos[primaryIdx], true);
+  infos.forEach((ti, idx) => { if (idx !== primaryIdx) processTable(ti, false); });
+  return { file, subject, grade, layoutType: 'wide', components, nodes: resequence(nodes) };
 }
 
 // ── reporting ─────────────────────────────────────────────────────────────────
