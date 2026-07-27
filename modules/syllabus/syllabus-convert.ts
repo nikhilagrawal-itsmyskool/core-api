@@ -19,10 +19,35 @@ const tar = require("tar");
 
 const LAYER_TAR = "/opt/lo.tar.br";
 const SOFFICE = "/tmp/instdir/program/soffice.bin";
+const FONT_DIR = "/tmp/instdir/share/fonts"; // LibreOffice's own bundled fonts
+const FONTCONFIG_DIR = "/tmp/fonts";
+const FONTCONFIG_FILE = "/tmp/fonts/fonts.conf";
 const SOFFICE_ARGS = [
   "--headless", "--norestore", "--invisible", "--nodefault",
   "--nolockcheck", "--nologo", "--nofirststartwizard",
 ];
+
+// LibreOffice links libfontconfig, which aborts with "Cannot load default config
+// file" because AL2023 Lambda has no /etc/fonts/fonts.conf. Write a minimal one that
+// points at LibreOffice's bundled fonts + a writable cache, and hand it to soffice
+// via FONTCONFIG_FILE/FONTCONFIG_PATH.
+function ensureFontConfig(): void {
+  if (fs.existsSync(FONTCONFIG_FILE)) return;
+  fs.mkdirSync(FONTCONFIG_DIR, { recursive: true });
+  fs.mkdirSync("/tmp/fontconfig-cache", { recursive: true });
+  fs.writeFileSync(
+    FONTCONFIG_FILE,
+    `<?xml version="1.0"?>
+<!DOCTYPE fontconfig SYSTEM "fonts.dtd">
+<fontconfig>
+  <dir>${FONT_DIR}</dir>
+  <dir>/tmp/instdir/share/fonts/truetype</dir>
+  <cachedir>/tmp/fontconfig-cache</cachedir>
+  <config></config>
+</fontconfig>
+`,
+  );
+}
 
 export function isConversionAvailable(): boolean {
   return process.env.SYLLABUS_CONVERT_ENABLED === "true";
@@ -49,6 +74,7 @@ async function ensureLibreOffice(): Promise<void> {
       if (!fs.existsSync(SOFFICE)) {
         throw new Error("extracted layer but soffice.bin is missing");
       }
+      ensureFontConfig();
     })().catch((e) => { extractPromise = null; throw e; });
   }
   return extractPromise;
@@ -56,7 +82,13 @@ async function ensureLibreOffice(): Promise<void> {
 
 function runSoffice(inputPath: string, outDir: string): void {
   execFileSync(SOFFICE, [...SOFFICE_ARGS, "--convert-to", "pdf", "--outdir", outDir, inputPath], {
-    env: { ...process.env, HOME: "/tmp" },
+    env: {
+      ...process.env,
+      HOME: "/tmp",
+      FONTCONFIG_FILE,
+      FONTCONFIG_PATH: FONTCONFIG_DIR,
+      XDG_CACHE_HOME: "/tmp/.cache",
+    },
     stdio: "pipe",
     timeout: 90000,
   });
@@ -85,9 +117,21 @@ export async function convertDocxToPdf(docxBase64: string, fileName: string): Pr
   }
 }
 
+// What fonts LibreOffice actually shipped — so if the fontconfig <dir> is wrong we can
+// see the real layout from the self-test instead of guessing across deploys.
+function fontDiagnostic(): string {
+  const dirs = [FONT_DIR, "/tmp/instdir/share/fonts/truetype", "/tmp/instdir/share"];
+  const out: string[] = [];
+  for (const d of dirs) {
+    try { out.push(`${d}: ${fs.existsSync(d) ? fs.readdirSync(d).slice(0, 20).join(",") : "(missing)"}`); }
+    catch (e: any) { out.push(`${d}: err ${e?.message}`); }
+  }
+  return out.join(" || ");
+}
+
 // Runtime compatibility check: extract the layer and convert a trivial file.
 // Bypasses the feature flag so it can be run before enabling conversion.
-export async function selfTest(): Promise<{ ok: boolean; ms: number; soffice: string; error?: string }> {
+export async function selfTest(): Promise<{ ok: boolean; ms: number; soffice: string; fonts?: string; error?: string }> {
   const started = Date.now();
   try {
     await ensureLibreOffice();
@@ -97,9 +141,9 @@ export async function selfTest(): Promise<{ ok: boolean; ms: number; soffice: st
     fs.writeFileSync(inPath, "LibreOffice self-test on this runtime.");
     runSoffice(inPath, "/tmp");
     const ok = fs.existsSync(outPath);
-    return { ok, ms: Date.now() - started, soffice: SOFFICE, error: ok ? undefined : "no PDF produced" };
+    return { ok, ms: Date.now() - started, soffice: SOFFICE, fonts: fontDiagnostic(), error: ok ? undefined : "no PDF produced" };
   } catch (e: any) {
     const stderr = e?.stderr ? Buffer.from(e.stderr).toString().slice(0, 800) : "";
-    return { ok: false, ms: Date.now() - started, soffice: SOFFICE, error: `${String(e?.message || e).slice(0, 400)}${stderr ? ` | ${stderr}` : ""}` };
+    return { ok: false, ms: Date.now() - started, soffice: SOFFICE, fonts: fontDiagnostic(), error: `${String(e?.message || e).slice(0, 400)}${stderr ? ` | ${stderr}` : ""}` };
   }
 }
