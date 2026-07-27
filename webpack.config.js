@@ -7,7 +7,7 @@ module.exports = {
     entry: slsw.lib.entries,
     stats: 'errors-only', // Minimal output
     externalsPresets: { node: true },
-    externals: [nodeExternals(), "pg", "jsonwebtoken", "qrcode", "bwip-js", "@aws-sdk/client-s3", "@aws-sdk/s3-request-presigner"], // externalize node deps (not bundled; installed via includeModules)
+    externals: [nodeExternals(), "pg", "jsonwebtoken", "qrcode", "bwip-js", "tar", "@aws-sdk/client-s3", "@aws-sdk/s3-request-presigner"], // externalize node deps (not bundled; installed via includeModules)
     resolve: {
         extensions: ['.ts', '.tsx'], // Only include TypeScript file extensions
     },
