@@ -89,6 +89,12 @@ class Db {
     return this.query('ROLLBACK');
   }
 
+  // Close the connection pool. Used by tests that import services directly so
+  // Jest can exit cleanly (no-op in Lambda, where the pool is reused).
+  public end(): Promise<void> {
+    return pool.end();
+  }
+
   static singleLineString(strings: TemplateStringsArray, ...values: any[]): string {
     let output = '';
     for (let i = 0; i < values.length; i++) {

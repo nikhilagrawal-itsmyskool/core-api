@@ -1,0 +1,224 @@
+  # Health check
+  health:
+    handler: health-handler.health
+    events:
+      - http:
+          path: health
+          method: get
+          cors: true
+
+  # ── Admin/teacher: the day's homework (X-School-Code + JWT) ────────────────
+  get-day:
+    handler: homework-handler.getDay
+    name: ${self:service}-get-day
+    memorySize: 512
+    timeout: 20
+    events:
+      - http:
+          path: day
+          method: get
+          cors: true
+
+  ensure-day:
+    handler: homework-handler.ensureDay
+    name: ${self:service}-ensure-day
+    events:
+      - http:
+          path: day
+          method: post
+          cors: true
+
+  publish-day:
+    handler: homework-handler.publish
+    name: ${self:service}-publish-day
+    events:
+      - http:
+          path: day/{id}/publish
+          method: post
+          cors: true
+
+  unpublish-day:
+    handler: homework-handler.unpublish
+    name: ${self:service}-unpublish-day
+    events:
+      - http:
+          path: day/{id}/unpublish
+          method: post
+          cors: true
+
+  add-item:
+    handler: homework-handler.addItem
+    name: ${self:service}-add-item
+    memorySize: 512
+    timeout: 20
+    events:
+      - http:
+          path: items
+          method: post
+          cors: true
+
+  edit-item:
+    handler: homework-handler.editItem
+    name: ${self:service}-edit-item
+    events:
+      - http:
+          path: items/{id}
+          method: put
+          cors: true
+
+  remove-item:
+    handler: homework-handler.removeItem
+    name: ${self:service}-remove-item
+    events:
+      - http:
+          path: items/{id}
+          method: delete
+          cors: true
+
+  get-item-image:
+    handler: homework-handler.getItemImage
+    name: ${self:service}-get-item-image
+    memorySize: 512
+    timeout: 20
+    events:
+      - http:
+          path: items/{id}/image
+          method: get
+          cors: true
+
+  # ── Admin: class → class-teacher mapping override ──────────────────────────
+  class-teacher-map:
+    handler: homework-handler.classTeacherMap
+    name: ${self:service}-class-teacher-map
+    events:
+      - http:
+          path: class-teachers
+          method: get
+          cors: true
+
+  set-class-teacher:
+    handler: homework-handler.setClassTeacher
+    name: ${self:service}-set-class-teacher
+    events:
+      - http:
+          path: class-teachers/{classId}
+          method: put
+          cors: true
+
+  clear-class-teacher:
+    handler: homework-handler.clearClassTeacher
+    name: ${self:service}-clear-class-teacher
+    events:
+      - http:
+          path: class-teachers/{classId}
+          method: delete
+          cors: true
+
+  get-audit:
+    handler: homework-handler.getAudit
+    name: ${self:service}-get-audit
+    events:
+      - http:
+          path: audit
+          method: get
+          cors: true
+
+  # ── Teacher PWA (resolveEmployee, scoped by canPostForClass) ───────────────
+  me-classes:
+    handler: homework-me-handler.myClasses
+    name: ${self:service}-me-classes
+    events:
+      - http:
+          path: me/classes
+          method: get
+          cors: true
+
+  me-get-day:
+    handler: homework-me-handler.getDay
+    name: ${self:service}-me-get-day
+    memorySize: 512
+    timeout: 20
+    events:
+      - http:
+          path: me/day
+          method: get
+          cors: true
+
+  me-ensure-day:
+    handler: homework-me-handler.ensureDay
+    name: ${self:service}-me-ensure-day
+    events:
+      - http:
+          path: me/day
+          method: post
+          cors: true
+
+  me-publish-day:
+    handler: homework-me-handler.publish
+    name: ${self:service}-me-publish-day
+    events:
+      - http:
+          path: me/day/{id}/publish
+          method: post
+          cors: true
+
+  me-unpublish-day:
+    handler: homework-me-handler.unpublish
+    name: ${self:service}-me-unpublish-day
+    events:
+      - http:
+          path: me/day/{id}/unpublish
+          method: post
+          cors: true
+
+  me-add-item:
+    handler: homework-me-handler.addItem
+    name: ${self:service}-me-add-item
+    memorySize: 512
+    timeout: 20
+    events:
+      - http:
+          path: me/items
+          method: post
+          cors: true
+
+  me-edit-item:
+    handler: homework-me-handler.editItem
+    name: ${self:service}-me-edit-item
+    events:
+      - http:
+          path: me/items/{id}
+          method: put
+          cors: true
+
+  me-remove-item:
+    handler: homework-me-handler.removeItem
+    name: ${self:service}-me-remove-item
+    events:
+      - http:
+          path: me/items/{id}
+          method: delete
+          cors: true
+
+  me-get-item-image:
+    handler: homework-me-handler.getItemImage
+    name: ${self:service}-me-get-item-image
+    memorySize: 512
+    timeout: 20
+    events:
+      - http:
+          path: me/items/{id}/image
+          method: get
+          cors: true
+
+  # ── Student/parent app (family token + X-Student-Id) ───────────────────────
+  me-today:
+    handler: homework-me-handler.studentToday
+    name: ${self:service}-me-today
+    memorySize: 512
+    timeout: 20
+    events:
+      - http:
+          path: me/today
+          method: get
+          cors: true

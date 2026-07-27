@@ -44,7 +44,7 @@ Profile: `prod-itsmyskool-nikhil.agrawal` · Region: `ap-south-1`. No `reservedC
 | `npm run stop:<module>` | Stop module |
 | `npm run test:<module>:full` | Full cycle: stop → start → test → stop |
 
-Available modules: `auth`, `medical`, `lab`, `sample`, `student`, `employee`, `class`, `academic-year`, `fine`, `uniform`, `shop`, `sports`, `asset`, `library`, `supplies`, `timetable`, `attendance`, `communication`, `transport`, `assembly`, `syllabus`
+Available modules: `auth`, `medical`, `lab`, `sample`, `student`, `employee`, `class`, `academic-year`, `fine`, `uniform`, `shop`, `sports`, `asset`, `library`, `supplies`, `timetable`, `attendance`, `communication`, `transport`, `assembly`, `syllabus`, `homework`
 
 > These always run on `local` stage (hardcoded in `start-module.js`). Stage cannot be changed for individual module commands.
 
@@ -85,6 +85,7 @@ Each module in `modules/` is an independent Lambda microservice with its own `se
 - **assembly/**: School morning-assembly planning - per-wing **assembly plans** (draft→published, scoped to an explicit set of classes with no class in two plans/year), each an unlimited-depth recursive **node tree** (block→segment→sub-…) whose nodes carry running-order (`sort_order`), three guidance fields (expectation/recommendation/outcome), optional timing, text/link resources, and multiple polymorphic **responsible** parties (employee/class/student/text) with role labels. Nodes carry a **recurring-weekday** set that **inherits down the tree** (child ⊆ parent, no-days = inherit/plan-ceiling); the plan's weekday set is the ceiling. **Special assemblies** are per-date **snapshots** (clone the day's resolved tree into an independent editable copy) that replace the plan for that date. A light **theme** (value-of-the-week) spans a date range. Append-only node audit; `/me/assembly` read surface for the student app. Execution "diary" and duty notifications deferred (schema-ready). See `modules/assembly/DESIGN.md`.
 - **communication/**: Independent SMS/WhatsApp notification service (other modules call it). References externally pre-approved templates (Meta/DLT) keyed by (key, channel, language); a DB-as-queue (`message_job`, same `for update skip locked` pattern as timetable) with lazy audience expansion; an ordered `role:channel` preference ladder (WhatsApp-first default) over student/employee contacts; provider-agnostic adapter (stub by default via `COMM_PROVIDER`). The queue is drained by a worker that calls the module's `processNext` (claim one due job → resolve audience → send); job-level failures retry with exponential backoff (transient only — a `BusinessErrorResult` like "no active template" fails immediately), per-recipient send failures don't retry. **Two drivers for the same work:** in **dev** run `scripts/local/communication-worker.js` (polls the `messages/process-next` HTTP endpoint) — required, because `serverless-offline` does NOT fire `schedule` events; on **AWS** the `drain-messages` function (EventBridge `rate(1 minute)`) loops `processNext` until the queue is empty or ~50s, so no worker process is needed (overlap-safe via `for update skip locked`, so no reserved concurrency). The `drain` function is inert under serverless-offline.
 - **syllabus/**: Month-wise **syllabus planner** - its own subject catalog (independent of timetable subjects); one shared **plan** per (academic-year, grade, subject) where grade is derived from the class-name prefix (`I-A`→`I`); an ordered `syllabus_entry` list interleaving months / senior "Topic:" section-headers / topics / exam+revision+refresher markers (`entry_type`), with free-text theme and page refs, split by `term` (half-yearly/annual) and a junior/senior `layout` hint; per-**section** coverage marks (`syllabus_progress`, teacher-marked covered/pending); and a student-app `/me/timeline` that anchors on the current month ("we are here") with past=covered / future=pending, coverage driven by teacher marks. Manual entry (bulk add + reorder); no importer. See `modules/syllabus/DESIGN.md`.
+- **homework/**: Daily homework posted as photos by the class teacher for a **base class** (both streams share one set) - a per-(class, date) `homework_day` header (draft→published→unpublished, mirrors the attendance session key and the assembly roster submit/recall flow), many `homework_item` photos each with an optional subject label + note (images in the shared `file_storage`, `entity_type='homework'`), back-dating allowed, append-only `homework_audit`. Class-teacher resolved from the timetable `class_teacher` with a per-school admin `homework_class_teacher` override; teacher PWA `/me/*` writes scoped by `canPostForClass`; student-app `/me/today` shows only the published day. No notifications in v1; image cropping deferred.
 - **student/**: Student search by name, class, and academic year
 - **employee/**: Employee search by name
 - **class/**: Class search for dropdowns (uuid + name)
@@ -120,6 +121,7 @@ Each module runs on dedicated ports to allow simultaneous local development:
 | transport     | 3039      | 3040        | /transport/*      |
 | assembly      | 3041      | 3042        | /assembly/*       |
 | syllabus      | 3043      | 3044        | /syllabus/*       |
+| homework      | 3045      | 3046        | /homework/*       |
 | gateway       | 3000      | -           | (routes all)      |
 
 #### Prod Stage
@@ -147,6 +149,7 @@ Each module runs on dedicated ports to allow simultaneous local development:
 | transport     | 6039      | 6040        |
 | assembly      | 6041      | 6042        |
 | syllabus      | 6043      | 6044        |
+| homework      | 6045      | 6046        |
 | gateway       | 6000      | -           |
 
 ### Scripts Organization
@@ -419,7 +422,7 @@ node scripts/local/kill-ports.js --all
 node scripts/local/health-all.js
 set GATEWAY_PORT=3000 && node node_modules/jest/bin/jest.js
 
-# Single module lifecycle (module = auth, medical, lab, sample, student, employee, class, academic-year, supplies, timetable, attendance, communication, transport, assembly, syllabus)
+# Single module lifecycle (module = auth, medical, lab, sample, student, employee, class, academic-year, supplies, timetable, attendance, communication, transport, assembly, syllabus, homework)
 node scripts/local/start-module.js <module> --kill
 node scripts/local/kill-ports.js --<module>
 node scripts/local/health-module.js <module>
