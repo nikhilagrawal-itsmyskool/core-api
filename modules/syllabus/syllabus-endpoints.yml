@@ -220,6 +220,15 @@
           method: get
           cors: true
 
+  plan-teacher-suggestions:
+    handler: syllabus-teacher-handler.suggest
+    name: ${self:service}-plan-teacher-suggestions
+    events:
+      - http:
+          path: syllabi/{id}/teacher-suggestions
+          method: get
+          cors: true
+
   assign-plan-teacher:
     handler: syllabus-teacher-handler.assign
     name: ${self:service}-assign-plan-teacher

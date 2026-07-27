@@ -21,6 +21,22 @@ class SyllabusTeacherHandler {
     }
   };
 
+  // GET /syllabi/{id}/teacher-suggestions — timetable-resolved teachers per section.
+  public suggest = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
+    _context.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const ctx = await resolveSchool(event, callback);
+      if (!ctx) return;
+      const id = requireParam(event, 'id', callback);
+      if (!id) return;
+      const result = await syllabusTeacherService.suggestForPlan(id, ctx.schoolId);
+      if (!result) { ResponseBuilder.notFound(ErrorCode.InvalidId, 'Syllabus not found', callback); return; }
+      ResponseBuilder.ok(result, callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
   // POST /syllabi/{id}/teachers — assign a teacher to a section (admin).
   public assign = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
     _context.callbackWaitsForEmptyEventLoop = false;
@@ -71,6 +87,7 @@ class SyllabusTeacherHandler {
 
 const handler = new SyllabusTeacherHandler();
 export const list = handler.list;
+export const suggest = handler.suggest;
 export const assign = handler.assign;
 export const unassign = handler.unassign;
 export const myPlans = handler.myPlans;

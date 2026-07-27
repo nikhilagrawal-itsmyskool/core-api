@@ -3,7 +3,7 @@ import { BusinessErrorResult } from '../../shared/lib/errors';
 import { ErrorCode } from '../../shared/lib/error-codes';
 import { DEFAULTS } from './syllabus-constants';
 import { findClass, findEmployee } from './syllabus-common';
-import { gradeEquals } from './syllabus-util';
+import { gradeEquals, normSubject, SUBJECT_ALIAS } from './syllabus-util';
 const { generateShortUuid } = require('../../shared/util/generate-uuid.js');
 
 class SyllabusTeacherService {
@@ -69,6 +69,59 @@ class SyllabusTeacherService {
       [uuid, schoolId, syllabusId, data.classId, data.teacherId, DEFAULTS.STATUS, userId, new Date()],
     );
     return { uuid, classId: data.classId, className: cls.name, teacherId: data.teacherId, teacherName: teacher.name };
+  }
+
+  // Live "resolve from the timetable": for each base section of the plan's grade,
+  // the teacher who teaches the matching subject in teaching_assignment (matched by
+  // normalised subject name + alias, since the timetable's subject catalogue is
+  // separate). The Offerings screen shows these as suggestions to pin as overrides
+  // (syllabus_plan_teacher). Sections with no timetable match are omitted.
+  public async suggestForPlan(syllabusId: string, schoolId: string): Promise<any[] | null> {
+    const plan = await DB.query(
+      singleLineString`
+        select s.uuid, s.grade, s.academic_year_id, sub.name as subject_name
+        from syllabus s join syllabus_subject sub on sub.uuid = s.subject_id
+        where s.uuid = $1 and s.school_id = $2 and s.status = 'active'
+      `,
+      [syllabusId, schoolId],
+    );
+    if (plan.length === 0) return null;
+    const p = plan[0];
+
+    const classes = await DB.query(
+      singleLineString`select uuid, name from class where school_id = $1 and base_class_id is null and class_group_id is null`,
+      [schoolId],
+    );
+    const sections = classes.filter((c: any) => gradeEquals(c.name, p.grade));
+    if (sections.length === 0) return [];
+
+    const key = SUBJECT_ALIAS[normSubject(p.subjectName)] || normSubject(p.subjectName);
+    const secIds = sections.map((s: any) => s.uuid);
+    const ta = await DB.query(
+      singleLineString`
+        select ta.class_id, s.name as subject_name, ta.teacher_id, e.name as teacher_name
+        from teaching_assignment ta
+        join subject s on s.uuid = ta.subject_id
+        left join employee e on e.uuid = ta.teacher_id
+        where ta.school_id = $1 and ta.academic_year_id = $2 and ta.status = 'active' and ta.class_id = any($3)
+      `,
+      [schoolId, p.academicYearId, secIds],
+    );
+
+    const out: any[] = [];
+    for (const sec of sections) {
+      const hit = ta.find((r: any) => r.classId === sec.uuid && normSubject(r.subjectName) === key);
+      if (hit) {
+        out.push({
+          classId: sec.uuid,
+          className: sec.name,
+          teacherId: hit.teacherId,
+          teacherName: hit.teacherName,
+          matchedSubject: hit.subjectName,
+        });
+      }
+    }
+    return out;
   }
 
   public async unassign(assignmentId: string, schoolId: string, userId: string): Promise<boolean> {
