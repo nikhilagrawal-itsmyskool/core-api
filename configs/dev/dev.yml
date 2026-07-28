@@ -7,6 +7,7 @@ POSTGRES_USERNAME: 'root'
 POSTGRES_PASSWORD: 'itsmyskool123'
 JWT_SECRET: 'itsmyskool-dev-secret-key-2024'
 JWT_ADMIN_EXPIRY_TIME: '24h'
+JWT_STUDENT_EXPIRY_TIME: '7d'
 
 # Communication: base URL other modules use to call its REST endpoints (via the API domain).
 COMM_BASE_URL: 'https://api.dev.itsmyskool.com'

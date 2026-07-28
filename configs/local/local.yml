@@ -9,6 +9,7 @@ POSTGRES_SSL: 'false'
 
 JWT_SECRET: 'local-dev-secret-key'
 JWT_ADMIN_EXPIRY_TIME: '24h'
+JWT_STUDENT_EXPIRY_TIME: '7d'
 
 # Communication module: base URL used by other modules (e.g. attendance absence
 # alerts) to call its REST endpoints. Locally this points straight at the

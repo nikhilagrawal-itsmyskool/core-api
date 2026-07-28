@@ -16,7 +16,8 @@ FILE_STORAGE_BUCKET: 'prod-itsmyskool-file-storage'
 CPSAT_S3_BUCKET: 'prod-itsmyskool-cpsat'
 
 JWT_SECRET: 'RgRX2tTs3hwcFGnJ*7zplHukK&opgdvxTzbucpP%*0BxV@E1'
-JWT_ADMIN_EXPIRY_TIME: '8h'
+JWT_ADMIN_EXPIRY_TIME: '12h'
+JWT_STUDENT_EXPIRY_TIME: '7d'
 
 # Communication: base URL other modules use to call its REST endpoints (via the API domain).
 COMM_BASE_URL: 'https://api-prod.itsmyskool.com'

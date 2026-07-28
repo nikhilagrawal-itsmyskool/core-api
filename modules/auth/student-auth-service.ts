@@ -17,7 +17,7 @@ export class StudentAuthService {
   public signToken(data: any): string {
     let token = undefined;
     try {
-      token = jwt.sign(data, process.env.JWT_SECRET, { expiresIn: process.env.JWT_ADMIN_EXPIRY_TIME });
+      token = jwt.sign(data, process.env.JWT_SECRET, { expiresIn: process.env.JWT_STUDENT_EXPIRY_TIME || process.env.JWT_ADMIN_EXPIRY_TIME });
     } catch (e) {
       console.log(e, 'Error');
       console.log('Error signing token: ', JSON.stringify(e));
