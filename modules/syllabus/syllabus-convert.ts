@@ -25,6 +25,8 @@ const FONTCONFIG_FILE = "/tmp/fonts/fonts.conf";
 const SOFFICE_ARGS = [
   "--headless", "--norestore", "--invisible", "--nodefault",
   "--nolockcheck", "--nologo", "--nofirststartwizard",
+  // LibreOffice needs a writable user-profile dir; on Lambda point it at /tmp.
+  "-env:UserInstallation=file:///tmp/lo_profile",
 ];
 
 // LibreOffice links libfontconfig, which aborts with "Cannot load default config
@@ -143,7 +145,12 @@ export async function selfTest(): Promise<{ ok: boolean; ms: number; soffice: st
     const ok = fs.existsSync(outPath);
     return { ok, ms: Date.now() - started, soffice: SOFFICE, fonts: fontDiagnostic(), error: ok ? undefined : "no PDF produced" };
   } catch (e: any) {
-    const stderr = e?.stderr ? Buffer.from(e.stderr).toString().slice(0, 800) : "";
-    return { ok: false, ms: Date.now() - started, soffice: SOFFICE, fonts: fontDiagnostic(), error: `${String(e?.message || e).slice(0, 400)}${stderr ? ` | ${stderr}` : ""}` };
+    const stderr = e?.stderr ? Buffer.from(e.stderr).toString().slice(0, 600) : "";
+    const stdout = e?.stdout ? Buffer.from(e.stdout).toString().slice(0, 600) : "";
+    const status = e?.status != null ? `exit=${e.status}` : e?.signal ? `signal=${e.signal}` : "";
+    return {
+      ok: false, ms: Date.now() - started, soffice: SOFFICE, fonts: fontDiagnostic(),
+      error: `${status} ${String(e?.message || e).slice(0, 200)} | out:${stdout} | err:${stderr}`,
+    };
   }
 }
