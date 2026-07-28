@@ -130,6 +130,10 @@ create table if not exists assembly_node (
     updated_at timestamp(0)
 );
 
+-- dynamic_source: auto-populated node content resolved per date (e.g. 'birthday'
+-- = the day's student/staff birthdays). null = a normal node.
+alter table assembly_node add column if not exists dynamic_source varchar(24);
+
 create index if not exists idx_assembly_node_owner
     on assembly_node(owner_type, owner_id, parent_id, sort_order) where status = 'active';
 create index if not exists idx_assembly_node_school on assembly_node(school_id);

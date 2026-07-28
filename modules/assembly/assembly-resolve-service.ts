@@ -2,13 +2,14 @@ import { DB, singleLineString } from '../../shared/lib/db';
 import { BusinessErrorResult } from '../../shared/lib/errors';
 import { ErrorCode } from '../../shared/lib/error-codes';
 import {
-  AssemblyNodeDetail, ResolvedAssembly, ResolvedNode, NodeResponsibleView, ResolvedAnchor,
+  AssemblyNodeDetail, ResolvedAssembly, ResolvedNode, NodeResponsibleView, ResolvedAnchor, BirthdayPerson,
 } from './assembly-interfaces';
 import { Weekday } from './assembly-constants';
 import { assemblyNodeService } from './assembly-node-service';
 import { assemblyThemeService } from './assembly-theme-service';
 import { assemblyHouseService } from './assembly-house-service';
 import { isValidDate } from './assembly-common';
+import { getSignedPhotoUrl } from '../../shared/lib/file-storage';
 
 function weekdayOf(dateStr: string): Weekday {
   const map: Weekday[] = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
@@ -84,6 +85,8 @@ class AssemblyResolveService {
   // prune opted-out optional nodes, attach the day's anchors/owner). No-op for
   // template-mode schools. Specials get the house label but no roster overlay.
   private async withHouseMode(result: ResolvedAssembly, schoolId: string): Promise<ResolvedAssembly> {
+    // Birthday-spotlight is independent of house mode — fill it before the early return.
+    await this.attachBirthdays(result, schoolId);
     const config = await assemblyHouseService.getConfig(schoolId);
     if (config.mode !== 'house') return result;
     result.mode = 'house';
@@ -204,6 +207,64 @@ class AssemblyResolveService {
     return (await this.resolve(rows[0].planId, date, schoolId, { publishedPlanOnly: true }))!;
   }
 
+  // Fill any dynamicSource='birthday' node with the day's birthdays (students of the
+  // plan's classes + all school staff). One query pass, skipped when no such node.
+  private async attachBirthdays(result: ResolvedAssembly, schoolId: string): Promise<void> {
+    const targets: ResolvedNode[] = [];
+    const walk = (nodes: ResolvedNode[]) => {
+      for (const n of nodes) { if (n.dynamicSource === 'birthday') targets.push(n); walk(n.children || []); }
+    };
+    walk(result.nodes || []);
+    if (targets.length === 0) return;
+    const people = await this.birthdaysForDate(schoolId, result.planId, result.date);
+    for (const n of targets) n.birthdays = people;
+  }
+
+  // Students (in the plan's audience classes) then staff, born on this day+month;
+  // students ordered smaller→higher class, each with a signed photo URL when present.
+  private async birthdaysForDate(schoolId: string, planId: string, date: string): Promise<BirthdayPerson[]> {
+    const [, mm, dd] = date.split('-').map(Number);
+    const out: BirthdayPerson[] = [];
+
+    const plan = await DB.query(
+      singleLineString`select academic_year_id from assembly_plan where uuid = $1 and school_id = $2 and status = 'active'`,
+      [planId, schoolId],
+    );
+    const ay = plan[0]?.academicYearId;
+    if (ay) {
+      const students = await DB.query(
+        singleLineString`
+          select s.uuid, s.name, c.name as class_name, c.seq,
+            (select storage_key from file_storage f where f.school_id = s.school_id and f.entity_type = 'student' and f.entity_id = s.uuid order by created_at desc limit 1) as photo_key
+          from student s
+          join student_class sc on sc.student_id = s.uuid and sc.school_id = s.school_id and sc.academic_year_id = $2 and sc.status = 'active'
+          join class c on c.uuid = sc.class_id
+          join assembly_plan_class pc on pc.plan_id = $3 and pc.class_id = sc.class_id and pc.academic_year_id = sc.academic_year_id and pc.school_id = sc.school_id and pc.status = 'active'
+          where s.school_id = $1 and s.status <> 'deleted' and s.dob is not null
+            and extract(month from s.dob) = $4 and extract(day from s.dob) = $5
+          order by c.seq nulls last, c.name, s.name
+        `,
+        [schoolId, ay, planId, mm, dd],
+      );
+      for (const s of students) {
+        out.push({ kind: 'student', id: s.uuid, name: s.name, className: s.className || undefined, photoUrl: await getSignedPhotoUrl(s.photoKey) });
+      }
+    }
+
+    const staff = await DB.query(
+      singleLineString`
+        select uuid, name from employee
+        where school_id = $1 and status <> 'deleted' and dob is not null
+          and extract(month from dob) = $2 and extract(day from dob) = $3
+        order by name
+      `,
+      [schoolId, mm, dd],
+    );
+    for (const e of staff) out.push({ kind: 'employee', id: e.uuid, name: e.name });
+
+    return out;
+  }
+
   // Produce the read model: each node's effective responsible = its own rules resolved
   // for the date, or (if it has none) the nearest ancestor's resolved set. Resources
   // are per-node. Responsibility rules are date-aware (independent dated rows + rotating
@@ -226,6 +287,7 @@ class AssemblyResolveService {
         sortOrder: n.sortOrder,
         fillMode: n.fillMode,
         isOptional: n.isOptional === true ? true : undefined,
+        dynamicSource: (n as any).dynamicSource || undefined,
         responsible: eff,
         resources: n.resources || [],
         children: this.toResolved(n.children || [], eff, date),

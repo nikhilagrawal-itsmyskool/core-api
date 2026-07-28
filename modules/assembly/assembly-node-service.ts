@@ -20,7 +20,7 @@ const { generateShortUuid } = require('../../shared/util/generate-uuid.js');
 const NODE_COLS = singleLineString`
   uuid, school_id, owner_type, owner_id, parent_id, depth, sort_order,
   title, description, expectation, recommendation, outcome, start_time,
-  duration_minutes, fill_mode, is_optional, options,
+  duration_minutes, fill_mode, is_optional, options, dynamic_source,
   status, createdby_userid, created_at, updatedby_userid, updated_at
 `;
 
@@ -38,6 +38,7 @@ const CONTENT_FIELDS: { key: keyof UpdateNodeRequest; col: string }[] = [
   { key: 'durationMinutes', col: 'duration_minutes' },
   { key: 'fillMode', col: 'fill_mode' },
   { key: 'isOptional', col: 'is_optional' },
+  { key: 'dynamicSource', col: 'dynamic_source' },
 ];
 
 export interface NodeWriteQuery { q: string; p: any[]; }
@@ -81,14 +82,14 @@ class AssemblyNodeService {
       q: singleLineString`
         insert into assembly_node
         (uuid, school_id, owner_type, owner_id, parent_id, depth, sort_order, title, description,
-         expectation, recommendation, outcome, start_time, duration_minutes, fill_mode, is_optional, options,
+         expectation, recommendation, outcome, start_time, duration_minutes, fill_mode, is_optional, options, dynamic_source,
          status, createdby_userid, created_at)
-        values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
+        values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
       `,
       p: [uuid, schoolId, ownerType, ownerId, parentId, depth, sortOrder, data.title.trim(),
         data.description || null, data.expectation || null, data.recommendation || null, data.outcome || null,
         data.startTime || null, data.durationMinutes ?? null, data.fillMode || null, data.isOptional ?? null, joinOptions(data.options),
-        DEFAULTS.STATUS, userId, now],
+        data.dynamicSource || null, DEFAULTS.STATUS, userId, now],
     });
     queries.push(this.audit(schoolId, uuid, ownerType, ownerId, 'create', null, null, data.title.trim(), userId, now));
     await this.run(queries);
@@ -474,14 +475,14 @@ class AssemblyNodeService {
         q: singleLineString`
           insert into assembly_node
           (uuid, school_id, owner_type, owner_id, parent_id, depth, sort_order, title, description,
-           expectation, recommendation, outcome, start_time, duration_minutes, fill_mode, is_optional, options,
+           expectation, recommendation, outcome, start_time, duration_minutes, fill_mode, is_optional, options, dynamic_source,
            status, createdby_userid, created_at)
-          values ($1,$2,'special',$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
+          values ($1,$2,'special',$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
         `,
         p: [newId, schoolId, specialId, newParent, n.depth, n.sortOrder, n.title, n.description ?? null,
           n.expectation ?? null, n.recommendation ?? null, n.outcome ?? null, n.startTime ?? null,
           n.durationMinutes ?? null, n.fillMode ?? null, n.isOptional ?? null, (n as any).options ?? null,
-          DEFAULTS.STATUS, userId, now],
+          (n as any).dynamicSource ?? null, DEFAULTS.STATUS, userId, now],
       });
       queries.push(this.audit(schoolId, newId, 'special', specialId, 'create', null, null, n.title, userId, now));
       for (const r of collected.responsible.get(n.uuid) || []) {

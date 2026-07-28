@@ -407,6 +407,7 @@ export interface AssemblyNode extends BaseEntity {
   fillMode?: FillMode;   // 'auto' (template content) | 'roster' (house fills weekly)
   isOptional?: boolean;  // can be opted in/out per day
   options?: string[];    // pick-one choices (e.g. performance types)
+  dynamicSource?: string; // auto-populated content, e.g. 'birthday' (today's birthdays)
   status: string;
 }
 
@@ -459,6 +460,7 @@ export interface CreateNodeRequest {
   fillMode?: FillMode;
   isOptional?: boolean;
   options?: string[];
+  dynamicSource?: string | null;
   // Optional insert position among siblings; appended to the end when omitted.
   sortOrder?: number;
 }
@@ -474,6 +476,7 @@ export interface UpdateNodeRequest {
   fillMode?: FillMode | null;
   isOptional?: boolean | null;
   options?: string[] | null;
+  dynamicSource?: string | null;
 }
 
 export interface SetNodeDayContentRequest {
@@ -637,5 +640,18 @@ export interface ResolvedNode {
   isOptional?: boolean; // house mode: dropped when the roster opts it out
   responsible: NodeResponsibleView[]; // effective (own or inherited)
   resources: NodeResourceView[];
+  dynamicSource?: string; // e.g. 'birthday' — node is auto-filled
+  birthdays?: BirthdayPerson[]; // populated when dynamicSource === 'birthday'
   children: ResolvedNode[];
+}
+
+// A student or staff member with a birthday on the resolved date (birthday-spotlight
+// node). Students carry their section; staff carry no class. Ordered students-first
+// (by class), then staff.
+export interface BirthdayPerson {
+  kind: 'student' | 'employee';
+  id: string;
+  name: string;
+  className?: string;      // students only
+  photoUrl?: string | null;
 }
