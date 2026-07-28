@@ -428,6 +428,7 @@ export interface NodeResponsibleView {
   targetId?: string;
   targetText?: string;
   targetName?: string;
+  className?: string; // section of a student target, for display ("(VIII-A)")
   sortOrder: number;
   // Time-aware fields (a rotating rule = rows sharing ruleGroup). Absent = fixed/always.
   startDate?: string;

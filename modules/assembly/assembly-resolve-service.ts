@@ -137,7 +137,7 @@ class AssemblyResolveService {
       for (const r of entryRows) entryByNode.set(r.nodeId, r);
 
       const partRows = await DB.query(
-        singleLineString`select node_id, role, target_type, target_id, target_name, target_text from assembly_roster_participant where week_id = $1 and entry_date = $2 and scope = 'entry' order by sort_order`,
+        singleLineString`select node_id, role, target_type, target_id, target_name, target_class, target_text from assembly_roster_participant where week_id = $1 and entry_date = $2 and scope = 'entry' order by sort_order`,
         [weekId, result.date],
       );
       const partsByNode = new Map<string, any[]>();
@@ -162,6 +162,7 @@ class AssemblyResolveService {
         n.responsible = parts.map((p, i): NodeResponsibleView => ({
           uuid: `roster-${n.uuid}-${i}`, role: p.role || undefined, targetType: p.targetType,
           targetId: p.targetId || undefined, targetName: p.targetName || undefined,
+          className: p.targetClass || undefined,
           targetText: p.targetText || undefined, sortOrder: i,
         }));
       }
