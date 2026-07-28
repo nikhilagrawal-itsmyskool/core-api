@@ -156,7 +156,7 @@ class AssemblyResolveService {
     for (const n of nodes) {
       const e = entryByNode.get(n.uuid);
       if (e && e.opted === false) continue; // the house opted this leaf out for the day
-      if (e?.content) n.content = e.content; // house-filled content overrides the template
+      if (e?.content) { n.content = e.content; n.contentFromRoster = true; } // house-filled content overrides the template
       const parts = partsByNode.get(n.uuid) || [];
       if (parts.length) {
         n.responsible = parts.map((p, i): NodeResponsibleView => ({

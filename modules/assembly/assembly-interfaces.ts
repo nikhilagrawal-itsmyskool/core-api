@@ -625,6 +625,7 @@ export interface ResolvedNode {
   uuid: string;
   title: string;
   content?: string; // the template's per-weekday content cell for the resolved date
+  contentFromRoster?: boolean; // content was filled by the house/teacher for the day
   description?: string;
   expectation?: string;
   recommendation?: string;
