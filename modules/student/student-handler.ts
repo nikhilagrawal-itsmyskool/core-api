@@ -30,6 +30,7 @@ class StudentHandler {
         academicYearId: q.academicYearId,
         admissionNumber: q.admissionNumber,
         phone: q.phone,
+        unreachable: q.unreachable === 'true',
       });
       // Presign a photo URL per row only when the caller asks (the grid does; the
       // dropdown/search dialogs don't, so they skip the presign cost). The grid

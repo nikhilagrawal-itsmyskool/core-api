@@ -36,12 +36,36 @@ class StudentAdminHandler {
         academicYearId: q.academicYearId,
         admissionNumber: q.admissionNumber,
         phone: q.phone,
+        unreachable: q.unreachable === 'true',
       });
       const reveal = getCallerContext(event).isAdminGod;
       (results as any[]).forEach((r: any) =>
         maskContactFields(r, [...STUDENT_MASKED_FIELDS], reveal)
       );
       ResponseBuilder.ok({ students: results }, callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
+  // GET /comms-summary?academicYearId=&classId=&name=&admissionNumber=
+  // Effective-contact breakdown for the cohort (counts only; no numbers). Any
+  // authenticated staff — reveals no contact data.
+  public commsSummary = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
+    _context.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const schoolId = await this.resolveSchool(event, callback);
+      if (!schoolId) return;
+
+      const q = event.queryStringParameters || {};
+      const summary = await studentService.commsSummary(schoolId, {
+        name: q.name,
+        classId: q.classId,
+        academicYearId: q.academicYearId,
+        admissionNumber: q.admissionNumber,
+        phone: q.phone,
+      });
+      ResponseBuilder.ok(summary, callback);
     } catch (err: any) {
       ResponseBuilder.handleError(err, callback);
     }
@@ -166,6 +190,7 @@ class StudentAdminHandler {
 
 const handler = new StudentAdminHandler();
 export const list = handler.list;
+export const commsSummary = handler.commsSummary;
 export const getById = handler.getById;
 export const create = handler.create;
 export const update = handler.update;

@@ -1,5 +1,7 @@
 import { DB, singleLineString } from '../../shared/lib/db';
 import { Student, StudentWithClass } from './student-interfaces';
+import { resolveLadder, studentNumbers } from '../communication/communication-util';
+import { Channel } from '../communication/communication-constants';
 
 export interface StudentSearchFilters {
   name?: string;
@@ -7,6 +9,23 @@ export interface StudentSearchFilters {
   academicYearId?: string;
   admissionNumber?: string;
   phone?: string;
+  // Comms data-quality filter: keep only students where father, mother AND
+  // guardian all have no mobile and no WhatsApp — a notification can never reach
+  // them (the student's own number is not used by the student ladder).
+  unreachable?: boolean;
+}
+
+// One line of the effective-contact breakdown: the role:channel the sender's
+// ladder would actually pick, and how many students land on it.
+export interface CommsSummaryLine {
+  role: string;
+  channel: string;
+  count: number;
+}
+export interface CommsSummary {
+  total: number;
+  unreachable: number;
+  breakdown: CommsSummaryLine[];
 }
 
 class StudentService {
@@ -41,7 +60,7 @@ class StudentService {
     schoolId: string,
     filters: StudentSearchFilters = {}
   ): Promise<Student[] | StudentWithClass[]> {
-    const { name, classId, academicYearId, admissionNumber, phone } = filters;
+    const { name, classId, academicYearId, admissionNumber, phone, unreachable } = filters;
     const namePattern = name && name.trim() ? `%${name.trim()}%` : '%';
 
     // Extra predicates shared by both query shapes. Built against the `student`
@@ -51,6 +70,11 @@ class StudentService {
       if (admissionNumber && admissionNumber.trim()) {
         params.push(`%${admissionNumber.trim()}%`);
         parts.push(`and ${alias}admission_number ilike $${params.length}`);
+      }
+      if (unreachable) {
+        // All six comms fields blank → the ladder resolves to nobody.
+        const cols = ['father_mobile', 'father_whatsapp', 'mother_mobile', 'mother_whatsapp', 'guardian_mobile', 'guardian_whatsapp'];
+        parts.push('and ' + cols.map((c) => `coalesce(trim(${alias}${c}), '') = ''`).join(' and '));
       }
       if (phone && phone.trim()) {
         params.push(`%${phone.trim()}%`);
@@ -139,6 +163,46 @@ class StudentService {
     `;
 
     return DB.query(query, params);
+  }
+
+  // Effective-contact breakdown for a cohort: for each student, resolve the SAME
+  // WhatsApp-first ladder the sender uses (explicit communication_preference if
+  // set, else the default ladder over whatever numbers exist) and count how many
+  // land on each role:channel. Only counts are returned — no numbers leak. The
+  // `unreachable` filter is intentionally ignored here so the summary always
+  // reflects the full cohort (the count of unreachable is a line of the result).
+  public async commsSummary(schoolId: string, filters: StudentSearchFilters = {}): Promise<CommsSummary> {
+    const rows = (await this.search(schoolId, { ...filters, unreachable: false })) as any[];
+    const ALL_CHANNELS = new Set<Channel>(['whatsapp', 'sms']);
+    const counts = new Map<string, number>();
+    let unreachable = 0;
+    for (const r of rows) {
+      const match = resolveLadder(
+        {
+          recipientType: 'student',
+          recipientId: r.uuid,
+          preference: r.communicationPreference,
+          numbers: studentNumbers(r),
+          context: {},
+        },
+        ALL_CHANNELS,
+      );
+      if (!match) {
+        unreachable += 1;
+        continue;
+      }
+      const key = `${match.role}:${match.channel}`;
+      counts.set(key, (counts.get(key) || 0) + 1);
+    }
+    // Order the breakdown by the default ladder (whatsapp roles, then sms roles).
+    const order = ['father:whatsapp', 'mother:whatsapp', 'guardian:whatsapp', 'father:sms', 'mother:sms', 'guardian:sms'];
+    const breakdown: CommsSummaryLine[] = order
+      .filter((k) => counts.has(k))
+      .map((k) => {
+        const [role, channel] = k.split(':');
+        return { role, channel, count: counts.get(k)! };
+      });
+    return { total: rows.length, unreachable, breakdown };
   }
 
   // Unified "type anything" search for the command palette: matches across student

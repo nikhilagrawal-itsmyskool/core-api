@@ -48,6 +48,17 @@
           method: get
           cors: true
 
+  # Effective-contact breakdown (counts only). Declared before students/{id} so
+  # the literal path wins over the {id} matcher.
+  comms-summary:
+    handler: student-admin-handler.commsSummary
+    name: ${self:service}-comms-summary
+    events:
+      - http:
+          path: comms-summary
+          method: get
+          cors: true
+
   create-student:
     handler: student-admin-handler.create
     name: ${self:service}-create-student
