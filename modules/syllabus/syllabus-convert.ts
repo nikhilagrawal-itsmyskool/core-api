@@ -82,18 +82,31 @@ async function ensureLibreOffice(): Promise<void> {
   return extractPromise;
 }
 
+// LibreOffice exit codes 79/81 mean "please restart me" (EXITHELPER_NORMAL_RESTART /
+// CRASH_WITH_RESTART) — soffice.bin does first-run user-profile setup then asks the
+// launcher to re-run. The `soffice` shell wrapper loops on these; since we invoke
+// soffice.bin directly, we replicate that: retry, and the next run (profile ready)
+// completes the conversion.
+const RESTART_EXITS = new Set([79, 81]);
+
 function runSoffice(inputPath: string, outDir: string): void {
-  execFileSync(SOFFICE, [...SOFFICE_ARGS, "--convert-to", "pdf", "--outdir", outDir, inputPath], {
-    env: {
-      ...process.env,
-      HOME: "/tmp",
-      FONTCONFIG_FILE,
-      FONTCONFIG_PATH: FONTCONFIG_DIR,
-      XDG_CACHE_HOME: "/tmp/.cache",
-    },
-    stdio: "pipe",
-    timeout: 90000,
-  });
+  const args = [...SOFFICE_ARGS, "--convert-to", "pdf", "--outdir", outDir, inputPath];
+  const env = {
+    ...process.env,
+    HOME: "/tmp",
+    FONTCONFIG_FILE,
+    FONTCONFIG_PATH: FONTCONFIG_DIR,
+    XDG_CACHE_HOME: "/tmp/.cache",
+  };
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      execFileSync(SOFFICE, args, { env, stdio: "pipe", timeout: 90000 });
+      return;
+    } catch (e: any) {
+      if (RESTART_EXITS.has(e?.status) && attempt < 3) continue;
+      throw e;
+    }
+  }
 }
 
 // Convert a .docx (base64) to a PDF (base64).
