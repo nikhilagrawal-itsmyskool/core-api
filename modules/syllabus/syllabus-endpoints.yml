@@ -367,9 +367,9 @@
           method: post
           cors: true
 
-  # AWS worker: EventBridge drains pending docs to PDF. Schedule DISABLED until the
-  # runtime self-test passes and SYLLABUS_CONVERT_ENABLED=true — then flip
-  # `enabled` to true. Overlap-safe via `for update skip locked`.
+  # AWS worker: EventBridge drains pending docs to PDF every minute. Enabled once the
+  # runtime self-test passed and SYLLABUS_CONVERT_ENABLED=true (2026-07-28).
+  # Overlap-safe via `for update skip locked`; inert if the flag is ever turned off.
   drain-conversions:
     handler: syllabus-model-paper-handler.drain
     name: ${self:service}-drain-conversions
@@ -381,7 +381,7 @@
     events:
       - schedule:
           rate: rate(1 minute)
-          enabled: false
+          enabled: true
 
   # Invoke-only runtime check for the LibreOffice layer (AL2 binary on AL2023).
   # Run: serverless invoke -f convert-selftest --stage prod --region ap-south-1
