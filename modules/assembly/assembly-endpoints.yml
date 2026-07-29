@@ -756,3 +756,44 @@
           path: me/assembly/leaderboard
           method: get
           cors: true
+
+  # ── Reference documents (source Word/PDF the assembly was built from) ──────
+  list-documents:
+    handler: assembly-document-handler.list
+    name: ${self:service}-list-documents
+    events:
+      - http:
+          path: documents
+          method: get
+          cors: true
+
+  upload-document:
+    handler: assembly-document-handler.upload
+    name: ${self:service}-upload-document
+    memorySize: 512
+    timeout: 20
+    events:
+      - http:
+          path: documents
+          method: post
+          cors: true
+
+  get-document-file:
+    handler: assembly-document-handler.getFile
+    name: ${self:service}-get-document-file
+    memorySize: 512
+    timeout: 20
+    events:
+      - http:
+          path: documents/{id}/file
+          method: get
+          cors: true
+
+  delete-document:
+    handler: assembly-document-handler.remove
+    name: ${self:service}-delete-document
+    events:
+      - http:
+          path: documents/{id}
+          method: delete
+          cors: true

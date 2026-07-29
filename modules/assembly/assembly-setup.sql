@@ -552,3 +552,25 @@ create table if not exists assembly_grade_penalty (
     penalty_id varchar(12) not null
 );
 create unique index if not exists idx_assembly_grade_penalty_unique on assembly_grade_penalty(grade_id, penalty_id);
+
+-- Table 30: assembly_document — the source reference doc (Word/PDF) the assembly was
+-- built from, kept for reference + download + edit. One active doc per (school, kind):
+--   plan      = the plan tree source (e.g. "Assembly New.docx")
+--   checklist = "House Execution Quality Check List.docx"
+--   grading   = "Comprehensive Grading Log.docx"
+-- File bytes live in the shared file_storage (entity_type='assembly_document').
+create table if not exists assembly_document (
+    uuid varchar(12) primary key,
+    school_id varchar(12) not null,
+    kind varchar(16) not null check (kind in ('plan', 'checklist', 'grading')),
+    file_id varchar(12) not null,
+    file_name varchar(256),
+    mime_type varchar(128),
+    size_bytes integer,
+    status varchar(16) not null check (status in ('active', 'deleted')),
+    uploadedby_userid varchar(12),
+    uploaded_at timestamp(0),
+    updatedby_userid varchar(12),
+    updated_at timestamp(0)
+);
+create unique index if not exists idx_assembly_document_kind on assembly_document(school_id, kind) where status = 'active';
