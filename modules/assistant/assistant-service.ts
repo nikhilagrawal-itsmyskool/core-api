@@ -1,14 +1,24 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { getCurrentAcademicYearId } from "./assistant-common";
 
-// The assistant answers a manager's spoken question about a student. It resolves the
-// student, loads a context (reusing the student / attendance / timetable modules over
-// HTTP — forwarding the manager's JWT so their real authorization + contact masking
-// apply), then lets Claude either answer from that context or request a different
-// student. Stateless: the client holds `context` and echoes it back each turn.
+// The assistant answers a manager's spoken question by letting Claude drive: it is given a
+// single read-only `apiGet(path)` tool over our existing HTTP surface and an `answer()` tool
+// to finish. Claude plans which endpoint(s) to call (search a student, load their detail,
+// pull attendance/timetable/library/etc.), we execute each GET forwarding the manager's own
+// JWT + X-School-Code (so downstream authorization + contact masking are the manager's real
+// permissions), feed the JSON back, and loop until it answers. Safety fence:
+//   • apiGet only ever issues GET, never a write.
+//   • the requested path must pass `allowedPath()` — a read-only allowlist of module prefixes
+//     minus sensitive/binary fragments (credentials, /me family routes, images/bills/receipts).
+//   • X-School-Code is fixed server-side from the caller — never a value the model supplies.
+//   • the loop is capped (MAX_HOPS) and each tool result is size-bounded.
+// Stateless: the client holds `context` (an opaque conversation blob) and echoes it each turn.
 
 const GATEWAY = process.env.COMM_BASE_URL || "http://localhost:3000"; // the API gateway base
 const MODEL = "claude-haiku-4-5-20251001";
+const MAX_HOPS = 6; // max apiGet rounds before we force an answer
+const HISTORY_CAP = 24; // messages carried across turns (trimmed to a valid start)
+const RESULT_CAP = 6000; // max chars of any single tool result fed back to the model
 
 let anthropic: Anthropic | null = null;
 function llm(): Anthropic {
@@ -20,14 +30,22 @@ export interface AskAuth {
   schoolCode: string;
   authorization?: string;
 }
+// Opaque, client-held conversation state (echoed back each turn). `history` is the raw
+// Claude message list; `focus*` remembers the student under discussion for follow-ups.
+export interface Convo {
+  history: any[];
+  focusStudentId?: string | null;
+  focusName?: string | null;
+}
 export interface AskInput {
   question: string;
-  context?: StudentContext | null;
-  // Force a specific student (skips name resolution) — used when the manager picks
-  // one from a disambiguation list.
-  studentId?: string;
+  context?: Convo | null;
+  // Reply language. 'hi' -> answer in Hindi.
+  lang?: "en" | "hi";
 }
-export interface StudentContext {
+// The structured summary card the UI renders when a student is in focus (best-effort — built
+// from whatever the model happened to fetch this turn; the spoken answer is authoritative).
+export interface StudentCard {
   studentId: string;
   name: string;
   className: string | null;
@@ -44,10 +62,8 @@ export interface StudentContext {
 }
 export interface AskResult {
   speech: string;
-  card?: StudentContext;
-  context: StudentContext | null;
-  needsDisambiguation?: boolean;
-  candidates?: { studentId: string; name: string; className: string | null; roll: number | null; admissionNumber: string | null }[];
+  card?: StudentCard | null;
+  context: Convo;
 }
 
 // ── HTTP fan-out (forwards the manager's JWT + X-School-Code) ──────────────────
@@ -58,63 +74,78 @@ async function apiGet(auth: AskAuth, path: string): Promise<any> {
       ...(auth.authorization ? { Authorization: auth.authorization } : {}),
     },
   });
-  if (res.status >= 400) {
-    const t = await res.text();
-    throw new Error(`GET ${path} -> ${res.status}: ${t.slice(0, 200)}`);
+  const text = await res.text();
+  if (res.status >= 400) return { error: `HTTP ${res.status}`, detail: text.slice(0, 300) };
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { error: "non-JSON response", detail: text.slice(0, 300) };
   }
-  return res.json();
 }
 const asArray = (r: any, ...keys: string[]) => (Array.isArray(r) ? r : keys.map((k) => r?.[k]).find(Array.isArray) || []);
 
-// ── Class-name normalisation ("nine A" / "9-A" / "IX A" -> "IXA") ─────────────
-const NUM_WORD: Record<string, string> = { one: "1", two: "2", three: "3", four: "4", five: "5", six: "6", seven: "7", eight: "8", nine: "9", ten: "10", eleven: "11", twelve: "12" };
-const DIGIT_ROMAN: Record<string, string> = { "1": "I", "2": "II", "3": "III", "4": "IV", "5": "V", "6": "VI", "7": "VII", "8": "VIII", "9": "IX", "10": "X", "11": "XI", "12": "XII" };
-function canonClass(s?: string | null): string {
-  if (!s) return "";
-  let t = String(s).toLowerCase().replace(/class|grade|section/g, "").replace(/[^a-z0-9]/g, "");
-  for (const [w, d] of Object.entries(NUM_WORD)) t = t.replace(w, d);
-  const m = t.match(/^([ivxlcdm]+|\d+)([a-z]*)$/);
-  if (!m) return t;
-  let grade = m[1];
-  if (/^\d+$/.test(grade)) grade = DIGIT_ROMAN[grade] || grade;
-  else grade = grade.toUpperCase();
-  return grade + (m[2] || "").toUpperCase();
-}
-const classMatch = (a?: string | null, b?: string | null) => !!canonClass(a) && canonClass(a) === canonClass(b);
-
-// ── Resolve a student by (name, class) within the current year ────────────────
-type ResolveResult =
-  | { status: "one"; student: any }
-  | { status: "many"; candidates: any[] }
-  | { status: "none" };
-
-async function resolveStudent(auth: AskAuth, schoolId: string, name: string, className: string | null): Promise<ResolveResult> {
-  const ay = await getCurrentAcademicYearId(schoolId);
-  const q = new URLSearchParams({ name });
-  if (ay) q.set("academicYearId", ay);
-  const raw = await apiGet(auth, `/students/search?${q.toString()}`);
-  let list: any[] = asArray(raw, "students", "results");
-  if (className) {
-    const filtered = list.filter((s) => classMatch(className, s.className || s.currentClassName));
-    if (filtered.length) list = filtered;
-  }
-  if (list.length === 0) return { status: "none" };
-  if (list.length === 1) return { status: "one", student: list[0] };
-  return { status: "many", candidates: list.slice(0, 6) };
+// ── Read-only allowlist ───────────────────────────────────────────────────────
+// A path is callable iff its first segment is a readable module AND it doesn't hit a
+// sensitive/binary fragment. apiGet is GET-only, so writes are already unreachable; this
+// fence just keeps the model off login credentials, per-child family (`/me`) routes, and
+// binary file/image/receipt endpoints that are useless to speak anyway.
+const READ_PREFIXES = new Set([
+  "students", "attendance", "timetable", "classes", "academic-years", "homework", "syllabus",
+  "transport", "library", "fine", "medical", "employees", "assembly", "communication",
+  "transfer", "shop", "uniform", "lab", "sports", "supplies", "asset", "hiring",
+]);
+const DENY: RegExp[] = [
+  /\/credentials(\/|\?|$)/,
+  /\/me(\/|\?|$)/,
+  /\/images?(\/|\?|$)/,
+  /\/photos?(\/|\?|$)/,
+  /\/files?(\/|\?|$)/,
+  /\/evidence(\/|\?|$)/,
+  /\/bill(\/|\?|$)/,
+  /\/receipt(\/|\?|$)/,
+  /\/export(\/|\?|$)/,
+  /\/source(\/|\?|$)/,
+  /\/docs?\/[^/]+\/file/,
+  /\/documents?\/[^/]+\/file/,
+];
+function allowedPath(path: string): boolean {
+  if (typeof path !== "string" || !path.startsWith("/")) return false;
+  const seg = path.slice(1).split(/[/?#]/)[0];
+  if (!READ_PREFIXES.has(seg)) return false;
+  return !DENY.some((re) => re.test(path));
 }
 
-// ── Load the full context for a resolved student (parallel fan-out) ───────────
-async function loadContext(auth: AskAuth, schoolId: string, student: any): Promise<StudentContext> {
-  const id = student.uuid;
-  const ay = await getCurrentAcademicYearId(schoolId);
-  const detail = await apiGet(auth, `/students/${id}`);
-  const effClassId = detail.currentEffectiveClassId || detail.currentClassId;
-  const [attendance, today, classSubjects] = await Promise.all([
-    apiGet(auth, `/attendance/student/${id}${ay ? `?academicYearId=${ay}` : ""}`).catch(() => null),
-    effClassId ? apiGet(auth, `/timetable/today?classId=${effClassId}`).catch(() => null) : Promise.resolve(null),
-    effClassId ? apiGet(auth, `/timetable/class-subjects?classId=${effClassId}${ay ? `&academicYearId=${ay}` : ""}`).catch(() => null) : Promise.resolve(null),
-  ]);
+// ── The API menu handed to Claude (compact; it may call any readable GET, not just these) ──
+function apiMenu(ay: string | null): string {
+  return [
+    "You can call these read-only endpoints via apiGet(path). The school is fixed for you — never put a school code in the path.",
+    ay ? `Current academic year id = "${ay}" — pass it as academicYearId where an endpoint accepts one (most default to the current year if omitted).` : "",
+    "STUDENTS:",
+    "  /students/omni-search?q={text}  — fuzzy search by student/parent/phone/admission. Returns ranked students (uuid, name, className, fatherName). START HERE to find a student.",
+    "  /students/search?name=&classId=&academicYearId=&admissionNumber=&phone=  — structured roster search.",
+    "  /students/{id}  — full 360 detail: guardians (names + mobile/whatsapp, masked unless you have contact access), siblings, addresses, house, classTeacher{name,subjects}, currentClassName/RollNumber/admissionNumber, currentEffectiveClassId.",
+    "  /students/{id}/guardians | /siblings | /addresses  — those sections alone.",
+    "  /students/class-strength?academicYearId=  — per-class head counts.",
+    "  /students/houses , /students/houses/{id}/teachers  — houses.",
+    "ATTENDANCE:  /attendance/student/{id}?academicYearId=&from=&to=  — a student's summary{present,absent,late,leave,total,percent} + days.",
+    "TIMETABLE:  /timetable/today?classId={effectiveClassId}  — today's periods for a class.  /timetable/now?classId=  — current period.  /timetable/class-subjects?classId=&academicYearId=  — subjects for a class.  /timetable/class-teachers , /timetable/teaching-assignments.",
+    "CLASSES:  /classes/search?name=&academicYearId=  — resolve a class name to its uuid.  /classes/streams?baseClassId=.",
+    "LIBRARY:  /library/borrowers/student/{studentId}/loans  — books a student has out.  /library/fines.",
+    "TRANSPORT:  /transport/reports/student/{studentId}?academicYearId=  — a student's route + stop.",
+    "DISCIPLINE/FINES:  /fine/incidents  (filterable) , /fine/incidents/{id}.",
+    "MEDICAL:  /medical/issues  — dispensing log (filterable).",
+    "HOMEWORK:  /homework/day?classId=&date=YYYY-MM-DD.",
+    "SYLLABUS:  /syllabus/syllabi , /syllabus/syllabi/{id}/progress  — coverage.",
+    "STAFF:  /employees/search?name= , /employees/{id}.",
+    "ASSEMBLY:  /assembly/plans , /assembly/leaderboard.",
+    "Other read endpoints across shop/uniform/lab/sports/supplies/asset/hiring/transfer/communication are also available. To answer about a student you almost always: omni-search -> pick the uuid -> /students/{id} (+ attendance/timetable/etc. as the question needs).",
+  ].filter(Boolean).join("\n");
+}
 
+// ── Build the UI summary card from whatever parts were fetched this turn ───────
+function buildCard(id: string, parts: { detail?: any; attendance?: any; today?: any; classSubjects?: any }): StudentCard | null {
+  const detail = parts.detail;
+  if (!detail || !detail.name) return null;
   const guardians = (detail.guardians || []).map((g: any) => ({
     relation: g.relation, name: g.name || null, mobile: g.mobile || null, whatsapp: g.whatsapp || null,
   }));
@@ -122,16 +153,15 @@ async function loadContext(auth: AskAuth, schoolId: string, student: any): Promi
     name: s.name || s.siblingName, className: s.className || null, relation: s.relation || s.relationship || null,
   }));
   const primaryAddr = (detail.addresses || []).find((a: any) => a.isPrimary) || (detail.addresses || [])[0] || null;
-  const subjects = asArray(classSubjects, "subjects", "results").map((r: any) => r.subjectName).filter(Boolean);
-  const todayPeriods = (today?.slots || [])
+  const subjects = asArray(parts.classSubjects, "subjects", "results").map((r: any) => r.subjectName).filter(Boolean);
+  const todayPeriods = (parts.today?.slots || [])
     .filter((sl: any) => (sl.entries || []).length > 0)
     .map((sl: any) => ({ subject: sl.entries[0].subjectName, teacher: sl.entries[0].teacherName || null, start: sl.startTime || null }));
-
   return {
     studentId: id,
     name: detail.name,
-    className: detail.currentClassName || student.className || null,
-    roll: detail.currentRollNumber ?? student.rollNumber ?? null,
+    className: detail.currentClassName || null,
+    roll: detail.currentRollNumber ?? null,
     admissionNumber: detail.admissionNumber || null,
     house: detail.houseName || null,
     guardians,
@@ -139,79 +169,134 @@ async function loadContext(auth: AskAuth, schoolId: string, student: any): Promi
     address: primaryAddr ? [primaryAddr.line1, primaryAddr.line2, primaryAddr.city, primaryAddr.pincode].filter(Boolean).join(", ") || primaryAddr.address || null : null,
     classTeacher: detail.classTeacher ? { name: detail.classTeacher.name || null, teaches: detail.classTeacher.subjects || null } : null,
     subjects,
-    attendance: attendance?.summary || null,
+    attendance: parts.attendance?.summary || null,
     today: todayPeriods,
   };
 }
 
-// ── Claude: answer from context, or request a (different) student ─────────────
-type Route = { action: "answer"; text: string } | { action: "lookup"; name: string; className: string | null };
-
-async function route(question: string, context: StudentContext | null): Promise<Route> {
-  const system = [
-    "You are a concise school office assistant for the school manager, answering aloud.",
-    context
-      ? `You are currently discussing this student. Use ONLY this data (numbers may be masked — if a value is masked or absent, say it's restricted; never invent facts):\n${JSON.stringify(context)}`
-      : "No student is loaded yet.",
-    "If the manager's message can be answered about the current student, call answer() with a natural 1–2 sentence spoken reply.",
-    "If the manager is naming a different or not-yet-loaded student (a person and/or a class), call lookup() with the name and class you heard.",
-  ].join("\n\n");
-
-  const msg = await llm().messages.create({
-    model: MODEL,
-    max_tokens: 500,
-    system,
-    tools: [
-      { name: "answer", description: "Speak the answer about the current student.", input_schema: { type: "object", properties: { text: { type: "string" } }, required: ["text"] } },
-      { name: "lookup", description: "Look up a (different) student by name and, if given, class.", input_schema: { type: "object", properties: { name: { type: "string" }, className: { type: ["string", "null"] } }, required: ["name"] } },
-    ],
-    tool_choice: { type: "any" },
-    messages: [{ role: "user", content: question }],
-  });
-  const tu: any = msg.content.find((c: any) => c.type === "tool_use");
-  if (!tu) return { action: "answer", text: "Sorry, I didn't catch that — could you say it again?" };
-  if (tu.name === "lookup") return { action: "lookup", name: String(tu.input?.name || "").trim(), className: tu.input?.className || null };
-  return { action: "answer", text: String(tu.input?.text || "").trim() || "I don't have that information." };
+// Keep the carried history bounded AND valid: trim to the last HISTORY_CAP messages, then drop
+// from the front until the first message is a plain user-text turn (so we never begin on an
+// orphan tool_result whose matching tool_use was trimmed away — Claude rejects that).
+function trimHistory(msgs: any[]): any[] {
+  let out = msgs.slice(-HISTORY_CAP);
+  while (out.length && !(out[0].role === "user" && typeof out[0].content === "string")) out = out.slice(1);
+  return out;
 }
 
-function disambiguationSpeech(name: string, className: string | null, cands: any[]): string {
-  const list = cands.map((c) => `${c.name}${c.rollNumber != null ? `, roll ${c.rollNumber}` : ""}${c.admissionNumber ? `, admission ${c.admissionNumber}` : ""}`).join("; ");
-  return `There are ${cands.length} students named ${name}${className ? ` in ${className}` : ""}: ${list}. Which one?`;
-}
-
+// ── Orchestration: Claude drives apiGet/answer over the manager's permitted read surface ──
 export async function ask(auth: AskAuth, schoolId: string, input: AskInput): Promise<AskResult> {
-  // Explicit student pick (from a disambiguation list): load + answer directly.
-  if (input.studentId) {
-    const ctx = await loadContext(auth, schoolId, { uuid: input.studentId });
-    const a = await route(input.question || "Give me a summary", ctx);
-    const speech = a.action === "answer" ? a.text : `This is ${ctx.name}, class ${ctx.className || "unknown"}.`;
-    return { speech, card: ctx, context: ctx };
-  }
+  const lang: "en" | "hi" = input.lang === "hi" ? "hi" : "en";
+  const ay = await getCurrentAcademicYearId(schoolId).catch(() => null);
+  const prior = input.context || null;
 
-  const context = input.context || null;
-  const r = await route(input.question, context);
+  const system = [
+    "You are a concise school office assistant for the school manager. Answer spoken questions about students, classes and school operations, then call answer() with a natural 1–2 sentence reply suitable to be read aloud.",
+    lang === "hi" ? "Reply in natural Hindi using Devanagari script (keep names and numbers exactly as-is)." : "",
+    "Use ONLY data returned by apiGet — never invent facts. Contact numbers come back masked unless the manager has contact access; if a value is masked or absent, say it's restricted or unavailable.",
+    "When the manager names a class along with the name, filter to that class yourself — do not ask them to re-confirm the class. Only ask which student if genuinely more than one matches.",
+    prior?.focusStudentId ? `Student currently under discussion: ${prior.focusName || "(unknown)"} — uuid ${prior.focusStudentId}. Follow-up questions are about this student unless a new name is given; you may call their endpoints with this uuid directly.` : "",
+    apiMenu(ay),
+  ].filter(Boolean).join("\n\n");
 
-  if (r.action === "answer") {
-    return { speech: r.text, context };
-  }
+  const tools: any[] = [
+    {
+      name: "apiGet",
+      description: "Fetch one read-only endpoint. `path` must start with '/' and include any query string, e.g. /students/omni-search?q=aarav . Returns the JSON body (or an {error} object).",
+      input_schema: { type: "object", properties: { path: { type: "string" } }, required: ["path"] },
+    },
+    {
+      name: "answer",
+      description: "Give the final spoken answer to the manager. Set studentId to the uuid of the student the answer is about (if any), so the app can show their card.",
+      input_schema: { type: "object", properties: { text: { type: "string" }, studentId: { type: ["string", "null"] } }, required: ["text"] },
+    },
+  ];
 
-  // lookup a (new) student
-  if (!r.name) return { speech: "Which student would you like to know about? Please say the name and class.", context };
-  const resolved = await resolveStudent(auth, schoolId, r.name, r.className);
-  if (resolved.status === "none") {
-    return { speech: `I couldn't find a student named ${r.name}${r.className ? ` in class ${r.className}` : ""}.`, context: null };
-  }
-  if (resolved.status === "many") {
+  const messages: any[] = trimHistory([...(prior?.history || [])]);
+  messages.push({ role: "user", content: input.question });
+
+  // Parts captured this turn, keyed by student uuid, used to render the card.
+  const captured: Record<string, { detail?: any; attendance?: any; today?: any; classSubjects?: any }> = {};
+  const stash = (id: string, key: "detail" | "attendance" | "today" | "classSubjects", val: any) => {
+    (captured[id] = captured[id] || {})[key] = val;
+  };
+  let lastDetailId: string | null = null;
+
+  const finish = (text: string, studentId: string | null): AskResult => {
+    const focusId = studentId || lastDetailId || prior?.focusStudentId || null;
+    const card = focusId && captured[focusId]?.detail ? buildCard(focusId, captured[focusId]) : undefined;
+    const focusName = card?.name || (focusId === prior?.focusStudentId ? prior?.focusName : null) || null;
+    // Normalise the carried transcript so it's a VALID conversation to resume next turn:
+    // it must end with a plain-text assistant turn (never a dangling `answer` tool_use that
+    // has no tool_result after it, and never a trailing user tool_result). We keep the real
+    // tool_use/tool_result exchanges (so follow-ups don't re-fetch) but cap the transcript.
+    const hist = messages.slice();
+    const last = hist[hist.length - 1];
+    if (last && last.role === "assistant" && Array.isArray(last.content) && last.content.some((c: any) => c.type === "tool_use")) {
+      hist[hist.length - 1] = { role: "assistant", content: text }; // drop the dangling answer tool_use
+    } else if (!last || last.role !== "assistant") {
+      hist.push({ role: "assistant", content: text }); // close an exhausted-hops turn cleanly
+    }
     return {
-      speech: disambiguationSpeech(r.name, r.className, resolved.candidates),
-      needsDisambiguation: true,
-      candidates: resolved.candidates.map((c) => ({ studentId: c.uuid, name: c.name, className: c.className || null, roll: c.rollNumber ?? null, admissionNumber: c.admissionNumber || null })),
-      context: null,
+      speech: text,
+      card,
+      context: { history: trimHistory(hist), focusStudentId: focusId, focusName },
     };
+  };
+
+  for (let hop = 0; hop < MAX_HOPS; hop++) {
+    const msg = await llm().messages.create({
+      model: MODEL,
+      max_tokens: 700,
+      system,
+      tools,
+      tool_choice: { type: "any" },
+      messages,
+    });
+    messages.push({ role: "assistant", content: msg.content });
+
+    const toolUses = (msg.content as any[]).filter((c) => c.type === "tool_use");
+    const ansCall = toolUses.find((t) => t.name === "answer");
+    if (ansCall) {
+      const text = String(ansCall.input?.text || "").trim() || (lang === "hi" ? "क्षमा करें, वह जानकारी उपलब्ध नहीं है." : "Sorry, I don't have that information.");
+      return finish(text, ansCall.input?.studentId || null);
+    }
+    if (toolUses.length === 0) {
+      // Model replied with plain text — treat it as the answer.
+      const text = (msg.content as any[]).filter((c) => c.type === "text").map((c) => c.text).join(" ").trim();
+      return finish(text || (lang === "hi" ? "क्षमा करें, मैं समझ नहीं पाया." : "Sorry, I didn't catch that."), null);
+    }
+
+    // Execute every apiGet in this hop, appending a tool_result for each (required by Claude).
+    const results: any[] = [];
+    for (const t of toolUses) {
+      let out: any;
+      const path = String(t.input?.path || "");
+      if (!allowedPath(path)) {
+        out = { error: "path not allowed", note: "Only read-only endpoints are permitted." };
+      } else {
+        out = await apiGet(auth, path);
+        // Capture student parts for the card.
+        const detailM = path.match(/^\/students\/([a-z0-9]+)(\?|$)/i);
+        const attM = path.match(/^\/attendance\/student\/([a-z0-9]+)/i);
+        if (detailM && !out?.error) { stash(detailM[1], "detail", out); lastDetailId = detailM[1]; }
+        else if (attM && !out?.error) stash(attM[1], "attendance", out);
+        else if (/^\/timetable\/today\?/.test(path) && !out?.error && lastDetailId) stash(lastDetailId, "today", out);
+        else if (/^\/timetable\/class-subjects\?/.test(path) && !out?.error && lastDetailId) stash(lastDetailId, "classSubjects", out);
+      }
+      let content = JSON.stringify(out);
+      if (content.length > RESULT_CAP) content = content.slice(0, RESULT_CAP) + '…"[truncated]"';
+      results.push({ type: "tool_result", tool_use_id: t.id, content });
+    }
+    messages.push({ role: "user", content: results });
   }
 
-  const ctx = await loadContext(auth, schoolId, resolved.student);
-  const answer = await route(input.question, ctx);
-  const speech = answer.action === "answer" ? answer.text : `This is ${ctx.name}, class ${ctx.className || "unknown"}.`;
-  return { speech, card: ctx, context: ctx };
+  // Ran out of hops — ask Claude for a best-effort answer from what it has (no tools).
+  const wrap = await llm().messages.create({
+    model: MODEL,
+    max_tokens: 400,
+    system: system + "\n\nYou have gathered enough. Give the final spoken answer now in plain text.",
+    messages,
+  });
+  const text = (wrap.content as any[]).filter((c) => c.type === "text").map((c) => c.text).join(" ").trim();
+  return finish(text || (lang === "hi" ? "क्षमा करें, वह जानकारी उपलब्ध नहीं है." : "Sorry, I couldn't find that."), null);
 }
