@@ -1,0 +1,22 @@
+  # Health check
+  health:
+    handler: health-handler.health
+    events:
+      - http:
+          path: health
+          method: get
+          cors: true
+
+  # Conversational student assistant — resolves a student, loads a context (student
+  # detail + attendance + timetable, with the manager's JWT forwarded), and answers
+  # via the LLM. Bigger memory/timeout: it makes up to 2 LLM calls + a data fan-out.
+  ask:
+    handler: assistant-handler.ask
+    name: ${self:service}-ask
+    memorySize: 512
+    timeout: 28
+    events:
+      - http:
+          path: ask
+          method: post
+          cors: true

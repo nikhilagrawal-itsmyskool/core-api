@@ -44,7 +44,7 @@ Profile: `prod-itsmyskool-nikhil.agrawal` · Region: `ap-south-1`. No `reservedC
 | `npm run stop:<module>` | Stop module |
 | `npm run test:<module>:full` | Full cycle: stop → start → test → stop |
 
-Available modules: `auth`, `medical`, `lab`, `sample`, `student`, `employee`, `class`, `academic-year`, `fine`, `uniform`, `shop`, `sports`, `asset`, `library`, `supplies`, `timetable`, `attendance`, `communication`, `transport`, `assembly`, `syllabus`, `homework`
+Available modules: `auth`, `medical`, `lab`, `sample`, `student`, `employee`, `class`, `academic-year`, `fine`, `uniform`, `shop`, `sports`, `asset`, `library`, `supplies`, `timetable`, `attendance`, `communication`, `transport`, `assembly`, `syllabus`, `homework`, `assistant`
 
 > These always run on `local` stage (hardcoded in `start-module.js`). Stage cannot be changed for individual module commands.
 
@@ -122,6 +122,7 @@ Each module runs on dedicated ports to allow simultaneous local development:
 | assembly      | 3041      | 3042        | /assembly/*       |
 | syllabus      | 3043      | 3044        | /syllabus/*       |
 | homework      | 3045      | 3046        | /homework/*       |
+| assistant     | 3047      | 3048        | /assistant/*      |
 | gateway       | 3000      | -           | (routes all)      |
 
 #### Prod Stage
@@ -150,6 +151,7 @@ Each module runs on dedicated ports to allow simultaneous local development:
 | assembly      | 6041      | 6042        |
 | syllabus      | 6043      | 6044        |
 | homework      | 6045      | 6046        |
+| assistant     | 6047      | 6048        |
 | gateway       | 6000      | -           |
 
 ### Scripts Organization

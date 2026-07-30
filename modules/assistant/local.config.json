@@ -1,0 +1,5 @@
+{
+  "httpPort": 3047,
+  "lambdaPort": 3048,
+  "prefix": "assistant"
+}

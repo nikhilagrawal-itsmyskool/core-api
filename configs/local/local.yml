@@ -23,3 +23,6 @@ MSG91_AUTH_KEY: ''
 MSG91_SMS_SENDER: ''
 MSG91_WHATSAPP_NUMBER: ''
 MSG91_DEFAULT_COUNTRY_CODE: '91'
+
+# Voice/LLM assistant (modules/assistant). Fill to test the /assistant/ask flow.
+ANTHROPIC_API_KEY: ''
