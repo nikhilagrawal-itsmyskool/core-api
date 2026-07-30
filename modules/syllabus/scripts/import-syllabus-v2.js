@@ -287,6 +287,11 @@ function parseDoc(file) {
           else addPages(curChapter, pages); // continuation row of the same chapter → extend its page span
         } else if (key && chapterMap.has(key)) { curChapter = chapterMap.get(key); addPages(curChapter, pages); }
         else if (!RX_CONT.test(c1)) { curChapter = add({ parent: null, type: 'chapter', month: curMonth, heading: c1, pageRef: pages }); if (key) chapterMap.set(key, curChapter); }
+      } else if (curChapter) {
+        // Blank chapter cell = continuation of the current chapter (same assumption
+        // that already routes this row's items to curChapter). Extend its page span:
+        // Ch-2 "9-13" then a later blank row "14-16" -> "9-16".
+        addPages(curChapter, pages);
       }
       if (curChapter) {
         for (const comp of compIdx) {
