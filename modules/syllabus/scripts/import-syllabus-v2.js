@@ -175,10 +175,12 @@ function parseDoc(file) {
   const add = (n) => { nodes.push({ tmp: nodes.length + 1, seq: seq++, ...n }); return nodes[nodes.length - 1].tmp; };
 
   if (isReasoning) {
-    // 3 parallel tracks: [1,2] Verbal, [3,4] Non-Verbal, [5,6] Quantitative.
+    // 3 parallel column-tracks: [1,2] Verbal, [3,4] Non-Verbal, [5,6] Quantitative.
+    // Each track is modelled as a COMPONENT (mirroring how the wide layout treats
+    // its columns), and each cell's chapter is a flat chapter row tagged with that
+    // component — no unit nesting, so coverage sits directly on the chapter (leaf).
     const tracks = [{ ci: 1, pi: 2, name: joinCell(hdr[1]) || 'Verbal' }, { ci: 3, pi: 4, name: joinCell(hdr[3]) || 'Non-Verbal' }, { ci: 5, pi: 6, name: joinCell(hdr[5]) || 'Quantitative' }];
-    const unitTmp = {};
-    for (const t of tracks) unitTmp[t.ci] = add({ parent: null, type: 'unit', month: null, heading: t.name, pageRef: null });
+    const components = tracks.map((t) => ({ key: t.name.toLowerCase().replace(/\s+/g, '_').slice(0, 48), label: t.name }));
     let curMonth = null;
     for (let r = hi + 1; r < rows.length; r++) {
       const c = rows[r];
@@ -186,11 +188,12 @@ function parseDoc(file) {
       for (const t of tracks) {
         const ch = joinCell(c[t.ci]);
         if (isBlank(ch)) continue;
-        if (RX_STRUCT.test(ch)) { add({ parent: unitTmp[t.ci], type: structType(ch), month: curMonth, heading: ch, pageRef: extractPage(ch) || joinCell(c[t.pi]) || null }); continue; }
-        add({ parent: unitTmp[t.ci], type: 'topic', month: curMonth, heading: ch, pageRef: joinCell(c[t.pi]) || null });
+        const pageRef = joinCell(c[t.pi]) || extractPage(ch) || null;
+        const type = RX_STRUCT.test(ch) ? structType(ch) : 'chapter';
+        add({ parent: null, type, component: t.name, month: curMonth, heading: ch, pageRef });
       }
     }
-    return { file, subject, grade, layoutType: 'reasoning', components: [], nodes };
+    return { file, subject, grade, layoutType: 'reasoning', components, nodes };
   }
 
   if (isGk) {
@@ -231,7 +234,24 @@ function parseDoc(file) {
   const components = [];
   const seenComp = new Set();
   const chapterMap = new Map(); // normalized chapter name -> chapter tmp id
-  const normName = (s) => (s || '').toLowerCase().replace(/continue.*$/i, '').replace(/\(.*?\)/g, '').replace(/[^a-z0-9]/g, '').slice(0, 40);
+  // Keep letters/digits of ANY script (Devanagari included) — the old [^a-z0-9]
+  // stripped all Hindi chars to '', collapsing every chapter key to empty so
+  // secondary tables never matched and got duplicated as new chapters.
+  const normName = (s) => (s || '').toLowerCase().replace(/continue.*$/i, '').replace(/\(.*?\)/g, '').replace(/[^\p{L}\p{N}]/gu, '').slice(0, 40);
+  // When a chapter is split across rows (a "Continue" row, or a secondary table),
+  // merge the row's pages into the chapter's span: 64-67 + 68-74 -> 64-74. Falls
+  // back to whichever side has content when the other has no digits.
+  const mergePages = (a, b) => {
+    const nums = `${a || ''} ${b || ''}`.match(/\d+/g);
+    if (!nums || !nums.length) return a || b || null;
+    const lo = Math.min(...nums.map(Number)), hi = Math.max(...nums.map(Number));
+    return lo === hi ? String(lo) : `${lo}-${hi}`;
+  };
+  const addPages = (chapTmp, pages) => {
+    if (!pages) return;
+    const chap = nodes.find((n) => n.tmp === chapTmp);
+    if (chap) chap.pageRef = mergePages(chap.pageRef, pages);
+  };
 
   const processTable = (ti, isPrimary) => {
     const { t, hi: thi, hdr: th, pagesIdx: tpi } = ti;
@@ -264,7 +284,8 @@ function parseDoc(file) {
         const key = normName(c1);
         if (isPrimary) {
           if (!RX_CONT.test(c1) || !curChapter) { curChapter = add({ parent: curUnit, type: 'chapter', month: curMonth, heading: c1, pageRef: pages }); if (key) chapterMap.set(key, curChapter); }
-        } else if (key && chapterMap.has(key)) { curChapter = chapterMap.get(key); }
+          else addPages(curChapter, pages); // continuation row of the same chapter → extend its page span
+        } else if (key && chapterMap.has(key)) { curChapter = chapterMap.get(key); addPages(curChapter, pages); }
         else if (!RX_CONT.test(c1)) { curChapter = add({ parent: null, type: 'chapter', month: curMonth, heading: c1, pageRef: pages }); if (key) chapterMap.set(key, curChapter); }
       }
       if (curChapter) {
