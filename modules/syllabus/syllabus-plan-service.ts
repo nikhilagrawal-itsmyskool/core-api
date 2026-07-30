@@ -297,7 +297,7 @@ class SyllabusPlanService {
     const params: any[] = [schoolId];
     let query = singleLineString`
       select s.uuid, s.school_id, s.academic_year_id, s.grade, s.stream_code, s.subject_id,
-             s.book, s.layout, s.note, s.status, sub.name as subject_name
+             s.book, s.layout, s.note, s.status, s.created_at, s.updated_at, sub.name as subject_name
       from syllabus s
       left join syllabus_subject sub on sub.uuid = s.subject_id
       where s.school_id = $1 and s.status = 'active'
