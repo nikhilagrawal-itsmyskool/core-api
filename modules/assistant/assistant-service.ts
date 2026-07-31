@@ -125,7 +125,7 @@ function apiMenu(ay: string | null): string {
     "  /students/search?name=&classId=&academicYearId=&admissionNumber=&phone=  — structured roster search.",
     "  /students/{id}  — full 360 detail: guardians (names + mobile/whatsapp, masked unless you have contact access), siblings, addresses, house, classTeacher{name,subjects}, currentClassName/RollNumber/admissionNumber, currentEffectiveClassId.",
     "  /students/{id}/guardians | /siblings | /addresses  — those sections alone.",
-    "  /students/class-strength?academicYearId=  — per-class head counts.",
+    "  /students/class-strength?academicYearId=  — returns totalStrength (whole-school active head-count), classCount, and per-class strengths. Use totalStrength directly for 'how many students in the school' — never add the per-class numbers yourself.",
     "  /students/houses , /students/houses/{id}/teachers  — houses.",
     "ATTENDANCE:  /attendance/student/{id}?academicYearId=&from=&to=  — a student's summary{present,absent,late,leave,total,percent} + days.",
     "TIMETABLE:  /timetable/today?classId={effectiveClassId}  — today's periods for a class.  /timetable/now?classId=  — current period.  /timetable/class-subjects?classId=&academicYearId=  — subjects for a class.  /timetable/class-teachers , /timetable/teaching-assignments.",
@@ -193,6 +193,8 @@ export async function ask(auth: AskAuth, schoolId: string, input: AskInput): Pro
     "You are a concise school office assistant for the school manager. Answer spoken questions about students, classes and school operations, then call answer() with a natural 1–2 sentence reply suitable to be read aloud.",
     lang === "hi" ? "Reply in natural Hindi using Devanagari script (keep names and numbers exactly as-is)." : "",
     "Use ONLY data returned by apiGet — never invent facts. Contact numbers come back masked unless the manager has contact access; if a value is masked or absent, say it's restricted or unavailable.",
+    "When you state a phone number, write it as a plain unbroken digit string with no spaces, dashes or brackets (e.g. 8887781104) so the app can read it out digit by digit.",
+    "Never sum or count large lists in your head — if an endpoint gives you a total or a count field, use it verbatim.",
     "When the manager names a class along with the name, filter to that class yourself — do not ask them to re-confirm the class. Only ask which student if genuinely more than one matches.",
     prior?.focusStudentId ? `Student currently under discussion: ${prior.focusName || "(unknown)"} — uuid ${prior.focusStudentId}. Follow-up questions are about this student unless a new name is given; you may call their endpoints with this uuid directly.` : "",
     apiMenu(ay),
@@ -275,6 +277,13 @@ export async function ask(auth: AskAuth, schoolId: string, input: AskInput): Pro
         out = { error: "path not allowed", note: "Only read-only endpoints are permitted." };
       } else {
         out = await apiGet(auth, path);
+        // Class-strength: compute the exact whole-school total in code (the model must not
+        // add 30+ numbers, and the raw per-class payload is big enough to hit RESULT_CAP).
+        // Mirrors the Class Strength screen (sum of activeStrength across all rows).
+        if (/^\/students\/class-strength(\?|$)/.test(path) && !out?.error) {
+          const classes = asArray(out, "classes", "results").map((r: any) => ({ className: r.className, strength: Number(r.activeStrength || 0) }));
+          out = { totalStrength: classes.reduce((s: number, c: any) => s + c.strength, 0), classCount: classes.length, classes };
+        }
         // Capture student parts for the card.
         const detailM = path.match(/^\/students\/([a-z0-9]+)(\?|$)/i);
         const attM = path.match(/^\/attendance\/student\/([a-z0-9]+)/i);
