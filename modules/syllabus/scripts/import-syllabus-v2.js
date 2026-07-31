@@ -19,6 +19,12 @@
  *   node import-syllabus-v2.js --dir "H:/syllabus" --grade VIII --stage local --school-code DBPASN --academic-session 2026-27
  *   node import-syllabus-v2.js --dir "H:/syllabus" --grade VIII --dry-run     # parse + print, no writes
  */
+// This script writes created_at/updated_at directly (via `new Date()`), and pg
+// serialises a Date using the process timezone. The Lambda runs in UTC and the
+// UI reads these columns as UTC, so we MUST write UTC too — otherwise running
+// from an IST machine stores IST wall-clock and the UI shows it +5:30. Force UTC
+// here (before any require touches Date) so uploads match the app convention.
+process.env.TZ = 'UTC';
 const fs = require('fs');
 const path = require('path');
 const zlib = require('zlib');
