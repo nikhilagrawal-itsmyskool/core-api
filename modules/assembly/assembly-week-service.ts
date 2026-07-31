@@ -22,10 +22,11 @@ const weekdayOf = (dateStr: string): Weekday => DOW[parse(dateStr).getUTCDay()];
 // The date of a weekday within a Monday-anchored week (mon..sun order).
 const dateInWeek = (weekStart: string, wd: Weekday) => addDays(weekStart, WEEKDAY_VALUES.indexOf(wd));
 
-// The submission deadline: 14:00 on the Wednesday of the week immediately before
-// (Monday - 5 days). NOTE: stored/compared as UTC 14:00; refine to school-local
-// time when the reminder/notify scheduler (deferred) lands.
-const deadlineFor = (weekStart: string) => new Date(`${addDays(weekStart, -5)}T14:00:00Z`);
+// The submission deadline: Thursday 01:00 IST on the week immediately before —
+// i.e. Wednesday (Monday - 5 days) 19:30 UTC, which is 01:00 IST the next day.
+// Stored/compared as UTC; hard-coded to IST since this is a single-tenant IST
+// school. Refine to school-local time when the notify scheduler (deferred) lands.
+const deadlineFor = (weekStart: string) => new Date(`${addDays(weekStart, -5)}T19:30:00Z`);
 
 const WEEK_COLS = singleLineString`
   uuid, plan_id, academic_year_id, week_start::text as week_start, house_id, house_name,
