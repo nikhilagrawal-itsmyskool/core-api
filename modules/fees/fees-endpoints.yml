@@ -267,6 +267,11 @@
     name: ${self:service}-daily-collection
     events:
       - http: { path: 'reports/daily-collection', method: get, cors: true }
+  overview:
+    handler: fees-report-handler.overview
+    name: ${self:service}-overview
+    events:
+      - http: { path: 'reports/overview', method: get, cors: true }
 
   # ---- Migration ----
   migration-import:
