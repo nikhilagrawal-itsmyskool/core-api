@@ -13,7 +13,7 @@ interface Allocation { ledgerId: string; amount: number; }
 interface CollectRequest {
   studentId: string; academicYearId: string; receiptDate?: string;
   paymentMode?: string; receivedFrom?: string; txnRef?: string; remarks?: string;
-  type?: string; allocations: Allocation[];
+  type?: string; allocations: Allocation[]; advanceApplied?: number;
 }
 
 class FeesReceiptService {
@@ -55,7 +55,7 @@ class FeesReceiptService {
     const paidBy: Record<string, number> = {};
     credits.forEach((r) => (paidBy[r.settlesEntryId] = n(r.paid)));
 
-    let totalPaid = 0; let totalDue = 0;
+    let settled = 0; let totalDue = 0;
     for (const a of body.allocations) {
       const c = chargeById[a.ledgerId];
       if (!c) throw new BadRequestResult(ErrorCode.InvalidId, `Charge not found: ${a.ledgerId}`);
@@ -63,8 +63,24 @@ class FeesReceiptService {
       if (!(a.amount > 0)) throw new BadRequestResult(ErrorCode.InvalidInput, 'Allocation amount must be positive');
       if (a.amount > remaining + 0.001)
         throw new BadRequestResult(ErrorCode.InvalidInput, `Allocation ${money(a.amount)} exceeds remaining ${money(remaining)} on a component`);
-      totalPaid += a.amount; totalDue += remaining;
+      settled += a.amount; totalDue += remaining;
     }
+
+    // advance drawdown: fund part of `settled` from the student's existing advance credit.
+    const advanceApplied = n(body.advanceApplied);
+    if (advanceApplied < 0) throw new BadRequestResult(ErrorCode.InvalidInput, 'advanceApplied cannot be negative');
+    if (advanceApplied > 0) {
+      if (advanceApplied > settled + 0.001)
+        throw new BadRequestResult(ErrorCode.InvalidInput, 'Advance applied cannot exceed the amount being settled');
+      const balRows: any[] = await DB.query(
+        singleLineString`select coalesce(sum(credit),0) - coalesce(sum(debit),0) as net from student_ledger_entry where school_id = $1 and student_id = $2 and academic_year_id = $3 and status = 'active'`,
+        [schoolId, body.studentId, body.academicYearId]
+      );
+      const advanceAvail = Math.max(0, n(balRows[0]?.net));
+      if (advanceApplied > advanceAvail + 0.001)
+        throw new BadRequestResult(ErrorCode.InvalidInput, `Advance applied ${money(advanceApplied)} exceeds available advance ${money(advanceAvail)}`);
+    }
+    const cash = settled - advanceApplied; // money actually received now
 
     const snap = await this.studentSnapshot(schoolId, body.studentId, body.academicYearId);
     const type = body.type && RECEIPT_SERIES[body.type as keyof typeof RECEIPT_SERIES] ? body.type : 'fee';
@@ -72,16 +88,16 @@ class FeesReceiptService {
     const receiptId = generateShortUuid(12);
     const now = new Date();
     const receiptDate = body.receiptDate || now.toISOString().slice(0, 10);
-    const balance = totalDue - totalPaid;
+    const balance = totalDue - settled;
 
     const queries: string[] = []; const params: any[][] = [];
     queries.push(singleLineString`
       insert into fee_receipt (uuid, school_id, academic_year_id, student_id, receipt_no, receipt_date, type,
-        payer_name, payer_class_snapshot, admission_no_snapshot, total_due, total_paid, balance, concession_total,
+        payer_name, payer_class_snapshot, admission_no_snapshot, total_due, total_paid, balance, concession_total, advance_applied,
         payment_mode, txn_ref, received_from, remarks, collected_by_userid, status, source, createdby_userid, created_at)
-      values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,0,$14,$15,$16,$17,$18,'active','native',$18,$19)`);
+      values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,0,$14,$15,$16,$17,$18,$19,'active','native',$19,$20)`);
     params.push([receiptId, schoolId, body.academicYearId, body.studentId, receiptNo, receiptDate, type,
-      snap.name || null, snap.className || null, snap.admissionNumber || null, totalDue, totalPaid, balance,
+      snap.name || null, snap.className || null, snap.admissionNumber || null, totalDue, cash, balance, advanceApplied,
       body.paymentMode || 'cash', body.txnRef || null, body.receivedFrom || null, body.remarks || null, userId, now]);
 
     for (const a of body.allocations) {
@@ -96,11 +112,20 @@ class FeesReceiptService {
       params.push([generateShortUuid(12), schoolId, body.studentId, body.academicYearId, receiptDate, c.category, c.feeHeadId, c.cycleId, c.headLabel, c.cycleLabel, a.amount, a.ledgerId, receiptId, userId, now]);
     }
 
+    // draw down the advance: an 'adjust' debit offsets the advance credit consumed, so the
+    // ledger's net credit rises only by the cash received (payments settled = cash + advance).
+    if (advanceApplied > 0) {
+      queries.push(singleLineString`
+        insert into student_ledger_entry (uuid, school_id, student_id, academic_year_id, entry_date, category, head_label, kind, debit, source_module, source_ref, allocation, status, createdby_userid, created_at)
+        values ($1,$2,$3,$4,$5,'fee','Advance applied','adjust',$6,'fees',$7,'explicit','active',$8,$9)`);
+      params.push([generateShortUuid(12), schoolId, body.studentId, body.academicYearId, receiptDate, advanceApplied, receiptId, userId, now]);
+    }
+
     await DB.queriesInTransaction(queries, params);
 
-    // fire-and-forget parent notification
+    // fire-and-forget parent notification (cash actually received)
     notifyReceipt(schoolCode, body.studentId, {
-      studentName: snap.name, receiptNo, amount: money(totalPaid), date: receiptDate,
+      studentName: snap.name, receiptNo, amount: money(cash), date: receiptDate,
     });
 
     return this.getById(schoolId, receiptId);
@@ -134,7 +159,7 @@ class FeesReceiptService {
     await DB.queriesInTransaction(
       [
         singleLineString`update fee_receipt set status = 'cancelled', cancel_reason = $3, cancelledby_userid = $4, cancelled_at = $5, updated_at = $5 where school_id = $1 and uuid = $2`,
-        singleLineString`update student_ledger_entry set status = 'cancelled', updatedby_userid = $3, updated_at = $4 where school_id = $1 and source_ref = $2 and kind = 'payment' and status = 'active'`,
+        singleLineString`update student_ledger_entry set status = 'cancelled', updatedby_userid = $3, updated_at = $4 where school_id = $1 and source_ref = $2 and kind in ('payment', 'adjust') and status = 'active'`,
       ],
       [
         [schoolId, receiptId, reason || null, userId, now],
@@ -172,7 +197,7 @@ class FeesReceiptService {
       fatherName: r.fatherName, paymentMode: r.paymentMode, receivedFrom: r.receivedFrom,
       collectedBy: r.collectedByUserid, remarks: r.remarks,
       lines: (r.lines || []).map((l: any) => ({ headLabel: l.headLabel, cycleLabel: l.cycleLabel, amount: n(l.amount) })),
-      totalPaid: n(r.totalPaid), balance: n(r.balance),
+      totalPaid: n(r.totalPaid), advanceApplied: n(r.advanceApplied), balance: n(r.balance),
     });
   }
 }

@@ -15,6 +15,7 @@ interface ReceiptData {
   remarks?: string | null;
   lines: { headLabel: string; cycleLabel?: string | null; amount: number }[];
   totalPaid: number;
+  advanceApplied?: number | null;
   balance?: number | null;
   amountInWords?: string | null;
 }
@@ -37,7 +38,8 @@ function copy(d: ReceiptData, label: string): string {
     </div>
     <table class="lines"><thead><tr><th>Particulars</th><th class="r">Amount (Rs.)</th></tr></thead>
       <tbody>${rows}</tbody>
-      <tfoot><tr><td class="r"><b>Total Paid</b></td><td class="r"><b>${money(d.totalPaid)}</b></td></tr>
+      ${d.advanceApplied ? `<tr><td class="r">Advance applied</td><td class="r">${money(d.advanceApplied)}</td></tr>` : ''}
+      <tfoot><tr><td class="r"><b>Total Paid${d.advanceApplied ? ' (cash)' : ''}</b></td><td class="r"><b>${money(d.totalPaid)}</b></td></tr>
       ${d.balance ? `<tr><td class="r">Balance</td><td class="r">${money(d.balance)}</td></tr>` : ''}</tfoot>
     </table>
     ${d.amountInWords ? `<div class="words"><b>In words:</b> ${esc(d.amountInWords)}</div>` : ''}

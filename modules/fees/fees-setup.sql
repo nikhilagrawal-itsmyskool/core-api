@@ -220,6 +220,8 @@ create unique index if not exists uq_fee_receipt_legacy on fee_receipt (school_i
 create index if not exists idx_fee_receipt_student on fee_receipt (school_id, student_id, academic_year_id);
 create index if not exists idx_fee_receipt_date on fee_receipt (school_id, receipt_date);
 create index if not exists idx_fee_receipt_collector on fee_receipt (school_id, collected_by_userid, receipt_date);
+-- advance drawn down at collection time (cash received = total_paid; advance_applied funds the rest)
+alter table fee_receipt add column if not exists advance_applied numeric(12,2);
 
 create table if not exists fee_receipt_line (
   uuid varchar(12) primary key,
