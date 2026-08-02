@@ -1,0 +1,170 @@
+{
+  "note": "incremental watermarks for SchoolPad fees extraction; watermark=highest print_view internalId already pulled per session per sweep",
+  "sessions": {
+    "2021-2022": 7,
+    "2022-2023": 8,
+    "2023-2024": 9,
+    "2024-2025": 10,
+    "2025-2026": 11,
+    "2026-2027": 12
+  },
+  "sweeps": {
+    "A_receipts": {
+      "2024-2025": {
+        "watermark": 15748,
+        "count": 4307,
+        "errors": 0,
+        "empties": 0,
+        "file": "A-2024-2025.ndjson",
+        "lastRun": "2026-08-01"
+      },
+      "2025-2026": {
+        "watermark": 18867,
+        "count": 3572,
+        "errors": 0,
+        "empties": 0,
+        "file": "A-2025-2026.ndjson",
+        "lastRun": "2026-08-01"
+      },
+      "2026-2027": {
+        "watermark": 18893,
+        "count": 1008,
+        "errors": 0,
+        "empties": 0,
+        "file": "A-2026-2027.ndjson",
+        "lastRun": "2026-08-01"
+      },
+      "2023-2024": {
+        "watermark": 11605,
+        "count": 4607,
+        "errors": 0,
+        "gridFound": 4609,
+        "file": "A-2023-2024.ndjson",
+        "partial": false,
+        "lastRun": "2026-08-01"
+      },
+      "2022-2023": {
+        "watermark": 9436,
+        "count": 4458,
+        "errors": 0,
+        "empties": 0,
+        "file": "A-2022-2023.ndjson",
+        "lastRun": "2026-08-01"
+      },
+      "2021-2022": {
+        "watermark": 0,
+        "count": 0,
+        "note": "school did not use SchoolPad fee collection in 2021-22 (Total Rs.0, no records)",
+        "partial": false,
+        "lastRun": "2026-08-01"
+      }
+    },
+    "B_adhoc": {
+      "_checked": "2026-08-01",
+      "_result": "EMPTY — DBPASN never used adhoc/general payments (all sessions: Total Rs.0 / No Records). The 1-3101-1 \"last receipt\" was a template placeholder."
+    },
+    "C_refunds": {
+      "_checked": "2026-08-01",
+      "_result": "EMPTY — security refund register unused (Any + Not-Refunded => NO DATA FOUND). Caution money is captured in Sweep A as the Caution Fee head; refunds never processed in SchoolPad."
+    },
+    "D_cancelled": {
+      "total": 693,
+      "perYear": {
+        "2022-2023": 89,
+        "2023-2024": 184,
+        "2024-2025": 245,
+        "2025-2026": 145,
+        "2026-2027": 30
+      },
+      "file": "D-cancelled.ndjson",
+      "note": "Cancelled/voided receipts (header-level: receiptNo, adm, class, mode, amount, cancelledBy/On). Separate from Sweep A (disjoint). No head breakdown (voided). 2021-22 empty.",
+      "lastRun": "2026-08-01"
+    },
+    "L_ledgers": {
+      "_note": "Per-student ledgers via studentInfo/printLedger/<internalStudentId> (id 1..~1180, session-bound). Gives charged(debit)+concessions+paid(credit)+outstanding balance + per-head/cycle entries. studentId=SchoolPad internal id; map to itsmyskool via admissionNo. Cross-checks receipts.",
+      "2026-2027": {
+        "students": 772,
+        "file": "L-2026-2027.ndjson",
+        "crosscheck": "572/572 paid-total match vs receipts",
+        "lastRun": "2026-08-01"
+      },
+      "2025-2026": {
+        "students": 678,
+        "file": "L-2025-2026.ndjson",
+        "crosscheck": "649/650 paid-total match vs receipts",
+        "aborted": false,
+        "lastRun": "2026-08-01"
+      },
+      "2024-2025": {
+        "students": 692,
+        "file": "L-2024-2025.ndjson",
+        "crosscheck": "429/634 paid-total match vs receipts",
+        "aborted": false,
+        "lastRun": "2026-08-01"
+      },
+      "2023-2024": {
+        "students": 568,
+        "file": "L-2023-2024.ndjson",
+        "crosscheck": "260/556 paid-total match vs receipts",
+        "aborted": false,
+        "lastRun": "2026-08-01"
+      },
+      "2022-2023": {
+        "students": 533,
+        "file": "L-2022-2023.ndjson",
+        "crosscheck": "183/519 paid-total match vs receipts",
+        "aborted": false,
+        "lastRun": "2026-08-01"
+      }
+    },
+    "Config": {
+      "_note": "Fee config (definitions) scraped per session: cycles(feeCycle), heads(feeHead), structure(feeHeadValue), concessions(applyConcessionNew; older years redirect to applyConcession). All 5 sessions 2022-23..2026-27. Row-level grid scrapes in out/config-<type>-<year>.json.",
+      "years": [
+        "2022-2023",
+        "2023-2024",
+        "2024-2025",
+        "2025-2026",
+        "2026-2027"
+      ],
+      "complete": true,
+      "lastRun": "2026-08-02"
+    }
+  },
+  "runs": [
+    {
+      "sweep": "A",
+      "year": "2024-2025",
+      "count": 4307,
+      "watermark": 15748,
+      "at": "2026-08-01"
+    },
+    {
+      "sweep": "A",
+      "year": "2025-2026",
+      "count": 3572,
+      "watermark": 18867,
+      "at": "2026-08-01"
+    },
+    {
+      "sweep": "A",
+      "year": "2026-2027",
+      "count": 1008,
+      "watermark": 18893,
+      "at": "2026-08-01"
+    },
+    {
+      "sweep": "A",
+      "year": "2023-2024",
+      "count": 3836,
+      "watermark": 8811,
+      "at": "2026-08-01"
+    },
+    {
+      "sweep": "A",
+      "year": "2022-2023",
+      "count": 4458,
+      "watermark": 9436,
+      "at": "2026-08-01"
+    }
+  ]
+}

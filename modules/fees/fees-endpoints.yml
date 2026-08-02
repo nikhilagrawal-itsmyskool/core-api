@@ -1,0 +1,276 @@
+  # ---- Health (authorizer-exempt) ----
+  health:
+    handler: health-handler.health
+    events:
+      - http: { path: 'health', method: get, cors: true }
+
+  # ---- Lookups ----
+  lookups:
+    handler: fees-lookup-handler.lookups
+    name: ${self:service}-lookups
+    events:
+      - http: { path: 'lookups', method: get, cors: true }
+
+  # ---- Fee Cycles ----
+  create-cycle:
+    handler: fees-cycle-handler.create
+    name: ${self:service}-create-cycle
+    events:
+      - http: { path: 'cycles', method: post, cors: true }
+  update-cycle:
+    handler: fees-cycle-handler.update
+    name: ${self:service}-update-cycle
+    events:
+      - http: { path: 'cycles/{id}', method: put, cors: true }
+  delete-cycle:
+    handler: fees-cycle-handler.remove
+    name: ${self:service}-delete-cycle
+    events:
+      - http: { path: 'cycles/{id}', method: delete, cors: true }
+  list-cycles:
+    handler: fees-cycle-handler.list
+    name: ${self:service}-list-cycles
+    events:
+      - http: { path: 'cycles', method: get, cors: true }
+
+  # ---- Fee Heads ----
+  create-head:
+    handler: fees-head-handler.create
+    name: ${self:service}-create-head
+    events:
+      - http: { path: 'heads', method: post, cors: true }
+  update-head:
+    handler: fees-head-handler.update
+    name: ${self:service}-update-head
+    events:
+      - http: { path: 'heads/{id}', method: put, cors: true }
+  delete-head:
+    handler: fees-head-handler.remove
+    name: ${self:service}-delete-head
+    events:
+      - http: { path: 'heads/{id}', method: delete, cors: true }
+  list-heads:
+    handler: fees-head-handler.list
+    name: ${self:service}-list-heads
+    events:
+      - http: { path: 'heads', method: get, cors: true }
+
+  # ---- Fee Structure ----
+  create-structure:
+    handler: fees-structure-handler.create
+    name: ${self:service}-create-structure
+    events:
+      - http: { path: 'structure', method: post, cors: true }
+  update-structure:
+    handler: fees-structure-handler.update
+    name: ${self:service}-update-structure
+    events:
+      - http: { path: 'structure/{id}', method: put, cors: true }
+  delete-structure:
+    handler: fees-structure-handler.remove
+    name: ${self:service}-delete-structure
+    events:
+      - http: { path: 'structure/{id}', method: delete, cors: true }
+  list-structure:
+    handler: fees-structure-handler.list
+    name: ${self:service}-list-structure
+    events:
+      - http: { path: 'structure', method: get, cors: true }
+  bulk-structure:
+    handler: fees-structure-handler.bulkApply
+    name: ${self:service}-bulk-structure
+    events:
+      - http: { path: 'structure/bulk', method: post, cors: true }
+  copy-structure:
+    handler: fees-structure-handler.copyFromClass
+    name: ${self:service}-copy-structure
+    events:
+      - http: { path: 'structure/copy', method: post, cors: true }
+  list-structure-students:
+    handler: fees-structure-handler.listStudent
+    name: ${self:service}-list-structure-students
+    events:
+      - http: { path: 'structure/students', method: get, cors: true }
+  upsert-structure-student:
+    handler: fees-structure-handler.upsertStudent
+    name: ${self:service}-upsert-structure-student
+    events:
+      - http: { path: 'structure/students', method: post, cors: true }
+  delete-structure-student:
+    handler: fees-structure-handler.removeStudent
+    name: ${self:service}-delete-structure-student
+    events:
+      - http: { path: 'structure/students/{id}', method: delete, cors: true }
+
+  # ---- Transport Slabs ----
+  create-slab:
+    handler: fees-transport-slab-handler.create
+    name: ${self:service}-create-slab
+    events:
+      - http: { path: 'transport-slabs', method: post, cors: true }
+  update-slab:
+    handler: fees-transport-slab-handler.update
+    name: ${self:service}-update-slab
+    events:
+      - http: { path: 'transport-slabs/{id}', method: put, cors: true }
+  delete-slab:
+    handler: fees-transport-slab-handler.remove
+    name: ${self:service}-delete-slab
+    events:
+      - http: { path: 'transport-slabs/{id}', method: delete, cors: true }
+  list-slabs:
+    handler: fees-transport-slab-handler.list
+    name: ${self:service}-list-slabs
+    events:
+      - http: { path: 'transport-slabs', method: get, cors: true }
+
+  # ---- Late Fee Rules ----
+  create-late-rule:
+    handler: fees-late-fee-rule-handler.create
+    name: ${self:service}-create-late-rule
+    events:
+      - http: { path: 'late-fee-rules', method: post, cors: true }
+  update-late-rule:
+    handler: fees-late-fee-rule-handler.update
+    name: ${self:service}-update-late-rule
+    events:
+      - http: { path: 'late-fee-rules/{id}', method: put, cors: true }
+  delete-late-rule:
+    handler: fees-late-fee-rule-handler.remove
+    name: ${self:service}-delete-late-rule
+    events:
+      - http: { path: 'late-fee-rules/{id}', method: delete, cors: true }
+  list-late-rules:
+    handler: fees-late-fee-rule-handler.list
+    name: ${self:service}-list-late-rules
+    events:
+      - http: { path: 'late-fee-rules', method: get, cors: true }
+
+  # ---- Concessions ----
+  create-concession:
+    handler: fees-concession-handler.create
+    name: ${self:service}-create-concession
+    events:
+      - http: { path: 'concessions', method: post, cors: true }
+  update-concession:
+    handler: fees-concession-handler.update
+    name: ${self:service}-update-concession
+    events:
+      - http: { path: 'concessions/{id}', method: put, cors: true }
+  delete-concession:
+    handler: fees-concession-handler.remove
+    name: ${self:service}-delete-concession
+    events:
+      - http: { path: 'concessions/{id}', method: delete, cors: true }
+  list-concessions:
+    handler: fees-concession-handler.list
+    name: ${self:service}-list-concessions
+    events:
+      - http: { path: 'concessions', method: get, cors: true }
+  list-concession-students:
+    handler: fees-concession-handler.listStudents
+    name: ${self:service}-list-concession-students
+    events:
+      - http: { path: 'concessions/{id}/students', method: get, cors: true }
+  add-concession-students:
+    handler: fees-concession-handler.addStudents
+    name: ${self:service}-add-concession-students
+    events:
+      - http: { path: 'concessions/{id}/students', method: post, cors: true }
+  remove-concession-student:
+    handler: fees-concession-handler.removeStudent
+    name: ${self:service}-remove-concession-student
+    events:
+      - http: { path: 'concessions/{id}/students/{studentId}', method: delete, cors: true }
+
+  # ---- Waivers ----
+  create-waiver:
+    handler: fees-waiver-handler.create
+    name: ${self:service}-create-waiver
+    events:
+      - http: { path: 'waivers', method: post, cors: true }
+  delete-waiver:
+    handler: fees-waiver-handler.remove
+    name: ${self:service}-delete-waiver
+    events:
+      - http: { path: 'waivers/{id}', method: delete, cors: true }
+  list-waivers:
+    handler: fees-waiver-handler.list
+    name: ${self:service}-list-waivers
+    events:
+      - http: { path: 'waivers', method: get, cors: true }
+
+  # ---- Ledger + Charge run ----
+  student-ledger:
+    handler: fees-ledger-handler.studentLedger
+    name: ${self:service}-student-ledger
+    events:
+      - http: { path: 'students/{id}/ledger', method: get, cors: true }
+  student-summary:
+    handler: fees-ledger-handler.studentSummary
+    name: ${self:service}-student-summary
+    events:
+      - http: { path: 'students/{id}/summary', method: get, cors: true }
+  charge-run:
+    handler: fees-ledger-handler.chargeRun
+    name: ${self:service}-charge-run
+    events:
+      - http: { path: 'charge-run', method: post, cors: true }
+
+  # ---- Receipts / Collection ----
+  collect:
+    handler: fees-receipt-handler.collect
+    name: ${self:service}-collect
+    events:
+      - http: { path: 'receipts', method: post, cors: true }
+  list-receipts:
+    handler: fees-receipt-handler.list
+    name: ${self:service}-list-receipts
+    events:
+      - http: { path: 'receipts', method: get, cors: true }
+  get-receipt:
+    handler: fees-receipt-handler.getById
+    name: ${self:service}-get-receipt
+    events:
+      - http: { path: 'receipts/{id}', method: get, cors: true }
+  cancel-receipt:
+    handler: fees-receipt-handler.cancel
+    name: ${self:service}-cancel-receipt
+    events:
+      - http: { path: 'receipts/{id}/cancel', method: post, cors: true }
+  print-receipt:
+    handler: fees-receipt-handler.print
+    name: ${self:service}-print-receipt
+    events:
+      - http: { path: 'receipts/{id}/print', method: get, cors: true }
+  collect-adhoc:
+    handler: fees-receipt-handler.adhoc
+    name: ${self:service}-collect-adhoc
+    events:
+      - http: { path: 'receipts/adhoc', method: post, cors: true }
+
+  # ---- Refunds ----
+  create-refund:
+    handler: fees-refund-handler.create
+    name: ${self:service}-create-refund
+    events:
+      - http: { path: 'refunds', method: post, cors: true }
+  list-refunds:
+    handler: fees-refund-handler.list
+    name: ${self:service}-list-refunds
+    events:
+      - http: { path: 'refunds', method: get, cors: true }
+
+  # ---- Reports ----
+  daily-collection:
+    handler: fees-report-handler.dailyCollection
+    name: ${self:service}-daily-collection
+    events:
+      - http: { path: 'reports/daily-collection', method: get, cors: true }
+
+  # ---- Migration ----
+  migration-import:
+    handler: fees-migration-handler.importData
+    name: ${self:service}-migration-import
+    events:
+      - http: { path: 'migration/import', method: post, cors: true }

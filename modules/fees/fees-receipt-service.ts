@@ -1,0 +1,182 @@
+import { DB, singleLineString } from '../../shared/lib/db';
+import { BadRequestResult, NotFoundResult } from '../../shared/lib/errors';
+import { ErrorCode } from '../../shared/lib/error-codes';
+import { nextReceiptNo } from './fees-util';
+import { RECEIPT_SERIES, DEFAULTS, PAYMENT_MODES } from './fees-constants';
+import { buildReceiptHtml } from './fees-receipt-template';
+import { notifyReceipt } from './fees-notify';
+const { generateShortUuid } = require('../../shared/util/generate-uuid.js');
+
+const n = (v: any): number => (v == null ? 0 : Number(v));
+
+interface Allocation { ledgerId: string; amount: number; }
+interface CollectRequest {
+  studentId: string; academicYearId: string; receiptDate?: string;
+  paymentMode?: string; receivedFrom?: string; txnRef?: string; remarks?: string;
+  type?: string; allocations: Allocation[];
+}
+
+class FeesReceiptService {
+  private async studentSnapshot(schoolId: string, studentId: string, academicYearId: string) {
+    const rows = await DB.query(
+      singleLineString`
+        select s.name, s.admission_number, c.name as class_name
+        from student s
+        left join student_class sc on sc.student_id = s.uuid and sc.academic_year_id = $2 and sc.school_id = $3
+        left join class c on c.uuid = sc.class_id
+        where s.uuid = $1`,
+      [studentId, academicYearId, schoolId]
+    );
+    return rows[0] || {};
+  }
+
+  // ---- COLLECT: create a receipt and post allocated payment credits ----
+  public async collect(schoolId: string, body: CollectRequest, userId: string, schoolCode: string) {
+    if (!body?.studentId) throw new BadRequestResult(ErrorCode.InvalidInput, 'studentId is required');
+    if (!body.academicYearId) throw new BadRequestResult(ErrorCode.InvalidInput, 'academicYearId is required');
+    if (!Array.isArray(body.allocations) || !body.allocations.length)
+      throw new BadRequestResult(ErrorCode.InvalidInput, 'At least one allocation is required');
+    if (body.paymentMode && !PAYMENT_MODES.includes(body.paymentMode as any))
+      throw new BadRequestResult(ErrorCode.InvalidInput, 'Invalid payment mode');
+
+    const ids = body.allocations.map((a) => a.ledgerId);
+    const phCharges = ids.map((_, i) => `$${i + 3}`).join(',');
+    const charges: any[] = await DB.query(
+      singleLineString`select * from student_ledger_entry where school_id = $1 and student_id = $2 and uuid in (${phCharges}) and kind = 'charge' and status = 'active'`,
+      [schoolId, body.studentId, ...ids]
+    );
+    const chargeById: Record<string, any> = {}; charges.forEach((c) => (chargeById[c.uuid] = c));
+    // remaining per charge = debit - sum(active credits settling it)
+    const phCredits = ids.map((_, i) => `$${i + 1}`).join(',');
+    const credits: any[] = await DB.query(
+      singleLineString`select settles_entry_id, coalesce(sum(credit),0) as paid from student_ledger_entry where settles_entry_id in (${phCredits}) and status = 'active' group by settles_entry_id`,
+      [...ids]
+    );
+    const paidBy: Record<string, number> = {};
+    credits.forEach((r) => (paidBy[r.settlesEntryId] = n(r.paid)));
+
+    let totalPaid = 0; let totalDue = 0;
+    for (const a of body.allocations) {
+      const c = chargeById[a.ledgerId];
+      if (!c) throw new BadRequestResult(ErrorCode.InvalidId, `Charge not found: ${a.ledgerId}`);
+      const remaining = n(c.debit) - (paidBy[a.ledgerId] || 0);
+      if (!(a.amount > 0)) throw new BadRequestResult(ErrorCode.InvalidInput, 'Allocation amount must be positive');
+      if (a.amount > remaining + 0.001)
+        throw new BadRequestResult(ErrorCode.InvalidInput, `Allocation ${money(a.amount)} exceeds remaining ${money(remaining)} on a component`);
+      totalPaid += a.amount; totalDue += remaining;
+    }
+
+    const snap = await this.studentSnapshot(schoolId, body.studentId, body.academicYearId);
+    const type = body.type && RECEIPT_SERIES[body.type as keyof typeof RECEIPT_SERIES] ? body.type : 'fee';
+    const receiptNo = await nextReceiptNo(schoolId, RECEIPT_SERIES[type as keyof typeof RECEIPT_SERIES], body.academicYearId);
+    const receiptId = generateShortUuid(12);
+    const now = new Date();
+    const receiptDate = body.receiptDate || now.toISOString().slice(0, 10);
+    const balance = totalDue - totalPaid;
+
+    const queries: string[] = []; const params: any[][] = [];
+    queries.push(singleLineString`
+      insert into fee_receipt (uuid, school_id, academic_year_id, student_id, receipt_no, receipt_date, type,
+        payer_name, payer_class_snapshot, admission_no_snapshot, total_due, total_paid, balance, concession_total,
+        payment_mode, txn_ref, received_from, remarks, collected_by_userid, status, source, createdby_userid, created_at)
+      values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,0,$14,$15,$16,$17,$18,'active','native',$18,$19)`);
+    params.push([receiptId, schoolId, body.academicYearId, body.studentId, receiptNo, receiptDate, type,
+      snap.name || null, snap.className || null, snap.admissionNumber || null, totalDue, totalPaid, balance,
+      body.paymentMode || 'cash', body.txnRef || null, body.receivedFrom || null, body.remarks || null, userId, now]);
+
+    for (const a of body.allocations) {
+      const c = chargeById[a.ledgerId];
+      queries.push(singleLineString`
+        insert into fee_receipt_line (uuid, school_id, receipt_id, fee_head_id, cycle_id, head_label, cycle_label, amount, is_concession, settles_ledger_id, createdby_userid, created_at)
+        values ($1,$2,$3,$4,$5,$6,$7,$8,false,$9,$10,$11)`);
+      params.push([generateShortUuid(12), schoolId, receiptId, c.feeHeadId, c.cycleId, c.headLabel, c.cycleLabel, a.amount, a.ledgerId, userId, now]);
+      queries.push(singleLineString`
+        insert into student_ledger_entry (uuid, school_id, student_id, academic_year_id, entry_date, category, fee_head_id, cycle_id, head_label, cycle_label, kind, credit, settles_entry_id, source_module, source_ref, allocation, status, createdby_userid, created_at)
+        values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'payment',$11,$12,'fees',$13,'explicit','active',$14,$15)`);
+      params.push([generateShortUuid(12), schoolId, body.studentId, body.academicYearId, receiptDate, c.category, c.feeHeadId, c.cycleId, c.headLabel, c.cycleLabel, a.amount, a.ledgerId, receiptId, userId, now]);
+    }
+
+    await DB.queriesInTransaction(queries, params);
+
+    // fire-and-forget parent notification
+    notifyReceipt(schoolCode, body.studentId, {
+      studentName: snap.name, receiptNo, amount: money(totalPaid), date: receiptDate,
+    });
+
+    return this.getById(schoolId, receiptId);
+  }
+
+  public async adhoc(schoolId: string, body: any, userId: string) {
+    if (!body?.academicYearId) throw new BadRequestResult(ErrorCode.InvalidInput, 'academicYearId is required');
+    if (!Array.isArray(body.lines) || !body.lines.length) throw new BadRequestResult(ErrorCode.InvalidInput, 'At least one line is required');
+    const totalPaid = body.lines.reduce((s: number, l: any) => s + n(l.amount), 0);
+    const receiptNo = await nextReceiptNo(schoolId, RECEIPT_SERIES.adhoc, body.academicYearId);
+    const receiptId = generateShortUuid(12); const now = new Date();
+    const receiptDate = body.receiptDate || now.toISOString().slice(0, 10);
+    const queries: string[] = []; const params: any[][] = [];
+    queries.push(singleLineString`
+      insert into fee_receipt (uuid, school_id, academic_year_id, student_id, receipt_no, receipt_date, type, payer_name, total_due, total_paid, balance, concession_total, payment_mode, remarks, collected_by_userid, status, source, createdby_userid, created_at)
+      values ($1,$2,$3,null,$4,$5,'adhoc',$6,$7,$7,0,0,$8,$9,$10,'active','native',$10,$11)`);
+    params.push([receiptId, schoolId, body.academicYearId, receiptNo, receiptDate, body.payerName || null, totalPaid, body.paymentMode || 'cash', body.remarks || null, userId, now]);
+    for (const l of body.lines) {
+      queries.push(singleLineString`insert into fee_receipt_line (uuid, school_id, receipt_id, head_label, amount, is_concession, createdby_userid, created_at) values ($1,$2,$3,$4,$5,false,$6,$7)`);
+      params.push([generateShortUuid(12), schoolId, receiptId, l.headLabel || 'Adhoc', n(l.amount), userId, now]);
+    }
+    await DB.queriesInTransaction(queries, params);
+    return this.getById(schoolId, receiptId);
+  }
+
+  public async cancel(schoolId: string, receiptId: string, reason: string, userId: string) {
+    const rec = await DB.query(singleLineString`select uuid, status from fee_receipt where school_id = $1 and uuid = $2`, [schoolId, receiptId]);
+    if (!rec.length) throw new NotFoundResult(ErrorCode.InvalidId, 'Receipt not found');
+    if (rec[0].status === 'cancelled') throw new BadRequestResult(ErrorCode.InvalidInput, 'Receipt already cancelled');
+    const now = new Date();
+    await DB.queriesInTransaction(
+      [
+        singleLineString`update fee_receipt set status = 'cancelled', cancel_reason = $3, cancelledby_userid = $4, cancelled_at = $5, updated_at = $5 where school_id = $1 and uuid = $2`,
+        singleLineString`update student_ledger_entry set status = 'cancelled', updatedby_userid = $3, updated_at = $4 where school_id = $1 and source_ref = $2 and kind = 'payment' and status = 'active'`,
+      ],
+      [
+        [schoolId, receiptId, reason || null, userId, now],
+        [schoolId, receiptId, userId, now],
+      ]
+    );
+    return this.getById(schoolId, receiptId);
+  }
+
+  public async getById(schoolId: string, receiptId: string) {
+    const rec = await DB.query(singleLineString`select * from fee_receipt where school_id = $1 and uuid = $2`, [schoolId, receiptId]);
+    if (!rec.length) throw new NotFoundResult(ErrorCode.InvalidId, 'Receipt not found');
+    const lines = await DB.query(singleLineString`select * from fee_receipt_line where receipt_id = $1 order by created_at`, [receiptId]);
+    return { ...rec[0], lines };
+  }
+
+  public async list(schoolId: string, q: any) {
+    const params: any[] = [schoolId]; let where = `school_id = $1`;
+    if (q?.studentId) { params.push(q.studentId); where += ` and student_id = $${params.length}`; }
+    if (q?.collectedBy) { params.push(q.collectedBy); where += ` and collected_by_userid = $${params.length}`; }
+    if (q?.type) { params.push(q.type); where += ` and type = $${params.length}`; }
+    if (q?.from) { params.push(q.from); where += ` and receipt_date >= $${params.length}`; }
+    if (q?.to) { params.push(q.to); where += ` and receipt_date <= $${params.length}`; }
+    if (q?.includeCancelled !== 'true') where += ` and status = 'active'`;
+    return DB.query(singleLineString`select * from fee_receipt where ${where} order by receipt_date desc, created_at desc limit 500`, params);
+  }
+
+  public async printHtml(schoolId: string, receiptId: string): Promise<string> {
+    const r: any = await this.getById(schoolId, receiptId);
+    const school = await DB.query(singleLineString`select name from school where uuid = $1`, [schoolId]);
+    return buildReceiptHtml({
+      schoolName: (school[0] && school[0].name) || 'School',
+      receiptNo: r.receiptNo, legacyReceiptNo: r.legacyReceiptNo, date: r.receiptDate,
+      studentName: r.payerName, admissionNo: r.admissionNoSnapshot, className: r.payerClassSnapshot,
+      fatherName: r.fatherName, paymentMode: r.paymentMode, receivedFrom: r.receivedFrom,
+      collectedBy: r.collectedByUserid, remarks: r.remarks,
+      lines: (r.lines || []).map((l: any) => ({ headLabel: l.headLabel, cycleLabel: l.cycleLabel, amount: n(l.amount) })),
+      totalPaid: n(r.totalPaid), balance: n(r.balance),
+    });
+  }
+}
+
+function money(v: number) { return Number(v || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+
+export const feesReceiptService = new FeesReceiptService();
