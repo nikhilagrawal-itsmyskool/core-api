@@ -124,6 +124,10 @@ class FeesLedgerService {
     if (!opts?.academicYearId) throw new BadRequestResult(ErrorCode.InvalidInput, 'academicYearId is required');
     const ay = opts.academicYearId;
     const asOf: string = opts.asOf || new Date().toISOString().slice(0, 10);
+    const dryRun = !!opts.dryRun; // preview: compute what would be posted, write nothing
+    // fullYear posts every cycle in the structure (matches the migrated full-year model);
+    // default accrual only posts cycles that have started as of asOf.
+    const fullYear = !!opts.fullYear;
 
     // 1. target students + their class
     let enrolWhere = `sc.school_id = $1 and sc.academic_year_id = $2`;
@@ -152,7 +156,10 @@ class FeesLedgerService {
     );
     const headById: Record<string, any> = {}; heads.forEach((h) => (headById[h.uuid] = h));
 
-    const queries: string[] = []; const params: any[][] = []; let posted = 0;
+    const queries: string[] = []; const params: any[][] = [];
+    let charges = 0, concessions = 0, waivers = 0;
+    let totalCharge = 0, totalConcession = 0, totalWaiver = 0;
+    const affectedMap: Record<string, { charges: number; amount: number }> = {};
 
     for (const s of students) {
       // structure for the class + per-student overrides (override wins)
@@ -193,42 +200,77 @@ class FeesLedgerService {
         const [headId, cycleId] = key.split('|');
         const head = headById[headId]; const cyc = cycleById[cycleId];
         if (!head) continue;
-        // accrue: one-time heads always; recurring only once the cycle has started
-        const due = head.oneTime || (cyc && cyc.fromDate && new Date(cyc.fromDate).getTime() <= new Date(asOf).getTime());
-        if (!due) continue;
+        // accrue: one-time heads always; recurring only once the cycle has started (unless fullYear)
+        const started = head.oneTime || (cyc && cyc.fromDate && new Date(cyc.fromDate).getTime() <= new Date(asOf).getTime());
+        if (!fullYear && !started) continue;
         const amount = amt[key];
-        const chargeId = generateShortUuid(12);
         const now = new Date();
         const category = head.kind === 'transport' ? 'transport' : 'fee';
-        queries.push(singleLineString`
-          insert into student_ledger_entry (uuid, school_id, student_id, academic_year_id, entry_date, category, fee_head_id, cycle_id, head_label, cycle_label, kind, debit, source_module, allocation, status, createdby_userid, created_at)
-          values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'charge',$11,'fees','explicit','active',$12,$13)`);
-        params.push([chargeId, schoolId, s.studentId, ay, asOf, category, headId, cycleId, head.name, cyc ? cyc.name : null, amount, userId, now]);
-        posted++;
+        const chargeId = generateShortUuid(12);
+        charges++; totalCharge += amount;
+        (affectedMap[s.studentId] ||= { charges: 0, amount: 0 }).charges++;
+        affectedMap[s.studentId].amount += amount;
+        if (!dryRun) {
+          queries.push(singleLineString`
+            insert into student_ledger_entry (uuid, school_id, student_id, academic_year_id, entry_date, category, fee_head_id, cycle_id, head_label, cycle_label, kind, debit, source_module, allocation, status, createdby_userid, created_at)
+            values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'charge',$11,'fees','explicit','active',$12,$13)`);
+          params.push([chargeId, schoolId, s.studentId, ay, asOf, category, headId, cycleId, head.name, cyc ? cyc.name : null, amount, userId, now]);
+        }
 
         // concession on this head
         const conc = concByHead[headId];
         if (conc) {
           const cval = conc.valueType === 'percent' ? (amount * n(conc.value)) / 100 : Math.min(n(conc.value), amount);
           if (cval > 0) {
-            queries.push(singleLineString`
-              insert into student_ledger_entry (uuid, school_id, student_id, academic_year_id, entry_date, category, fee_head_id, cycle_id, head_label, cycle_label, kind, credit, settles_entry_id, source_module, allocation, status, createdby_userid, created_at)
-              values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'concession',$11,$12,'fees','explicit','active',$13,$14)`);
-            params.push([generateShortUuid(12), schoolId, s.studentId, ay, asOf, category, headId, cycleId, conc.name, cyc ? cyc.name : null, cval, chargeId, userId, now]);
+            concessions++; totalConcession += cval;
+            if (!dryRun) {
+              queries.push(singleLineString`
+                insert into student_ledger_entry (uuid, school_id, student_id, academic_year_id, entry_date, category, fee_head_id, cycle_id, head_label, cycle_label, kind, credit, settles_entry_id, source_module, allocation, status, createdby_userid, created_at)
+                values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'concession',$11,$12,'fees','explicit','active',$13,$14)`);
+              params.push([generateShortUuid(12), schoolId, s.studentId, ay, asOf, category, headId, cycleId, conc.name, cyc ? cyc.name : null, cval, chargeId, userId, now]);
+            }
           }
         }
         // waiver on this (head, cycle) → waive the full amount
         if (waived.has(key)) {
-          queries.push(singleLineString`
-            insert into student_ledger_entry (uuid, school_id, student_id, academic_year_id, entry_date, category, fee_head_id, cycle_id, head_label, cycle_label, kind, credit, settles_entry_id, source_module, allocation, status, createdby_userid, created_at)
-            values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'waiver',$11,$12,'fees','explicit','active',$13,$14)`);
-          params.push([generateShortUuid(12), schoolId, s.studentId, ay, asOf, category, headId, cycleId, 'Waiver', cyc ? cyc.name : null, amount, chargeId, userId, now]);
+          waivers++; totalWaiver += amount;
+          if (!dryRun) {
+            queries.push(singleLineString`
+              insert into student_ledger_entry (uuid, school_id, student_id, academic_year_id, entry_date, category, fee_head_id, cycle_id, head_label, cycle_label, kind, credit, settles_entry_id, source_module, allocation, status, createdby_userid, created_at)
+              values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'waiver',$11,$12,'fees','explicit','active',$13,$14)`);
+            params.push([generateShortUuid(12), schoolId, s.studentId, ay, asOf, category, headId, cycleId, 'Waiver', cyc ? cyc.name : null, amount, chargeId, userId, now]);
+          }
         }
       }
     }
 
-    if (queries.length) await DB.queriesInTransaction(queries, params);
-    return { posted, students: students.length };
+    if (!dryRun && queries.length) await DB.queriesInTransaction(queries, params);
+
+    // enrich affected students with name + class for the preview / result
+    const affectedIds = Object.keys(affectedMap);
+    let affected: any[] = [];
+    if (affectedIds.length) {
+      const ph = affectedIds.map((_, i) => `$${i + 3}`).join(',');
+      const info: any[] = await DB.query(
+        singleLineString`select s.uuid, s.name, s.admission_number, c.name as class_name from student s left join student_class sc on sc.student_id = s.uuid and sc.academic_year_id = $2 and sc.school_id = $1 left join class c on c.uuid = sc.class_id where s.uuid in (${ph})`,
+        [schoolId, ay, ...affectedIds]
+      );
+      const byId: Record<string, any> = {}; info.forEach((r) => (byId[r.uuid] = r));
+      affected = affectedIds.map((id) => ({
+        studentId: id, name: byId[id]?.name || null, admissionNumber: byId[id]?.admissionNumber || null,
+        className: byId[id]?.className || null, charges: affectedMap[id].charges, amount: affectedMap[id].amount,
+      }));
+      affected.sort((a, b) => (a.className || '').localeCompare(b.className || '') || (a.name || '').localeCompare(b.name || ''));
+    }
+
+    return {
+      dryRun, academicYearId: ay, fullYear,
+      students: students.length, studentsAffected: affectedIds.length,
+      posted: dryRun ? 0 : charges,
+      charges, concessions, waivers,
+      totalCharge, totalConcession, totalWaiver,
+      affected,
+    };
   }
 }
 
