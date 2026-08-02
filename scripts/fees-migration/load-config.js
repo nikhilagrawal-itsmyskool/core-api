@@ -52,7 +52,8 @@ function inferConcType(name) {
   if (/ews/.test(s)) return 'ews';
   return 'other';
 }
-const parseRs = (v) => { const m = String(v || '').match(/([\d,.]+)/); return m ? Number(m[1].replace(/,/g, '')) : 0; };
+// digit-led so "Rs.225" -> 225 (not ".225"); handles "Rs.2,500.00" -> 2500
+const parseRs = (v) => { const m = String(v || '').match(/(\d[\d,]*(?:\.\d+)?)/); return m ? Number(m[1].replace(/,/g, '')) : 0; };
 
 (async () => {
   const pool = createPool(loadConfig(STAGE));
