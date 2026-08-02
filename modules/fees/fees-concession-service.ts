@@ -133,11 +133,22 @@ class ConcessionService {
 
   // ---- Concession roster (fee_concession_student) ----
 
+  // Roster with the student's name + this-year class (joined server-side so the UI doesn't
+  // fire one lookup per student). class_name is null when the student isn't enrolled in the
+  // concession's academic year (e.g. left the school) — the UI can flag/hide those.
   public async listStudents(concessionId: string, schoolId: string, includeDeleted?: boolean): Promise<any[]> {
     const params: any[] = [schoolId, concessionId];
-    let sql = `select * from fee_concession_student where school_id = $1 and concession_id = $2`;
-    if (!includeDeleted) { sql += ` and status = 'active'`; }
-    sql += ` order by created_at desc`;
+    let sql = singleLineString`
+      select cs.*, s.name as student_name, s.admission_number, s.status as student_status,
+             c.name as class_name, (sc.uuid is not null) as enrolled_this_year
+      from fee_concession_student cs
+      join fee_concession fc on fc.uuid = cs.concession_id
+      left join student s on s.uuid = cs.student_id and s.school_id = cs.school_id
+      left join student_class sc on sc.student_id = cs.student_id and sc.academic_year_id = fc.academic_year_id and sc.school_id = cs.school_id
+      left join class c on c.uuid = sc.class_id
+      where cs.school_id = $1 and cs.concession_id = $2`;
+    if (!includeDeleted) { sql += ` and cs.status = 'active'`; }
+    sql += ` order by s.name nulls last`;
     return DB.query(sql, params);
   }
 
