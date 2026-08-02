@@ -41,13 +41,22 @@ class FeesLedgerService {
     // charges carry cycle_label (not cycle_id), so we map by name. A line with no cycle / no due
     // date counts as due now (one-time heads tied to TOA, etc.).
     const nrm = (s: any) => String(s || '').replace(/\s+/g, ' ').trim().toLowerCase();
+    // pg returns `date` columns as JS Date objects (local midnight). Format with local getters —
+    // toISOString() would shift the calendar day back in IST. Already-string values are sliced.
+    const ymd = (v: any): string | null => {
+      if (!v) return null;
+      if (v instanceof Date) {
+        return `${v.getFullYear()}-${String(v.getMonth() + 1).padStart(2, '0')}-${String(v.getDate()).padStart(2, '0')}`;
+      }
+      return String(v).slice(0, 10);
+    };
     const cycleDue: Record<string, string | null> = {};
     if (academicYearId) {
       const cyc: any[] = await DB.query(
         singleLineString`select name, due_date from fee_cycle where school_id = $1 and academic_year_id = $2 and status = 'active'`,
         [schoolId, academicYearId]
       );
-      cyc.forEach((c) => (cycleDue[nrm(c.name)] = c.dueDate ? String(c.dueDate).slice(0, 10) : null));
+      cyc.forEach((c) => (cycleDue[nrm(c.name)] = ymd(c.dueDate)));
     }
     const today = new Date().toISOString().slice(0, 10);
 
