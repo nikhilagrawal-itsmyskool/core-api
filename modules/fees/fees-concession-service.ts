@@ -124,10 +124,13 @@ class ConcessionService {
 
   public async list(schoolId: string, academicYearId?: string, includeDeleted?: boolean): Promise<any[]> {
     const params: any[] = [schoolId];
-    let sql = `select * from fee_concession where school_id = $1`;
-    if (!includeDeleted) { sql += ` and status = 'active'`; }
-    if (academicYearId) { params.push(academicYearId); sql += ` and academic_year_id = $${params.length}`; }
-    sql += ` order by name`;
+    // student_count joined in so the UI doesn't fetch every roster just to count it.
+    let sql = singleLineString`
+      select c.*, (select count(*) from fee_concession_student cs where cs.concession_id = c.uuid and cs.status = 'active') as student_count
+      from fee_concession c where c.school_id = $1`;
+    if (!includeDeleted) { sql += ` and c.status = 'active'`; }
+    if (academicYearId) { params.push(academicYearId); sql += ` and c.academic_year_id = $${params.length}`; }
+    sql += ` order by c.name`;
     return DB.query(sql, params);
   }
 

@@ -37,6 +37,20 @@ class FeesLedgerService {
       params
     );
 
+    // cycle due dates (by name) so each line can be flagged due-now vs not-yet-due. Migrated
+    // charges carry cycle_label (not cycle_id), so we map by name. A line with no cycle / no due
+    // date counts as due now (one-time heads tied to TOA, etc.).
+    const nrm = (s: any) => String(s || '').replace(/\s+/g, ' ').trim().toLowerCase();
+    const cycleDue: Record<string, string | null> = {};
+    if (academicYearId) {
+      const cyc: any[] = await DB.query(
+        singleLineString`select name, due_date from fee_cycle where school_id = $1 and academic_year_id = $2 and status = 'active'`,
+        [schoolId, academicYearId]
+      );
+      cyc.forEach((c) => (cycleDue[nrm(c.name)] = c.dueDate ? String(c.dueDate).slice(0, 10) : null));
+    }
+    const today = new Date().toISOString().slice(0, 10);
+
     // credits grouped by the charge they settle
     const bySettle: Record<string, LedgerRow[]> = {};
     for (const r of rows) if (r.settlesEntryId) (bySettle[r.settlesEntryId] ||= []).push(r);
@@ -51,16 +65,20 @@ class FeesLedgerService {
         const net = n(c.debit) - concession - waiver;
         const remaining = Math.max(0, net - paid);
         const status = remaining <= 0 ? 'paid' : paid > 0 ? 'partial' : 'unpaid';
+        const dueDate = c.cycleLabel ? (cycleDue[nrm(c.cycleLabel)] ?? null) : null;
+        const due = !dueDate || dueDate <= today; // no due date => immediate (one-time heads)
         return {
           chargeId: c.uuid, category: c.category, feeHeadId: c.feeHeadId, cycleId: c.cycleId,
           headLabel: c.headLabel, cycleLabel: c.cycleLabel, entryDate: c.entryDate,
-          charged: n(c.debit), concession, waiver, paid, net, remaining, status,
+          charged: n(c.debit), concession, waiver, paid, net, remaining, status, dueDate, due,
         };
       });
 
     const totalDebit = rows.reduce((s, r) => s + n(r.debit), 0);
     const totalCredit = rows.reduce((s, r) => s + n(r.credit), 0);
     const outstanding = totalDebit - totalCredit;
+    const dueNow = lines.filter((l) => l.due).reduce((s, l) => s + l.remaining, 0);
+    const upcoming = lines.filter((l) => !l.due).reduce((s, l) => s + l.remaining, 0);
     const totals = {
       charged: rows.filter((r) => r.kind === 'charge').reduce((s, r) => s + n(r.debit), 0),
       concession: rows.filter((r) => r.kind === 'concession').reduce((s, r) => s + n(r.credit), 0),
@@ -68,6 +86,8 @@ class FeesLedgerService {
       paid: rows.filter((r) => r.kind === 'payment').reduce((s, r) => s + n(r.credit), 0),
       outstanding: Math.max(0, outstanding),
       advance: Math.max(0, -outstanding),
+      dueNow,     // remaining on cycles whose due date has passed (+ one-time)
+      upcoming,   // remaining on cycles not yet due (rest of the year)
     };
     return { studentId, academicYearId: academicYearId || null, lines, entries: rows, totals };
   }
@@ -82,6 +102,8 @@ class FeesLedgerService {
       concession: led.totals.concession,
       outstanding: led.totals.outstanding,
       advance: led.totals.advance,
+      dueNow: led.totals.dueNow,
+      upcoming: led.totals.upcoming,
       walletBalance: 0, // supplies wallet deferred
       dueComponents: dueLines.length,
     };

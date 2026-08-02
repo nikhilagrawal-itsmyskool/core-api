@@ -72,12 +72,37 @@ class FeesReportService {
       concParams
     );
 
+    // "due now" = remaining on charges whose cycle due date has passed (+ charges with no
+    // cycle/due date). Migrated charges carry cycle_label (not cycle_id), so join fee_cycle by name.
+    let dueNow = 0;
+    if (ay) {
+      const today = now.toISOString().slice(0, 10);
+      const dueRow = await DB.query(
+        singleLineString`
+          select coalesce(sum(greatest(0, ch.debit - coalesce(pd.paid, 0))), 0) as due_now
+          from (
+            select e.uuid, e.debit, fc.due_date
+            from student_ledger_entry e
+            left join fee_cycle fc on fc.school_id = e.school_id and fc.academic_year_id = e.academic_year_id and lower(fc.name) = lower(e.cycle_label) and fc.status = 'active'
+            where e.school_id = $1 and e.academic_year_id = $2 and e.kind = 'charge' and e.status = 'active'
+          ) ch
+          left join (
+            select settles_entry_id, sum(credit) as paid from student_ledger_entry
+            where school_id = $1 and academic_year_id = $2 and status = 'active' and settles_entry_id is not null group by settles_entry_id
+          ) pd on pd.settles_entry_id = ch.uuid
+          where ch.due_date is null or ch.due_date <= $3`,
+        [schoolId, ay, today]
+      );
+      dueNow = Number(dueRow[0]?.dueNow || 0);
+    }
+
     const bal = balRow[0] || {};
     return {
       academicYearId: ay,
       collectedToday: Number(collectedTodayRow[0]?.total || 0),
       collectedMonth: Number(collectedMonthRow[0]?.total || 0),
       outstanding: Number(bal.outstanding || 0),
+      dueNow,
       duesStudents: Number(bal.duesStudents || 0),
       advance: Number(bal.advance || 0),
       advanceStudents: Number(bal.advanceStudents || 0),
