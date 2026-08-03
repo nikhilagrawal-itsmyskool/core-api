@@ -25,6 +25,8 @@ const arg = (k, d) => { const i = process.argv.indexOf(k); return i > -1 ? proce
 const has = (k) => process.argv.includes(k);
 const STAGE = arg('--stage', 'prod');
 const APPLY = has('--apply') && has('--yes'); // both required to write
+const SPILL = !has('--no-spill'); // spill a receipt's leftover onto next unpaid cycles (default on)
+const ADM = String(arg('--adm', '')).split(',').map((s) => s.trim()).filter(Boolean); // limit to these admission numbers
 const SCHOOL = '2qy0xfycrq88';   // DBPASN
 const AY = 'w3ajbki9xhbm';       // 2026-27
 const TODAY = new Date().toISOString().slice(0, 10);
@@ -93,6 +95,10 @@ const VOID_SQL = `update student_ledger_entry set status='cancelled', updatedby_
   const chByStu = {}; charges.forEach((c) => (chByStu[c.student_id] ||= []).push(c));
   const rcByStu = {}; receipts.forEach((r) => (rcByStu[r.student_id] ||= []).push(r));
 
+  // optional --adm filter: restrict processing to specific students (keeps re-runs surgical)
+  const admSet = new Set(ADM);
+  const targetSids = Object.keys(rcByStu).filter((sid) => !ADM.length || admSet.has(studInfo[sid]?.admission_number));
+
   const net = (c) => round2(Number(c.debit) - (cw[c.uuid]?.concession || 0) - (cw[c.uuid]?.waiver || 0));
   const nativePaid = (c) => payBy[c.uuid]?.native || 0;
   const oldMigPaid = (c) => payBy[c.uuid]?.mig || 0;
@@ -104,10 +110,13 @@ const VOID_SQL = `update student_ledger_entry set status='cancelled', updatedby_
 
   const client = APPLY ? await pool.connect() : null;
 
-  for (const sid of Object.keys(rcByStu)) {
+  for (const sid of targetSids) {
     const chs = chByStu[sid] || [];
     const byCycle = {}; chs.forEach((c) => (byCycle[norm(c.cycle_label)] ||= []).push(c));
     Object.values(byCycle).forEach((arr) => arr.sort((a, b) => String(a.head_label).localeCompare(String(b.head_label))));
+    // charges in chronological cycle order (for spilling leftover onto the next unpaid cycle)
+    const chsOrdered = chs.slice().sort((a, b) =>
+      (cycleOrder[norm(a.cycle_label)] ?? 999) - (cycleOrder[norm(b.cycle_label)] ?? 999) || String(a.head_label).localeCompare(String(b.head_label)));
 
     // fill migrated receipts on top of native payments
     const posted = {}; chs.forEach((c) => (posted[c.uuid] = 0)); // migrated allocation this run
@@ -120,6 +129,19 @@ const VOID_SQL = `update student_ledger_entry set status='cancelled', updatedby_
         .sort((a, b) => (cycleOrder[a] ?? 999) - (cycleOrder[b] ?? 999));
       for (const cn of cyc) {
         for (const c of (byCycle[cn] || [])) {
+          if (amt <= 0.001) break;
+          const remaining = round2(net(c) - nativePaid(c) - posted[c.uuid]);
+          if (remaining <= 0) continue;
+          const take = Math.min(amt, remaining);
+          posted[c.uuid] = round2(posted[c.uuid] + take);
+          amt = round2(amt - take);
+          allocations.push({ c, amount: take, receipt: r });
+        }
+      }
+      // spill leftover (e.g. receipt cycle_set repeats an already-paid cycle like TOA) onto the
+      // next unpaid cycles in chronological order — the money was paid, the receipt just under-named it.
+      if (amt > 0.001 && SPILL) {
+        for (const c of chsOrdered) {
           if (amt <= 0.001) break;
           const remaining = round2(net(c) - nativePaid(c) - posted[c.uuid]);
           if (remaining <= 0) continue;
@@ -185,13 +207,13 @@ const VOID_SQL = `update student_ledger_entry set status='cancelled', updatedby_
   // ---- CSV audit ----
   const outDir = path.join(__dirname, '../reports');
   fs.mkdirSync(outDir, { recursive: true });
-  const outFile = path.join(outDir, `payment-reallocation-audit-${STAGE}-2026-27.csv`);
+  const outFile = path.join(outDir, `payment-reallocation-audit-${STAGE}-2026-27${ADM.length ? '-adm' : ''}.csv`);
   fs.writeFileSync(outFile, rows.map((r) => r.map((v) => {
     const s = String(v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
   }).join(',')).join('\n'), 'utf8');
 
   console.log(`\n================ PAYMENT RE-ALLOCATION ${APPLY ? 'APPLY' : 'DRY-RUN (no writes)'} ================`);
-  console.log(`migrated-receipt students : ${Object.keys(rcByStu).length}`);
+  console.log(`migrated-receipt students : ${targetSids.length}${ADM.length ? ` (filtered to --adm)` : ''}`);
   console.log(`  allocation CHANGES      : ${studChanged}`);
   console.log(`  unchanged               : ${studSame}`);
   console.log(`receipts w/ unallocated leftover (overpay / cycle_set gap): ${recLeftover}  (₹${inr(leftoverAmt)})`);
