@@ -272,6 +272,11 @@
     name: ${self:service}-overview
     events:
       - http: { path: 'reports/overview', method: get, cors: true }
+  ungenerated-students:
+    handler: fees-report-handler.ungeneratedStudents
+    name: ${self:service}-ungenerated-students
+    events:
+      - http: { path: 'reports/ungenerated-students', method: get, cors: true }
 
   # ---- Migration ----
   migration-import:

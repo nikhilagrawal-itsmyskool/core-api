@@ -109,6 +109,28 @@ class FeesReportService {
       concessionYtd: Number(concRow[0]?.total || 0),
     };
   }
+
+  // Students enrolled this year with NO fee charges yet — the candidates for charge generation
+  // (new admissions, or anyone the charge-run hasn't been run for). Fast: one not-exists query.
+  public async ungeneratedStudents(schoolId: string, q: any) {
+    const ay = q?.academicYearId;
+    if (!ay) return [];
+    return DB.query(
+      singleLineString`
+        select s.uuid as student_id, s.name, s.admission_number, c.name as class_name
+        from student_class sc
+        join student s on s.uuid = sc.student_id and s.school_id = sc.school_id
+        left join class c on c.uuid = sc.class_id
+        where sc.school_id = $1 and sc.academic_year_id = $2
+          and not exists (
+            select 1 from student_ledger_entry le
+            where le.school_id = sc.school_id and le.student_id = sc.student_id
+              and le.academic_year_id = $2 and le.kind = 'charge' and le.status = 'active'
+          )
+        order by c.name nulls last, s.name`,
+      [schoolId, ay]
+    );
+  }
 }
 
 export const feesReportService = new FeesReportService();
