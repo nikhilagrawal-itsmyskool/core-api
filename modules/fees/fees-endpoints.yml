@@ -277,6 +277,11 @@
     name: ${self:service}-ungenerated-students
     events:
       - http: { path: 'reports/ungenerated-students', method: get, cors: true }
+  dues:
+    handler: fees-report-handler.dues
+    name: ${self:service}-dues
+    events:
+      - http: { path: 'reports/dues', method: get, cors: true }
 
   # ---- Migration ----
   migration-import:

@@ -131,6 +131,60 @@ class FeesReportService {
       [schoolId, ay]
     );
   }
+
+  // Class-wise dues report: per-student due-now / upcoming / full-year outstanding.
+  // mode 'due' (default) lists only students with something due now; 'all' lists any outstanding.
+  public async dues(schoolId: string, q: any) {
+    const ay = q?.academicYearId;
+    if (!ay) return { rows: [], totals: { dueNow: 0, upcoming: 0, fullYear: 0, students: 0 } };
+    const today = new Date().toISOString().slice(0, 10);
+    const params: any[] = [schoolId, ay, today];
+    let filter = '';
+    if (q?.classId) { params.push(q.classId); filter += ` and sc.class_id = $${params.length}`; }
+    if (q?.studentId) { params.push(q.studentId); filter += ` and ps.student_id = $${params.length}`; }
+    const having = q?.mode === 'all' ? 'ps.full_year > 0.5' : 'ps.due_now > 0.5';
+
+    const rows = await DB.query(
+      singleLineString`
+        with charges as (
+          select e.student_id, e.uuid, e.debit, (fc.due_date is null or fc.due_date <= $3) as is_due
+          from student_ledger_entry e
+          left join fee_cycle fc on fc.uuid = e.cycle_id and fc.status = 'active'
+          where e.school_id = $1 and e.academic_year_id = $2 and e.kind = 'charge' and e.status = 'active'
+        ),
+        paid as (
+          select settles_entry_id, sum(credit) as c from student_ledger_entry
+          where school_id = $1 and academic_year_id = $2 and status = 'active' and settles_entry_id is not null
+          group by settles_entry_id
+        ),
+        per_charge as (
+          select c.student_id, greatest(0, c.debit - coalesce(p.c, 0)) as remaining, c.is_due from charges c
+          left join paid p on p.settles_entry_id = c.uuid
+        ),
+        ps as (
+          select student_id,
+            coalesce(sum(remaining), 0) as full_year,
+            coalesce(sum(remaining) filter (where is_due), 0) as due_now,
+            coalesce(sum(remaining) filter (where not is_due), 0) as upcoming
+          from per_charge group by student_id
+        )
+        select ps.student_id, ps.due_now, ps.upcoming, ps.full_year,
+               s.name, s.admission_number, c.name as class_name
+        from ps
+        join student s on s.uuid = ps.student_id and s.school_id = $1
+        left join student_class sc on sc.student_id = ps.student_id and sc.academic_year_id = $2 and sc.school_id = $1
+        left join class c on c.uuid = sc.class_id
+        where ${having} ${filter}
+        order by c.name nulls last, s.name`,
+      params
+    );
+
+    const totals = rows.reduce(
+      (t: any, r: any) => ({ dueNow: t.dueNow + Number(r.dueNow || 0), upcoming: t.upcoming + Number(r.upcoming || 0), fullYear: t.fullYear + Number(r.fullYear || 0) }),
+      { dueNow: 0, upcoming: 0, fullYear: 0 }
+    );
+    return { rows, totals: { ...totals, students: rows.length } };
+  }
 }
 
 export const feesReportService = new FeesReportService();
