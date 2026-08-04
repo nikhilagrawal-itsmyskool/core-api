@@ -101,16 +101,27 @@ class ConcessionService {
     `;
 
     const results = await DB.query(query, params);
+    // value/type/head change alters the discount → reconcile everyone on this concession
+    if (results.length > 0 && (data.value !== undefined || data.valueType !== undefined || data.feeHeadId !== undefined)) {
+      await this.syncFor(schoolId, id, null, userId);
+    }
     return results.length > 0 ? results[0] : null;
   }
 
   public async remove(id: string, schoolId: string, userId: string): Promise<any | null> {
+    // capture roster before the concession is deleted, then reconcile (expected discount → 0)
+    const roster = await DB.query(singleLineString`select student_id from fee_concession_student where concession_id = $1 and school_id = $2 and status = 'active'`, [id, schoolId]);
     const query = singleLineString`
       update fee_concession set status = 'deleted', updatedby_userid = $1, updated_at = $2
       where uuid = $3 and school_id = $4 and status = 'active'
       returning *
     `;
     const results = await DB.query(query, [userId, new Date(), id, schoolId]);
+    if (results.length > 0) {
+      const ay = results[0].academicYearId;
+      const ids = roster.map((r: any) => r.studentId);
+      if (ay && ids.length) { await this.syncConcessions(schoolId, ay, ids, userId); }
+    }
     return results.length > 0 ? results[0] : null;
   }
 
@@ -196,6 +207,8 @@ class ConcessionService {
     if (queries.length > 0) {
       await DB.queriesInTransaction(queries, params);
     }
+    // reflect the newly-eligible discount on the students' existing charges
+    await this.syncFor(schoolId, concessionId, data.studentIds, userId);
     return { added: queries.length };
   }
 
@@ -206,7 +219,82 @@ class ConcessionService {
       returning *
     `;
     const results = await DB.query(query, [userId, new Date(), schoolId, concessionId, studentId]);
+    if (results.length > 0) { await this.syncFor(schoolId, concessionId, [studentId], userId); }
     return results.length > 0 ? results[0] : null;
+  }
+
+  // Resolve a concession's academic year + the given (or all active roster) students, then reconcile.
+  private async syncFor(schoolId: string, concessionId: string, studentIds: string[] | null, userId: string) {
+    const c = await DB.query(singleLineString`select academic_year_id from fee_concession where uuid = $1 and school_id = $2`, [concessionId, schoolId]);
+    const ay = c[0]?.academicYearId;
+    if (!ay) return;
+    let ids = studentIds;
+    if (!ids) {
+      const roster = await DB.query(singleLineString`select student_id from fee_concession_student where concession_id = $1 and school_id = $2 and status = 'active'`, [concessionId, schoolId]);
+      ids = roster.map((r: any) => r.studentId);
+    }
+    if (ids && ids.length) { await this.syncConcessions(schoolId, ay, ids, userId); }
+  }
+
+  // Reconcile concession credits on a student's existing charges to what their active concessions
+  // imply. charge-run only applies concessions when it first creates a charge, so a late add/remove/
+  // edit of a concession must be reflected here: void stale concession credits, post fresh ones.
+  // Idempotent — a no-op when already in sync. settles_entry_id links each credit to its charge.
+  public async syncConcessions(schoolId: string, academicYearId: string, studentIds: string[], userId: string) {
+    const empty = { students: 0, chargesAdjusted: 0, concessionAdded: 0, concessionRemoved: 0 };
+    if (!academicYearId || !studentIds || !studentIds.length) return empty;
+    const n = (v: any) => (v == null ? 0 : Number(v));
+    const round2 = (x: number) => Math.round(x * 100) / 100;
+
+    const charges: any[] = await DB.query(
+      singleLineString`select uuid, student_id, fee_head_id, cycle_id, category, head_label, cycle_label, debit
+        from student_ledger_entry where school_id = $1 and academic_year_id = $2 and kind = 'charge' and status = 'active' and student_id = any($3)`,
+      [schoolId, academicYearId, studentIds]
+    );
+    if (!charges.length) return empty;
+
+    const concRows: any[] = await DB.query(
+      singleLineString`select uuid, settles_entry_id, credit from student_ledger_entry
+        where school_id = $1 and academic_year_id = $2 and kind = 'concession' and status = 'active' and settles_entry_id is not null and student_id = any($3)`,
+      [schoolId, academicYearId, studentIds]
+    );
+    const byCharge: Record<string, { sum: number; ids: string[] }> = {};
+    concRows.forEach((r) => { const e = (byCharge[r.settlesEntryId] ||= { sum: 0, ids: [] }); e.sum += n(r.credit); e.ids.push(r.uuid); });
+
+    const defs: any[] = await DB.query(
+      singleLineString`select cs.student_id, c.fee_head_id, c.value_type, c.value, c.name
+        from fee_concession_student cs join fee_concession c on c.uuid = cs.concession_id and c.status = 'active'
+        where cs.school_id = $1 and c.academic_year_id = $2 and cs.status = 'active' and cs.student_id = any($3)`,
+      [schoolId, academicYearId, studentIds]
+    );
+    const byStuHead: Record<string, Record<string, any>> = {};
+    defs.forEach((c) => ((byStuHead[c.studentId] ||= {})[c.feeHeadId] = c));
+
+    const queries: string[] = []; const params: any[][] = []; const now = new Date();
+    const today = now.toISOString().slice(0, 10);
+    let chargesAdjusted = 0, added = 0, removed = 0; const touched = new Set<string>();
+
+    for (const ch of charges) {
+      const conc = byStuHead[ch.studentId]?.[ch.feeHeadId];
+      const expected = conc ? round2(conc.valueType === 'percent' ? (n(ch.debit) * n(conc.value)) / 100 : Math.min(n(conc.value), n(ch.debit))) : 0;
+      const cur = round2(byCharge[ch.uuid]?.sum || 0);
+      if (Math.abs(expected - cur) < 0.005) continue;
+      for (const eid of (byCharge[ch.uuid]?.ids || [])) {
+        queries.push(singleLineString`update student_ledger_entry set status = 'cancelled', updatedby_userid = $1, updated_at = $2 where uuid = $3`);
+        params.push([userId, now, eid]);
+      }
+      if (cur > 0) removed = round2(removed + cur);
+      if (expected > 0.005) {
+        queries.push(singleLineString`
+          insert into student_ledger_entry (uuid, school_id, student_id, academic_year_id, entry_date, category, fee_head_id, cycle_id, head_label, cycle_label, kind, credit, settles_entry_id, source_module, allocation, status, createdby_userid, created_at)
+          values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'concession',$11,$12,'fees','resynced','active',$13,$14)`);
+        params.push([generateShortUuid(12), schoolId, ch.studentId, academicYearId, today, ch.category, ch.feeHeadId, ch.cycleId, conc.name, ch.cycleLabel, expected, ch.uuid, userId, now]);
+        added = round2(added + expected);
+      }
+      chargesAdjusted++; touched.add(ch.studentId);
+    }
+    if (queries.length) await DB.queriesInTransaction(queries, params);
+    return { students: touched.size, chargesAdjusted, concessionAdded: added, concessionRemoved: removed };
   }
 }
 
