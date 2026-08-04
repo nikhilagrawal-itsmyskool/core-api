@@ -18,7 +18,7 @@ const arg = (k, d) => { const i = process.argv.indexOf(k); return i > -1 ? proce
 const has = (k) => process.argv.includes(k);
 const STAGE = arg('--stage', 'prod');
 const APPLY = has('--apply') && has('--yes');
-const SCHOOL = '2qy0xfycrq88', AY = 'w3ajbki9xhbm';
+const SCHOOL = '2qy0xfycrq88', AY = arg('--ay', 'w3ajbki9xhbm'), LABEL = arg('--label', '2026-27');
 const cfg = yaml.load(fs.readFileSync(path.join(__dirname, `../../../configs/${STAGE}/${STAGE}.yml`), 'utf8'));
 const pool = new Pool({ host: cfg.POSTGRES_ENDPOINT||cfg.POSTGRES_HOST, database: cfg.POSTGRES_DATABASE, user: cfg.POSTGRES_USERNAME||cfg.POSTGRES_USER, password: cfg.POSTGRES_PASSWORD, port: parseInt(cfg.POSTGRES_PORT||'5432'), ssl: cfg.POSTGRES_SSL==='false'?false:{rejectUnauthorized:false} });
 const n = v => v==null?0:Number(v), r2 = x => Math.round(x*100)/100, inr = x => '₹'+Math.round(Number(x||0)).toLocaleString('en-IN');
@@ -45,6 +45,7 @@ const VOID = `update student_ledger_entry set status='cancelled', updatedby_user
     const chs = chByStu[sid] || [];
     let changed = 0, oldC = 0, newC = 0; const voids = []; const inserts = [];
     for (const ch of chs) {
+      if (!ch.fee_head_id) continue; // SAFETY: never reconcile a charge whose head isn't resolved (would spuriously strip)
       const cur = r2(byCharge[ch.uuid]?.sum || 0);
       const def = byStuHead[sid]?.[ch.fee_head_id];
       const exp = def ? r2(def.value_type==='percent' ? n(ch.debit)*n(def.value)/100 : Math.min(n(def.value), n(ch.debit))) : 0;
@@ -70,7 +71,7 @@ const VOID = `update student_ledger_entry set status='cancelled', updatedby_user
   perStu.sort((a,b)=> (b.newC-b.oldC)-(a.newC-a.oldC));
   perStu.forEach(p => { const i = info[p.sid]||{}; rows.push([i.admission_number||'', i.cls||'', i.name||'', Math.round(p.oldC), Math.round(p.newC), Math.round(p.newC-p.oldC), p.voids.length, p.inserts.length]); });
   const outDir = path.join(__dirname, '../reports'); fs.mkdirSync(outDir, { recursive:true });
-  const out = path.join(outDir, `concession-reconcile-${STAGE}-2026-27.csv`);
+  const out = path.join(outDir, `concession-reconcile-${STAGE}-${LABEL}.csv`);
   fs.writeFileSync(out, rows.map(r => r.map(v => { const t=String(v==null?'':v); return /[",\n]/.test(t)?'"'+t.replace(/"/g,'""')+'"':t; }).join(',')).join('\n'), 'utf8');
   console.log(`per-student detail: ${out}`);
 

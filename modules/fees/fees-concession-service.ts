@@ -275,6 +275,7 @@ class ConcessionService {
     let chargesAdjusted = 0, added = 0, removed = 0; const touched = new Set<string>();
 
     for (const ch of charges) {
+      if (!ch.feeHeadId) continue; // SAFETY: never reconcile a charge whose head isn't resolved (would spuriously strip)
       const conc = byStuHead[ch.studentId]?.[ch.feeHeadId];
       const expected = conc ? round2(conc.valueType === 'percent' ? (n(ch.debit) * n(conc.value)) / 100 : Math.min(n(conc.value), n(ch.debit))) : 0;
       const cur = round2(byCharge[ch.uuid]?.sum || 0);

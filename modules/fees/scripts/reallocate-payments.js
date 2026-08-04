@@ -28,7 +28,7 @@ const APPLY = has('--apply') && has('--yes'); // both required to write
 const SPILL = !has('--no-spill'); // spill a receipt's leftover onto next unpaid cycles (default on)
 const ADM = String(arg('--adm', '')).split(',').map((s) => s.trim()).filter(Boolean); // limit to these admission numbers
 const SCHOOL = '2qy0xfycrq88';   // DBPASN
-const AY = 'w3ajbki9xhbm';       // 2026-27
+const AY = arg('--ay', 'w3ajbki9xhbm'), LABEL = arg('--label', '2026-27'); // 2026-27 default
 const TODAY = new Date().toISOString().slice(0, 10);
 
 const cfg = yaml.load(fs.readFileSync(path.join(__dirname, `../../../configs/${STAGE}/${STAGE}.yml`), 'utf8'));
@@ -78,10 +78,12 @@ const VOID_SQL = `update student_ledger_entry set status='cancelled', updatedby_
      from student_ledger_entry where school_id=$1 and academic_year_id=$2 and status='active' and kind='payment' and settles_entry_id is not null
      group by settles_entry_id, src`, [SCHOOL, AY])).rows.forEach((r) => { (payBy[r.settles_entry_id] ||= {})[r.src] = Number(r.c); });
 
-  // only MIGRATED receipts drive re-allocation; native receipts (live Collect) are left as-is
+  // only MIGRATED, NON-TRANSPORT receipts drive re-allocation (transport stays separate — it has no
+  // charges in this ledger); native receipts (live Collect) are left as-is
   const receipts = (await pool.query(
     `select uuid, student_id, legacy_receipt_no, receipt_date, total_paid, cycle_set, source from fee_receipt
      where school_id=$1 and academic_year_id=$2 and status='active' and student_id is not null and source='schoolpad'
+       and (type is null or type <> 'transport')
      order by student_id, receipt_date, legacy_receipt_no`, [SCHOOL, AY])).rows;
 
   const studInfo = {};
@@ -207,7 +209,7 @@ const VOID_SQL = `update student_ledger_entry set status='cancelled', updatedby_
   // ---- CSV audit ----
   const outDir = path.join(__dirname, '../reports');
   fs.mkdirSync(outDir, { recursive: true });
-  const outFile = path.join(outDir, `payment-reallocation-audit-${STAGE}-2026-27${ADM.length ? '-adm' : ''}.csv`);
+  const outFile = path.join(outDir, `payment-reallocation-audit-${STAGE}-${LABEL}${ADM.length ? '-adm' : ''}.csv`);
   fs.writeFileSync(outFile, rows.map((r) => r.map((v) => {
     const s = String(v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
   }).join(',')).join('\n'), 'utf8');

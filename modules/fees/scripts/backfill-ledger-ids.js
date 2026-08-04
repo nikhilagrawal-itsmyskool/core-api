@@ -18,7 +18,7 @@ const arg = (k, d) => { const i = process.argv.indexOf(k); return i > -1 ? proce
 const has = (k) => process.argv.includes(k);
 const STAGE = arg('--stage', 'prod');
 const APPLY = has('--apply') && has('--yes');
-const SCHOOL = '2qy0xfycrq88', AY = 'w3ajbki9xhbm';
+const SCHOOL = '2qy0xfycrq88', AY = arg('--ay', 'w3ajbki9xhbm');
 
 const cfg = yaml.load(fs.readFileSync(path.join(__dirname, `../../../configs/${STAGE}/${STAGE}.yml`), 'utf8'));
 const pool = new Pool({ host: cfg.POSTGRES_ENDPOINT||cfg.POSTGRES_HOST, database: cfg.POSTGRES_DATABASE, user: cfg.POSTGRES_USERNAME||cfg.POSTGRES_USER, password: cfg.POSTGRES_PASSWORD, port: parseInt(cfg.POSTGRES_PORT||'5432'), ssl: cfg.POSTGRES_SSL==='false'?false:{rejectUnauthorized:false} });
@@ -48,7 +48,7 @@ const P = [SCHOOL, AY];
   console.log(`left null (standalone non-charge adjust/misc): ${leftover.length ? leftover.map(r=>`${r.kind}=${r.n}`).join(', ') : 'none'}`);
 
   if (APPLY) {
-    if (badChHead.length || badChCyc.length) { console.log('\nABORTING — unmatched CHARGE labels; resolve first.'); await pool.end(); return; }
+    if (badChHead.length || badChCyc.length) console.log('\nNOTE: unmatched charge labels above stay null (e.g. "Late Fee Fine" — not a fee_head); backfilling the rest.');
     const h = await pool.query(`update student_ledger_entry le set fee_head_id=h.uuid from fee_head h where le.school_id=$1 and le.academic_year_id=$2 and le.kind='charge' and le.fee_head_id is null and h.school_id=$1 and h.academic_year_id=$2 and h.status='active' and ${headJoin}`, P);
     const c = await pool.query(`update student_ledger_entry le set cycle_id=c.uuid from fee_cycle c where le.school_id=$1 and le.academic_year_id=$2 and le.kind='charge' and le.cycle_id is null and c.school_id=$1 and c.academic_year_id=$2 and c.status='active' and ${cycJoin}`, P);
     const cr = await pool.query(`update student_ledger_entry le set fee_head_id=coalesce(le.fee_head_id, ch.fee_head_id), cycle_id=coalesce(le.cycle_id, ch.cycle_id) from student_ledger_entry ch where le.school_id=$1 and le.academic_year_id=$2 and le.settles_entry_id=ch.uuid and (le.fee_head_id is null or le.cycle_id is null)`, P);
