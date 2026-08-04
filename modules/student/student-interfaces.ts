@@ -121,6 +121,7 @@ export interface ClassTeacherRef {
 
 export interface EnrollmentRow {
   uuid: string;
+  studentId?: string; // the student record this year lives under (differs for 'historical' prev-admission years)
   academicYearId?: string;
   academicYearName?: string;
   classId?: string;

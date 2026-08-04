@@ -353,7 +353,7 @@ class StudentAdminService {
 
     const currentEnrollments = (await DB.query(
       singleLineString`
-        select sc.uuid, sc.academic_year_id, ay.name as academic_year_name,
+        select sc.uuid, sc.student_id, sc.academic_year_id, ay.name as academic_year_name,
                sc.class_id, c.name as class_name, sc.stream_code, cs.name as stream_name, sc.roll_number, sc.join_date, sc.status
         from student_class sc
         left join academic_year ay on sc.academic_year_id = ay.uuid
@@ -426,7 +426,7 @@ class StudentAdminService {
     // Old (superseded) record's years — already EnrollmentRow-shaped after case transform.
     const oldRows = (await DB.query(
       singleLineString`
-        select sc.uuid, sc.academic_year_id, ay.name as academic_year_name,
+        select sc.uuid, prev.uuid as student_id, sc.academic_year_id, ay.name as academic_year_name,
                sc.class_id, c.name as class_name, sc.stream_code, sc.roll_number, sc.join_date, sc.status
         from student prev
         join student_class sc on sc.student_id = prev.uuid and sc.school_id = prev.school_id
