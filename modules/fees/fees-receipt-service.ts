@@ -187,6 +187,33 @@ class FeesReceiptService {
     return this.getById(schoolId, receiptId);
   }
 
+  // ---- TRANSPORT collection (interim, before stop/distance charges): a per-student transport
+  // receipt (type='transport'), month-tagged so it can reconcile to charges once they exist. No
+  // ledger entries — transport has no charges in the fee ledger yet.
+  public async collectTransport(schoolId: string, body: any, userId: string, schoolCode: string) {
+    if (!body?.studentId) throw new BadRequestResult(ErrorCode.InvalidInput, 'studentId is required');
+    if (!body?.academicYearId) throw new BadRequestResult(ErrorCode.InvalidInput, 'academicYearId is required');
+    const amount = n(body.amount);
+    if (!(amount > 0)) throw new BadRequestResult(ErrorCode.InvalidInput, 'Amount must be positive');
+    if (body.paymentMode && !PAYMENT_MODES.includes(body.paymentMode)) throw new BadRequestResult(ErrorCode.InvalidInput, 'Invalid payment mode');
+    const snap = await this.studentSnapshot(schoolId, body.studentId, body.academicYearId);
+    const receiptNo = await nextReceiptNo(schoolId, RECEIPT_SERIES.transport, body.academicYearId);
+    const receiptId = generateShortUuid(12); const now = new Date();
+    const receiptDate = body.receiptDate || now.toISOString().slice(0, 10);
+    await DB.query(
+      singleLineString`
+        insert into fee_receipt (uuid, school_id, academic_year_id, student_id, receipt_no, receipt_date, type,
+          payer_name, payer_class_snapshot, admission_no_snapshot, cycle_set, total_due, total_paid, balance, concession_total,
+          payment_mode, received_from, remarks, transport_remark, collected_by_userid, status, source, createdby_userid, created_at)
+        values ($1,$2,$3,$4,$5,$6,'transport',$7,$8,$9,$10,$11,$11,0,0,$12,$13,$14,$15,$16,'active','native',$16,$17)`,
+      [receiptId, schoolId, body.academicYearId, body.studentId, receiptNo, receiptDate,
+        snap.name || null, snap.className || null, snap.admissionNumber || null, body.month || null, amount,
+        body.paymentMode || 'cash', body.receivedFrom || null, body.remark || null, body.month || null, userId, now]
+    );
+    notifyReceipt(schoolCode, body.studentId, { studentName: snap.name, receiptNo, amount: money(amount), date: receiptDate });
+    return this.getById(schoolId, receiptId);
+  }
+
   public async getById(schoolId: string, receiptId: string) {
     const rec = await DB.query(singleLineString`select * from fee_receipt where school_id = $1 and uuid = $2`, [schoolId, receiptId]);
     if (!rec.length) throw new NotFoundResult(ErrorCode.InvalidId, 'Receipt not found');

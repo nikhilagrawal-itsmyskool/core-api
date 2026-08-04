@@ -26,6 +26,17 @@ class FeesReceiptHandler {
     } catch (err: any) { ResponseBuilder.handleError(err, callback); }
   };
 
+  public collectTransport = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const schoolCode = validateSchoolCodeHeader(event);
+      const rc = await resolveSchool(event, callback); if (!rc) return;
+      const body = parseBody<any>(event, callback); if (!body) return;
+      const result = await feesReceiptService.collectTransport(rc.schoolId, body, rc.userId, schoolCode);
+      ResponseBuilder.ok(result, callback);
+    } catch (err: any) { ResponseBuilder.handleError(err, callback); }
+  };
+
   public cancel = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
     ctx.callbackWaitsForEmptyEventLoop = false;
     try {
@@ -70,6 +81,7 @@ class FeesReceiptHandler {
 const handler = new FeesReceiptHandler();
 export const collect = handler.collect;
 export const adhoc = handler.adhoc;
+export const collectTransport = handler.collectTransport;
 export const cancel = handler.cancel;
 export const getById = handler.getById;
 export const list = handler.list;

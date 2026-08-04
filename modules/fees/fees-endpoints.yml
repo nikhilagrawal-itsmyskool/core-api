@@ -248,6 +248,11 @@
     name: ${self:service}-collect-adhoc
     events:
       - http: { path: 'receipts/adhoc', method: post, cors: true }
+  collect-transport:
+    handler: fees-receipt-handler.collectTransport
+    name: ${self:service}-collect-transport
+    events:
+      - http: { path: 'receipts/transport', method: post, cors: true }
 
   # ---- Refunds ----
   create-refund:
