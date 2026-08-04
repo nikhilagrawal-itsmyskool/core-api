@@ -1,4 +1,8 @@
 import { DB, singleLineString } from '../../shared/lib/db';
+import { BadRequestResult } from '../../shared/lib/errors';
+import { ErrorCode } from '../../shared/lib/error-codes';
+import { dueBuckets } from './fees-util';
+const { generateShortUuid } = require('../../shared/util/generate-uuid.js');
 
 class FeesReportService {
   // Per-cashier daily collection summary for a date (default today).
@@ -132,22 +136,25 @@ class FeesReportService {
     );
   }
 
-  // Class-wise dues report: per-student due-now / upcoming / full-year outstanding.
-  // mode 'due' (default) lists only students with something due now; 'all' lists any outstanding.
+  // Class-wise dues report (collection console): per-student due-now / this-quarter / full-year,
+  // plus prior-year dues (following the old-admission link), father's mobile and follow-up status.
+  // mode 'due' (default) lists students with something due now; 'all' lists any outstanding.
   public async dues(schoolId: string, q: any) {
     const ay = q?.academicYearId;
-    if (!ay) return { rows: [], totals: { dueNow: 0, upcoming: 0, fullYear: 0, students: 0 } };
-    const today = new Date().toISOString().slice(0, 10);
-    const params: any[] = [schoolId, ay, today];
+    const bkt = dueBuckets();
+    if (!ay) return { rows: [], totals: { dueNow: 0, thisQuarter: 0, fullYear: 0, prevYears: 0, students: 0 }, quarterLabel: bkt.label };
+    const params: any[] = [schoolId, ay, bkt.endOfMonth, bkt.quarterEnd];
     let filter = '';
     if (q?.classId) { params.push(q.classId); filter += ` and sc.class_id = $${params.length}`; }
     if (q?.studentId) { params.push(q.studentId); filter += ` and ps.student_id = $${params.length}`; }
     const having = q?.mode === 'all' ? 'ps.full_year > 0.5' : 'ps.due_now > 0.5';
 
-    const rows = await DB.query(
+    const rows: any[] = await DB.query(
       singleLineString`
         with charges as (
-          select e.student_id, e.uuid, e.debit, (fc.due_date is null or fc.due_date <= $3) as is_due
+          select e.student_id, e.uuid, e.debit,
+            (fc.due_date is null or fc.due_date <= $3) as due_now,
+            (fc.due_date is not null and fc.due_date > $3 and fc.due_date <= $4) as this_quarter
           from student_ledger_entry e
           left join fee_cycle fc on fc.uuid = e.cycle_id and fc.status = 'active'
           where e.school_id = $1 and e.academic_year_id = $2 and e.kind = 'charge' and e.status = 'active'
@@ -158,32 +165,87 @@ class FeesReportService {
           group by settles_entry_id
         ),
         per_charge as (
-          select c.student_id, greatest(0, c.debit - coalesce(p.c, 0)) as remaining, c.is_due from charges c
-          left join paid p on p.settles_entry_id = c.uuid
+          select c.student_id, greatest(0, c.debit - coalesce(p.c, 0)) as remaining, c.due_now, c.this_quarter
+          from charges c left join paid p on p.settles_entry_id = c.uuid
         ),
         ps as (
           select student_id,
             coalesce(sum(remaining), 0) as full_year,
-            coalesce(sum(remaining) filter (where is_due), 0) as due_now,
-            coalesce(sum(remaining) filter (where not is_due), 0) as upcoming
+            coalesce(sum(remaining) filter (where due_now), 0) as due_now,
+            coalesce(sum(remaining) filter (where this_quarter), 0) as this_quarter
           from per_charge group by student_id
         )
-        select ps.student_id, ps.due_now, ps.upcoming, ps.full_year,
-               s.name, s.admission_number, c.name as class_name
+        select ps.student_id, ps.due_now, ps.this_quarter, ps.full_year,
+               s.name, s.admission_number, c.name as class_name,
+               (select g.mobile from student_guardian g where g.school_id = $1 and g.student_id = ps.student_id
+                  and g.relation = 'father' and g.status = 'active' order by g.is_primary_contact desc nulls last limit 1) as father_mobile,
+               fu.status as followup_status, fu.note as followup_note, fu.promised_date as followup_promised
         from ps
         join student s on s.uuid = ps.student_id and s.school_id = $1
         left join student_class sc on sc.student_id = ps.student_id and sc.academic_year_id = $2 and sc.school_id = $1
         left join class c on c.uuid = sc.class_id
+        left join fee_followup fu on fu.school_id = $1 and fu.student_id = ps.student_id and fu.academic_year_id = $2
         where ${having} ${filter}
         order by c.name nulls last, s.name`,
       params
     );
 
+    // prior-year outstanding per shown student — includes the linked old-admission record's years
+    const ids = rows.map((r) => r.studentId);
+    const prevById: Record<string, number> = {};
+    if (ids.length) {
+      const pr: any[] = await DB.query(
+        singleLineString`
+          with targets as (
+            select s.uuid as ref_id, s.uuid as owner_id from student s where s.school_id = $1 and s.uuid = any($2)
+            union
+            select prev.uuid as ref_id, cur.uuid as owner_id
+            from student cur
+            join student prev on prev.school_id = cur.school_id and lower(prev.admission_number) = lower(cur.old_admission_number)
+            where cur.school_id = $1 and cur.uuid = any($2) and cur.old_admission_number is not null
+          ),
+          net as (
+            select le.student_id, le.academic_year_id, sum(coalesce(le.debit,0)) - sum(coalesce(le.credit,0)) as net
+            from student_ledger_entry le
+            where le.school_id = $1 and le.status = 'active' and le.academic_year_id <> $3
+              and le.student_id in (select ref_id from targets)
+            group by le.student_id, le.academic_year_id
+          )
+          select t.owner_id as student_id, coalesce(sum(greatest(0, n.net)), 0) as prev_dues
+          from targets t left join net n on n.student_id = t.ref_id
+          group by t.owner_id`,
+        [schoolId, ids, ay]
+      );
+      pr.forEach((r) => (prevById[r.studentId] = Number(r.prevDues || 0)));
+    }
+    rows.forEach((r) => (r.prevYears = prevById[r.studentId] || 0));
+
     const totals = rows.reduce(
-      (t: any, r: any) => ({ dueNow: t.dueNow + Number(r.dueNow || 0), upcoming: t.upcoming + Number(r.upcoming || 0), fullYear: t.fullYear + Number(r.fullYear || 0) }),
-      { dueNow: 0, upcoming: 0, fullYear: 0 }
+      (t: any, r: any) => ({
+        dueNow: t.dueNow + Number(r.dueNow || 0),
+        thisQuarter: t.thisQuarter + Number(r.thisQuarter || 0),
+        fullYear: t.fullYear + Number(r.fullYear || 0),
+        prevYears: t.prevYears + Number(r.prevYears || 0),
+      }),
+      { dueNow: 0, thisQuarter: 0, fullYear: 0, prevYears: 0 }
     );
-    return { rows, totals: { ...totals, students: rows.length } };
+    return { rows, totals: { ...totals, students: rows.length }, quarterLabel: bkt.label };
+  }
+
+  // Set/clear a student's follow-up status for the dues console (upsert one row per student/year).
+  public async setFollowup(schoolId: string, body: any, userId: string) {
+    if (!body?.studentId || !body?.academicYearId) throw new BadRequestResult(ErrorCode.InvalidInput, 'studentId and academicYearId are required');
+    const status = body.status || null; // 'called' | 'promised' | 'unreachable' | 'settled' | null(clear)
+    const now = new Date();
+    await DB.query(
+      singleLineString`
+        insert into fee_followup (uuid, school_id, student_id, academic_year_id, status, note, promised_date, updatedby_userid, updated_at)
+        values ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+        on conflict (school_id, student_id, academic_year_id)
+        do update set status = $5, note = $6, promised_date = $7, updatedby_userid = $8, updated_at = $9`,
+      [generateShortUuid(12), schoolId, body.studentId, body.academicYearId, status, body.note || null, body.promisedDate || null, userId, now]
+    );
+    return { ok: true };
   }
 }
 

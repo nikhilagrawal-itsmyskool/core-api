@@ -265,3 +265,17 @@ create table if not exists fee_receipt_counter (
   updated_at timestamp(0)
 );
 create unique index if not exists uq_fee_receipt_counter on fee_receipt_counter (school_id, series, academic_year_id);
+
+-- follow-up / collection tracker: one row per (student, academic year) for the dues console
+create table if not exists fee_followup (
+  uuid varchar(12) primary key,
+  school_id varchar(12) not null,
+  student_id varchar(12) not null,
+  academic_year_id varchar(12) not null,
+  status varchar(16),                        -- 'called' | 'promised' | 'unreachable' | 'settled' | null
+  note varchar(512),
+  promised_date date,
+  updatedby_userid varchar(12),
+  updated_at timestamp(0)
+);
+create unique index if not exists uq_fee_followup on fee_followup (school_id, student_id, academic_year_id);

@@ -1,6 +1,7 @@
 import { DB, singleLineString } from '../../shared/lib/db';
 import { BadRequestResult } from '../../shared/lib/errors';
 import { ErrorCode } from '../../shared/lib/error-codes';
+import { dueBuckets } from './fees-util';
 const { generateShortUuid } = require('../../shared/util/generate-uuid.js');
 
 // A ledger entry row (camelCase, as returned by DB.query).
@@ -58,7 +59,7 @@ class FeesLedgerService {
       );
       cyc.forEach((c) => (cycleDue[nrm(c.name)] = ymd(c.dueDate)));
     }
-    const today = new Date().toISOString().slice(0, 10);
+    const bkt = dueBuckets(); // due-now (<= end of month) / this-or-next quarter / later
 
     // credits grouped by the charge they settle
     const bySettle: Record<string, LedgerRow[]> = {};
@@ -75,19 +76,22 @@ class FeesLedgerService {
         const remaining = Math.max(0, net - paid);
         const status = remaining <= 0 ? 'paid' : paid > 0 ? 'partial' : 'unpaid';
         const dueDate = c.cycleLabel ? (cycleDue[nrm(c.cycleLabel)] ?? null) : null;
-        const due = !dueDate || dueDate <= today; // no due date => immediate (one-time heads)
+        // bucket: due now (<= end of this month, incl. no-date one-time), this/next quarter, or later
+        const bucket = !dueDate || dueDate <= bkt.endOfMonth ? 'due' : dueDate <= bkt.quarterEnd ? 'quarter' : 'later';
+        const due = bucket === 'due';
         return {
           chargeId: c.uuid, category: c.category, feeHeadId: c.feeHeadId, cycleId: c.cycleId,
           headLabel: c.headLabel, cycleLabel: c.cycleLabel, entryDate: c.entryDate,
-          charged: n(c.debit), concession, waiver, paid, net, remaining, status, dueDate, due,
+          charged: n(c.debit), concession, waiver, paid, net, remaining, status, dueDate, due, bucket,
         };
       });
 
     const totalDebit = rows.reduce((s, r) => s + n(r.debit), 0);
     const totalCredit = rows.reduce((s, r) => s + n(r.credit), 0);
     const outstanding = totalDebit - totalCredit;
-    const dueNow = lines.filter((l) => l.due).reduce((s, l) => s + l.remaining, 0);
-    const upcoming = lines.filter((l) => !l.due).reduce((s, l) => s + l.remaining, 0);
+    const dueNow = lines.filter((l) => l.bucket === 'due').reduce((s, l) => s + l.remaining, 0);
+    const thisQuarter = lines.filter((l) => l.bucket === 'quarter').reduce((s, l) => s + l.remaining, 0);
+    const upcoming = lines.filter((l) => l.bucket !== 'due').reduce((s, l) => s + l.remaining, 0);
     const totals = {
       charged: rows.filter((r) => r.kind === 'charge').reduce((s, r) => s + n(r.debit), 0),
       concession: rows.filter((r) => r.kind === 'concession').reduce((s, r) => s + n(r.credit), 0),
@@ -95,8 +99,10 @@ class FeesLedgerService {
       paid: rows.filter((r) => r.kind === 'payment').reduce((s, r) => s + n(r.credit), 0),
       outstanding: Math.max(0, outstanding),
       advance: Math.max(0, -outstanding),
-      dueNow,     // remaining on cycles whose due date has passed (+ one-time)
-      upcoming,   // remaining on cycles not yet due (rest of the year)
+      dueNow,       // remaining due through end of this month (overdue + current month)
+      thisQuarter,  // remaining due later this quarter (rolls to next quarter in a quarter's last month)
+      upcoming,     // remaining not yet due (this quarter + later) — full-year minus due-now
+      quarterLabel: bkt.label,
     };
     return { studentId, academicYearId: academicYearId || null, lines, entries: rows, totals };
   }
@@ -112,7 +118,9 @@ class FeesLedgerService {
       outstanding: led.totals.outstanding,
       advance: led.totals.advance,
       dueNow: led.totals.dueNow,
+      thisQuarter: led.totals.thisQuarter,
       upcoming: led.totals.upcoming,
+      quarterLabel: led.totals.quarterLabel,
       walletBalance: 0, // supplies wallet deferred
       dueComponents: dueLines.length,
     };

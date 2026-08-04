@@ -10,6 +10,25 @@ export interface RequestContext {
   userId: string;
 }
 
+// Quarter-based due buckets for the fees views. A charge's due date is bucketed vs today:
+//   due now      = due_date <= end of THIS month (overdue + current month)
+//   this quarter = end-of-month < due_date <= end of the current calendar quarter
+//   later        = beyond that
+// In the LAST month of a quarter, "this quarter" is empty, so it rolls forward to the NEXT
+// quarter (label becomes "Next quarter"). Boundaries are YYYY-MM-DD strings for date compares.
+export function dueBuckets(today?: string): { endOfMonth: string; quarterEnd: string; label: string; nextQuarter: boolean } {
+  const t = today ? new Date(today + 'T00:00:00') : new Date();
+  const y = t.getFullYear();
+  const m = t.getMonth(); // 0-11
+  const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const endOfMonth = new Date(y, m + 1, 0);
+  const lastMonthOfQuarter = m % 3 === 2;
+  const q = Math.floor(m / 3); // 0-3 calendar quarter
+  const quarterEndMonthIdx = (lastMonthOfQuarter ? q + 1 : q) * 3 + 2; // month index of the target quarter's last month
+  const quarterEnd = new Date(y, quarterEndMonthIdx + 1, 0); // JS Date rolls month/year overflow (Dec -> next Jan-Mar)
+  return { endOfMonth: ymd(endOfMonth), quarterEnd: ymd(quarterEnd), label: lastMonthOfQuarter ? 'Next quarter' : 'This quarter', nextQuarter: lastMonthOfQuarter };
+}
+
 export async function getSchoolIdByCode(schoolCode: string): Promise<string | null> {
   const results = await DB.query(
     singleLineString`select uuid from school where lower(code) = lower($1)`,
