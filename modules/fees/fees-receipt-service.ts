@@ -14,6 +14,7 @@ interface CollectRequest {
   studentId: string; academicYearId: string; receiptDate?: string;
   paymentMode?: string; receivedFrom?: string; txnRef?: string; remarks?: string;
   type?: string; allocations: Allocation[]; advanceApplied?: number;
+  waivers?: Allocation[]; waiveReason?: string; // ad-hoc settlement: forgive the leftover on a charge
 }
 
 class FeesReceiptService {
@@ -34,12 +35,16 @@ class FeesReceiptService {
   public async collect(schoolId: string, body: CollectRequest, userId: string, schoolCode: string) {
     if (!body?.studentId) throw new BadRequestResult(ErrorCode.InvalidInput, 'studentId is required');
     if (!body.academicYearId) throw new BadRequestResult(ErrorCode.InvalidInput, 'academicYearId is required');
-    if (!Array.isArray(body.allocations) || !body.allocations.length)
-      throw new BadRequestResult(ErrorCode.InvalidInput, 'At least one allocation is required');
+    const allocations = Array.isArray(body.allocations) ? body.allocations.filter((a) => n(a.amount) > 0) : [];
+    const waivers = Array.isArray(body.waivers) ? body.waivers.filter((a) => n(a.amount) > 0) : [];
+    if (!allocations.length && !waivers.length)
+      throw new BadRequestResult(ErrorCode.InvalidInput, 'At least one payment or waiver is required');
+    if (waivers.length && !body.waiveReason)
+      throw new BadRequestResult(ErrorCode.InvalidInput, 'A reason is required to waive an amount');
     if (body.paymentMode && !PAYMENT_MODES.includes(body.paymentMode as any))
       throw new BadRequestResult(ErrorCode.InvalidInput, 'Invalid payment mode');
 
-    const ids = body.allocations.map((a) => a.ledgerId);
+    const ids = [...new Set([...allocations, ...waivers].map((a) => a.ledgerId))];
     const phCharges = ids.map((_, i) => `$${i + 3}`).join(',');
     const charges: any[] = await DB.query(
       singleLineString`select * from student_ledger_entry where school_id = $1 and student_id = $2 and uuid in (${phCharges}) and kind = 'charge' and status = 'active'`,
@@ -55,15 +60,17 @@ class FeesReceiptService {
     const paidBy: Record<string, number> = {};
     credits.forEach((r) => (paidBy[r.settlesEntryId] = n(r.paid)));
 
-    let settled = 0; let totalDue = 0;
-    for (const a of body.allocations) {
-      const c = chargeById[a.ledgerId];
-      if (!c) throw new BadRequestResult(ErrorCode.InvalidId, `Charge not found: ${a.ledgerId}`);
-      const remaining = n(c.debit) - (paidBy[a.ledgerId] || 0);
-      if (!(a.amount > 0)) throw new BadRequestResult(ErrorCode.InvalidInput, 'Allocation amount must be positive');
-      if (a.amount > remaining + 0.001)
-        throw new BadRequestResult(ErrorCode.InvalidInput, `Allocation ${money(a.amount)} exceeds remaining ${money(remaining)} on a component`);
-      settled += a.amount; totalDue += remaining;
+    const payByCharge: Record<string, number> = {}; allocations.forEach((a) => (payByCharge[a.ledgerId] = (payByCharge[a.ledgerId] || 0) + n(a.amount)));
+    const waiveByCharge: Record<string, number> = {}; waivers.forEach((a) => (waiveByCharge[a.ledgerId] = (waiveByCharge[a.ledgerId] || 0) + n(a.amount)));
+    let settled = 0; let waived = 0; let totalDue = 0;
+    for (const id of ids) {
+      const c = chargeById[id];
+      if (!c) throw new BadRequestResult(ErrorCode.InvalidId, `Charge not found: ${id}`);
+      const remaining = n(c.debit) - (paidBy[id] || 0);
+      const pay = payByCharge[id] || 0; const waive = waiveByCharge[id] || 0;
+      if (pay + waive > remaining + 0.001)
+        throw new BadRequestResult(ErrorCode.InvalidInput, `Payment + waiver ${money(pay + waive)} exceeds remaining ${money(remaining)} on a component`);
+      settled += pay; waived += waive; totalDue += remaining;
     }
 
     // advance drawdown: fund part of `settled` from the student's existing advance credit.
@@ -88,7 +95,7 @@ class FeesReceiptService {
     const receiptId = generateShortUuid(12);
     const now = new Date();
     const receiptDate = body.receiptDate || now.toISOString().slice(0, 10);
-    const balance = totalDue - settled;
+    const balance = totalDue - settled - waived;
 
     const queries: string[] = []; const params: any[][] = [];
     queries.push(singleLineString`
@@ -100,7 +107,7 @@ class FeesReceiptService {
       snap.name || null, snap.className || null, snap.admissionNumber || null, totalDue, cash, balance, advanceApplied,
       body.paymentMode || 'cash', body.txnRef || null, body.receivedFrom || null, body.remarks || null, userId, now]);
 
-    for (const a of body.allocations) {
+    for (const a of allocations) {
       const c = chargeById[a.ledgerId];
       queries.push(singleLineString`
         insert into fee_receipt_line (uuid, school_id, receipt_id, fee_head_id, cycle_id, head_label, cycle_label, amount, is_concession, settles_ledger_id, createdby_userid, created_at)
@@ -110,6 +117,17 @@ class FeesReceiptService {
         insert into student_ledger_entry (uuid, school_id, student_id, academic_year_id, entry_date, category, fee_head_id, cycle_id, head_label, cycle_label, kind, credit, settles_entry_id, source_module, source_ref, allocation, status, createdby_userid, created_at)
         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'payment',$11,$12,'fees',$13,'explicit','active',$14,$15)`);
       params.push([generateShortUuid(12), schoolId, body.studentId, body.academicYearId, receiptDate, c.category, c.feeHeadId, c.cycleId, c.headLabel, c.cycleLabel, a.amount, a.ledgerId, receiptId, userId, now]);
+    }
+
+    // waiver / settlement write-off: forgive the leftover on a charge (no money received)
+    for (const id of ids) {
+      const waive = waiveByCharge[id] || 0;
+      if (waive <= 0) continue;
+      const c = chargeById[id];
+      queries.push(singleLineString`
+        insert into student_ledger_entry (uuid, school_id, student_id, academic_year_id, entry_date, category, fee_head_id, cycle_id, head_label, cycle_label, kind, credit, settles_entry_id, source_module, source_ref, remarks, allocation, status, createdby_userid, created_at)
+        values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'waiver',$11,$12,'fees',$13,$14,'explicit','active',$15,$16)`);
+      params.push([generateShortUuid(12), schoolId, body.studentId, body.academicYearId, receiptDate, c.category, c.feeHeadId, c.cycleId, c.headLabel, c.cycleLabel, waive, id, receiptId, body.waiveReason || 'Settlement waiver', userId, now]);
     }
 
     // draw down the advance: an 'adjust' debit offsets the advance credit consumed, so the
@@ -173,7 +191,8 @@ class FeesReceiptService {
     const rec = await DB.query(singleLineString`select * from fee_receipt where school_id = $1 and uuid = $2`, [schoolId, receiptId]);
     if (!rec.length) throw new NotFoundResult(ErrorCode.InvalidId, 'Receipt not found');
     const lines = await DB.query(singleLineString`select * from fee_receipt_line where receipt_id = $1 order by created_at`, [receiptId]);
-    return { ...rec[0], lines };
+    const wv = await DB.query(singleLineString`select coalesce(sum(credit),0) as t from student_ledger_entry where school_id = $1 and source_ref = $2 and kind = 'waiver' and status = 'active'`, [schoolId, receiptId]);
+    return { ...rec[0], lines, waiverTotal: Number(wv[0]?.t || 0) };
   }
 
   public async list(schoolId: string, q: any) {
@@ -197,7 +216,7 @@ class FeesReceiptService {
       fatherName: r.fatherName, paymentMode: r.paymentMode, receivedFrom: r.receivedFrom,
       collectedBy: r.collectedByUserid, remarks: r.remarks,
       lines: (r.lines || []).map((l: any) => ({ headLabel: l.headLabel, cycleLabel: l.cycleLabel, amount: n(l.amount) })),
-      totalPaid: n(r.totalPaid), advanceApplied: n(r.advanceApplied), balance: n(r.balance),
+      totalPaid: n(r.totalPaid), advanceApplied: n(r.advanceApplied), waiverTotal: n(r.waiverTotal), balance: n(r.balance),
     });
   }
 }
