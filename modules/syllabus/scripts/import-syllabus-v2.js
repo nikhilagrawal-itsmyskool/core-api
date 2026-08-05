@@ -215,6 +215,10 @@ function parseDoc(file) {
         if (/^(chapters?|topics?|months?)$/i.test(t)) continue; // repeated header row
         if (isBlank(t)) continue;
         if (/^topic\s*[:：]/i.test(t)) { curSection = add({ parent: null, type: 'section', month: curMonth, heading: t.replace(/^topic\s*[:：]\s*/i, ''), pageRef: null }); continue; }
+        // A numbered "Story 1: …" / "Chapter 2: …" / "Unit/Lesson N: …" row is a
+        // CHAPTER header (Phonics-style flat books): the sheets/topics beneath it
+        // nest under it and roll up. Keep the full heading; its page cell is a dash.
+        if (/^(story|chapter|unit|lesson)\s*\d+[a-z]?\s*[:：]/i.test(t)) { curSection = add({ parent: null, type: 'chapter', month: curMonth, heading: t, pageRef: pageFromCell(joinCell(c[b.pi])) }); continue; }
         if (RX_STRUCT.test(t) && !/^T\s*-?\s*\d/i.test(t)) { add({ parent: curSection, type: structType(t), month: curMonth, heading: t, pageRef: joinCell(c[b.pi]) || null }); continue; }
         add({ parent: curSection, type: 'topic', month: curMonth, heading: t, theme: b.th != null ? (joinCell(c[b.th]) || null) : null, pageRef: joinCell(c[b.pi]) || null });
       }
