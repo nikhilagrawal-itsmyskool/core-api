@@ -167,6 +167,11 @@
     name: ${self:service}-list-concessions
     events:
       - http: { path: 'concessions', method: get, cors: true }
+  multi-concession:
+    handler: fees-concession-handler.multi
+    name: ${self:service}-multi-concession
+    events:
+      - http: { path: 'concessions/multi', method: get, cors: true }
   list-concession-students:
     handler: fees-concession-handler.listStudents
     name: ${self:service}-list-concession-students

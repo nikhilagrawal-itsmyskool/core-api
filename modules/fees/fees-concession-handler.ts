@@ -76,6 +76,18 @@ class ConcessionHandler {
     }
   };
 
+  public multi = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
+    _context.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const ctx = await resolveSchool(event, callback);
+      if (!ctx) return;
+      const results = await concessionService.multiConcession(ctx.schoolId, event.queryStringParameters?.academicYearId);
+      ResponseBuilder.ok(results, callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
   public listStudents = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
     _context.callbackWaitsForEmptyEventLoop = false;
     try {
@@ -133,6 +145,7 @@ export const create = handler.create;
 export const update = handler.update;
 export const remove = handler.remove;
 export const list = handler.list;
+export const multi = handler.multi;
 export const listStudents = handler.listStudents;
 export const addStudents = handler.addStudents;
 export const removeStudent = handler.removeStudent;

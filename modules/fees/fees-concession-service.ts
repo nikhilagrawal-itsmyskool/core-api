@@ -166,6 +166,30 @@ class ConcessionService {
     return DB.query(sql, params);
   }
 
+  // Students attached to >1 active concession this year — audit for stacked discounts.
+  // sameHead = two+ concessions on the SAME fee head (a real double-discount to review);
+  // different-head combos (e.g. CAUTION waiver + a tuition discount) are normal.
+  public async multiConcession(schoolId: string, academicYearId?: string): Promise<any[]> {
+    if (!academicYearId) return [];
+    const rows: any[] = await DB.query(
+      singleLineString`
+        select cs.student_id, s.name as student_name, s.admission_number, c.name as class_name,
+               count(*) as concession_count, count(distinct fc.fee_head_id) as head_count,
+               json_agg(json_build_object('name', fc.name, 'feeHeadId', fc.fee_head_id, 'valueType', fc.value_type, 'value', fc.value) order by fc.name) as concessions
+        from fee_concession_student cs
+        join fee_concession fc on fc.uuid = cs.concession_id and fc.status = 'active' and fc.academic_year_id = $2
+        left join student s on s.uuid = cs.student_id and s.school_id = cs.school_id
+        left join student_class sc on sc.student_id = cs.student_id and sc.academic_year_id = $2 and sc.school_id = cs.school_id
+        left join class c on c.uuid = sc.class_id
+        where cs.school_id = $1 and cs.status = 'active'
+        group by cs.student_id, s.name, s.admission_number, c.name
+        having count(*) > 1
+        order by (count(*) - count(distinct fc.fee_head_id)) desc, count(*) desc, s.name`,
+      [schoolId, academicYearId]
+    );
+    return rows.map((r) => ({ ...r, sameHead: Number(r.concessionCount) > Number(r.headCount) }));
+  }
+
   public async addStudents(concessionId: string, data: AddConcessionStudentsRequest, schoolId: string, userId: string): Promise<any> {
     if (!Array.isArray(data.studentIds) || data.studentIds.length === 0) {
       throw new BadRequestResult(ErrorCode.InvalidInput, 'studentIds is required');
