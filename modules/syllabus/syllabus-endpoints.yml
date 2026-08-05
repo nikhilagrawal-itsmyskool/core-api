@@ -211,6 +211,17 @@
           cors: true
 
   # ── Plan ↔ teacher assignment (per section) ───────────────────────────────
+  # Bulk: all assignments for a whole grade in one request (Offerings matrix).
+  # Must be declared before syllabi/{id}/teachers so the literal path wins.
+  list-grade-teachers:
+    handler: syllabus-teacher-handler.listForScope
+    name: ${self:service}-list-grade-teachers
+    events:
+      - http:
+          path: plan-teachers
+          method: get
+          cors: true
+
   list-plan-teachers:
     handler: syllabus-teacher-handler.list
     name: ${self:service}-list-plan-teachers

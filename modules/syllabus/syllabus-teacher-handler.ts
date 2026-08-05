@@ -21,6 +21,25 @@ class SyllabusTeacherHandler {
     }
   };
 
+  // GET /plan-teachers?academicYearId=&grade= — all persisted assignments for a
+  // whole grade in one request (Offerings matrix). Replaces the per-plan N+1.
+  public listForScope = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
+    _context.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const ctx = await resolveSchool(event, callback);
+      if (!ctx) return;
+      const qp = event.queryStringParameters || {};
+      if (!qp.academicYearId || !qp.grade) {
+        ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'academicYearId and grade are required', callback);
+        return;
+      }
+      const result = await syllabusTeacherService.listForScope(ctx.schoolId, qp.academicYearId, qp.grade);
+      ResponseBuilder.ok(result, callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
   // GET /syllabi/{id}/teacher-suggestions — timetable-resolved teachers per section.
   public suggest = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
     _context.callbackWaitsForEmptyEventLoop = false;
@@ -87,6 +106,7 @@ class SyllabusTeacherHandler {
 
 const handler = new SyllabusTeacherHandler();
 export const list = handler.list;
+export const listForScope = handler.listForScope;
 export const suggest = handler.suggest;
 export const assign = handler.assign;
 export const unassign = handler.unassign;

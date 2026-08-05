@@ -71,6 +71,31 @@ class SyllabusTeacherService {
     return { uuid, classId: data.classId, className: cls.name, teacherId: data.teacherId, teacherName: teacher.name };
   }
 
+  // All persisted teacher assignments for every plan in a (year, grade) scope, in
+  // ONE query. Powers the Offerings matrix — the previous per-plan fetch was an
+  // N+1 (one request per subject) whose intermittent failures got silently
+  // swallowed, making saved teachers flicker/vanish. Rows carry syllabus_id so the
+  // caller can group by plan. Stream is intentionally NOT filtered — the caller
+  // groups by syllabus_id and ignores plans it isn't showing.
+  public async listForScope(
+    schoolId: string, academicYearId: string, grade: string,
+  ): Promise<any[]> {
+    return DB.query(
+      singleLineString`
+        select spt.uuid, spt.syllabus_id, spt.class_id, c.name as class_name,
+               spt.teacher_id, e.name as teacher_name
+        from syllabus_plan_teacher spt
+        join syllabus s on s.uuid = spt.syllabus_id and s.status = 'active'
+        left join class c on c.uuid = spt.class_id
+        left join employee e on e.uuid = spt.teacher_id
+        where spt.school_id = $1 and spt.status = 'active'
+          and s.academic_year_id = $2 and lower(s.grade) = lower($3)
+        order by c.name, e.name
+      `,
+      [schoolId, academicYearId, grade.trim()],
+    );
+  }
+
   // Live "resolve from the timetable": for each base section of the plan's grade,
   // the teacher who teaches the matching subject in teaching_assignment (matched by
   // normalised subject name + alias, since the timetable's subject catalogue is
