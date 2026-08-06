@@ -35,6 +35,16 @@
           method: get
           cors: true
 
+  # ── Overview (readiness board) ────────────────────────────────────────────
+  syllabus-overview:
+    handler: syllabus-overview-handler.overview
+    name: ${self:service}-syllabus-overview
+    events:
+      - http:
+          path: overview
+          method: get
+          cors: true
+
   # ── Subjects ──────────────────────────────────────────────────────────────
   create-subject:
     handler: syllabus-subject-handler.create
