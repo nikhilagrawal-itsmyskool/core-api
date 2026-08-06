@@ -100,9 +100,13 @@ class FeesLedgerService {
       outstanding: Math.max(0, outstanding),
       advance: Math.max(0, -outstanding),
       dueNow,       // remaining due through end of this month (overdue + current month)
-      thisQuarter,  // remaining due later this quarter (rolls to next quarter in a quarter's last month)
+      thisQuarter,  // remaining due later this quarter (disjoint) — kept for internal grouping
+      dueQuarter: dueNow + thisQuarter, // CUMULATIVE: due through end of the quarter
       upcoming,     // remaining not yet due (this quarter + later) — full-year minus due-now
       quarterLabel: bkt.label,
+      monthEndLabel: bkt.monthEndLabel,     // e.g. "till Aug end"
+      quarterEndLabel: bkt.quarterEndLabel, // e.g. "till Sep end"
+      yearEndLabel: bkt.yearEndLabel,       // "till Mar end"
     };
     return { studentId, academicYearId: academicYearId || null, lines, entries: rows, totals };
   }
@@ -119,8 +123,12 @@ class FeesLedgerService {
       advance: led.totals.advance,
       dueNow: led.totals.dueNow,
       thisQuarter: led.totals.thisQuarter,
+      dueQuarter: led.totals.dueQuarter,
       upcoming: led.totals.upcoming,
       quarterLabel: led.totals.quarterLabel,
+      monthEndLabel: led.totals.monthEndLabel,
+      quarterEndLabel: led.totals.quarterEndLabel,
+      yearEndLabel: led.totals.yearEndLabel,
       walletBalance: 0, // supplies wallet deferred
       dueComponents: dueLines.length,
     };

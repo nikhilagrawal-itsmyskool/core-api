@@ -297,6 +297,11 @@
     name: ${self:service}-set-followup
     events:
       - http: { path: 'reports/followup', method: post, cors: true }
+  get-followup:
+    handler: fees-report-handler.getFollowup
+    name: ${self:service}-get-followup
+    events:
+      - http: { path: 'reports/followup', method: get, cors: true }
 
   # ---- Migration ----
   migration-import:

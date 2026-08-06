@@ -2,6 +2,7 @@ import { DB, singleLineString } from '../../shared/lib/db';
 import { BadRequestResult } from '../../shared/lib/errors';
 import { ErrorCode } from '../../shared/lib/error-codes';
 import { dueBuckets } from './fees-util';
+import { fileStorageService, getSignedPhotoUrl } from '../../shared/lib/file-storage';
 const { generateShortUuid } = require('../../shared/util/generate-uuid.js');
 
 class FeesReportService {
@@ -175,16 +176,23 @@ class FeesReportService {
             coalesce(sum(remaining) filter (where this_quarter), 0) as this_quarter
           from per_charge group by student_id
         )
-        select ps.student_id, ps.due_now, ps.this_quarter, ps.full_year,
+        select ps.student_id, ps.due_now, ps.this_quarter, (ps.due_now + ps.this_quarter) as due_quarter, ps.full_year,
                s.name, s.admission_number, c.name as class_name,
                (select g.mobile from student_guardian g where g.school_id = $1 and g.student_id = ps.student_id
                   and g.relation = 'father' and g.status = 'active' order by g.is_primary_contact desc nulls last limit 1) as father_mobile,
-               fu.status as followup_status, fu.note as followup_note, fu.promised_date as followup_promised
+               fu.status as followup_status, fu.note as followup_note, fu.promised_date as followup_promised,
+               fu.created_at as followup_at, fu.cnt as followup_count
         from ps
         join student s on s.uuid = ps.student_id and s.school_id = $1
         left join student_class sc on sc.student_id = ps.student_id and sc.academic_year_id = $2 and sc.school_id = $1
         left join class c on c.uuid = sc.class_id
-        left join fee_followup fu on fu.school_id = $1 and fu.student_id = ps.student_id and fu.academic_year_id = $2
+        left join lateral (
+          select fe.status, fe.note, fe.promised_date, fe.created_at,
+            (select count(*) from fee_followup_entry a where a.school_id = $1 and a.student_id = ps.student_id and a.academic_year_id = $2) as cnt
+          from fee_followup_entry fe
+          where fe.school_id = $1 and fe.student_id = ps.student_id and fe.academic_year_id = $2
+          order by fe.created_at desc limit 1
+        ) fu on true
         where ${having} ${filter}
         order by c.name nulls last, s.name`,
       params
@@ -223,29 +231,52 @@ class FeesReportService {
     const totals = rows.reduce(
       (t: any, r: any) => ({
         dueNow: t.dueNow + Number(r.dueNow || 0),
-        thisQuarter: t.thisQuarter + Number(r.thisQuarter || 0),
+        dueQuarter: t.dueQuarter + Number(r.dueQuarter || 0),
         fullYear: t.fullYear + Number(r.fullYear || 0),
         prevYears: t.prevYears + Number(r.prevYears || 0),
       }),
-      { dueNow: 0, thisQuarter: 0, fullYear: 0, prevYears: 0 }
+      { dueNow: 0, dueQuarter: 0, fullYear: 0, prevYears: 0 }
     );
-    return { rows, totals: { ...totals, students: rows.length }, quarterLabel: bkt.label };
+    return {
+      rows, totals: { ...totals, students: rows.length },
+      quarterLabel: bkt.label, monthEndLabel: bkt.monthEndLabel, quarterEndLabel: bkt.quarterEndLabel, yearEndLabel: bkt.yearEndLabel,
+    };
   }
 
-  // Set/clear a student's follow-up status for the dues console (upsert one row per student/year).
+  // Add a follow-up timeline entry (note + status + optional attachments). Many per student/year.
   public async setFollowup(schoolId: string, body: any, userId: string) {
     if (!body?.studentId || !body?.academicYearId) throw new BadRequestResult(ErrorCode.InvalidInput, 'studentId and academicYearId are required');
-    const status = body.status || null; // 'called' | 'promised' | 'unreachable' | 'settled' | null(clear)
+    const entryId = generateShortUuid(12);
     const now = new Date();
     await DB.query(
-      singleLineString`
-        insert into fee_followup (uuid, school_id, student_id, academic_year_id, status, note, promised_date, updatedby_userid, updated_at)
-        values ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-        on conflict (school_id, student_id, academic_year_id)
-        do update set status = $5, note = $6, promised_date = $7, updatedby_userid = $8, updated_at = $9`,
-      [generateShortUuid(12), schoolId, body.studentId, body.academicYearId, status, body.note || null, body.promisedDate || null, userId, now]
+      singleLineString`insert into fee_followup_entry (uuid, school_id, student_id, academic_year_id, status, note, promised_date, createdby_userid, created_at)
+        values ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+      [entryId, schoolId, body.studentId, body.academicYearId, body.status || null, body.note || null, body.promisedDate || null, userId, now]
     );
-    return { ok: true };
+    for (const a of Array.isArray(body.attachments) ? body.attachments : []) {
+      if (a?.base64Data && a?.fileName) {
+        await fileStorageService.upload({ fileName: a.fileName, mimeType: a.mimeType || 'application/octet-stream', base64Data: a.base64Data, entityType: 'fee_followup', entityId: entryId, schoolId, userId });
+      }
+    }
+    return { ok: true, entryId };
+  }
+
+  // Follow-up timeline for a student (newest first), each entry with its attachments (presigned URLs).
+  public async getFollowup(schoolId: string, q: any) {
+    if (!q?.studentId || !q?.academicYearId) return { entries: [] };
+    const entries: any[] = await DB.query(
+      singleLineString`select uuid, status, note, promised_date, createdby_userid, created_at from fee_followup_entry
+        where school_id = $1 and student_id = $2 and academic_year_id = $3 order by created_at desc`,
+      [schoolId, q.studentId, q.academicYearId]
+    );
+    for (const e of entries) {
+      const files: any[] = await DB.query(
+        singleLineString`select uuid, file_name, mime_type, storage_key from file_storage where school_id = $1 and entity_type = 'fee_followup' and entity_id = $2 order by created_at`,
+        [schoolId, e.uuid]
+      );
+      e.attachments = await Promise.all(files.map(async (f) => ({ uuid: f.uuid, fileName: f.fileName, mimeType: f.mimeType, url: await getSignedPhotoUrl(f.storageKey) })));
+    }
+    return { entries };
   }
 }
 

@@ -279,3 +279,18 @@ create table if not exists fee_followup (
   updated_at timestamp(0)
 );
 create unique index if not exists uq_fee_followup on fee_followup (school_id, student_id, academic_year_id);
+
+-- follow-up timeline: MANY entries per student/year (each = a note + status + optional attachments
+-- stored in file_storage entity_type='fee_followup', entity_id=entry uuid). Supersedes single-row fee_followup.
+create table if not exists fee_followup_entry (
+  uuid varchar(12) primary key,
+  school_id varchar(12) not null,
+  student_id varchar(12) not null,
+  academic_year_id varchar(12) not null,
+  status varchar(16),                        -- 'called' | 'promised' | 'unreachable' | 'settled' | null
+  note varchar(1000),
+  promised_date date,
+  createdby_userid varchar(12),
+  created_at timestamp(0)
+);
+create index if not exists idx_fee_followup_entry on fee_followup_entry (school_id, student_id, academic_year_id, created_at desc);

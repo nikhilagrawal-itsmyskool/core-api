@@ -16,7 +16,11 @@ export interface RequestContext {
 //   later        = beyond that
 // In the LAST month of a quarter, "this quarter" is empty, so it rolls forward to the NEXT
 // quarter (label becomes "Next quarter"). Boundaries are YYYY-MM-DD strings for date compares.
-export function dueBuckets(today?: string): { endOfMonth: string; quarterEnd: string; label: string; nextQuarter: boolean } {
+export function dueBuckets(today?: string): {
+  endOfMonth: string; quarterEnd: string; label: string; nextQuarter: boolean;
+  monthEndLabel: string; quarterEndLabel: string; yearEndLabel: string;
+} {
+  const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   const t = today ? new Date(today + 'T00:00:00') : new Date();
   const y = t.getFullYear();
   const m = t.getMonth(); // 0-11
@@ -26,7 +30,13 @@ export function dueBuckets(today?: string): { endOfMonth: string; quarterEnd: st
   const q = Math.floor(m / 3); // 0-3 calendar quarter
   const quarterEndMonthIdx = (lastMonthOfQuarter ? q + 1 : q) * 3 + 2; // month index of the target quarter's last month
   const quarterEnd = new Date(y, quarterEndMonthIdx + 1, 0); // JS Date rolls month/year overflow (Dec -> next Jan-Mar)
-  return { endOfMonth: ymd(endOfMonth), quarterEnd: ymd(quarterEnd), label: lastMonthOfQuarter ? 'Next quarter' : 'This quarter', nextQuarter: lastMonthOfQuarter };
+  return {
+    endOfMonth: ymd(endOfMonth), quarterEnd: ymd(quarterEnd),
+    label: lastMonthOfQuarter ? 'Next quarter' : 'This quarter', nextQuarter: lastMonthOfQuarter,
+    monthEndLabel: `till ${MON[endOfMonth.getMonth()]} end`,
+    quarterEndLabel: `till ${MON[quarterEnd.getMonth()]} end`,
+    yearEndLabel: 'till Mar end', // academic session ends in March
+  };
 }
 
 export async function getSchoolIdByCode(schoolCode: string): Promise<string | null> {
