@@ -16,8 +16,8 @@ class SyllabusOverviewHandler {
         ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'academicYearId is required', callback);
         return;
       }
-      const rows = await syllabusOverviewService.getOverview(ctx.schoolId, qp.academicYearId, qp.grade);
-      ResponseBuilder.ok({ rows }, callback);
+      const result = await syllabusOverviewService.getOverview(ctx.schoolId, qp.academicYearId, qp.grade);
+      ResponseBuilder.ok(result, callback);
     } catch (err: any) {
       ResponseBuilder.handleError(err, callback);
     }
