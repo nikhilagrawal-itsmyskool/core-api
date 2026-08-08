@@ -239,12 +239,15 @@ class FeesReceiptService {
     const school = await DB.query(singleLineString`select name from school where uuid = $1`, [schoolId]);
     return buildReceiptHtml({
       schoolName: (school[0] && school[0].name) || 'School',
-      receiptNo: r.receiptNo, legacyReceiptNo: r.legacyReceiptNo, date: r.receiptDate,
+      receiptNo: r.receiptNo, legacyReceiptNo: r.legacyReceiptNo, date: r.receiptDate, receiptType: r.type,
       studentName: r.payerName, admissionNo: r.admissionNoSnapshot, className: r.payerClassSnapshot,
-      fatherName: r.fatherName, paymentMode: r.paymentMode, receivedFrom: r.receivedFrom,
+      fatherName: r.fatherName, motherName: r.motherName, feeCycle: r.cycleSet,
+      paymentMode: r.paymentMode, receivedFrom: r.receivedFrom, description: r.transportRemark,
       collectedBy: r.collectedByUserid, remarks: r.remarks,
-      lines: (r.lines || []).map((l: any) => ({ headLabel: l.headLabel, cycleLabel: l.cycleLabel, amount: n(l.amount) })),
-      totalPaid: n(r.totalPaid), advanceApplied: n(r.advanceApplied), waiverTotal: n(r.waiverTotal), balance: n(r.balance),
+      lines: (r.lines || []).map((l: any) => ({ headLabel: l.headLabel, cycleLabel: l.cycleLabel, amount: n(l.amount), isConcession: l.isConcession })),
+      totalDue: n(r.totalDue), totalPaid: n(r.totalPaid), concessionTotal: n(r.concessionTotal),
+      advanceApplied: n(r.advanceApplied), waiverTotal: n(r.waiverTotal), balance: n(r.balance),
+      status: r.status, cancelReason: r.cancelReason,
     });
   }
 }
