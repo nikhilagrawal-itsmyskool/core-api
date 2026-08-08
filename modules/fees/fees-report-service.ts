@@ -81,14 +81,14 @@ class FeesReportService {
     // cycle/due date). Migrated charges carry cycle_label (not cycle_id), so join fee_cycle by name.
     let dueNow = 0;
     if (ay) {
-      const today = now.toISOString().slice(0, 10);
+      const eom = dueBuckets().endOfMonth; // "due now" = due by end of THIS month (matches the Dues report)
       const dueRow = await DB.query(
         singleLineString`
           select coalesce(sum(greatest(0, ch.debit - coalesce(pd.paid, 0))), 0) as due_now
           from (
             select e.uuid, e.debit, fc.due_date
             from student_ledger_entry e
-            left join fee_cycle fc on fc.school_id = e.school_id and fc.academic_year_id = e.academic_year_id and lower(fc.name) = lower(e.cycle_label) and fc.status = 'active'
+            left join fee_cycle fc on fc.uuid = e.cycle_id and fc.status = 'active'
             where e.school_id = $1 and e.academic_year_id = $2 and e.kind = 'charge' and e.status = 'active'
           ) ch
           left join (
@@ -96,7 +96,7 @@ class FeesReportService {
             where school_id = $1 and academic_year_id = $2 and status = 'active' and settles_entry_id is not null group by settles_entry_id
           ) pd on pd.settles_entry_id = ch.uuid
           where ch.due_date is null or ch.due_date <= $3`,
-        [schoolId, ay, today]
+        [schoolId, ay, eom]
       );
       dueNow = Number(dueRow[0]?.dueNow || 0);
     }
