@@ -154,6 +154,21 @@ function resequence(nodes) {
   return out;
 }
 
+// Canonical subject names — the source docs name the same subject differently
+// across grades ("English Grammar" vs "Grammar"; "Life Skills" / "Value Education
+// & Life Skills" vs "Value Education and Life Skills"). Keep one name per subject
+// so plans stay consistent across grades.
+const SUBJECT_CANON = {
+  'english grammar': 'Grammar',
+  'life skills': 'Value Education and Life Skills',
+  'value education & life skills': 'Value Education and Life Skills',
+  'value education and life skills': 'Value Education and Life Skills',
+};
+function canonSubject(name) {
+  const k = (name || '').toLowerCase().replace(/\s+/g, ' ').trim();
+  return SUBJECT_CANON[k] || name;
+}
+
 // ── parse a doc into { subject, grade, layoutType, components, nodes } ─────────
 function parseDoc(file) {
   const xml = readZipEntry(fs.readFileSync(file), 'word/document.xml').toString('utf8');
@@ -162,7 +177,7 @@ function parseDoc(file) {
   // Subject: "Syllabus: <name>" else from filename after "Class X-"
   let subject = (text.match(/Syllabus:\s*([^\n]+)/i) || [])[1]?.trim();
   if (!subject) subject = base.replace(/^Class\s+[A-Za-z0-9]+\s*[-–]\s*/i, '').replace(/\s*\(\d+\)\s*$/, '').trim();
-  subject = subject.replace(/\s+/g, ' ');
+  subject = canonSubject(subject.replace(/\s+/g, ' '));
   const grade = (text.match(/Class\s+([A-Za-z0-9]+)/i) || [])[1]?.trim() || null;
 
   const rows = docTables(xml)
