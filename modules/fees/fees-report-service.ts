@@ -215,9 +215,11 @@ class FeesReportService {
           net as (
             select le.student_id, le.academic_year_id, sum(coalesce(le.debit,0)) - sum(coalesce(le.credit,0)) as net
             from student_ledger_entry le
-            where le.school_id = $1 and le.status = 'active' and le.academic_year_id <> $3
+            join academic_year ay_le on ay_le.uuid = le.academic_year_id
+            where le.school_id = $1 and le.status = 'active'
               and le.student_id in (select ref_id from targets)
-            group by le.student_id, le.academic_year_id
+              and (substring(ay_le.name from '^[0-9]{4}'))::int
+                  < (select (substring(name from '^[0-9]{4}'))::int from academic_year where uuid = $3)
           )
           select t.owner_id as student_id, coalesce(sum(greatest(0, n.net)), 0) as prev_dues
           from targets t left join net n on n.student_id = t.ref_id
