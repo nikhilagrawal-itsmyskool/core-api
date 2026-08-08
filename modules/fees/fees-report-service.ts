@@ -220,6 +220,7 @@ class FeesReportService {
               and le.student_id in (select ref_id from targets)
               and (substring(ay_le.name from '^[0-9]{4}'))::int
                   < (select (substring(name from '^[0-9]{4}'))::int from academic_year where uuid = $3)
+            group by le.student_id, le.academic_year_id
           )
           select t.owner_id as student_id, coalesce(sum(greatest(0, n.net)), 0) as prev_dues
           from targets t left join net n on n.student_id = t.ref_id
