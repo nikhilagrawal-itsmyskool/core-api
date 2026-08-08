@@ -124,7 +124,10 @@ export function autoContext(type: RecipientType, row: any): Record<string, strin
 // template usable across schools (e.g. a {{schoolName}} signature). Keys must
 // match AUTO_CONTEXT_KEYS.common.
 export function schoolContext(school: any): Record<string, string> {
-  return { schoolCode: school?.code || '', schoolName: school?.name || '' };
+  // schoolCode is upper-cased so it reads as a clean sign-off in message bodies
+  // (e.g. "-DBPASN") regardless of how the code is stored; lookups are all
+  // case-insensitive, so this only affects the displayed variable value.
+  return { schoolCode: (school?.code || '').toUpperCase(), schoolName: school?.name || '' };
 }
 
 // Resolve a template's ordered variables from a context object. Returns the

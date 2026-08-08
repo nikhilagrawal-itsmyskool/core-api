@@ -39,6 +39,9 @@ export interface CreateTemplateRequest {
   headerType?: HeaderType;
   bodyPreview?: string;
   variables?: string[];
+  // Optional initial status so a template can be staged as 'inactive' (ignored by
+  // the send path) and flipped 'active' later. Defaults to 'active'.
+  status?: 'active' | 'inactive';
 }
 
 export interface UpdateTemplateRequest {

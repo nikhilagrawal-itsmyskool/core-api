@@ -65,15 +65,23 @@ class TemplateService {
     if (data.channel !== 'sms' && data.channel !== 'whatsapp') throw new BusinessErrorResult(ErrorCode.BusinessError, 'channel must be sms or whatsapp');
     const language = (data.language && data.language.trim()) || DEFAULTS.LANGUAGE;
 
-    const dup = await DB.query(
-      singleLineString`
-        select 1 from message_template
-        where school_id = $1 and lower(key) = lower($2) and channel = $3 and coalesce(language, '') = $4 and status = 'active' limit 1
-      `,
-      [schoolId, data.key.trim(), data.channel, language],
-    );
-    if (dup.length > 0) {
-      throw new BusinessErrorResult(ErrorCode.BusinessError, `Template "${data.key}" (${data.channel}/${language}) already exists`);
+    // Allow staging a template as 'inactive' (ignored by the send path) so it can
+    // be created ahead of provider approval and flipped 'active' on go-live.
+    const status = data.status === 'inactive' ? 'inactive' : DEFAULTS.STATUS;
+
+    // Only one ACTIVE template may exist per (key, channel, language). An inactive
+    // draft is allowed to coexist with a live one, so only guard active creates.
+    if (status === 'active') {
+      const dup = await DB.query(
+        singleLineString`
+          select 1 from message_template
+          where school_id = $1 and lower(key) = lower($2) and channel = $3 and coalesce(language, '') = $4 and status = 'active' limit 1
+        `,
+        [schoolId, data.key.trim(), data.channel, language],
+      );
+      if (dup.length > 0) {
+        throw new BusinessErrorResult(ErrorCode.BusinessError, `Template "${data.key}" (${data.channel}/${language}) already exists`);
+      }
     }
 
     const uuid = generateShortUuid(12);
@@ -90,7 +98,7 @@ class TemplateService {
         data.provider || DEFAULTS.PROVIDER, data.providerTemplateId || null, data.category || null,
         data.headerType || 'none', data.bodyPreview || null,
         sanitizeVariables(data.variables) ? JSON.stringify(sanitizeVariables(data.variables)) : null,
-        DEFAULTS.STATUS, userId, now,
+        status, userId, now,
       ],
     );
     return rows[0];
