@@ -410,10 +410,9 @@ class StudentAdminService {
   // now-inactive student row linked by old_admission_number) into one timeline,
   // marking the empty academic years between the two spans as 'gap'.
   //
-  // A J->S promotion student (renumbered on reaching Class I, NO break) also carries
-  // an old_admission_number, but their old record's last year is ADJACENT to the new
-  // record's first year — so gapYears comes back empty and we return the current
-  // enrollments unchanged: no historical rows, no gap rows, zero behaviour change.
+  // A J->S promotion student (renumbered on reaching Class I, NO break) also carries an
+  // old_admission_number; their old record's last year is ADJACENT to the new record's first, so
+  // gapYears is empty and the timeline becomes current + historical (junior years), no gap markers.
   private async buildEnrollmentHistory(
     studentId: string,
     schoolId: string,
@@ -462,10 +461,6 @@ class StudentAdminService {
       [schoolId, oldAdmissionNumber, studentId]
     )) as Array<{ uuid: string; name: string }>;
 
-    // The J->S guard: no empty year in between → contiguous renumbering, not a
-    // return. Emit exactly what we do today.
-    if (gapYears.length === 0) return currentTagged;
-
     const gapRows: EnrollmentRow[] = gapYears.map((g) => ({
       uuid: `gap-${g.uuid}`,
       academicYearId: g.uuid,
@@ -473,9 +468,16 @@ class StudentAdminService {
       status: 'gap',
       kind: 'gap',
     }));
-    const historicalRows: EnrollmentRow[] = oldRows.map((e) => ({ ...e, kind: 'historical' }));
+    // dedup: never show an old-record year the current record already covers (safety if the two
+    // records ever overlap a year).
+    const currentYearIds = new Set(current.map((e) => e.academicYearId));
+    const historicalRows: EnrollmentRow[] = oldRows
+      .filter((e) => !currentYearIds.has(e.academicYearId))
+      .map((e) => ({ ...e, kind: 'historical' }));
 
-    // newest-first: current years, then the gap markers, then the old years
+    // newest-first: current years, then any gap markers, then the old (junior) years. A contiguous
+    // J->S renumbering has no gap, so this is simply current + historical — one continuous timeline
+    // (consistent with the Dues prev-years, which also chains to the old admission).
     return [...currentTagged, ...gapRows, ...historicalRows];
   }
 
