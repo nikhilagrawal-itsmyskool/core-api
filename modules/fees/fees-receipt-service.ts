@@ -15,6 +15,7 @@ interface CollectRequest {
   paymentMode?: string; receivedFrom?: string; txnRef?: string; remarks?: string;
   type?: string; allocations: Allocation[]; advanceApplied?: number;
   waivers?: Allocation[]; waiveReason?: string; // ad-hoc settlement: forgive the leftover on a charge
+  storeAsAdvance?: number; // deliberate overpayment kept as advance for a future receipt
 }
 
 class FeesReceiptService {
@@ -37,7 +38,9 @@ class FeesReceiptService {
     if (!body.academicYearId) throw new BadRequestResult(ErrorCode.InvalidInput, 'academicYearId is required');
     const allocations = Array.isArray(body.allocations) ? body.allocations.filter((a) => n(a.amount) > 0) : [];
     const waivers = Array.isArray(body.waivers) ? body.waivers.filter((a) => n(a.amount) > 0) : [];
-    if (!allocations.length && !waivers.length)
+    const storeAsAdvance = n(body.storeAsAdvance);
+    if (storeAsAdvance < 0) throw new BadRequestResult(ErrorCode.InvalidInput, 'storeAsAdvance cannot be negative');
+    if (!allocations.length && !waivers.length && !(storeAsAdvance > 0))
       throw new BadRequestResult(ErrorCode.InvalidInput, 'At least one payment or waiver is required');
     if (waivers.length && !body.waiveReason)
       throw new BadRequestResult(ErrorCode.InvalidInput, 'A reason is required to waive an amount');
@@ -87,7 +90,7 @@ class FeesReceiptService {
       if (advanceApplied > advanceAvail + 0.001)
         throw new BadRequestResult(ErrorCode.InvalidInput, `Advance applied ${money(advanceApplied)} exceeds available advance ${money(advanceAvail)}`);
     }
-    const cash = settled - advanceApplied; // money actually received now
+    const cash = settled - advanceApplied + storeAsAdvance; // total money received now (allocations cash + advance stored)
 
     const snap = await this.studentSnapshot(schoolId, body.studentId, body.academicYearId);
     const type = body.type && RECEIPT_SERIES[body.type as keyof typeof RECEIPT_SERIES] ? body.type : 'fee';
@@ -137,6 +140,15 @@ class FeesReceiptService {
         insert into student_ledger_entry (uuid, school_id, student_id, academic_year_id, entry_date, category, head_label, kind, debit, source_module, source_ref, allocation, status, createdby_userid, created_at)
         values ($1,$2,$3,$4,$5,'fee','Advance applied','adjust',$6,'fees',$7,'explicit','active',$8,$9)`);
       params.push([generateShortUuid(12), schoolId, body.studentId, body.academicYearId, receiptDate, advanceApplied, receiptId, userId, now]);
+    }
+
+    // store an explicit overpayment as advance: a floating credit (no settles_entry_id) raises the
+    // student's advance balance for a future receipt. Deliberate — never created automatically.
+    if (storeAsAdvance > 0) {
+      queries.push(singleLineString`
+        insert into student_ledger_entry (uuid, school_id, student_id, academic_year_id, entry_date, category, head_label, kind, credit, source_module, source_ref, allocation, status, createdby_userid, created_at)
+        values ($1,$2,$3,$4,$5,'fee','Advance','payment',$6,'fees',$7,'advance','active',$8,$9)`);
+      params.push([generateShortUuid(12), schoolId, body.studentId, body.academicYearId, receiptDate, storeAsAdvance, receiptId, userId, now]);
     }
 
     await DB.queriesInTransaction(queries, params);
