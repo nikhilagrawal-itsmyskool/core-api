@@ -32,7 +32,10 @@ const SERIES = ['FR', 'TR', 'AR', 'RF'];
     "select coalesce(max((split_part(receipt_no,'-',2))::int),0) as maxid from fee_receipt where school_id=$1 and receipt_no ~ '^[A-Za-z]+-[0-9]+'",
     [sid]
   );
-  const maxId = Number(maxRow.rows[0].maxid) || 0;
+  const dbMax = Number(maxRow.rows[0].maxid) || 0;
+  const override = Number(arg('last-no', 0)) || 0;
+  const maxId = override > dbMax ? override : dbMax; // allow a manual gap above SchoolPad's ongoing numbers
+  console.log(`db max legacy receipt id: ${dbMax}${override ? `  (overridden to ${override} for a collision gap)` : ''}`);
   console.log(`global max legacy receipt id: ${maxId}  → next native receipts will be <SERIES>-${maxId + 1}`);
   console.log(`seeding counters for ${YEAR} (${ay.uuid}) to last_no=${maxId}:`);
 

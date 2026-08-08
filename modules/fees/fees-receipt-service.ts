@@ -225,6 +225,7 @@ class FeesReceiptService {
   public async list(schoolId: string, q: any) {
     const params: any[] = [schoolId]; let where = `school_id = $1`;
     if (q?.studentId) { params.push(q.studentId); where += ` and student_id = $${params.length}`; }
+    if (q?.academicYearId) { params.push(q.academicYearId); where += ` and academic_year_id = $${params.length}`; }
     if (q?.collectedBy) { params.push(q.collectedBy); where += ` and collected_by_userid = $${params.length}`; }
     if (q?.type) { params.push(q.type); where += ` and type = $${params.length}`; }
     if (q?.from) { params.push(q.from); where += ` and receipt_date >= $${params.length}`; }
