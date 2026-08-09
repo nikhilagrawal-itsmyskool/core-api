@@ -251,13 +251,19 @@ class FeesReceiptService {
   public async printHtml(schoolId: string, receiptId: string): Promise<string> {
     const r: any = await this.getById(schoolId, receiptId);
     const school = await DB.query(singleLineString`select name from school where uuid = $1`, [schoolId]);
+    // Resolve the collector id to a name where we can (in-app receipts); migrated receipts have none.
+    let issuer: string | null = r.collectedByUserid || null;
+    if (issuer) {
+      const emp = await DB.query(singleLineString`select name from employee where school_id = $1 and uuid = $2`, [schoolId, issuer]).catch(() => []);
+      if (emp[0]?.name) issuer = emp[0].name;
+    }
     return buildReceiptHtml({
       schoolName: (school[0] && school[0].name) || 'School',
       receiptNo: r.receiptNo, legacyReceiptNo: r.legacyReceiptNo, date: r.receiptDate, receiptType: r.type,
       studentName: r.payerName, admissionNo: r.admissionNoSnapshot, className: r.payerClassSnapshot,
       fatherName: r.fatherName, motherName: r.motherName, feeCycle: r.cycleSet,
       paymentMode: r.paymentMode, receivedFrom: r.receivedFrom, description: r.transportRemark,
-      collectedBy: r.collectedByUserid, remarks: r.remarks,
+      collectedBy: issuer, remarks: r.remarks, native: r.source === 'native',
       lines: (r.lines || []).map((l: any) => ({ headLabel: l.headLabel, cycleLabel: l.cycleLabel, amount: n(l.amount), isConcession: l.isConcession })),
       totalDue: n(r.totalDue), totalPaid: n(r.totalPaid), concessionTotal: n(r.concessionTotal),
       advanceApplied: n(r.advanceApplied), waiverTotal: n(r.waiverTotal), balance: n(r.balance),

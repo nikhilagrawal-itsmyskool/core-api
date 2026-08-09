@@ -28,6 +28,8 @@ interface ReceiptData {
   amountInWords?: string | null;
   status?: string | null;                 // 'active' | 'cancelled'
   cancelReason?: string | null;
+  native?: boolean;                       // true = in-app receipt (clean itemised: lines are amounts paid);
+                                          // false/undefined = migrated (SchoolPad running-statement waterfall)
 }
 
 const money = (v: number) => Number(v || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -42,6 +44,25 @@ function fmtDate(s: any): string {
   return `${String(d.getUTCDate()).padStart(2, '0')}-${MON[d.getUTCMonth()]}-${d.getUTCFullYear()}`;
 }
 
+// Indian-system amount in words (rupees, rounded) — "Three Thousand Four Hundred".
+function inWords(v: any): string {
+  let num = Math.round(Number(v) || 0);
+  if (num <= 0) return 'Zero';
+  const a = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
+  const b = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+  const two = (n: number): string => (n < 20 ? a[n] : b[Math.floor(n / 10)] + (n % 10 ? ' ' + a[n % 10] : ''));
+  const three = (n: number): string => { const h = Math.floor(n / 100), r = n % 100; return (h ? a[h] + ' Hundred' + (r ? ' ' : '') : '') + (r ? two(r) : ''); };
+  const parts: string[] = [];
+  const cr = Math.floor(num / 10000000); num %= 10000000;
+  const lk = Math.floor(num / 100000); num %= 100000;
+  const th = Math.floor(num / 1000); num %= 1000;
+  if (cr) parts.push(two(cr) + ' Crore');
+  if (lk) parts.push(two(lk) + ' Lakh');
+  if (th) parts.push(two(th) + ' Thousand');
+  if (num) parts.push(three(num));
+  return parts.join(' ');
+}
+
 const detail = (label: string, val: any, wide = false) =>
   val == null || val === '' ? '' : `<div class="d${wide ? ' wide' : ''}"><dt>${esc(label)}</dt><dd>${esc(val)}</dd></div>`;
 
@@ -54,6 +75,13 @@ function copy(d: ReceiptData, label: string): string {
   const title = d.receiptType === 'transport' ? 'Transport Receipt' : d.receiptType === 'refund' ? 'Refund Receipt' : 'Fee Receipt';
   const bal = Number(d.balance || 0);
   const rno = d.receiptNo + (d.legacyReceiptNo && d.legacyReceiptNo !== d.receiptNo ? ` (${d.legacyReceiptNo})` : '');
+  // Native (in-app): line amounts are what was paid → Total due (selected) / Total paid / Balance.
+  // Migrated (SchoolPad): lines are the cumulative gross bill → gross Total due, then Last paid (−) and
+  // Concessions (−) net down to what was owed, exactly as the original receipt read.
+  const gross = charged.reduce((s, l) => s + Number(l.amount || 0), 0);
+  const conc = (d.lines || []).filter((l) => l.isConcession).reduce((s, l) => s + Math.abs(Number(l.amount || 0)), 0);
+  const totalDueShown = d.native ? Number(d.totalDue || 0) : gross;
+  const lastPaid = d.native ? 0 : Math.max(0, gross - conc - Number(d.totalDue || 0));
 
   return `
   <section class="copy${cancelled ? ' cx' : ''}">
@@ -80,23 +108,24 @@ function copy(d: ReceiptData, label: string): string {
     </dl>
 
     <table class="li">
-      <thead><tr><th>Fee head</th><th class="r">Amount (₹)</th></tr></thead>
+      <thead><tr><th>${d.native ? 'Fee head — paid towards' : 'Fee head'}</th><th class="r">${d.native ? 'Paid (₹)' : 'Amount (₹)'}</th></tr></thead>
       <tbody>${rows}</tbody>
     </table>
 
     <div class="tot">
-      ${d.totalDue != null ? `<div class="tr"><span>Total due</span><span class="money">${money(d.totalDue)}</span></div>` : ''}
-      ${d.concessionTotal ? `<div class="tr"><span>Concession</span><span class="money">(−) ${money(d.concessionTotal)}</span></div>` : ''}
+      <div class="tr"><span>Total due</span><span class="money">${money(totalDueShown)}</span></div>
+      ${!d.native && lastPaid > 0.5 ? `<div class="tr"><span>Last paid</span><span class="money">(−) ${money(lastPaid)}</span></div>` : ''}
+      ${!d.native && conc > 0.5 ? `<div class="tr"><span>Concessions</span><span class="money">(−) ${money(conc)}</span></div>` : ''}
       ${d.advanceApplied ? `<div class="tr"><span>Advance applied</span><span class="money">${money(d.advanceApplied)}</span></div>` : ''}
       ${d.waiverTotal ? `<div class="tr"><span>Waived (write-off)</span><span class="money">${money(d.waiverTotal)}</span></div>` : ''}
       <div class="tr paid"><span>Total paid${d.advanceApplied ? ' (cash)' : ''}</span><span class="money">${money(d.totalPaid)}</span></div>
     </div>
     <div class="bal${bal > 0 ? '' : ' zero'}"><span>${bal > 0 ? 'Balance' : 'Fully paid'}</span><span class="money">₹ ${money(bal)}</span></div>
-    ${d.amountInWords ? `<div class="words">Rupees ${esc(d.amountInWords)} only</div>` : ''}
-    ${d.remarks ? `<div class="rem"><b>Remarks:</b> ${esc(d.remarks)}</div>` : ''}
+    <div class="words"><b>In words:</b> Rupees ${esc(inWords(d.totalPaid))} Only</div>
+    <div class="rem"><b>Remarks:</b> ${d.remarks ? esc(d.remarks) : '—'}</div>
 
     <footer class="foot">
-      ${d.collectedBy ? `<div>Collected by: ${esc(d.collectedBy)}</div>` : ''}
+      <div>Issued by: ${d.collectedBy ? esc(d.collectedBy) : '—'}</div>
       <div>Cheque/draft payments are subject to realisation · Fee once paid is not refundable · E.&amp;O.E.</div>
       <div>This is a computer-generated receipt; no signature is required.</div>
     </footer>
