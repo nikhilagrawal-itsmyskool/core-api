@@ -432,15 +432,24 @@ async function main() {
             }
           }
 
-          // TC (rare)
-          if (clean(row['TC SRN Number']) || parseDate(row['Date of TC issue']) || clean(row['Reason for leaving School'])) {
-            const issue = parseDate(row['Date of TC issue']);
-            await client.query(
-              `insert into student_tc (uuid,school_id,student_id,application_date,srn_number,issue_date,reason_for_leaving,total_attendance_days,total_working_days,status,createdby_userid,created_at)
-               values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'0',now())`,
-              [generateShortUuid(12), schoolId, studentId, parseDate(row['Application for TC']), orNull(row['TC SRN Number']), issue,
-               orNull(row['Reason for leaving School']), intOrNull(row['T.C Total Days Attendance']), intOrNull(row['T.C Total Working Days']), issue ? 'issued' : 'applied']);
-            stats.tc++;
+          // TC — only when the export has a REAL certificate artifact (SRN or issue date). A bare
+          // "Reason for leaving School" is NOT enough: SchoolPad leaves it populated on active
+          // students, which previously created phantom "applied" TCs. Idempotent per (student, SRN)
+          // so re-running the sync never duplicates an existing TC row.
+          const tcSrn = clean(row['TC SRN Number']);
+          const tcIssue = parseDate(row['Date of TC issue']);
+          if (tcSrn || tcIssue) {
+            const dupe = await client.query(
+              `select 1 from student_tc where school_id=$1 and student_id=$2 and coalesce(srn_number,'')=coalesce($3,'') and status<>'deleted' limit 1`,
+              [schoolId, studentId, orNull(row['TC SRN Number'])]);
+            if (!dupe.rows.length) {
+              await client.query(
+                `insert into student_tc (uuid,school_id,student_id,application_date,srn_number,issue_date,reason_for_leaving,total_attendance_days,total_working_days,status,createdby_userid,created_at)
+                 values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'0',now())`,
+                [generateShortUuid(12), schoolId, studentId, parseDate(row['Application for TC']), orNull(row['TC SRN Number']), tcIssue,
+                 orNull(row['Reason for leaving School']), intOrNull(row['T.C Total Days Attendance']), intOrNull(row['T.C Total Working Days']), tcIssue ? 'issued' : 'applied']);
+              stats.tc++;
+            }
           }
 
           await client.query('COMMIT');
