@@ -302,6 +302,16 @@
     name: ${self:service}-get-followup
     events:
       - http: { path: 'reports/followup', method: get, cors: true }
+  family-dues:
+    handler: fees-report-handler.familyDues
+    name: ${self:service}-family-dues
+    events:
+      - http: { path: 'students/{id}/family-dues', method: get, cors: true }
+  withdraw-student:
+    handler: fees-report-handler.withdraw
+    name: ${self:service}-withdraw-student
+    events:
+      - http: { path: 'students/{id}/withdraw', method: post, cors: true }
 
   # ---- Migration ----
   migration-import:

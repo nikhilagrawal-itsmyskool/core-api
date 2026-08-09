@@ -57,6 +57,26 @@ class FeesReportHandler {
       ResponseBuilder.ok(result, callback);
     } catch (err: any) { ResponseBuilder.handleError(err, callback); }
   };
+
+  public familyDues = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const rc = await resolveSchool(event, callback); if (!rc) return;
+      const id = event.pathParameters?.id as string;
+      const result = await feesReportService.familyDues(rc.schoolId, id, event.queryStringParameters || {});
+      ResponseBuilder.ok(result, callback);
+    } catch (err: any) { ResponseBuilder.handleError(err, callback); }
+  };
+
+  public withdraw = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const rc = await resolveSchool(event, callback); if (!rc) return;
+      const id = event.pathParameters?.id as string;
+      const result = await feesReportService.withdrawStudent(rc.schoolId, id, JSON.parse(event.body || '{}'), rc.userId);
+      ResponseBuilder.ok(result, callback);
+    } catch (err: any) { ResponseBuilder.handleError(err, callback); }
+  };
 }
 
 const handler = new FeesReportHandler();
@@ -66,3 +86,5 @@ export const ungeneratedStudents = handler.ungeneratedStudents;
 export const dues = handler.dues;
 export const setFollowup = handler.setFollowup;
 export const getFollowup = handler.getFollowup;
+export const familyDues = handler.familyDues;
+export const withdraw = handler.withdraw;

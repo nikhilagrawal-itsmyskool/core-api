@@ -246,6 +246,79 @@ class FeesReportService {
     };
   }
 
+  // Family (linked siblings + self) dues for the drawer — each member's due-now, full-year, prior-year net.
+  public async familyDues(schoolId: string, studentId: string, q: any) {
+    const ay = q?.academicYearId;
+    if (!studentId || !ay) return { studentId, members: [] };
+    const bkt = dueBuckets();
+    const sib = await DB.query(singleLineString`select sibling_student_id as id from student_sibling where school_id = $1 and student_id = $2 and status = 'active'`, [schoolId, studentId]);
+    const ids = Array.from(new Set([studentId, ...sib.map((r: any) => r.id)]));
+    const info = await DB.query(singleLineString`
+      select s.uuid, s.name, s.admission_number, s.status,
+        (select c.name from student_class sc left join class c on c.uuid = sc.class_id where sc.student_id = s.uuid and sc.school_id = $1 and sc.academic_year_id = $2 limit 1) as class_name
+      from student s where s.school_id = $1 and s.uuid = any($3::text[])`, [schoolId, ay, ids]);
+    const dn = await DB.query(singleLineString`
+      with charges as (
+        select e.student_id, e.uuid, e.debit, (fc.due_date is null or fc.due_date <= $3) as due_now
+        from student_ledger_entry e left join fee_cycle fc on fc.uuid = e.cycle_id and fc.status = 'active'
+        where e.school_id = $1 and e.academic_year_id = $2 and e.kind = 'charge' and e.status = 'active' and e.student_id = any($4::text[])
+      ),
+      paid as (select settles_entry_id, sum(credit) as c from student_ledger_entry where school_id = $1 and academic_year_id = $2 and status = 'active' and settles_entry_id is not null group by settles_entry_id)
+      select c.student_id,
+        coalesce(sum(greatest(0, c.debit - coalesce(p.c, 0))) filter (where c.due_now), 0) as due_now,
+        coalesce(sum(greatest(0, c.debit - coalesce(p.c, 0))), 0) as full_year
+      from charges c left join paid p on p.settles_entry_id = c.uuid group by c.student_id`, [schoolId, ay, bkt.endOfMonth, ids]);
+    const pv = await DB.query(singleLineString`
+      select le.student_id, coalesce(sum(le.debit) - sum(le.credit), 0) as prev
+      from student_ledger_entry le join academic_year ay on ay.uuid = le.academic_year_id
+      where le.school_id = $1 and le.status = 'active' and le.student_id = any($3::text[])
+        and ay.start_date < (select start_date from academic_year where uuid = $2)
+      group by le.student_id`, [schoolId, ay, ids]);
+    const dnMap: any = {}; dn.forEach((r: any) => { dnMap[r.studentId] = r; });
+    const pvMap: any = {}; pv.forEach((r: any) => { pvMap[r.studentId] = Math.max(0, Number(r.prev || 0)); });
+    const members = info.map((s: any) => ({
+      studentId: s.uuid, name: s.name, admissionNumber: s.admissionNumber, className: s.className, status: s.status,
+      dueNow: Number(dnMap[s.uuid]?.dueNow || 0), fullYear: Number(dnMap[s.uuid]?.fullYear || 0), prevYears: Number(pvMap[s.uuid] || 0),
+    }));
+    members.sort((a: any, b: any) => (a.studentId === studentId ? -1 : b.studentId === studentId ? 1 : 0) || String(a.name || '').localeCompare(String(b.name || '')));
+    return { studentId, members };
+  }
+
+  // "Withdrawn-lite": mark a student inactive with a leaving date and cap unpaid fee cycles due after
+  // that month (same rule as the register cleanup). NOT a full TC/withdrawal module — just corrects dues.
+  public async withdrawStudent(schoolId: string, studentId: string, body: any, userId: string) {
+    const date = body?.date;
+    if (!studentId) throw new BadRequestResult(ErrorCode.InvalidInput, 'studentId is required');
+    if (!date || isNaN(new Date(date).getTime())) throw new BadRequestResult(ErrorCode.InvalidInput, 'A valid withdrawal date is required');
+    const reason = body?.reason || null;
+    const wd = new Date(date); const depAbs = wd.getUTCFullYear() * 12 + (wd.getUTCMonth() + 1);
+    const charges = await DB.query(singleLineString`
+      select l.uuid, l.debit, coalesce(fc.due_date, fc.from_date) as due_date,
+        coalesce((select sum(cr.credit) from student_ledger_entry cr where cr.settles_entry_id = l.uuid and cr.status = 'active' and cr.kind = 'payment'), 0) as pay,
+        coalesce((select sum(cr.credit) from student_ledger_entry cr where cr.settles_entry_id = l.uuid and cr.status = 'active'), 0) as paid
+      from student_ledger_entry l left join fee_cycle fc on fc.uuid = l.cycle_id and fc.status = 'active'
+      where l.school_id = $1 and l.student_id = $2 and l.kind = 'charge' and l.status = 'active'`, [schoolId, studentId]);
+    const toVoid = charges.filter((c: any) => {
+      if (!c.dueDate) return false; // undated charge — cannot tell if it's post-departure; leave it
+      const d = new Date(c.dueDate); const abs = d.getUTCFullYear() * 12 + (d.getUTCMonth() + 1);
+      return abs > depAbs && Number(c.pay) < 0.5 && (Number(c.debit) - Number(c.paid)) > 0.5;
+    });
+    const queries: string[] = [
+      singleLineString`update student set status = 'inactive', withdrawal_date = $3, withdrawal_remarks = coalesce($4, withdrawal_remarks), updated_at = now(), updatedby_userid = $5 where school_id = $1 and uuid = $2`,
+    ];
+    const params: any[][] = [[schoolId, studentId, date, reason, userId]];
+    let amount = 0;
+    for (const c of toVoid) {
+      queries.push(singleLineString`update student_ledger_entry set status = 'cancelled', remarks = coalesce(remarks, '') || ' [withdrawn-cap]', updated_at = now() where uuid = $1 and status = 'active'`);
+      params.push([c.uuid]);
+      queries.push(singleLineString`update student_ledger_entry set status = 'cancelled', remarks = coalesce(remarks, '') || ' [withdrawn-cap]' where school_id = $1 and settles_entry_id = $2 and status = 'active' and kind in ('concession', 'waiver')`);
+      params.push([schoolId, c.uuid]);
+      amount += Number(c.debit) - Number(c.paid);
+    }
+    await DB.queriesInTransaction(queries, params);
+    return { studentId, withdrawalDate: date, cyclesVoided: toVoid.length, amountVoided: Math.round(amount) };
+  }
+
   // Add a follow-up timeline entry (note + status + optional attachments). Many per student/year.
   public async setFollowup(schoolId: string, body: any, userId: string) {
     if (!body?.studentId || !body?.academicYearId) throw new BadRequestResult(ErrorCode.InvalidInput, 'studentId and academicYearId are required');
