@@ -242,8 +242,10 @@ class FeesReceiptService {
     if (q?.type) { params.push(q.type); where += ` and type = $${params.length}`; }
     if (q?.from) { params.push(q.from); where += ` and receipt_date >= $${params.length}`; }
     if (q?.to) { params.push(q.to); where += ` and receipt_date <= $${params.length}`; }
+    if (q?.search) { params.push(`%${String(q.search).trim()}%`); const p = `$${params.length}`; where += ` and (receipt_no ilike ${p} or legacy_receipt_no ilike ${p} or payer_name ilike ${p} or admission_no_snapshot ilike ${p})`; }
     if (q?.includeCancelled !== 'true') where += ` and status = 'active'`;
-    return DB.query(singleLineString`select * from fee_receipt where ${where} order by receipt_date desc, created_at desc limit 500`, params);
+    const limit = Math.min(1000, Math.max(1, parseInt(q?.limit, 10) || 500));
+    return DB.query(singleLineString`select * from fee_receipt where ${where} order by receipt_date desc, created_at desc limit ${limit}`, params);
   }
 
   public async printHtml(schoolId: string, receiptId: string): Promise<string> {
