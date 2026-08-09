@@ -29,6 +29,48 @@ class StudentGuardianService {
     );
   }
 
+  // Mirror the active guardians' phone numbers into the denormalised
+  // student.{father,mother,guardian}_{mobile,whatsapp} columns — the ONLY columns
+  // the communication ladder reads for reachability. Called after every guardian
+  // mutation so a number entered here is actually reachable.
+  //
+  // Fill-only: a relation's columns are (re)written from its first active guardian
+  // row (by created_at) — even to blank if that row's number was cleared — but a
+  // relation with NO active guardian row is left untouched. This deliberately does
+  // not null out denormalised values that have no backing guardian row (a handful
+  // of legacy-synced students), so it can never wipe data.
+  private async syncStudentContacts(studentId: string, schoolId: string, userId: string): Promise<void> {
+    const guardians = await DB.query(
+      singleLineString`
+        select relation, mobile, whatsapp from student_guardian
+        where student_id = $1 and school_id = $2 and status = 'active'
+        order by case relation when 'father' then 1 when 'mother' then 2 when 'guardian' then 3 else 4 end, created_at
+      `,
+      [studentId, schoolId]
+    );
+
+    const fields: string[] = [];
+    const params: any[] = [];
+    const norm = (v: any) => (v && String(v).trim() ? String(v).trim() : null);
+    for (const rel of ['father', 'mother', 'guardian'] as const) {
+      const g = guardians.find((row: any) => row.relation === rel);
+      if (!g) continue; // no row for this relation → leave its columns as-is
+      params.push(norm(g.mobile));
+      fields.push(`${rel}_mobile = $${params.length}`);
+      params.push(norm(g.whatsapp));
+      fields.push(`${rel}_whatsapp = $${params.length}`);
+    }
+    if (fields.length === 0) return;
+
+    params.push(userId, new Date());
+    fields.push(`updatedby_userid = $${params.length - 1}`, `updated_at = $${params.length}`);
+    params.push(studentId, schoolId);
+    await DB.query(
+      `update student set ${fields.join(', ')} where uuid = $${params.length - 1} and school_id = $${params.length}`,
+      params
+    );
+  }
+
   public async list(studentId: string, schoolId: string): Promise<Guardian[]> {
     return DB.query(
       singleLineString`
@@ -108,6 +150,7 @@ class StudentGuardianService {
       ]
     );
     if (data.isPrimaryContact) await this.demoteOtherPrimaries(studentId, schoolId, uuid, userId);
+    await this.syncStudentContacts(studentId, schoolId, userId);
     return rows[0];
   }
 
@@ -159,6 +202,7 @@ class StudentGuardianService {
     if (rows.length > 0 && data.isPrimaryContact) {
       await this.demoteOtherPrimaries(rows[0].studentId, schoolId, id, userId);
     }
+    if (rows.length > 0) await this.syncStudentContacts(rows[0].studentId, schoolId, userId);
     return rows.length > 0 ? rows[0] : null;
   }
 
@@ -167,10 +211,11 @@ class StudentGuardianService {
       singleLineString`
         update student_guardian set status = 'deleted', updatedby_userid = $1, updated_at = $2
         where uuid = $3 and school_id = $4 and status = 'active'
-        returning uuid
+        returning uuid, student_id
       `,
       [userId, new Date(), id, schoolId]
     );
+    if (rows.length > 0) await this.syncStudentContacts(rows[0].studentId, schoolId, userId);
     return rows.length > 0;
   }
 }
