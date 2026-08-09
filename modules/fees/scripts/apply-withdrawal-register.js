@@ -77,19 +77,22 @@ const yStart = (yr) => { const m=String(yr).match(/(20\d\d)/); return m?+m[1]:nu
   const voidNet=voidCells.reduce((s,r)=>s+Math.max(0,Number(r.net)),0);
   const capNet=capCells.reduce((s,r)=>s+r.capNet,0);
   fs.mkdirSync(path.dirname(REPORT),{recursive:true});
+  // dry-runs write a *-preview file so they can never clobber the applied audit (rebuild that from the
+  // DB with audit-left-capvoid.js — it reflects the tagged [left-void]/[left-cap] rows actually cancelled)
+  const OUTFILE = APPLY ? REPORT : REPORT.replace(/\.csv$/, '-preview.csv');
   const lines=['action,adm,name,year,net_or_cap,paid,last_attendance,basis_year,basis_type'];
   voidCells.forEach(r=>lines.push(`VOID,${r.adm},"${r.name}",${r.ys},${Math.round(Math.max(0,r.net))},${Math.round(r.paid)},${r.la},${r.basisYear},${r.basisType}`));
   capCells.forEach(r=>lines.push(`CAP,${r.adm},"${r.name}",${r.ys},${Math.round(r.capNet)},,${r.la},${r.basisYear},${r.basisType}`));
   flagged.forEach(r=>lines.push(`FLAG_PAID,${r.adm},"${r.name}",${ayStart[r.academic_year_id]},${Math.round(r.net)},${Math.round(r.paid)},${r.la||''},${r.basisYear||''},${r.basisType||''}`));
   unknown.forEach(r=>lines.push(`UNKNOWN,${r.adm},"${r.name}",${ayStart[r.academic_year_id]},${Math.round(Math.max(0,r.net))},${Math.round(r.paid)},,,`));
-  try { fs.writeFileSync(REPORT,lines.join('\n')); } catch(e){ console.log(`  (couldn't rewrite review CSV — ${e.code}; likely open in Excel — continuing)`); }
+  try { fs.writeFileSync(OUTFILE,lines.join('\n')); } catch(e){ console.log(`  (couldn't rewrite review CSV — ${e.code}; likely open in Excel — continuing)`); }
 
   console.log(`================ LEFT-STUDENT CAP/VOID ${APPLY?'APPLY':'DRY-RUN'} (inactive only) ================`);
   console.log(`VOID  (years after last-attendance, unpaid): ${voidCells.length} cells · ${inr(voidNet)}`);
   console.log(`CAP   (last year, cycles after departure month, unpaid): ${capCells.length} cells · ${inr(capNet)}`);
   console.log(`FLAG  (to-void year has a payment — review): ${flagged.length}`);
   console.log(`UNKNOWN (no last-attendance & no withdrawal date — manual): ${unknown.length} cells · ${inr(sum(unknown))}`);
-  console.log(`review CSV -> ${REPORT}`);
+  console.log(`review CSV -> ${OUTFILE}`);
   const spot=(adm)=>{const r=Object.values(byStu).find(s=>s.adm===adm); if(!r)return `${adm}: not inactive/charged`;
     const reg=laMap[adm.toUpperCase()]||{}; const las=Object.entries(reg).filter(([,v])=>v.la).map(([y,v])=>`${y}:${v.la}`).join(', ');
     const v=voidCells.filter(x=>x.adm===adm).map(x=>x.ys), c=capCells.filter(x=>x.adm===adm).map(x=>`${x.ys}@${inr(x.capNet)}`);
