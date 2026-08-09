@@ -177,7 +177,7 @@ class FeesReportService {
           from per_charge group by student_id
         )
         select ps.student_id, ps.due_now, ps.this_quarter, (ps.due_now + ps.this_quarter) as due_quarter, ps.full_year,
-               s.name, s.admission_number, c.name as class_name,
+               s.name, s.admission_number, s.status as student_status, s.withdrawal_date, c.name as class_name,
                (select g.mobile from student_guardian g where g.school_id = $1 and g.student_id = ps.student_id
                   and g.relation = 'father' and g.status = 'active' order by g.is_primary_contact desc nulls last limit 1) as father_mobile,
                fu.status as followup_status, fu.note as followup_note, fu.promised_date as followup_promised,
