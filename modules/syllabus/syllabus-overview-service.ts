@@ -22,7 +22,7 @@ class SyllabusOverviewService {
         select s.uuid as syllabus_id, s.grade, s.subject_id, sub.name as subject_name,
                (s.source_file_id is not null) as has_source,
                (select count(*) from syllabus_entry e where e.syllabus_id = s.uuid and e.status = 'active')::int as total_entries,
-               (select count(*) from syllabus_entry e where e.syllabus_id = s.uuid and e.status = 'active' and e.entry_type in ('topic','item'))::int as content_leaves
+               (select count(*) from syllabus_entry e where e.syllabus_id = s.uuid and e.status = 'active' and e.entry_type not in ('unit','section','exam','revision') and not exists (select 1 from syllabus_entry c where c.parent_entry_id = e.uuid and c.status = 'active'))::int as content_leaves
         from syllabus s
         join syllabus_subject sub on sub.uuid = s.subject_id
         where s.school_id = $1 and s.academic_year_id = $2 and s.status = 'active'${gflt}
@@ -38,7 +38,8 @@ class SyllabusOverviewService {
         select e.syllabus_id, e.month, count(*)::int as n
         from syllabus_entry e join syllabus s on s.uuid = e.syllabus_id
         where s.school_id = $1 and s.academic_year_id = $2 and s.status = 'active'${gflt}
-          and e.status = 'active' and e.entry_type in ('topic','item')
+          and e.status = 'active' and e.entry_type not in ('unit','section','exam','revision')
+          and not exists (select 1 from syllabus_entry c where c.parent_entry_id = e.uuid and c.status = 'active')
         group by e.syllabus_id, e.month
       `,
       scope,
@@ -58,7 +59,9 @@ class SyllabusOverviewService {
         join syllabus_entry e on e.uuid = p.syllabus_entry_id
         join syllabus s on s.uuid = e.syllabus_id
         where s.school_id = $1 and s.academic_year_id = $2 and s.status = 'active'${gflt}
-          and e.status = 'active' and e.entry_type in ('topic','item') and p.status = 'covered'
+          and e.status = 'active' and e.entry_type not in ('unit','section','exam','revision')
+          and not exists (select 1 from syllabus_entry c where c.parent_entry_id = e.uuid and c.status = 'active')
+          and p.status = 'covered'
         group by e.syllabus_id, p.class_id
       `,
       scope,

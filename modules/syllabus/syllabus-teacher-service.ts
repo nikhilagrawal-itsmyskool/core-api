@@ -173,10 +173,14 @@ class SyllabusTeacherService {
         select spt.uuid as assignment_id, s.uuid as syllabus_id, s.grade, s.subject_id, s.layout,
                s.academic_year_id, sub.name as subject_name, spt.class_id, c.name as class_name,
                (select count(*) from syllabus_entry e
-                  where e.syllabus_id = s.uuid and e.status = 'active' and e.entry_type = 'topic')::int as total_topics,
+                  where e.syllabus_id = s.uuid and e.status = 'active'
+                    and e.entry_type not in ('unit','section','exam','revision')
+                    and not exists (select 1 from syllabus_entry c where c.parent_entry_id = e.uuid and c.status = 'active'))::int as total_topics,
                (select count(*) from syllabus_progress p
                   join syllabus_entry e on e.uuid = p.syllabus_entry_id
-                  where e.syllabus_id = s.uuid and e.entry_type = 'topic'
+                  where e.syllabus_id = s.uuid and e.status = 'active'
+                    and e.entry_type not in ('unit','section','exam','revision')
+                    and not exists (select 1 from syllabus_entry c where c.parent_entry_id = e.uuid and c.status = 'active')
                     and p.class_id = spt.class_id and p.status = 'covered')::int as covered_topics
         from syllabus_plan_teacher spt
         join syllabus s on s.uuid = spt.syllabus_id and s.status = 'active'
