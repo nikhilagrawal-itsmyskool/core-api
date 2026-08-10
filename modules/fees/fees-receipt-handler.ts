@@ -72,7 +72,8 @@ class FeesReceiptHandler {
     try {
       const rc = await resolveSchool(event, callback); if (!rc) return;
       const id = requireParam(event, 'id', callback); if (!id) return;
-      const html = await feesReceiptService.printHtml(rc.schoolId, id);
+      const format = (event.queryStringParameters || {}).format; // 'waterfall' → SchoolPad statement view
+      const html = await feesReceiptService.printHtml(rc.schoolId, id, format);
       ResponseBuilder.returnHtml(html, callback);
     } catch (err: any) { ResponseBuilder.handleError(err, callback); }
   };

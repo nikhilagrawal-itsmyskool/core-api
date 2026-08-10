@@ -248,7 +248,7 @@ class FeesReceiptService {
     return DB.query(singleLineString`select * from fee_receipt where ${where} order by receipt_date desc, created_at desc limit ${limit}`, params);
   }
 
-  public async printHtml(schoolId: string, receiptId: string): Promise<string> {
+  public async printHtml(schoolId: string, receiptId: string, format?: string): Promise<string> {
     const r: any = await this.getById(schoolId, receiptId);
     const school = await DB.query(singleLineString`select name from school where uuid = $1`, [schoolId]);
     // Resolve the collector id to a name where we can (in-app receipts); migrated receipts have none.
@@ -257,7 +257,7 @@ class FeesReceiptService {
       const emp = await DB.query(singleLineString`select name from employee where school_id = $1 and uuid = $2`, [schoolId, issuer]).catch(() => []);
       if (emp[0]?.name) issuer = emp[0].name;
     }
-    return buildReceiptHtml({
+    const data: any = {
       schoolName: (school[0] && school[0].name) || 'School',
       receiptNo: r.receiptNo, legacyReceiptNo: r.legacyReceiptNo, date: r.receiptDate, receiptType: r.type,
       studentName: r.payerName, admissionNo: r.admissionNoSnapshot, className: r.payerClassSnapshot,
@@ -268,7 +268,32 @@ class FeesReceiptService {
       totalDue: n(r.totalDue), totalPaid: n(r.totalPaid), concessionTotal: n(r.concessionTotal),
       advanceApplied: n(r.advanceApplied), waiverTotal: n(r.waiverTotal), balance: n(r.balance),
       status: r.status, cancelReason: r.cancelReason,
-    });
+    };
+
+    // Statement (SchoolPad waterfall) view on an in-app receipt: reconstruct the cumulative figures
+    // (gross bill for the paid cycles, prior-paid = "Last Paid", concession) from the ledger — since a
+    // native receipt only stores this transaction's delta. No-op for migrated receipts (already waterfall).
+    if (format === 'waterfall' && r.source === 'native') {
+      const cycles = [...new Set((r.lines || []).map((l: any) => l.cycleLabel).filter(Boolean))].map((c: any) => String(c).trim().toLowerCase());
+      if (cycles.length) {
+        const agg = await DB.query(singleLineString`
+          select coalesce(sum(debit) filter (where kind = 'charge'), 0) gross,
+                 coalesce(sum(credit) filter (where kind = 'concession'), 0) concession,
+                 coalesce(sum(credit) filter (where kind = 'payment'), 0) paid
+          from student_ledger_entry
+          where school_id = $1 and student_id = $2 and academic_year_id = $3 and status = 'active' and lower(trim(cycle_label)) = any($4::text[])`,
+          [schoolId, r.studentId, r.academicYearId, cycles]);
+        const gross = n(agg[0].gross), concession = n(agg[0].concession), allPaid = n(agg[0].paid);
+        const lastPaid = Math.max(0, allPaid - n(r.totalPaid));
+        data.native = false;
+        data.lines = [{ headLabel: 'Composite Fee', amount: gross, isConcession: false }];
+        if (concession > 0) data.lines.push({ headLabel: 'Concessions', amount: -concession, isConcession: true });
+        data.concessionTotal = concession;
+        data.totalDue = gross - concession - lastPaid;   // template derives "Last Paid" = gross − conc − totalDue
+        data.balance = gross - concession - allPaid;
+      }
+    }
+    return buildReceiptHtml(data);
   }
 }
 
