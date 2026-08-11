@@ -102,6 +102,12 @@ create table if not exists fee_late_fee_rule (
   createdby_userid varchar(12), created_at timestamp(0),
   updatedby_userid varchar(12), updated_at timestamp(0)
 );
+-- config for the auto-levy (Apply-Fine) job — off by default; see modules/fees/scripts/apply-fines.js
+alter table fee_late_fee_rule add column if not exists enabled boolean;            -- master on/off (null/false = off)
+alter table fee_late_fee_rule add column if not exists effective_from date;        -- fine-clock floor: days counted from max(cycle_due, effective_from)
+alter table fee_late_fee_rule add column if not exists min_due_amount numeric(12,2);-- skip fine when a cycle's unpaid balance is below this ₹
+alter table fee_late_fee_rule add column if not exists min_due_pct numeric(6,2);   -- skip fine when unpaid is below this % of the cycle
+alter table fee_late_fee_rule add column if not exists cycle_scope text;           -- comma list of fineable cycle names (null = all except TOA/Full Term)
 create index if not exists idx_fee_late_fee_rule_ay on fee_late_fee_rule (school_id, academic_year_id);
 
 -- ============================================================ DISCOUNTS / RELIEF

@@ -3,6 +3,7 @@ import { ResponseBuilder } from '../../shared/lib/response-builder';
 import { ErrorCode } from '../../shared/lib/error-codes';
 import { resolveSchool, parseBody, requireParam } from './fees-util';
 import { lateFeeRuleService, CreateLateFeeRuleRequest, UpdateLateFeeRuleRequest } from './fees-late-fee-rule-service';
+import { applyFineService } from './fees-apply-fine-service';
 
 class LateFeeRuleHandler {
   public create = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
@@ -70,6 +71,51 @@ class LateFeeRuleHandler {
       ResponseBuilder.handleError(err, callback);
     }
   };
+
+  // Preview (dry-run) what the Apply-Fine job would levy right now — used by the settings screen.
+  public applyPreview = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
+    _context.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const ctx = await resolveSchool(event, callback);
+      if (!ctx) return;
+      const body = parseBody<any>(event, callback) || {};
+      const academicYearId = body.academicYearId || event.queryStringParameters?.academicYearId;
+      if (!academicYearId) { ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'academicYearId is required', callback); return; }
+      const result = await applyFineService.run(ctx.schoolId, academicYearId, { asOf: body.asOf, dryRun: true, userId: ctx.userId });
+      ResponseBuilder.ok(result, callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
+  // Run the Apply-Fine job on-demand (persists). Nightly cron does this automatically.
+  public applyRun = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
+    _context.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const ctx = await resolveSchool(event, callback);
+      if (!ctx) return;
+      const body = parseBody<any>(event, callback) || {};
+      const academicYearId = body.academicYearId || event.queryStringParameters?.academicYearId;
+      if (!academicYearId) { ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'academicYearId is required', callback); return; }
+      const result = await applyFineService.run(ctx.schoolId, academicYearId, { asOf: body.asOf, dryRun: false, userId: ctx.userId });
+      ResponseBuilder.ok(result, callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
+  // EventBridge nightly trigger — runs for every school+year with an enabled rule. No HTTP context.
+  public nightly = async (_event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
+    _context.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const results = await applyFineService.runAllEnabled({});
+      console.log('[apply-fine nightly]', JSON.stringify(results));
+      if (callback) callback(null, { ok: true, results } as any);
+    } catch (err: any) {
+      console.error('[apply-fine nightly] failed', err);
+      if (callback) callback(null, { ok: false, error: err.message } as any);
+    }
+  };
 }
 
 const handler = new LateFeeRuleHandler();
@@ -77,3 +123,6 @@ export const create = handler.create;
 export const update = handler.update;
 export const remove = handler.remove;
 export const list = handler.list;
+export const applyPreview = handler.applyPreview;
+export const applyRun = handler.applyRun;
+export const nightly = handler.nightly;

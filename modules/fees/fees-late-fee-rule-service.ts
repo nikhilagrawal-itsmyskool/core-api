@@ -11,6 +11,11 @@ export interface CreateLateFeeRuleRequest {
   mode: string;
   amount: number;
   cap?: number;
+  enabled?: boolean;
+  effectiveFrom?: string;   // fine-clock floor (days counted from max(cycle_due, effectiveFrom))
+  minDueAmount?: number;    // skip fine when unpaid < this ₹
+  minDuePct?: number;       // skip fine when unpaid < this % of the cycle
+  cycleScope?: string;      // comma list of fineable cycle names (null = all except TOA/Full Term)
 }
 
 export interface UpdateLateFeeRuleRequest {
@@ -19,6 +24,11 @@ export interface UpdateLateFeeRuleRequest {
   mode?: string;
   amount?: number;
   cap?: number;
+  enabled?: boolean;
+  effectiveFrom?: string | null;
+  minDueAmount?: number | null;
+  minDuePct?: number | null;
+  cycleScope?: string | null;
 }
 
 class LateFeeRuleService {
@@ -38,8 +48,8 @@ class LateFeeRuleService {
 
     const query = singleLineString`
       insert into fee_late_fee_rule
-      (uuid, school_id, academic_year_id, applies_to_kind, grace_days, mode, amount, cap, status, createdby_userid, created_at)
-      values ($1, $2, $3, $4, $5, $6, $7, $8, 'active', $9, $10)
+      (uuid, school_id, academic_year_id, applies_to_kind, grace_days, mode, amount, cap, enabled, effective_from, min_due_amount, min_due_pct, cycle_scope, status, createdby_userid, created_at)
+      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'active', $14, $15)
       returning *
     `;
 
@@ -52,6 +62,11 @@ class LateFeeRuleService {
       data.mode,
       data.amount,
       data.cap ?? null,
+      data.enabled ?? false,
+      data.effectiveFrom ?? null,
+      data.minDueAmount ?? null,
+      data.minDuePct ?? null,
+      data.cycleScope ?? null,
       userId,
       now,
     ];
@@ -74,6 +89,11 @@ class LateFeeRuleService {
     if (data.mode !== undefined) { updates.push(`mode = $${i++}`); params.push(data.mode); }
     if (data.amount !== undefined) { updates.push(`amount = $${i++}`); params.push(data.amount); }
     if (data.cap !== undefined) { updates.push(`cap = $${i++}`); params.push(data.cap); }
+    if (data.enabled !== undefined) { updates.push(`enabled = $${i++}`); params.push(data.enabled); }
+    if (data.effectiveFrom !== undefined) { updates.push(`effective_from = $${i++}`); params.push(data.effectiveFrom); }
+    if (data.minDueAmount !== undefined) { updates.push(`min_due_amount = $${i++}`); params.push(data.minDueAmount); }
+    if (data.minDuePct !== undefined) { updates.push(`min_due_pct = $${i++}`); params.push(data.minDuePct); }
+    if (data.cycleScope !== undefined) { updates.push(`cycle_scope = $${i++}`); params.push(data.cycleScope); }
 
     if (updates.length === 0) {
       return this.getById(id, schoolId);

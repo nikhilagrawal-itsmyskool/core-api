@@ -145,6 +145,24 @@
     name: ${self:service}-list-late-rules
     events:
       - http: { path: 'late-fee-rules', method: get, cors: true }
+  apply-fine-preview:
+    handler: fees-late-fee-rule-handler.applyPreview
+    name: ${self:service}-apply-fine-preview
+    timeout: 60
+    events:
+      - http: { path: 'late-fee-rules/apply-preview', method: post, cors: true }
+  apply-fine-run:
+    handler: fees-late-fee-rule-handler.applyRun
+    name: ${self:service}-apply-fine-run
+    timeout: 300
+    events:
+      - http: { path: 'late-fee-rules/apply', method: post, cors: true }
+  apply-fine-nightly:
+    handler: fees-late-fee-rule-handler.nightly
+    name: ${self:service}-apply-fine-nightly
+    timeout: 600
+    events:
+      - schedule: cron(30 20 * * ? *)   # ~02:00 IST daily; no-op unless a rule is enabled
 
   # ---- Concessions ----
   create-concession:
