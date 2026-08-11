@@ -24,6 +24,7 @@ export interface UpdateConcessionRequest {
 export interface AddConcessionStudentsRequest {
   studentIds: string[];
   cycleScope?: string;
+  effectiveFrom?: string; // apply only to cycles due on/after this date (null = whole year)
   remarks?: string;
   attachmentFileId?: string;
 }
@@ -212,8 +213,8 @@ class ConcessionService {
       if (existingSet.has(studentId)) { continue; }
       queries.push(singleLineString`
         insert into fee_concession_student
-        (uuid, school_id, concession_id, student_id, cycle_scope, remarks, attachment_file_id, status, createdby_userid, created_at)
-        values ($1, $2, $3, $4, $5, $6, $7, 'active', $8, $9)
+        (uuid, school_id, concession_id, student_id, cycle_scope, effective_from, remarks, attachment_file_id, status, createdby_userid, created_at)
+        values ($1, $2, $3, $4, $5, $6, $7, $8, 'active', $9, $10)
       `);
       params.push([
         generateShortUuid(12),
@@ -221,6 +222,7 @@ class ConcessionService {
         concessionId,
         studentId,
         data.cycleScope ?? null,
+        data.effectiveFrom ?? null,
         data.remarks ?? null,
         data.attachmentFileId ?? null,
         userId,
@@ -260,66 +262,108 @@ class ConcessionService {
     if (ids && ids.length) { await this.syncConcessions(schoolId, ay, ids, userId); }
   }
 
-  // Reconcile concession credits on a student's existing charges to what their active concessions
-  // imply. charge-run only applies concessions when it first creates a charge, so a late add/remove/
-  // edit of a concession must be reflected here: void stale concession credits, post fresh ones.
-  // Idempotent — a no-op when already in sync. settles_entry_id links each credit to its charge.
-  public async syncConcessions(schoolId: string, academicYearId: string, studentIds: string[], userId: string) {
-    const empty = { students: 0, chargesAdjusted: 0, concessionAdded: 0, concessionRemoved: 0 };
+  // Reconcile concession credits on a student's existing charges to what their active concession
+  // assignments imply. charge-run only applies concessions when it first creates a charge, so a late
+  // add/remove/edit must be reflected here: void stale credits, post fresh ones. Idempotent — a
+  // no-op when already in sync. settles_entry_id links each credit to its charge.
+  //
+  // Handles: (1) STACKING — a student may hold >1 concession on the same fee head (e.g. tuition
+  // 350 + commerce 300); each is reconciled independently keyed by scheme name (head_label), and the
+  // combined credit on a charge is capped at the charge amount. (2) effective_from — a concession
+  // applies only to cycles due on/after that date (null = whole year). (3) cycle_scope — a comma list
+  // of cycle names/ids restricting which cycles it applies to (null = all). Pass opts.dryRun to
+  // compute the plan WITHOUT writing (used to prove safety before relying on the engine).
+  public async syncConcessions(schoolId: string, academicYearId: string, studentIds: string[], userId: string, opts: { dryRun?: boolean } = {}) {
+    const empty = { students: 0, chargesAdjusted: 0, concessionAdded: 0, concessionRemoved: 0, plan: [] as any[] };
     if (!academicYearId || !studentIds || !studentIds.length) return empty;
     const n = (v: any) => (v == null ? 0 : Number(v));
     const round2 = (x: number) => Math.round(x * 100) / 100;
+    const norm = (s: any) => String(s ?? '').trim().toLowerCase();
 
+    // charges + each cycle's due date (for effective_from gating)
     const charges: any[] = await DB.query(
-      singleLineString`select uuid, student_id, fee_head_id, cycle_id, category, head_label, cycle_label, debit
-        from student_ledger_entry where school_id = $1 and academic_year_id = $2 and kind = 'charge' and status = 'active' and student_id = any($3)`,
+      singleLineString`select l.uuid, l.student_id, l.fee_head_id, l.cycle_id, l.category, l.head_label, l.cycle_label, l.debit,
+          coalesce(fc.due_date, fc.from_date) as cycle_due
+        from student_ledger_entry l left join fee_cycle fc on fc.uuid = l.cycle_id and fc.status = 'active'
+        where l.school_id = $1 and l.academic_year_id = $2 and l.kind = 'charge' and l.status = 'active' and l.student_id = any($3)`,
       [schoolId, academicYearId, studentIds]
     );
     if (!charges.length) return empty;
 
+    // existing concession credits keyed by charge -> scheme name so stacked schemes reconcile independently
     const concRows: any[] = await DB.query(
-      singleLineString`select uuid, settles_entry_id, credit from student_ledger_entry
+      singleLineString`select uuid, settles_entry_id, credit, head_label from student_ledger_entry
         where school_id = $1 and academic_year_id = $2 and kind = 'concession' and status = 'active' and settles_entry_id is not null and student_id = any($3)`,
       [schoolId, academicYearId, studentIds]
     );
-    const byCharge: Record<string, { sum: number; ids: string[] }> = {};
-    concRows.forEach((r) => { const e = (byCharge[r.settlesEntryId] ||= { sum: 0, ids: [] }); e.sum += n(r.credit); e.ids.push(r.uuid); });
+    const byChargeScheme: Record<string, Record<string, { sum: number; ids: string[] }>> = {};
+    concRows.forEach((r) => {
+      const c = (byChargeScheme[r.settlesEntryId] ||= {});
+      const e = (c[r.headLabel] ||= { sum: 0, ids: [] });
+      e.sum += n(r.credit); e.ids.push(r.uuid);
+    });
 
+    // active assignments — possibly MANY per (student, head) for stacking; carry effective_from + cycle_scope
     const defs: any[] = await DB.query(
-      singleLineString`select cs.student_id, c.fee_head_id, c.value_type, c.value, c.name
+      singleLineString`select cs.student_id, cs.effective_from, cs.cycle_scope, c.fee_head_id, c.value_type, c.value, c.name
         from fee_concession_student cs join fee_concession c on c.uuid = cs.concession_id and c.status = 'active'
         where cs.school_id = $1 and c.academic_year_id = $2 and cs.status = 'active' and cs.student_id = any($3)`,
       [schoolId, academicYearId, studentIds]
     );
-    const byStuHead: Record<string, Record<string, any>> = {};
-    defs.forEach((c) => ((byStuHead[c.studentId] ||= {})[c.feeHeadId] = c));
+    const byStuHead: Record<string, Record<string, any[]>> = {};
+    defs.forEach((d) => { ((byStuHead[d.studentId] ||= {})[d.feeHeadId] ||= []).push(d); });
 
     const queries: string[] = []; const params: any[][] = []; const now = new Date();
     const today = now.toISOString().slice(0, 10);
-    let chargesAdjusted = 0, added = 0, removed = 0; const touched = new Set<string>();
+    let chargesAdjusted = 0, added = 0, removed = 0; const touched = new Set<string>(); const plan: any[] = [];
 
     for (const ch of charges) {
       if (!ch.feeHeadId) continue; // SAFETY: never reconcile a charge whose head isn't resolved (would spuriously strip)
-      const conc = byStuHead[ch.studentId]?.[ch.feeHeadId];
-      const expected = conc ? round2(conc.valueType === 'percent' ? (n(ch.debit) * n(conc.value)) / 100 : Math.min(n(conc.value), n(ch.debit))) : 0;
-      const cur = round2(byCharge[ch.uuid]?.sum || 0);
-      if (Math.abs(expected - cur) < 0.005) continue;
-      for (const eid of (byCharge[ch.uuid]?.ids || [])) {
-        queries.push(singleLineString`update student_ledger_entry set status = 'cancelled', updatedby_userid = $1, updated_at = $2 where uuid = $3`);
-        params.push([userId, now, eid]);
+      const applicable = (byStuHead[ch.studentId]?.[ch.feeHeadId] || []).filter((d) => {
+        if (d.effectiveFrom && ch.cycleDue && new Date(ch.cycleDue) < new Date(d.effectiveFrom)) return false;
+        if (d.cycleScope) {
+          const scope = String(d.cycleScope).split(',').map(norm).filter(Boolean);
+          if (scope.length && !scope.includes(norm(ch.cycleLabel)) && !scope.includes(norm(ch.cycleId))) return false;
+        }
+        return true;
+      });
+      // desired discount per scheme; combined credit on a charge never exceeds the charge amount
+      // (bigger discounts first, then name, for deterministic capping)
+      const sorted = [...applicable].sort((a, b) => n(b.value) - n(a.value) || String(a.name).localeCompare(String(b.name)));
+      const desired: Record<string, number> = {}; let remaining = n(ch.debit);
+      for (const d of sorted) {
+        const raw = d.valueType === 'percent' ? (n(ch.debit) * n(d.value)) / 100 : n(d.value);
+        const amt = round2(Math.max(0, Math.min(raw, remaining)));
+        if (amt <= 0.005) continue;
+        desired[d.name] = round2((desired[d.name] || 0) + amt);
+        remaining = round2(remaining - amt);
       }
-      if (cur > 0) removed = round2(removed + cur);
-      if (expected > 0.005) {
-        queries.push(singleLineString`
-          insert into student_ledger_entry (uuid, school_id, student_id, academic_year_id, entry_date, category, fee_head_id, cycle_id, head_label, cycle_label, kind, credit, settles_entry_id, source_module, allocation, status, createdby_userid, created_at)
-          values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'concession',$11,$12,'fees','resynced','active',$13,$14)`);
-        params.push([generateShortUuid(12), schoolId, ch.studentId, academicYearId, today, ch.category, ch.feeHeadId, ch.cycleId, conc.name, ch.cycleLabel, expected, ch.uuid, userId, now]);
-        added = round2(added + expected);
+      const cur = byChargeScheme[ch.uuid] || {};
+      const schemeNames = new Set<string>([...Object.keys(desired), ...Object.keys(cur)]);
+      let chargeTouched = false;
+      for (const sName of schemeNames) {
+        const want = round2(desired[sName] || 0);
+        const have = round2(cur[sName]?.sum || 0);
+        if (Math.abs(want - have) < 0.005) continue;
+        for (const eid of (cur[sName]?.ids || [])) {
+          queries.push(singleLineString`update student_ledger_entry set status = 'cancelled', updatedby_userid = $1, updated_at = $2 where uuid = $3`);
+          params.push([userId, now, eid]);
+        }
+        if (have > 0) removed = round2(removed + have);
+        if (want > 0.005) {
+          queries.push(singleLineString`
+            insert into student_ledger_entry (uuid, school_id, student_id, academic_year_id, entry_date, category, fee_head_id, cycle_id, head_label, cycle_label, kind, credit, settles_entry_id, source_module, allocation, status, createdby_userid, created_at)
+            values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'concession',$11,$12,'fees','resynced','active',$13,$14)`);
+          params.push([generateShortUuid(12), schoolId, ch.studentId, academicYearId, today, ch.category, ch.feeHeadId, ch.cycleId, sName, ch.cycleLabel, want, ch.uuid, userId, now]);
+          added = round2(added + want);
+        }
+        if (opts.dryRun) plan.push({ studentId: ch.studentId, cycle: ch.cycleLabel, scheme: sName, from: have, to: want });
+        chargeTouched = true;
       }
-      chargesAdjusted++; touched.add(ch.studentId);
+      if (chargeTouched) { chargesAdjusted++; touched.add(ch.studentId); }
     }
-    if (queries.length) await DB.queriesInTransaction(queries, params);
-    return { students: touched.size, chargesAdjusted, concessionAdded: added, concessionRemoved: removed };
+    if (!opts.dryRun && queries.length) await DB.queriesInTransaction(queries, params);
+    return { students: touched.size, chargesAdjusted, concessionAdded: added, concessionRemoved: removed, plan };
   }
 }
 

@@ -133,6 +133,8 @@ create table if not exists fee_concession_student (
   createdby_userid varchar(12), created_at timestamp(0),
   updatedby_userid varchar(12), updated_at timestamp(0)
 );
+-- apply the discount only to cycles due on/after this date (null = whole year); backdatable
+alter table fee_concession_student add column if not exists effective_from date;
 create index if not exists idx_fee_concession_student on fee_concession_student (school_id, student_id);
 create index if not exists idx_fee_concession_student_c on fee_concession_student (school_id, concession_id);
 
