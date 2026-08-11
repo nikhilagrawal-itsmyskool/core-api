@@ -1,9 +1,9 @@
 import { DB, singleLineString } from '../../shared/lib/db';
 import { BusinessErrorResult } from '../../shared/lib/errors';
 import { ErrorCode } from '../../shared/lib/error-codes';
-import { DEFAULTS } from './syllabus-constants';
+import { DEFAULTS, MONTH_VALUES } from './syllabus-constants';
 import { findClass, findEmployee } from './syllabus-common';
-import { gradeEquals, normSubject, SUBJECT_ALIAS } from './syllabus-util';
+import { gradeEquals, normSubject, SUBJECT_ALIAS, currentMonth, monthOrder } from './syllabus-util';
 const { generateShortUuid } = require('../../shared/util/generate-uuid.js');
 
 class SyllabusTeacherService {
@@ -168,7 +168,7 @@ class SyllabusTeacherService {
   // The plans (per section) a teacher is assigned to, with per-section coverage
   // counts. Powers the teacher-PWA "My Syllabus" list.
   public async myPlans(schoolId: string, employeeId: string): Promise<any[]> {
-    return DB.query(
+    const rows = await DB.query(
       singleLineString`
         select spt.uuid as assignment_id, s.uuid as syllabus_id, s.grade, s.subject_id, s.layout,
                s.academic_year_id, sub.name as subject_name, spt.class_id, c.name as class_name,
@@ -191,6 +191,35 @@ class SyllabusTeacherService {
       `,
       [schoolId, employeeId],
     );
+    if (rows.length === 0) return rows;
+
+    // Per-plan monthly schedule of content leaves (Apr→Mar) so the PWA can draw
+    // the same plan-weighted coverage timeline as the admin Overview.
+    const planIds = [...new Set(rows.map((r: any) => r.syllabusId))];
+    const ph = planIds.map((_, i) => `$${i + 1}`).join(', ');
+    const sched = await DB.query(
+      singleLineString`
+        select e.syllabus_id, e.month, count(*)::int as n
+        from syllabus_entry e
+        where e.syllabus_id in (${ph}) and e.status = 'active'
+          and e.entry_type not in ('unit','section','exam','revision')
+          and not exists (select 1 from syllabus_entry c where c.parent_entry_id = e.uuid and c.status = 'active')
+        group by e.syllabus_id, e.month
+      `,
+      planIds,
+    );
+    const schedByPlan = new Map<string, number[]>();
+    for (const r of sched) {
+      if (!schedByPlan.has(r.syllabusId)) schedByPlan.set(r.syllabusId, new Array(MONTH_VALUES.length).fill(0));
+      const idx = MONTH_VALUES.indexOf(r.month);
+      if (idx >= 0) schedByPlan.get(r.syllabusId)![idx] += r.n;
+    }
+    const currentMonthIndex = monthOrder(currentMonth());
+    return rows.map((r: any) => ({
+      ...r,
+      monthlyScheduled: schedByPlan.get(r.syllabusId) || new Array(MONTH_VALUES.length).fill(0),
+      currentMonthIndex,
+    }));
   }
 }
 
