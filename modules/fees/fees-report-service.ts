@@ -354,6 +354,45 @@ class FeesReportService {
     }
     return { entries };
   }
+
+  // Per-student outstanding across ALL academic years — powers the "also owes in other years"
+  // banner on Collect so a clerk on one year isn't misled into thinking a student is all-clear.
+  public async duesByYear(schoolId: string, studentId: string) {
+    return DB.query(
+      singleLineString`select l.academic_year_id as academic_year_id, ay.name as year_name,
+          round(coalesce(sum(l.debit),0) - coalesce(sum(l.credit),0), 2) as balance
+        from student_ledger_entry l left join academic_year ay on ay.uuid = l.academic_year_id
+        where l.school_id = $1 and l.student_id = $2 and l.status = 'active'
+        group by l.academic_year_id, ay.name
+        having round(coalesce(sum(l.debit),0) - coalesce(sum(l.credit),0), 2) > 0.5
+        order by ay.name`,
+      [schoolId, studentId]
+    );
+  }
+
+  // Fine Exemptions report — every waiver posted on a Late Fee Fine charge (whether from the Collect
+  // screen's Exempt toggle or the historical import), with who/when/reason.
+  public async fineExemptions(schoolId: string, q: any) {
+    const params: any[] = [schoolId];
+    let where = `w.school_id = $1 and w.kind = 'waiver' and w.status = 'active' and w.head_label ilike '%late%'`;
+    if (q?.academicYearId) { params.push(q.academicYearId); where += ` and w.academic_year_id = $${params.length}`; }
+    if (q?.search) { params.push(`%${String(q.search).trim()}%`); const p = `$${params.length}`; where += ` and (s.name ilike ${p} or s.admission_number ilike ${p})`; }
+    params.push(Math.min(Number(q?.limit) || 500, 2000));
+    return DB.query(
+      singleLineString`select w.uuid, w.academic_year_id, ay.name as year_name, w.cycle_label,
+          round(w.credit, 2) as amount, w.remarks as reason, w.created_at as exempted_on,
+          s.name as student_name, s.admission_number, c.name as class_name,
+          coalesce(e.name, w.createdby_userid) as exempted_by
+        from student_ledger_entry w
+        left join academic_year ay on ay.uuid = w.academic_year_id
+        left join student s on s.uuid = w.student_id and s.school_id = w.school_id
+        left join student_class sc on sc.student_id = w.student_id and sc.academic_year_id = w.academic_year_id and sc.school_id = w.school_id
+        left join class c on c.uuid = sc.class_id
+        left join employee e on e.uuid = w.createdby_userid and e.school_id = w.school_id
+        where ${where} order by w.created_at desc limit $${params.length}`,
+      params
+    );
+  }
 }
 
 export const feesReportService = new FeesReportService();

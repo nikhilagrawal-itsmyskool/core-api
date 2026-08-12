@@ -9,7 +9,7 @@ const { generateShortUuid } = require('../../shared/util/generate-uuid.js');
 
 const n = (v: any): number => (v == null ? 0 : Number(v));
 
-interface Allocation { ledgerId: string; amount: number; }
+interface Allocation { ledgerId: string; amount: number; reason?: string; }
 interface CollectRequest {
   studentId: string; academicYearId: string; receiptDate?: string;
   paymentMode?: string; receivedFrom?: string; txnRef?: string; remarks?: string;
@@ -42,7 +42,9 @@ class FeesReceiptService {
     if (storeAsAdvance < 0) throw new BadRequestResult(ErrorCode.InvalidInput, 'storeAsAdvance cannot be negative');
     if (!allocations.length && !waivers.length && !(storeAsAdvance > 0))
       throw new BadRequestResult(ErrorCode.InvalidInput, 'At least one payment or waiver is required');
-    if (waivers.length && !body.waiveReason)
+    // A reason is required per waiver — either a per-item reason (fine exemptions carry their own) or a
+    // single body.waiveReason for the batch.
+    if (waivers.some((a) => !a.reason) && !body.waiveReason)
       throw new BadRequestResult(ErrorCode.InvalidInput, 'A reason is required to waive an amount');
     if (body.paymentMode && !PAYMENT_MODES.includes(body.paymentMode as any))
       throw new BadRequestResult(ErrorCode.InvalidInput, 'Invalid payment mode');
@@ -65,6 +67,7 @@ class FeesReceiptService {
 
     const payByCharge: Record<string, number> = {}; allocations.forEach((a) => (payByCharge[a.ledgerId] = (payByCharge[a.ledgerId] || 0) + n(a.amount)));
     const waiveByCharge: Record<string, number> = {}; waivers.forEach((a) => (waiveByCharge[a.ledgerId] = (waiveByCharge[a.ledgerId] || 0) + n(a.amount)));
+    const waiveReasonByCharge: Record<string, string> = {}; waivers.forEach((a) => { if (a.reason) waiveReasonByCharge[a.ledgerId] = a.reason; });
     let settled = 0; let waived = 0; let totalDue = 0;
     for (const id of ids) {
       const c = chargeById[id];
@@ -130,7 +133,8 @@ class FeesReceiptService {
       queries.push(singleLineString`
         insert into student_ledger_entry (uuid, school_id, student_id, academic_year_id, entry_date, category, fee_head_id, cycle_id, head_label, cycle_label, kind, credit, settles_entry_id, source_module, source_ref, remarks, allocation, status, createdby_userid, created_at)
         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'waiver',$11,$12,'fees',$13,$14,'explicit','active',$15,$16)`);
-      params.push([generateShortUuid(12), schoolId, body.studentId, body.academicYearId, receiptDate, c.category, c.feeHeadId, c.cycleId, c.headLabel, c.cycleLabel, waive, id, receiptId, body.waiveReason || 'Settlement waiver', userId, now]);
+      const reason = waiveReasonByCharge[id] || body.waiveReason || (/late/i.test(String(c.headLabel)) ? 'Fine exemption' : 'Settlement waiver');
+      params.push([generateShortUuid(12), schoolId, body.studentId, body.academicYearId, receiptDate, c.category, c.feeHeadId, c.cycleId, c.headLabel, c.cycleLabel, waive, id, receiptId, reason, userId, now]);
     }
 
     // draw down the advance: an 'adjust' debit offsets the advance credit consumed, so the

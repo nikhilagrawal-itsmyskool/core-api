@@ -330,6 +330,16 @@
     name: ${self:service}-withdraw-student
     events:
       - http: { path: 'students/{id}/withdraw', method: post, cors: true }
+  dues-by-year:
+    handler: fees-report-handler.duesByYear
+    name: ${self:service}-dues-by-year
+    events:
+      - http: { path: 'students/{id}/dues-by-year', method: get, cors: true }
+  fine-exemptions:
+    handler: fees-report-handler.fineExemptions
+    name: ${self:service}-fine-exemptions
+    events:
+      - http: { path: 'reports/fine-exemptions', method: get, cors: true }
 
   # ---- Migration ----
   migration-import:
