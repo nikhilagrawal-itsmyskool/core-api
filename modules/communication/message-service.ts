@@ -248,7 +248,7 @@ class MessageService {
     return DB.query(
       singleLineString`
         update message_recipient
-        set status = 'sending', updatedby_userid = $1, updated_at = now()
+        set status = 'sending', worker_id = $1, updated_at = now()
         where uuid in (
           select r.uuid from message_recipient r
           join message_job j on j.uuid = r.job_id and j.status = 'sending'

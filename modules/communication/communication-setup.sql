@@ -86,6 +86,7 @@ create table if not exists message_recipient (
     template_id varchar(12),
     context jsonb,
     status varchar(16) check (status in ('pending', 'sending', 'sent', 'delivered', 'read', 'failed', 'skipped')),
+    worker_id varchar(64),
     provider_message_id varchar(128),
     error text,
     sent_at timestamp(0),
@@ -94,6 +95,11 @@ create table if not exists message_recipient (
     updatedby_userid varchar(12),
     updated_at timestamp(0)
 );
+
+-- Additive for existing DBs: the send-claim marks which worker invocation owns a
+-- recipient here (was wrongly stuffed into updatedby_userid, a varchar(12) that
+-- overflowed on the drain's long worker id).
+alter table message_recipient add column if not exists worker_id varchar(64);
 
 create index if not exists idx_message_recipient_job on message_recipient(job_id);
 create index if not exists idx_message_recipient_job_status on message_recipient(job_id, status);
