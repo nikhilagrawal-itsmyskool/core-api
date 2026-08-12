@@ -63,8 +63,15 @@ function inWords(v: any): string {
   return parts.join(' ');
 }
 
-const detail = (label: string, val: any, wide = false) =>
-  val == null || val === '' ? '' : `<div class="d${wide ? ' wide' : ''}"><dt>${esc(label)}</dt><dd>${esc(val)}</dd></div>`;
+const titleCase = (s: any) => (s == null || s === '' ? s : String(s).charAt(0).toUpperCase() + String(s).slice(1).toLowerCase());
+const MODE_LABEL: Record<string, string> = { cash: 'Cash', cheque: 'Cheque', draft: 'DD / Draft', ecs: 'ECS', 'bank-deposit': 'Bank Deposit', card: 'Card', neft: 'NEFT', online: 'Online', rte: 'RTE' };
+const modeLabel = (m: any) => (m == null || m === '' ? m : (MODE_LABEL[String(m).toLowerCase()] || titleCase(m)));
+// Core fields show a dash when blank; pass { optional:true } to hide the row instead.
+const detail = (label: string, val: any, opt: { wide?: boolean; optional?: boolean } = {}) => {
+  if ((val == null || val === '') && opt.optional) return '';
+  const v = val == null || val === '' ? '—' : esc(val);
+  return `<div class="d${opt.wide ? ' wide' : ''}"><dt>${esc(label)}</dt><dd>${v}</dd></div>`;
+};
 
 function copy(d: ReceiptData, label: string): string {
   const cancelled = d.status === 'cancelled';
@@ -96,15 +103,15 @@ function copy(d: ReceiptData, label: string): string {
     </header>
 
     <dl class="det">
-      ${detail('Student', d.studentName)}
-      ${detail('Admission', d.admissionNo)}
-      ${detail('Father', d.fatherName)}
-      ${detail('Mother', d.motherName)}
+      ${detail('Admission No', d.admissionNo)}
+      ${detail('Student Name', d.studentName)}
+      ${detail('Father Name', d.fatherName)}
+      ${detail('Mother Name', d.motherName)}
       ${detail('Class', d.className)}
-      ${detail('Mode', d.paymentMode)}
-      ${detail('Received from', d.receivedFrom, true)}
-      ${detail('Fee cycle', d.feeCycle, true)}
-      ${detail('Description', d.description, true)}
+      ${detail('Mode', modeLabel(d.paymentMode))}
+      ${detail('Received from', titleCase(d.receivedFrom))}
+      ${detail('Fee cycle', d.feeCycle, { optional: true })}
+      ${detail('Description', d.description, { wide: true, optional: true })}
     </dl>
 
     <table class="li">
@@ -113,12 +120,12 @@ function copy(d: ReceiptData, label: string): string {
     </table>
 
     <div class="tot">
-      <div class="tr"><span>Total due</span><span class="money">${money(totalDueShown)}</span></div>
+      <div class="tr"><span>Due</span><span class="money">${money(totalDueShown)}</span></div>
       ${!d.native && lastPaid > 0.5 ? `<div class="tr"><span>Last paid</span><span class="money">(−) ${money(lastPaid)}</span></div>` : ''}
       ${!d.native && conc > 0.5 ? `<div class="tr"><span>Concessions</span><span class="money">(−) ${money(conc)}</span></div>` : ''}
       ${d.advanceApplied ? `<div class="tr"><span>Advance applied</span><span class="money">${money(d.advanceApplied)}</span></div>` : ''}
       ${d.waiverTotal ? `<div class="tr"><span>Waived (write-off)</span><span class="money">${money(d.waiverTotal)}</span></div>` : ''}
-      <div class="tr paid"><span>Total paid${d.advanceApplied ? ' (cash)' : ''}</span><span class="money">${money(d.totalPaid)}</span></div>
+      <div class="tr paid"><span>Paid${d.advanceApplied ? ' (cash)' : ''}</span><span class="money">${money(d.totalPaid)}</span></div>
     </div>
     <div class="bal${bal > 0 ? '' : ' zero'}"><span>${bal > 0 ? 'Balance' : 'Fully paid'}</span><span class="money">₹ ${money(bal)}</span></div>
     <div class="words"><b>In words:</b> Rupees ${esc(inWords(d.totalPaid))} Only</div>
@@ -148,8 +155,8 @@ export function buildReceiptHtml(d: ReceiptData): string {
 
     .top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;
       border-bottom:2px solid #0f172a;padding-bottom:10px}
-    .sch{font-size:16px;font-weight:800;letter-spacing:-.01em;color:#0f172a}
-    .ey{font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:#64748b;margin-top:3px}
+    .sch{font-size:20px;font-weight:800;letter-spacing:-.01em;color:#0f172a}
+    .ey{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#334155;margin-top:3px;font-weight:700}
     .rbox{text-align:right;line-height:1.5;white-space:nowrap}
     .cptag{font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:#94a3b8}
     .rno{font-weight:700;font-size:12.5px;font-variant-numeric:tabular-nums}
@@ -158,7 +165,7 @@ export function buildReceiptHtml(d: ReceiptData): string {
     .det{display:grid;grid-template-columns:1fr 1fr;gap:6px 26px;margin:11px 0 4px}
     .d{display:grid;grid-template-columns:88px 1fr;align-items:baseline;gap:8px;margin:0}
     .d.wide{grid-column:1/-1}
-    .d dt{margin:0;color:#94a3b8;font-size:9.5px;text-transform:uppercase;letter-spacing:.05em}
+    .d dt{margin:0;color:#475569;font-size:9.5px;text-transform:uppercase;letter-spacing:.05em;font-weight:700}
     .d dd{margin:0;font-weight:600;color:#0f172a}
 
     table.li{width:100%;border-collapse:collapse;margin-top:8px}

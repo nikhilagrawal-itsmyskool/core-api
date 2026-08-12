@@ -257,12 +257,19 @@ class FeesReceiptService {
       const emp = await DB.query(singleLineString`select name from employee where school_id = $1 and uuid = $2`, [schoolId, issuer]).catch(() => []);
       if (emp[0]?.name) issuer = emp[0].name;
     }
+    // Native/transport receipts don't snapshot father/mother — pull them live from the student record
+    // so every receipt carries the full parent dataset (migrated receipts already have them stored).
+    let stu: any = null;
+    if (r.studentId) {
+      const s = await DB.query(singleLineString`select name, admission_number, father_name, mother_name from student where school_id = $1 and uuid = $2`, [schoolId, r.studentId]).catch(() => []);
+      stu = s[0] || null;
+    }
     const data: any = {
       schoolName: (school[0] && school[0].name) || 'School',
       receiptNo: r.receiptNo, legacyReceiptNo: r.legacyReceiptNo, date: r.receiptDate, receiptType: r.type,
-      studentName: r.payerName, admissionNo: r.admissionNoSnapshot, className: r.payerClassSnapshot,
-      fatherName: r.fatherName, motherName: r.motherName, feeCycle: r.cycleSet,
-      paymentMode: r.paymentMode, receivedFrom: r.receivedFrom, description: r.transportRemark,
+      studentName: r.payerName || stu?.name, admissionNo: r.admissionNoSnapshot || stu?.admissionNumber, className: r.payerClassSnapshot,
+      fatherName: r.fatherName || stu?.fatherName, motherName: r.motherName || stu?.motherName, feeCycle: r.cycleSet,
+      paymentMode: r.paymentMode, receivedFrom: r.receivedFrom || 'father', description: r.transportRemark,
       collectedBy: issuer, remarks: r.remarks, native: r.source === 'native',
       lines: (r.lines || []).map((l: any) => ({ headLabel: l.headLabel, cycleLabel: l.cycleLabel, amount: n(l.amount), isConcession: l.isConcession })),
       totalDue: n(r.totalDue), totalPaid: n(r.totalPaid), concessionTotal: n(r.concessionTotal),
