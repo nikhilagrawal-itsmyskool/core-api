@@ -130,7 +130,7 @@ function copy(d: ReceiptData, label: string): string {
       <tbody>${rows}</tbody>
     </table>
 
-    ${d.qrDataUri ? `<div class="qrtot"><div class="qrbox"><img src="${d.qrDataUri}" width="86" height="86" alt="verify"/><div class="qrcap">${esc(d.qrCaption || 'Scan to verify')}</div></div><div class="totcol">${totals}</div></div>` : totals}
+    ${d.qrDataUri ? `<div class="qrtot"><div class="qrbox"><img src="${d.qrDataUri}" width="68" height="68" alt="verify"/><div class="qrcap">${esc(d.qrCaption || 'Scan to verify')}</div></div><div class="totcol">${totals}</div></div>` : totals}
     <div class="words"><b>In words:</b> Rupees ${esc(inWords(d.totalPaid))} Only</div>
     <div class="rem"><b>Remarks:</b> ${d.remarks ? esc(d.remarks) : '—'}</div>
 
@@ -151,7 +151,7 @@ export function buildReceiptHtml(d: ReceiptData): string {
     body{font-family:'Segoe UI',Roboto,Arial,Helvetica,sans-serif;color:#0f172a;font-size:12px;
       -webkit-print-color-adjust:exact;print-color-adjust:exact;background:#eef1f6}
     .sheet{width:190mm;margin:0 auto;background:#fff}
-    .copy{padding:6mm 7mm;position:relative}
+    .copy{padding:5mm 7mm;position:relative}
     .copy.cx{opacity:.9}
     .banner{border:1px solid #fca5a5;background:#fee2e2;color:#b91c1c;text-align:center;font-weight:700;
       letter-spacing:1px;padding:4px;border-radius:4px;margin-bottom:8px}
@@ -188,8 +188,8 @@ export function buildReceiptHtml(d: ReceiptData): string {
     .bal{display:flex;justify-content:space-between;align-items:center;margin:8px 0 0 auto;width:56%;min-width:220px;
       padding:7px 12px;border-radius:8px;border:1px solid #fca5a5;background:#fef2f2;color:#b91c1c;font-weight:700}
     .bal.zero{border-color:#86efac;background:#f0fdf4;color:#15803d}
-    .qrtot{display:flex;align-items:flex-end;gap:16px;margin-top:10px}
-    .qrbox{flex:0 0 auto;text-align:center;padding-bottom:2px}
+    .qrtot{display:flex;align-items:flex-end;gap:16px;margin-top:6px}
+    .qrbox{flex:0 0 auto;text-align:center;padding-bottom:1px}
     .qrbox img{border:1px solid #e2e8f0;border-radius:5px;padding:3px;background:#fff}
     .qrcap{font-size:8px;letter-spacing:.05em;color:#94a3b8;margin-top:3px}
     .totcol{flex:1 1 auto}
@@ -209,7 +209,7 @@ export function buildReceiptHtml(d: ReceiptData): string {
     @media print{
       body{background:#fff}
       .sheet{width:auto;margin:0;box-shadow:none}
-      .copy{min-height:128mm}
+      .copy{min-height:120mm}
       .copy, .tear{page-break-inside:avoid}
     }
   </style></head>
