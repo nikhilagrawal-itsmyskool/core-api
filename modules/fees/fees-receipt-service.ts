@@ -350,6 +350,37 @@ class FeesReceiptService {
       schoolName: r.schoolName,
     };
   }
+
+  // STAFF verification (auth; the Scan & Verify PWA tile) — resolves ANY receipt type (incl transport)
+  // with fuller detail, scoped to the staff member's school. `uuid` is extracted client-side from the
+  // scanned QR (a public URL, an imsk:<type>:<uuid> token, or a bare uuid).
+  public async verifyReceiptStaff(schoolId: string, uuid: string): Promise<any> {
+    if (!uuid || !/^[a-z0-9]{6,16}$/i.test(uuid)) return { found: false };
+    const rows = await DB.query(
+      singleLineString`select r.uuid, r.receipt_no, r.receipt_date, r.type, r.total_paid, r.balance, r.status,
+          r.payer_name, r.payer_class_snapshot, r.admission_no_snapshot, sc.name as school_name
+        from fee_receipt r left join school sc on sc.uuid = r.school_id where r.uuid = $1 and r.school_id = $2`,
+      [uuid, schoolId]
+    );
+    const r = rows[0];
+    if (!r) return { found: false };
+    return {
+      found: true,
+      cancelled: r.status === 'cancelled',
+      genuine: r.status !== 'cancelled',
+      type: r.type,
+      receiptNo: r.receiptNo,
+      date: r.receiptDate,
+      amount: n(r.totalPaid),
+      balance: n(r.balance),
+      fullyPaid: n(r.balance) <= 0.5,
+      studentName: r.payerName,
+      className: r.payerClassSnapshot,
+      admissionNo: r.admissionNoSnapshot,
+      schoolName: r.schoolName,
+      uuid: r.uuid,
+    };
+  }
 }
 
 function money(v: number) { return Number(v || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }

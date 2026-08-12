@@ -271,6 +271,11 @@
     name: ${self:service}-verify-receipt
     events:
       - http: { path: 'verify/receipt/{uuid}', method: get, cors: true }   # PUBLIC (authorizer-exempt)
+  verify-staff:
+    handler: fees-receipt-handler.verifyStaff
+    name: ${self:service}-verify-staff
+    events:
+      - http: { path: 'verify/staff/{uuid}', method: get, cors: true }     # authed (Scan & Verify)
   collect-adhoc:
     handler: fees-receipt-handler.adhoc
     name: ${self:service}-collect-adhoc

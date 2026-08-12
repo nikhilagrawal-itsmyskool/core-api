@@ -87,6 +87,17 @@ class FeesReceiptHandler {
       ResponseBuilder.ok(result, callback);
     } catch (err: any) { ResponseBuilder.handleError(err, callback); }
   };
+
+  // STAFF — authed. The Scan & Verify PWA tile (admin/god) resolves any receipt type here.
+  public verifyStaff = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const rc = await resolveSchool(event, callback); if (!rc) return;
+      const uuid = event.pathParameters?.uuid as string;
+      const result = await feesReceiptService.verifyReceiptStaff(rc.schoolId, uuid);
+      ResponseBuilder.ok(result, callback);
+    } catch (err: any) { ResponseBuilder.handleError(err, callback); }
+  };
 }
 
 const handler = new FeesReceiptHandler();
@@ -98,3 +109,4 @@ export const getById = handler.getById;
 export const list = handler.list;
 export const print = handler.print;
 export const verify = handler.verify;
+export const verifyStaff = handler.verifyStaff;
