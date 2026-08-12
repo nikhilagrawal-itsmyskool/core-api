@@ -14,6 +14,14 @@ export interface BaseEntity {
 }
 
 // --------------------------------------------------------------------- Template
+// Per-variable UI metadata (hint + preset suggestions) for sender-supplied
+// variables, keyed by variable name. Purely for the Compose form; ignored at send.
+export interface VariableMeta {
+  hint?: string;
+  suggestions?: string[];
+}
+export type VariableMetaMap = Record<string, VariableMeta>;
+
 export interface MessageTemplate extends BaseEntity {
   key: string;
   name?: string;
@@ -25,6 +33,7 @@ export interface MessageTemplate extends BaseEntity {
   headerType?: HeaderType;
   bodyPreview?: string;
   variables?: string[];
+  variableMeta?: VariableMetaMap;
   status: TemplateStatus;
 }
 
@@ -39,6 +48,7 @@ export interface CreateTemplateRequest {
   headerType?: HeaderType;
   bodyPreview?: string;
   variables?: string[];
+  variableMeta?: VariableMetaMap;
   // Optional initial status so a template can be staged as 'inactive' (ignored by
   // the send path) and flipped 'active' later. Defaults to 'active'.
   status?: 'active' | 'inactive';
@@ -53,6 +63,7 @@ export interface UpdateTemplateRequest {
   headerType?: HeaderType;
   bodyPreview?: string;
   variables?: string[];
+  variableMeta?: VariableMetaMap;
   status?: 'active' | 'inactive';
 }
 

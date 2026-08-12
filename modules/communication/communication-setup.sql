@@ -31,12 +31,18 @@ create table if not exists message_template (
     header_type varchar(16) check (header_type in ('none', 'text', 'image')),
     body_preview text,
     variables jsonb,
+    variable_meta jsonb,
     status varchar(16) check (status in ('active', 'inactive', 'deleted')),
     createdby_userid varchar(12),
     created_at timestamp(0),
     updatedby_userid varchar(12),
     updated_at timestamp(0)
 );
+
+-- Additive for existing DBs: per-variable UI metadata (hint + preset suggestions),
+-- keyed by variable name, for the sender-supplied variables. Shape:
+--   { "<var>": { "hint": "...", "suggestions": ["...", "..."] } }
+alter table message_template add column if not exists variable_meta jsonb;
 
 create index if not exists idx_message_template_school_status on message_template(school_id, status);
 create index if not exists idx_message_template_key on message_template(school_id, key, channel);
