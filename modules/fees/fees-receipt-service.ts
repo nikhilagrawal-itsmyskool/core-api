@@ -257,18 +257,23 @@ class FeesReceiptService {
       const emp = await DB.query(singleLineString`select name from employee where school_id = $1 and uuid = $2`, [schoolId, issuer]).catch(() => []);
       if (emp[0]?.name) issuer = emp[0].name;
     }
-    // Native/transport receipts don't snapshot father/mother — pull them live from the student record
-    // so every receipt carries the full parent dataset (migrated receipts already have them stored).
-    let stu: any = null;
+    // Native/transport receipts don't snapshot father/mother — pull them live so every receipt carries
+    // the full parent dataset. Names live in student_guardian (relation father/mother); honorific stripped.
+    let stu: any = null; let guardians: any[] = [];
     if (r.studentId) {
-      const s = await DB.query(singleLineString`select name, admission_number, father_name, mother_name from student where school_id = $1 and uuid = $2`, [schoolId, r.studentId]).catch(() => []);
+      const s = await DB.query(singleLineString`select name, admission_number from student where school_id = $1 and uuid = $2`, [schoolId, r.studentId]).catch(() => []);
       stu = s[0] || null;
+      guardians = await DB.query(singleLineString`select relation, name from student_guardian where school_id = $1 and student_id = $2 and status = 'active'`, [schoolId, r.studentId]).catch(() => []);
     }
+    const gname = (rel: string) => {
+      const g = guardians.find((x: any) => new RegExp(rel, 'i').test(x.relation || ''));
+      return g?.name ? String(g.name).replace(/^(mr|mrs|ms|dr|smt|shri|sri|master|kum)\.?\s*/i, '').trim() : null;
+    };
     const data: any = {
       schoolName: (school[0] && school[0].name) || 'School',
       receiptNo: r.receiptNo, legacyReceiptNo: r.legacyReceiptNo, date: r.receiptDate, receiptType: r.type,
       studentName: r.payerName || stu?.name, admissionNo: r.admissionNoSnapshot || stu?.admissionNumber, className: r.payerClassSnapshot,
-      fatherName: r.fatherName || stu?.fatherName, motherName: r.motherName || stu?.motherName, feeCycle: r.cycleSet,
+      fatherName: r.fatherName || gname('father'), motherName: r.motherName || gname('mother'), feeCycle: r.cycleSet,
       paymentMode: r.paymentMode, receivedFrom: r.receivedFrom || 'father', description: r.transportRemark,
       collectedBy: issuer, remarks: r.remarks, native: r.source === 'native',
       lines: (r.lines || []).map((l: any) => ({ headLabel: l.headLabel, cycleLabel: l.cycleLabel, amount: n(l.amount), isConcession: l.isConcession })),

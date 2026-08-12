@@ -109,23 +109,23 @@ function copy(d: ReceiptData, label: string): string {
       ${detail('Mother Name', d.motherName)}
       ${detail('Class', d.className)}
       ${detail('Mode', modeLabel(d.paymentMode))}
-      ${detail('Received from', titleCase(d.receivedFrom))}
-      ${detail('Fee cycle', d.feeCycle, { optional: true })}
+      ${detail('Received From', titleCase(d.receivedFrom))}
+      ${detail('Fee Cycle', d.feeCycle, { optional: true })}
       ${detail('Description', d.description, { wide: true, optional: true })}
     </dl>
 
     <table class="li">
-      <thead><tr><th>${d.native ? 'Fee head — paid towards' : 'Fee head'}</th><th class="r">${d.native ? 'Paid (₹)' : 'Amount (₹)'}</th></tr></thead>
+      <thead><tr><th>${d.native ? 'Fee Head — Paid Towards' : 'Fee Head'}</th><th class="r">${d.native ? 'Paid (₹)' : 'Amount (₹)'}</th></tr></thead>
       <tbody>${rows}</tbody>
     </table>
 
     <div class="tot">
-      <div class="tr"><span>Due</span><span class="money">${money(totalDueShown)}</span></div>
+      <div class="tr"><span>Total Due</span><span class="money">${money(totalDueShown)}</span></div>
       ${!d.native && lastPaid > 0.5 ? `<div class="tr"><span>Last paid</span><span class="money">(−) ${money(lastPaid)}</span></div>` : ''}
       ${!d.native && conc > 0.5 ? `<div class="tr"><span>Concessions</span><span class="money">(−) ${money(conc)}</span></div>` : ''}
       ${d.advanceApplied ? `<div class="tr"><span>Advance applied</span><span class="money">${money(d.advanceApplied)}</span></div>` : ''}
       ${d.waiverTotal ? `<div class="tr"><span>Waived (write-off)</span><span class="money">${money(d.waiverTotal)}</span></div>` : ''}
-      <div class="tr paid"><span>Paid${d.advanceApplied ? ' (cash)' : ''}</span><span class="money">${money(d.totalPaid)}</span></div>
+      <div class="tr paid"><span>Total Paid${d.advanceApplied ? ' (cash)' : ''}</span><span class="money">${money(d.totalPaid)}</span></div>
     </div>
     <div class="bal${bal > 0 ? '' : ' zero'}"><span>${bal > 0 ? 'Balance' : 'Fully paid'}</span><span class="money">₹ ${money(bal)}</span></div>
     <div class="words"><b>In words:</b> Rupees ${esc(inWords(d.totalPaid))} Only</div>
@@ -156,21 +156,21 @@ export function buildReceiptHtml(d: ReceiptData): string {
     .top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;
       border-bottom:2px solid #0f172a;padding-bottom:10px}
     .sch{font-size:20px;font-weight:800;letter-spacing:-.01em;color:#0f172a}
-    .ey{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#334155;margin-top:3px;font-weight:700}
+    .ey{font-size:12px;letter-spacing:.01em;color:#334155;margin-top:3px;font-weight:700}
     .rbox{text-align:right;line-height:1.5;white-space:nowrap}
-    .cptag{font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:#94a3b8}
+    .cptag{font-size:10px;letter-spacing:.02em;color:#94a3b8}
     .rno{font-weight:700;font-size:12.5px;font-variant-numeric:tabular-nums}
     .dt{font-size:11.5px;color:#475569;font-variant-numeric:tabular-nums}
 
     .det{display:grid;grid-template-columns:1fr 1fr;gap:6px 26px;margin:11px 0 4px}
     .d{display:grid;grid-template-columns:88px 1fr;align-items:baseline;gap:8px;margin:0}
     .d.wide{grid-column:1/-1}
-    .d dt{margin:0;color:#475569;font-size:9.5px;text-transform:uppercase;letter-spacing:.05em;font-weight:700}
-    .d dd{margin:0;font-weight:600;color:#0f172a}
+    .d dt{margin:0;color:#64748b;font-size:11px;letter-spacing:.01em;font-weight:700}
+    .d dd{margin:0;font-size:11px;font-weight:600;color:#0f172a}
 
     table.li{width:100%;border-collapse:collapse;margin-top:8px}
     .li th,.li td{padding:6px 6px}
-    .li thead th{font-size:9.5px;text-transform:uppercase;letter-spacing:.05em;color:#64748b;
+    .li thead th{font-size:10px;letter-spacing:.01em;color:#64748b;font-weight:700;
       text-align:left;border-bottom:1px solid #cbd5e1}
     .li thead th.r{text-align:right}
     .li tbody td{border-bottom:1px solid #eef2f7}
