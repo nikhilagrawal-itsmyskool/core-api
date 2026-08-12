@@ -28,6 +28,8 @@ interface ReceiptData {
   amountInWords?: string | null;
   status?: string | null;                 // 'active' | 'cancelled'
   cancelReason?: string | null;
+  qrDataUri?: string | null;              // verification QR (data: URI); sits beside the totals
+  qrCaption?: string | null;              // e.g. "Scan to verify" / "Staff verify"
   native?: boolean;                       // true = in-app receipt (clean itemised: lines are amounts paid);
                                           // false/undefined = migrated (SchoolPad running-statement waterfall)
 }
@@ -89,6 +91,15 @@ function copy(d: ReceiptData, label: string): string {
   const conc = (d.lines || []).filter((l) => l.isConcession).reduce((s, l) => s + Math.abs(Number(l.amount || 0)), 0);
   const totalDueShown = d.native ? Number(d.totalDue || 0) : gross;
   const lastPaid = d.native ? 0 : Math.max(0, gross - conc - Number(d.totalDue || 0));
+  const totals = `<div class="tot">
+      <div class="tr"><span>Total Due</span><span class="money">${money(totalDueShown)}</span></div>
+      ${!d.native && lastPaid > 0.5 ? `<div class="tr"><span>Last paid</span><span class="money">(−) ${money(lastPaid)}</span></div>` : ''}
+      ${!d.native && conc > 0.5 ? `<div class="tr"><span>Concessions</span><span class="money">(−) ${money(conc)}</span></div>` : ''}
+      ${d.advanceApplied ? `<div class="tr"><span>Advance applied</span><span class="money">${money(d.advanceApplied)}</span></div>` : ''}
+      ${d.waiverTotal ? `<div class="tr"><span>Waived (write-off)</span><span class="money">${money(d.waiverTotal)}</span></div>` : ''}
+      <div class="tr paid"><span>Total Paid${d.advanceApplied ? ' (cash)' : ''}</span><span class="money">${money(d.totalPaid)}</span></div>
+    </div>
+    <div class="bal${bal > 0 ? '' : ' zero'}"><span>${bal > 0 ? 'Balance' : 'Fully paid'}</span><span class="money">₹ ${money(bal)}</span></div>`;
 
   return `
   <section class="copy${cancelled ? ' cx' : ''}">
@@ -119,15 +130,7 @@ function copy(d: ReceiptData, label: string): string {
       <tbody>${rows}</tbody>
     </table>
 
-    <div class="tot">
-      <div class="tr"><span>Total Due</span><span class="money">${money(totalDueShown)}</span></div>
-      ${!d.native && lastPaid > 0.5 ? `<div class="tr"><span>Last paid</span><span class="money">(−) ${money(lastPaid)}</span></div>` : ''}
-      ${!d.native && conc > 0.5 ? `<div class="tr"><span>Concessions</span><span class="money">(−) ${money(conc)}</span></div>` : ''}
-      ${d.advanceApplied ? `<div class="tr"><span>Advance applied</span><span class="money">${money(d.advanceApplied)}</span></div>` : ''}
-      ${d.waiverTotal ? `<div class="tr"><span>Waived (write-off)</span><span class="money">${money(d.waiverTotal)}</span></div>` : ''}
-      <div class="tr paid"><span>Total Paid${d.advanceApplied ? ' (cash)' : ''}</span><span class="money">${money(d.totalPaid)}</span></div>
-    </div>
-    <div class="bal${bal > 0 ? '' : ' zero'}"><span>${bal > 0 ? 'Balance' : 'Fully paid'}</span><span class="money">₹ ${money(bal)}</span></div>
+    ${d.qrDataUri ? `<div class="qrtot"><div class="qrbox"><img src="${d.qrDataUri}" width="86" height="86" alt="verify"/><div class="qrcap">${esc(d.qrCaption || 'Scan to verify')}</div></div><div class="totcol">${totals}</div></div>` : totals}
     <div class="words"><b>In words:</b> Rupees ${esc(inWords(d.totalPaid))} Only</div>
     <div class="rem"><b>Remarks:</b> ${d.remarks ? esc(d.remarks) : '—'}</div>
 
@@ -185,6 +188,11 @@ export function buildReceiptHtml(d: ReceiptData): string {
     .bal{display:flex;justify-content:space-between;align-items:center;margin:8px 0 0 auto;width:56%;min-width:220px;
       padding:7px 12px;border-radius:8px;border:1px solid #fca5a5;background:#fef2f2;color:#b91c1c;font-weight:700}
     .bal.zero{border-color:#86efac;background:#f0fdf4;color:#15803d}
+    .qrtot{display:flex;align-items:flex-end;gap:16px;margin-top:10px}
+    .qrbox{flex:0 0 auto;text-align:center;padding-bottom:2px}
+    .qrbox img{border:1px solid #e2e8f0;border-radius:5px;padding:3px;background:#fff}
+    .qrcap{font-size:8px;letter-spacing:.05em;color:#94a3b8;margin-top:3px}
+    .totcol{flex:1 1 auto}
     .words{margin-top:8px;font-style:italic;color:#334155}
     .rem{margin-top:5px;color:#334155}
     .foot{margin-top:12px;border-top:1px dashed #cbd5e1;padding-top:7px;color:#94a3b8;font-size:9.5px;line-height:1.55}

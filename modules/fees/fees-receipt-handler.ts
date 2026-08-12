@@ -77,6 +77,16 @@ class FeesReceiptHandler {
       ResponseBuilder.returnHtml(html, callback);
     } catch (err: any) { ResponseBuilder.handleError(err, callback); }
   };
+
+  // PUBLIC — no auth (authorizer-exempt). Scanning a fee-receipt QR resolves here.
+  public verify = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const uuid = event.pathParameters?.uuid as string;
+      const result = await feesReceiptService.verifyReceipt(uuid);
+      ResponseBuilder.ok(result, callback);
+    } catch (err: any) { ResponseBuilder.handleError(err, callback); }
+  };
 }
 
 const handler = new FeesReceiptHandler();
@@ -87,3 +97,4 @@ export const cancel = handler.cancel;
 export const getById = handler.getById;
 export const list = handler.list;
 export const print = handler.print;
+export const verify = handler.verify;

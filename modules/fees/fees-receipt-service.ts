@@ -6,6 +6,9 @@ import { RECEIPT_SERIES, DEFAULTS, PAYMENT_MODES } from './fees-constants';
 import { buildReceiptHtml } from './fees-receipt-template';
 import { notifyReceipt } from './fees-notify';
 const { generateShortUuid } = require('../../shared/util/generate-uuid.js');
+const QRCode = require('qrcode');
+// Base for the public receipt-verify page the QR links to. Per-school portal domain.
+const VERIFY_BASE = process.env.PORTAL_BASE_URL || 'https://dbpasn.itsmyskool.com';
 
 const n = (v: any): number => (v == null ? 0 : Number(v));
 
@@ -273,8 +276,16 @@ class FeesReceiptService {
       const g = guardians.find((x: any) => new RegExp(rel, 'i').test(x.relation || ''));
       return g?.name ? String(g.name).replace(/^(mr|mrs|ms|dr|smt|shri|sri|master|kum)\.?\s*/i, '').trim() : null;
     };
+    // Verification QR: fee/adhoc → a PUBLIC verify URL (any phone camera opens it); transport/refund
+    // → a staff-only token that only the staff PWA scanner resolves. Never blocks printing on failure.
+    const isPublicVerify = r.type === 'fee' || r.type === 'adhoc';
+    const qrPayload = isPublicVerify ? `${VERIFY_BASE}/verify/receipt/${r.uuid}` : `imsk:${String(r.type || 'r').toUpperCase()}:${r.uuid}`;
+    let qrDataUri: string | null = null;
+    try { qrDataUri = await QRCode.toDataURL(qrPayload, { margin: 1, width: 220, color: { dark: '#0f172a', light: '#ffffff' } }); } catch { qrDataUri = null; }
+
     const data: any = {
       schoolName: (school[0] && school[0].name) || 'School',
+      qrDataUri, qrCaption: isPublicVerify ? 'Scan to verify' : 'Staff verify',
       receiptNo: r.receiptNo, legacyReceiptNo: r.legacyReceiptNo, date: r.receiptDate, receiptType: r.type,
       studentName: r.payerName || stu?.name, admissionNo: r.admissionNoSnapshot || stu?.admissionNumber, className: r.payerClassSnapshot,
       fatherName: r.fatherName || gname('father'), motherName: r.motherName || gname('mother'), feeCycle: r.cycleSet,
@@ -310,6 +321,34 @@ class FeesReceiptService {
       }
     }
     return buildReceiptHtml(data);
+  }
+
+  // PUBLIC receipt verification (no auth) — keyed on the unguessable receipt uuid from the QR.
+  // Returns minimal, non-sensitive proof for FEE/ADHOC receipts only; transport/refund are refused
+  // (they verify staff-side). Reflects cancellation so a voided receipt never reads as genuine.
+  public async verifyReceipt(uuid: string): Promise<any> {
+    if (!uuid || !/^[a-z0-9]{6,16}$/i.test(uuid)) return { found: false };
+    const rows = await DB.query(
+      singleLineString`select r.receipt_no, r.receipt_date, r.type, r.total_paid, r.balance, r.status,
+          r.payer_name, r.payer_class_snapshot, sc.name as school_name
+        from fee_receipt r left join school sc on sc.uuid = r.school_id where r.uuid = $1`,
+      [uuid]
+    );
+    const r = rows[0];
+    if (!r) return { found: false };
+    if (!(r.type === 'fee' || r.type === 'adhoc')) return { found: false, restricted: true }; // staff-only types
+    return {
+      found: true,
+      cancelled: r.status === 'cancelled',
+      genuine: r.status !== 'cancelled',
+      receiptNo: r.receiptNo,
+      date: r.receiptDate,
+      amount: n(r.totalPaid),
+      fullyPaid: n(r.balance) <= 0.5,
+      studentName: r.payerName ? String(r.payerName).trim().split(/\s+/)[0] : null, // first name only
+      className: r.payerClassSnapshot,
+      schoolName: r.schoolName,
+    };
   }
 }
 

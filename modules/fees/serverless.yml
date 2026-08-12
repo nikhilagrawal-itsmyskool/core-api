@@ -12,6 +12,8 @@ custom:
   fullServiceName: ${self:custom.prefix}-${self:custom.baseServiceName}
   customDomain:
    basePath: 'fees'
+  authorizerExtraExempt:
+    - 'verify/receipt/{uuid}'   # public receipt verification (QR scan) — no JWT
   $<<: ${file(../global-config-${self:provider.stage}.yml):custom}
 
 service: ${self:provider.stage}-${self:custom.fullServiceName}

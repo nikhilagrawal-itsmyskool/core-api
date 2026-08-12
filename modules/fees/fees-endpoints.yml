@@ -266,6 +266,11 @@
     name: ${self:service}-print-receipt
     events:
       - http: { path: 'receipts/{id}/print', method: get, cors: true }
+  verify-receipt:
+    handler: fees-receipt-handler.verify
+    name: ${self:service}-verify-receipt
+    events:
+      - http: { path: 'verify/receipt/{uuid}', method: get, cors: true }   # PUBLIC (authorizer-exempt)
   collect-adhoc:
     handler: fees-receipt-handler.adhoc
     name: ${self:service}-collect-adhoc
