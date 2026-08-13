@@ -3,6 +3,9 @@ import {
   CHANNEL_VALUES, STUDENT_ROLES, EMPLOYEE_ROLES, DEFAULT_CHANNEL_ORDER,
 } from './communication-constants';
 import { AudienceTarget, LadderMatch } from './communication-interfaces';
+import { firstName } from '../../shared/util/name-format';
+
+export { firstName };
 
 export function numberKey(role: ContactRole, channel: Channel): string {
   return `${role}:${channel}`;
@@ -114,10 +117,14 @@ export const AUTO_CONTEXT_KEYS = {
   employee: ['recipientName', 'employeeName'],
 } as const;
 
+// recipientName is a PLACEHOLDER for students — the real greeting name is the
+// resolved contact (father/mother/guardian), filled in by the send flow once the
+// ladder picks a role (their names live in student_guardian, not on the student
+// row). 'Parent' is only ever seen if a student has no guardian name at all.
 export function autoContext(type: RecipientType, row: any): Record<string, string> {
   return type === 'student'
-    ? { recipientName: row.name, studentName: row.name, admissionNumber: row.admissionNumber }
-    : { recipientName: row.name, employeeName: row.name };
+    ? { recipientName: 'Parent', studentName: firstName(row.name), admissionNumber: row.admissionNumber }
+    : { recipientName: firstName(row.name), employeeName: row.name };
 }
 
 // Job-level context resolved once per job from the school record — keeps a single

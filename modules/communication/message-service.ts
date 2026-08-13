@@ -3,10 +3,10 @@ import { BusinessErrorResult } from '../../shared/lib/errors';
 import { ErrorCode } from '../../shared/lib/error-codes';
 import { Channel, DEFAULTS, RETRY, SEND_BATCH_SIZE, REAPER } from './communication-constants';
 import {
-  AudienceSpec, AudienceTarget, MessageJob, MessageRecipient, MessageTemplate,
+  AudienceSpec, AudienceTarget, LadderMatch, MessageJob, MessageRecipient, MessageTemplate,
   SendMessageRequest, PreviewRequest,
 } from './communication-interfaces';
-import { resolveLadder, resolveVariables, studentNumbers, employeeNumbers, autoContext, schoolContext } from './communication-util';
+import { resolveLadder, resolveVariables, studentNumbers, employeeNumbers, autoContext, schoolContext, firstName } from './communication-util';
 import { templateService } from './template-service';
 import { getProvider } from './providers';
 const { generateShortUuid } = require('../../shared/util/generate-uuid.js');
@@ -118,7 +118,7 @@ class MessageService {
         return { recipientType: t.recipientType, recipientId: t.recipientId, name: t.name, status: 'skipped', reason: 'no reachable channel with an approved template' };
       }
       const template = templates.get(match.channel)!;
-      const ctx = { ...(req.context || {}), ...t.context, ...schoolCtx };
+      const ctx = this.withRecipientName(t, match, { ...(req.context || {}), ...t.context, ...schoolCtx });
       const { missing } = resolveVariables(template.variables, ctx);
       if (missing.length > 0) {
         return { recipientType: t.recipientType, recipientId: t.recipientId, name: t.name, role: match.role, channel: match.channel, status: 'skipped', reason: `missing variables: ${missing.join(', ')}` };
@@ -213,7 +213,7 @@ class MessageService {
         continue;
       }
       const template = templates.get(match.channel)!;
-      const ctx = { ...(job.context || {}), ...t.context, ...schoolCtx };
+      const ctx = this.withRecipientName(t, match, { ...(job.context || {}), ...t.context, ...schoolCtx });
       const { missing } = resolveVariables(template.variables, ctx);
       if (missing.length > 0) {
         queries.push(RECIPIENT_INSERT_SQL);
@@ -456,6 +456,18 @@ class MessageService {
     return rows[0] || {};
   }
 
+  // Fill recipientName with the resolved contact's name once the ladder has picked
+  // a role. For students that's the matched guardian (father/mother/guardian),
+  // falling back to any available guardian name; the autoContext placeholder
+  // ('Parent') only survives if a student truly has no guardian name. Employees
+  // greet themselves, already set in autoContext.
+  private withRecipientName(target: AudienceTarget, match: LadderMatch, ctx: Record<string, any>): Record<string, any> {
+    if (target.recipientType !== 'student') return ctx;
+    const gn = target.guardianNames || {};
+    const name = gn[match.role] || gn.father || gn.mother || gn.guardian;
+    return name ? { ...ctx, recipientName: name } : ctx;
+  }
+
   // student ids/classes/all, employee ids/roles/all, and transport route(s).
   // (wingId is reserved.)
   private async resolveTargets(schoolId: string, audience?: AudienceSpec): Promise<AudienceTarget[]> {
@@ -557,6 +569,26 @@ class MessageService {
       }
     }
 
+    // Guardian display names (first-name, title-stripped) for greeting the actual
+    // contact rather than the student. Names live in student_guardian; the student
+    // row carries only the numbers. One batch query over all resolved students.
+    const guardianNamesByStudent = new Map<string, Record<string, string>>();
+    if (studentRows.length > 0) {
+      const ids = Array.from(new Set(studentRows.map((r) => r.uuid)));
+      const grows = await DB.query(
+        singleLineString`
+          select student_id, relation, name from student_guardian
+          where school_id = $1 and student_id = any($2) and status = 'active' and coalesce(name, '') <> ''
+        `,
+        [schoolId, ids],
+      );
+      for (const g of grows) {
+        const m = guardianNamesByStudent.get(g.studentId) || {};
+        if (!m[g.relation]) m[g.relation] = firstName(g.name); // keep first non-empty per relation
+        guardianNamesByStudent.set(g.studentId, m);
+      }
+    }
+
     for (const row of studentRows) {
       const key = `student:${row.uuid}`;
       if (byKey.has(key)) continue;
@@ -566,6 +598,7 @@ class MessageService {
         name: row.name,
         preference: row.communicationPreference,
         numbers: studentNumbers(row),
+        guardianNames: guardianNamesByStudent.get(row.uuid) || {},
         context: autoContext('student', row),
       });
     }

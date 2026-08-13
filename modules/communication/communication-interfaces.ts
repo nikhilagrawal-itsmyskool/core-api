@@ -164,6 +164,10 @@ export interface AudienceTarget {
   preference?: string | null;
   // role:channel -> number, e.g. { 'father:whatsapp': '+91...', 'father:sms': '+91...' }
   numbers: Record<string, string | null | undefined>;
+  // First-name (title-stripped) of each contact, keyed by relation
+  // (father/mother/guardian). Used to greet the actual recipient once the ladder
+  // picks a role; only populated for students.
+  guardianNames?: Record<string, string>;
   // per-recipient variable context (merged over the job context)
   context: Record<string, any>;
 }
