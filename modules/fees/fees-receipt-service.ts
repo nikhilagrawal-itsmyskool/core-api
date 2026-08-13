@@ -274,7 +274,8 @@ class FeesReceiptService {
     }
     const gname = (rel: string) => {
       const g = guardians.find((x: any) => new RegExp(rel, 'i').test(x.relation || ''));
-      return g?.name ? String(g.name).replace(/^(mr|mrs|ms|dr|smt|shri|sri|master|kum)\.?\s*/i, '').trim() : null;
+      // longest-first + \b so "Mrs.Upasana" strips "Mrs." (not "Mr"→"s.Upasana") and a name like "Mrinal" is left intact
+      return g?.name ? String(g.name).replace(/^(mrs|smt|master|shri|sri|kum|mr|ms|dr)\b\.?\s*/i, '').trim() : null;
     };
     // Verification QR: fee/adhoc → a PUBLIC verify URL (any phone camera opens it); transport/refund
     // → a staff-only token that only the staff PWA scanner resolves. Never blocks printing on failure.
