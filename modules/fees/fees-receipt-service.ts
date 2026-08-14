@@ -5,6 +5,7 @@ import { nextReceiptNo } from './fees-util';
 import { RECEIPT_SERIES, DEFAULTS, PAYMENT_MODES } from './fees-constants';
 import { buildReceiptHtml } from './fees-receipt-template';
 import { notifyReceipt } from './fees-notify';
+import { stripTitle } from '../../shared/util/name-format';
 const { generateShortUuid } = require('../../shared/util/generate-uuid.js');
 const QRCode = require('qrcode');
 // Base for the public receipt-verify page the QR links to. Per-school portal domain.
@@ -274,8 +275,7 @@ class FeesReceiptService {
     }
     const gname = (rel: string) => {
       const g = guardians.find((x: any) => new RegExp(rel, 'i').test(x.relation || ''));
-      // longest-first + \b so "Mrs.Upasana" strips "Mrs." (not "Mr"→"s.Upasana") and a name like "Mrinal" is left intact
-      return g?.name ? String(g.name).replace(/^(mrs|smt|master|shri|sri|kum|mr|ms|dr)\b\.?\s*/i, '').trim() : null;
+      return g?.name ? stripTitle(g.name) || null : null;
     };
     // Verification QR: fee/adhoc → a PUBLIC verify URL (any phone camera opens it); transport/refund
     // → a staff-only token that only the staff PWA scanner resolves. Never blocks printing on failure.
