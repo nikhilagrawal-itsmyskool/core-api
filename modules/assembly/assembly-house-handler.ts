@@ -4,6 +4,7 @@ import { ErrorCode } from '../../shared/lib/error-codes';
 import { resolveSchool, parseBody, requireParam } from './handler-util';
 import { assemblyHouseService } from './assembly-house-service';
 import { SetConfigRequest, SetHouseRotationRequest, SetWeekHouseRequest } from './assembly-interfaces';
+import { istToday } from '../../shared/util/datetime';
 
 class AssemblyHouseHandler {
   public getConfig = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
@@ -51,7 +52,7 @@ class AssemblyHouseHandler {
       const ctx = await resolveSchool(event, callback); if (!ctx) return;
       const planId = requireParam(event, 'id', callback); if (!planId) return;
       const q = event.queryStringParameters || {};
-      const today = new Date().toISOString().slice(0, 10);
+      const today = istToday();
       const from = q.from || today;
       const to = q.to || new Date(Date.now() + 120 * 86400000).toISOString().slice(0, 10);
       ResponseBuilder.ok(await assemblyHouseService.weekCalendar(planId, ctx.schoolId, from, to), callback);

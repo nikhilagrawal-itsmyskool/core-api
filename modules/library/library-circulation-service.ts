@@ -11,10 +11,11 @@ import { BORROWER_TYPES } from "./library-constants";
 import { policyService } from "./library-policy-service";
 import { fineService } from "./library-fine-service";
 import { resolveBorrowerName } from "./library-common";
+import { istToday } from "../../shared/util/datetime";
 const { generateShortUuid } = require("../../shared/util/generate-uuid.js");
 
 function today(): string {
-  return new Date().toISOString().slice(0, 10);
+  return istToday();
 }
 // Normalize a date-only value (a 'YYYY-MM-DD' string, or a Date as pg returns
 // for `date` columns) to a UTC-midnight epoch millis, by calendar date.

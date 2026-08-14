@@ -4,6 +4,7 @@ import { ErrorCode } from '../../shared/lib/error-codes';
 import { resolveSchool, parseBody, requireParam } from './handler-util';
 import { assemblyWeekService } from './assembly-week-service';
 import { EnsureWeekRequest, SaveRosterRequest, UnlockWeekRequest } from './assembly-interfaces';
+import { istToday } from '../../shared/util/datetime';
 
 class AssemblyWeekHandler {
   // POST /plans/{id}/weeks  { weekStart } — ensure (idempotent) a draft roster week.
@@ -25,7 +26,7 @@ class AssemblyWeekHandler {
       const ctx = await resolveSchool(event, callback); if (!ctx) return;
       const planId = requireParam(event, 'id', callback); if (!planId) return;
       const q = event.queryStringParameters || {};
-      const today = new Date().toISOString().slice(0, 10);
+      const today = istToday();
       const from = q.from || today;
       const to = q.to || new Date(Date.now() + 120 * 86400000).toISOString().slice(0, 10);
       ResponseBuilder.ok(await assemblyWeekService.listWeeks(planId, ctx.schoolId, from, to), callback);

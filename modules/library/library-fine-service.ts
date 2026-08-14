@@ -1,6 +1,7 @@
 import { DB, singleLineString } from "../../shared/lib/db";
 import { BusinessErrorResult } from "../../shared/lib/errors";
 import { ErrorCode } from "../../shared/lib/error-codes";
+import { istToday } from "../../shared/util/datetime";
 import { DEFAULTS } from "./library-constants";
 import {
   LibraryFine,
@@ -149,7 +150,7 @@ class FineService {
     }
     const amountCollected = data.amountCollected ?? Number(fine.amount);
     const receipt = this.generateReceiptNumber();
-    const paidDate = data.paidDate || new Date().toISOString().slice(0, 10);
+    const paidDate = data.paidDate || istToday();
     const rows = await DB.query(
       singleLineString`
         update library_fine

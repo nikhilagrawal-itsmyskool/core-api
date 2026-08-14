@@ -16,9 +16,9 @@ class ShopStatsService {
       DB.query(
         singleLineString`
           select
-            coalesce(sum(total_amount) filter (where sale_date = current_date), 0) as sales_today,
+            coalesce(sum(total_amount) filter (where sale_date = (now() at time zone 'Asia/Kolkata')::date), 0) as sales_today,
             coalesce(sum(total_amount) filter (
-              where date_trunc('month', sale_date) = date_trunc('month', current_date)
+              where date_trunc('month', sale_date) = date_trunc('month', (now() at time zone 'Asia/Kolkata')::date)
             ), 0) as sales_this_month
           from shop_sale
           where school_id = $1 and status = 'active'

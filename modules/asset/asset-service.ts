@@ -1,6 +1,7 @@
 import { DB, singleLineString } from '../../shared/lib/db';
 import { BusinessErrorResult } from '../../shared/lib/errors';
 import { ErrorCode } from '../../shared/lib/error-codes';
+import { istToday } from '../../shared/util/datetime';
 import {
   Asset, CreateAssetRequest, UpdateAssetRequest, AssetTreeNode,
   EffectiveResponsibility, MoveRequest, IndividualizeRequest,
@@ -615,7 +616,7 @@ class AssetService {
       throw new BusinessErrorResult(ErrorCode.BusinessError, `Move quantity (${qty}) exceeds available (${node.quantity})`);
     }
 
-    const movementDate = req.movementDate || new Date().toISOString().slice(0, 10);
+    const movementDate = req.movementDate || istToday();
     const now = new Date();
 
     // Individual coded item, or whole-node move.

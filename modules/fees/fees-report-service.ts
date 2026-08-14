@@ -1,6 +1,7 @@
 import { DB, singleLineString } from '../../shared/lib/db';
 import { BadRequestResult } from '../../shared/lib/errors';
 import { ErrorCode } from '../../shared/lib/error-codes';
+import { istToday } from '../../shared/util/datetime';
 import { dueBuckets } from './fees-util';
 import { fileStorageService, getSignedPhotoUrl } from '../../shared/lib/file-storage';
 const { generateShortUuid } = require('../../shared/util/generate-uuid.js');
@@ -8,7 +9,7 @@ const { generateShortUuid } = require('../../shared/util/generate-uuid.js');
 class FeesReportService {
   // Per-cashier daily collection summary for a date (default today).
   public async dailyCollection(schoolId: string, q: any) {
-    const date = q?.date || new Date().toISOString().slice(0, 10);
+    const date = q?.date || istToday();
     const params: any[] = [schoolId, date]; let where = `school_id = $1 and receipt_date = $2 and status = 'active'`;
     if (q?.collectedBy) { params.push(q.collectedBy); where += ` and collected_by_userid = $${params.length}`; }
 
@@ -30,8 +31,7 @@ class FeesReportService {
   // Dashboard headline aggregates for a school (optionally scoped to an academic year).
   public async overview(schoolId: string, q: any) {
     const ay = q?.academicYearId || null;
-    const now = new Date();
-    const today = now.toISOString().slice(0, 10);
+    const today = istToday();
     const monthStart = today.slice(0, 8) + '01';
 
     const recWhere = (extra: string, params: any[]) => {

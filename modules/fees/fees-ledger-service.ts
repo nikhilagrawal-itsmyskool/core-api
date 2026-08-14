@@ -1,6 +1,7 @@
 import { DB, singleLineString } from '../../shared/lib/db';
 import { BadRequestResult } from '../../shared/lib/errors';
 import { ErrorCode } from '../../shared/lib/error-codes';
+import { istToday } from '../../shared/util/datetime';
 import { dueBuckets } from './fees-util';
 const { generateShortUuid } = require('../../shared/util/generate-uuid.js');
 
@@ -139,7 +140,7 @@ class FeesLedgerService {
   public async chargeRun(schoolId: string, opts: any, userId: string) {
     if (!opts?.academicYearId) throw new BadRequestResult(ErrorCode.InvalidInput, 'academicYearId is required');
     const ay = opts.academicYearId;
-    const asOf: string = opts.asOf || new Date().toISOString().slice(0, 10);
+    const asOf: string = opts.asOf || istToday();
     const dryRun = !!opts.dryRun; // preview: compute what would be posted, write nothing
     // fullYear posts every cycle in the structure (matches the migrated full-year model);
     // default accrual only posts cycles that have started as of asOf.

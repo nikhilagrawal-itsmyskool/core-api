@@ -4,6 +4,7 @@ import { ErrorCode } from '../../shared/lib/error-codes';
 import { DB, singleLineString } from '../../shared/lib/db';
 import { validateSchoolCodeHeader } from '../auth/auth-utils';
 import { uniformItemService } from './uniform-item-service';
+import { istToday } from '../../shared/util/datetime';
 
 export const getStats = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
   _context.callbackWaitsForEmptyEventLoop = false;
@@ -12,7 +13,7 @@ export const getStats = async (event: ApiEvent, _context: ApiContext, callback: 
     const schoolId = await uniformItemService.getSchoolIdByCode(schoolCode);
     if (!schoolId) { ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'Invalid school code', callback); return; }
 
-    const today = new Date().toISOString().split('T')[0];
+    const today = istToday();
     const monthStart = today.slice(0, 7) + '-01';
 
     const [
