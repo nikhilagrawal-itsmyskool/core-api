@@ -54,3 +54,30 @@
           path: student/change-password
           method: post
           cors: true
+
+  recover-request-otp:
+    handler: recovery-handler.requestOtp
+    name: ${self:service}-recover-request-otp
+    events:
+      - http:
+          path: recover/request-otp
+          method: post
+          cors: true
+
+  recover-verify-otp:
+    handler: recovery-handler.verifyOtp
+    name: ${self:service}-recover-verify-otp
+    events:
+      - http:
+          path: recover/verify-otp
+          method: post
+          cors: true
+
+  recover-set-password:
+    handler: recovery-handler.setPassword
+    name: ${self:service}-recover-set-password
+    events:
+      - http:
+          path: recover/set-password
+          method: post
+          cors: true

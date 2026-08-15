@@ -11,6 +11,11 @@ JWT_SECRET: 'local-dev-secret-key'
 JWT_ADMIN_EXPIRY_TIME: '24h'
 JWT_STUDENT_EXPIRY_TIME: '7d'
 
+# Forgot-username/password: when 'true', request-otp echoes the OTP back in the
+# response so local dev + tests can complete the flow without reading an SMS.
+# LOCAL ONLY — never set in prod (would leak codes).
+OTP_DEV_ECHO: 'true'
+
 # Communication module: base URL used by other modules (e.g. attendance absence
 # alerts) to call its REST endpoints. Locally this points straight at the
 # communication module's own http port so it works standalone and under start:all.

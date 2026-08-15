@@ -158,6 +158,17 @@
           method: post
           cors: true
 
+  # Synchronous OTP send (bypasses the queue). Machine-to-machine: called by the auth
+  # module's recovery flow with a service token; sends one OTP SMS inline.
+  send-otp:
+    handler: otp-handler.send
+    name: ${self:service}-send-otp
+    events:
+      - http:
+          path: otp
+          method: post
+          cors: true
+
   # Provider delivery-status callback (authenticated by a provider secret, not the user JWT).
   provider-webhook:
     handler: message-handler.webhook
