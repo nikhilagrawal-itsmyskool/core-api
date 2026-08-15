@@ -16,6 +16,9 @@ JWT_STUDENT_EXPIRY_TIME: '7d'
 # LOCAL ONLY — never set in prod (would leak codes).
 OTP_DEV_ECHO: 'true'
 
+# Dedicated pepper for hashing recovery OTP codes (distinct from prod's value).
+OTP_PEPPER: '6a9a3d65fcd92a0a770232800aa589431f2941a8e9ae22ca'
+
 # Communication module: base URL used by other modules (e.g. attendance absence
 # alerts) to call its REST endpoints. Locally this points straight at the
 # communication module's own http port so it works standalone and under start:all.
