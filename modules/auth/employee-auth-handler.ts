@@ -4,6 +4,7 @@ import { ResponseBuilder } from '../../shared/lib/response-builder';
 import { employeeAuthService, EmployeeLogin } from './employee-auth-service';
 import { validateSchoolCodeHeader } from './auth-utils';
 import { getClientIp, checkLock, recordFailure, recordSuccess } from './login-throttle';
+import { turnstileEnabled, verifyTurnstile } from './turnstile';
 
 class EmployeeAuthHandler {
 
@@ -15,11 +16,11 @@ class EmployeeAuthHandler {
       return;
     }
 
-    const { schoolCode, username, password } = validated;
+    const { schoolCode, username, password, turnstileToken } = validated;
 
     try {
       const schoolId = await employeeAuthService.getSchoolIdByCode(schoolCode);
-      
+
       if (!schoolId) {
         ResponseBuilder.badRequest(ErrorCode.InvalidInput, `Invalid school code: ${schoolCode}`, callback);
         return;
@@ -30,6 +31,13 @@ class EmployeeAuthHandler {
       const lock = await checkLock(schoolId, username, ip);
       if (lock.locked) {
         ResponseBuilder.unauthorizedRequest(ErrorCode.GeneralError, `Too many login attempts. Please try again in about ${Math.ceil(lock.retryAfterSec / 60)} minute(s).`, callback);
+        return;
+      }
+
+      // Bot guard: verify the Cloudflare Turnstile token (no-op unless TURNSTILE_SECRET
+      // is set). Runs before the password check so bots can't spend guess attempts.
+      if (turnstileEnabled() && !(await verifyTurnstile(turnstileToken, ip))) {
+        ResponseBuilder.unauthorizedRequest(ErrorCode.GeneralError, 'Bot check failed. Please refresh the page and try again.', callback);
         return;
       }
 
@@ -79,7 +87,7 @@ class EmployeeAuthHandler {
   private _validateLoginRequest(
     event: ApiEvent,
     callback: ApiCallback
-  ): { schoolCode: string; username: string; password: string } | null {
+  ): { schoolCode: string; username: string; password: string; turnstileToken?: string } | null {
     // Validate request body
     if (event.body == null || event.body === undefined) {
       ResponseBuilder.badRequest(ErrorCode.GeneralError, 'Username and password required', callback);
@@ -113,8 +121,8 @@ class EmployeeAuthHandler {
       return null;
     }
 
-    return { schoolCode, username: username.trim(), password };
-  }  
+    return { schoolCode, username: username.trim(), password, turnstileToken: bodyObj.turnstileToken };
+  }
 }
 
 const handler = new EmployeeAuthHandler();
