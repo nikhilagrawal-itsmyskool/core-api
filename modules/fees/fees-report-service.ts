@@ -370,6 +370,64 @@ class FeesReportService {
     );
   }
 
+  // Per-student concessions: the schemes offered this year (with the discount actually applied to
+  // charges), plus the concession amount given in every prior year — one call for the assistant so
+  // it never sums per-scheme or per-year itself. "applied" = concession credit posted on the ledger
+  // (head_label carries the scheme name), which matches the money the family did not have to pay.
+  public async studentConcessions(schoolId: string, studentId: string, academicYearId?: string) {
+    const ay = academicYearId || null;
+    // concession credit given per academic year (all years the student has any)
+    const byYearRows: any[] = await DB.query(
+      singleLineString`select l.academic_year_id, ay.name as year_name, round(coalesce(sum(l.credit),0),2) as applied
+        from student_ledger_entry l left join academic_year ay on ay.uuid = l.academic_year_id
+        where l.school_id = $1 and l.student_id = $2 and l.kind = 'concession' and l.status = 'active'
+        group by l.academic_year_id, ay.name having coalesce(sum(l.credit),0) > 0.5 order by ay.name`,
+      [schoolId, studentId]
+    );
+    const byYear = byYearRows.map((r) => ({ academicYearId: r.academicYearId, yearName: r.yearName, applied: Number(r.applied || 0) }));
+    const currentYearApplied = ay ? Number(byYear.find((y) => y.academicYearId === ay)?.applied || 0) : 0;
+    const priorYearsTotal = byYear.filter((y) => y.academicYearId !== ay).reduce((s, y) => s + y.applied, 0);
+    const allTimeTotal = byYear.reduce((s, y) => s + y.applied, 0);
+
+    // schemes offered this year (assignment) + the discount actually applied per scheme
+    let schemes: any[] = [];
+    if (ay) {
+      const assigned: any[] = await DB.query(
+        singleLineString`select c.name, c.type, c.value_type, c.value, fh.name as head_name,
+            cs.effective_from, cs.cycle_scope, cs.remarks
+          from fee_concession_student cs
+          join fee_concession c on c.uuid = cs.concession_id and c.status = 'active'
+          left join fee_head fh on fh.uuid = c.fee_head_id
+          where cs.school_id = $1 and cs.student_id = $2 and cs.status = 'active' and c.academic_year_id = $3
+          order by c.name`,
+        [schoolId, studentId, ay]
+      );
+      const appliedRows: any[] = await DB.query(
+        singleLineString`select head_label as name, round(coalesce(sum(credit),0),2) as applied
+          from student_ledger_entry
+          where school_id = $1 and student_id = $2 and academic_year_id = $3 and kind = 'concession' and status = 'active'
+          group by head_label`,
+        [schoolId, studentId, ay]
+      );
+      const appliedByName: Record<string, number> = {};
+      appliedRows.forEach((r) => { appliedByName[String(r.name || '').trim().toLowerCase()] = Number(r.applied || 0); });
+      schemes = assigned.map((a) => ({
+        name: a.name, type: a.type, valueType: a.valueType, value: Number(a.value || 0),
+        feeHead: a.headName || null, effectiveFrom: a.effectiveFrom || null, cycleScope: a.cycleScope || null,
+        applied: appliedByName[String(a.name || '').trim().toLowerCase()] || 0,
+      }));
+    }
+
+    return {
+      studentId,
+      academicYearId: ay,
+      currentYear: { totalApplied: Math.round(currentYearApplied), schemeCount: schemes.length, schemes },
+      priorYearsTotal: Math.round(priorYearsTotal),
+      allTimeTotal: Math.round(allTimeTotal),
+      byYear,
+    };
+  }
+
   // Fine Exemptions report — every waiver posted on a Late Fee Fine charge (whether from the Collect
   // screen's Exempt toggle or the historical import), with who/when/reason.
   public async fineExemptions(schoolId: string, q: any) {

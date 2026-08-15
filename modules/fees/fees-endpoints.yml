@@ -345,6 +345,11 @@
     name: ${self:service}-dues-by-year
     events:
       - http: { path: 'students/{id}/dues-by-year', method: get, cors: true }
+  student-concessions:
+    handler: fees-report-handler.studentConcessions
+    name: ${self:service}-student-concessions
+    events:
+      - http: { path: 'students/{id}/concessions', method: get, cors: true }
   fine-exemptions:
     handler: fees-report-handler.fineExemptions
     name: ${self:service}-fine-exemptions

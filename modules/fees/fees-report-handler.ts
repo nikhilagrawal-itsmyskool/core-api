@@ -88,6 +88,16 @@ class FeesReportHandler {
     } catch (err: any) { ResponseBuilder.handleError(err, callback); }
   };
 
+  public studentConcessions = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const rc = await resolveSchool(event, callback); if (!rc) return;
+      const id = event.pathParameters?.id as string;
+      const result = await feesReportService.studentConcessions(rc.schoolId, id, (event.queryStringParameters || {}).academicYearId);
+      ResponseBuilder.ok(result, callback);
+    } catch (err: any) { ResponseBuilder.handleError(err, callback); }
+  };
+
   public fineExemptions = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
     ctx.callbackWaitsForEmptyEventLoop = false;
     try {
@@ -108,4 +118,5 @@ export const getFollowup = handler.getFollowup;
 export const familyDues = handler.familyDues;
 export const withdraw = handler.withdraw;
 export const duesByYear = handler.duesByYear;
+export const studentConcessions = handler.studentConcessions;
 export const fineExemptions = handler.fineExemptions;
