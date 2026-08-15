@@ -91,7 +91,7 @@ const asArray = (r: any, ...keys: string[]) => (Array.isArray(r) ? r : keys.map(
 // binary file/image/receipt endpoints that are useless to speak anyway.
 const READ_PREFIXES = new Set([
   "students", "attendance", "timetable", "classes", "academic-years", "homework", "syllabus",
-  "transport", "library", "fine", "medical", "employees", "assembly", "communication",
+  "transport", "library", "fine", "fees", "medical", "employees", "assembly", "communication",
   "transfer", "shop", "uniform", "lab", "sports", "supplies", "asset", "hiring",
 ]);
 const DENY: RegExp[] = [
@@ -132,6 +132,12 @@ function apiMenu(ay: string | null): string {
     "CLASSES:  /classes/search?name=&academicYearId=  — resolve a class name to its uuid.  /classes/streams?baseClassId=.",
     "LIBRARY:  /library/borrowers/student/{studentId}/loans  — books a student has out.  /library/fines.",
     "TRANSPORT:  /transport/reports/student/{studentId}?academicYearId=  — a student's route + stop.",
+    "FEES / DUES:",
+    "  /fees/students/{id}/summary?academicYearId={ay}  — THIS student's fee position for a year: dueNow (payable now, through this month), dueQuarter (cumulative through this quarter's end), outstanding (full remaining this year), advance, paid, concession. Always pass the current academicYearId. monthEndLabel/quarterEndLabel tell you the cut-off dates.",
+    "  /fees/students/{id}/dues-by-year  — the student's outstanding split by academic year, ALREADY totalled for you: priorYearsTotal (all previous years combined), currentYearBalance, totalOutstanding. Use priorYearsTotal when asked about 'previous years' dues.",
+    "  /fees/reports/overview?academicYearId={ay}  — WHOLE-SCHOOL money headline: collectedToday, collectedMonth, dueNow (school-wide due this month), outstanding (total dues as of now), duesStudents, advance. Use this for 'total collection today' and 'total dues as of now'.",
+    "  /fees/reports/daily-collection?date=YYYY-MM-DD  — one day's collection: total{receipts,total} plus byMode[{paymentMode,total,receipts}] (cash/UPI/cheque/etc. breakup) and byCashier. Omit ?date for today. Call again with a different date to compare days.",
+    "  /fees/reports/dues?academicYearId={ay}&classId=  — class-wise list of students who owe, with totals{dueNow,dueQuarter,fullYear,prevYears,students}.",
     "DISCIPLINE/FINES:  /fine/incidents  (filterable) , /fine/incidents/{id}.",
     "MEDICAL:  /medical/issues  — dispensing log (filterable).",
     "HOMEWORK:  /homework/day?classId=&date=YYYY-MM-DD.",
@@ -193,8 +199,10 @@ export async function ask(auth: AskAuth, schoolId: string, input: AskInput): Pro
     "You are a concise school office assistant for the school manager. Answer spoken questions about students, classes and school operations, then call answer() with a natural 1–2 sentence reply suitable to be read aloud.",
     lang === "hi" ? "Reply in natural Hindi using Devanagari script (keep names and numbers exactly as-is)." : "",
     "Use ONLY data returned by apiGet — never invent facts. Contact numbers come back masked unless the manager has contact access; if a value is masked or absent, say it's restricted or unavailable.",
-    "When you state a phone number, write it as a plain unbroken digit string with no spaces, dashes or brackets (e.g. 8887781104) so the app can read it out digit by digit.",
-    "Never sum or count large lists in your head — if an endpoint gives you a total or a count field, use it verbatim.",
+    "When you state a phone number, write it as a plain unbroken 10-digit string with no spaces, dashes or brackets (e.g. 8887781104) so the app can read it out digit by digit.",
+    "Class grades are STORED as Roman numerals (I–XII), e.g. 'IX-A', 'VII-B'. When you search or filter by a class the manager names, use the Roman form for the lookup — convert spoken 'nine A' -> 'IX-A', 'class 7' -> 'VII'. But in your final SPOKEN answer, say the grade as an Arabic numeral — 'class 9-A', not 'IX-A'; 'class 12', not 'XII' (the section letter stays as-is).",
+    "State money amounts in Indian numbering words (thousand, lakh, crore) — e.g. ₹1,45,000 as 'one lakh forty-five thousand rupees', ₹2,500 as 'two thousand five hundred rupees' — never as a bare digit run. Round to the nearest rupee.",
+    "Never sum or count large lists in your head — if an endpoint gives you a total, a count, or a pre-computed rollup field, use it verbatim.",
     "When the manager names a class along with the name, filter to that class yourself — do not ask them to re-confirm the class. Only ask which student if genuinely more than one matches.",
     prior?.focusStudentId ? `Student currently under discussion: ${prior.focusName || "(unknown)"} — uuid ${prior.focusStudentId}. Follow-up questions are about this student unless a new name is given; you may call their endpoints with this uuid directly.` : "",
     apiMenu(ay),
@@ -283,6 +291,19 @@ export async function ask(auth: AskAuth, schoolId: string, input: AskInput): Pro
         if (/^\/students\/class-strength(\?|$)/.test(path) && !out?.error) {
           const classes = asArray(out, "classes", "results").map((r: any) => ({ className: r.className, strength: Number(r.activeStrength || 0) }));
           out = { totalStrength: classes.reduce((s: number, c: any) => s + c.strength, 0), classCount: classes.length, classes };
+        }
+        // Dues-by-year: split current vs prior years and total in code (the model must not add
+        // per-year balances). Endpoint returns a bare array of {academicYearId,yearName,balance}.
+        if (/^\/fees\/students\/[a-z0-9]+\/dues-by-year(\?|$)/i.test(path) && Array.isArray(out)) {
+          const years = out.map((r: any) => ({ academicYearId: r.academicYearId, yearName: r.yearName, balance: Math.round(Number(r.balance || 0)) }));
+          const current = years.find((y) => y.academicYearId === ay) || null;
+          const priorYears = years.filter((y) => y.academicYearId !== ay);
+          out = {
+            currentYearBalance: current ? current.balance : 0,
+            priorYearsTotal: priorYears.reduce((s: number, y: any) => s + y.balance, 0),
+            totalOutstanding: years.reduce((s: number, y: any) => s + y.balance, 0),
+            priorYears, years,
+          };
         }
         // Capture student parts for the card.
         const detailM = path.match(/^\/students\/([a-z0-9]+)(\?|$)/i);
