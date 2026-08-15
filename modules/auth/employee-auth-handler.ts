@@ -3,6 +3,7 @@ import { ErrorCode } from '../../shared/lib/error-codes';
 import { ResponseBuilder } from '../../shared/lib/response-builder';
 import { employeeAuthService, EmployeeLogin } from './employee-auth-service';
 import { validateSchoolCodeHeader } from './auth-utils';
+import { getClientIp, checkLock, recordFailure, recordSuccess } from './login-throttle';
 
 class EmployeeAuthHandler {
 
@@ -24,6 +25,14 @@ class EmployeeAuthHandler {
         return;
       }
 
+      // Brute-force guard: refuse before checking the password if this account/IP is locked.
+      const ip = getClientIp(event);
+      const lock = await checkLock(schoolId, username, ip);
+      if (lock.locked) {
+        ResponseBuilder.unauthorizedRequest(ErrorCode.GeneralError, `Too many login attempts. Please try again in about ${Math.ceil(lock.retryAfterSec / 60)} minute(s).`, callback);
+        return;
+      }
+
       const employeeLogin: EmployeeLogin | null = await employeeAuthService.validateUsernameAndPassword(
         username,
         password,
@@ -31,9 +40,11 @@ class EmployeeAuthHandler {
       );
 
       if (!employeeLogin) {
+        await recordFailure(schoolId, username, ip);
         ResponseBuilder.unauthorizedRequest(ErrorCode.GeneralError, 'Invalid username or password', callback);
         return;
       }
+      await recordSuccess(schoolId, username);
 
       const token: string = employeeAuthService.signToken({
         auth: process.env.JWT_MAGIC_KEY,
