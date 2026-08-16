@@ -226,9 +226,14 @@ create table if not exists syllabus_revision (
     source_file_id varchar(12),
     snapshot jsonb not null,
     counts jsonb,
+    changes jsonb,
     createdby_userid varchar(12),
     created_at timestamp(0)
 );
+
+-- Itemized change list of the reconcile that produced this revision (added/removed/
+-- changed/renamed entry labels) — for the "what did this update change?" view.
+alter table syllabus_revision add column if not exists changes jsonb;
 
 -- Newest-first lookup per plan (list the strip, find the prune cutoff).
 create index if not exists idx_syllabus_revision_plan

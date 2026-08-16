@@ -128,13 +128,16 @@ class SyllabusReconcileService {
     const paByTmp = new Map(parsed.nodes.map((n) => [n.tmp, n]));
     const oldView = (id: string) => {
       const e = exById.get(id);
-      return e && { uuid: e.uuid, title: e.title, topicNo: e.topicNo, component: e.component, month: e.month, pageRef: e.pageRef, entryType: e.entryType, markCount: e.markCount };
+      if (!e) return null;
+      const parentTitle = e.parentEntryId ? exById.get(e.parentEntryId)?.title ?? null : null;
+      return { uuid: e.uuid, title: e.title, topicNo: e.topicNo, component: e.component, month: e.month, pageRef: e.pageRef, entryType: e.entryType, markCount: e.markCount, parentTitle };
     };
     const newView = (tmp: number) => {
       const n = paByTmp.get(tmp);
       if (!n) return null;
       const parts = deriveTitleParts(n.heading);
-      return { tmp, title: parts.title, topicNo: parts.topicNo, component: n.component ?? null, month: n.month, pageRef: n.pageRef, entryType: n.type, parentTmp: n.parent };
+      const parentTitle = n.parent != null ? deriveTitleParts(paByTmp.get(n.parent)?.heading || "").title || null : null;
+      return { tmp, title: parts.title, topicNo: parts.topicNo, component: n.component ?? null, month: n.month, pageRef: n.pageRef, entryType: n.type, parentTmp: n.parent, parentTitle };
     };
     const gradeOk = this.gradeMatches(parsed.grade, plan.grade);
     const subjectOk = normText(parsed.subject) === normText(plan.subjectName);
@@ -196,8 +199,32 @@ class SyllabusReconcileService {
     const childCount = new Map<number, number>();
     for (const n of parsed.nodes) if (n.parent) childCount.set(n.parent, (childCount.get(n.parent) || 0) + 1);
 
+    // Build the itemized change list of THIS reconcile (added/removed/changed/renamed
+    // entry labels), stored on the revision for the "what changed?" view.
+    const exById2 = new Map(existing.map((e) => [e.uuid, e]));
+    const chapterOfNode = (n: ParsedNode) =>
+      n.parent != null ? deriveTitleParts(headingByTmp.get(n.parent) || "").title || null : null;
+    const nodeLabel = (t: number) => {
+      const n = parsed.nodes.find((x) => x.tmp === t);
+      return n ? { title: deriveTitleParts(n.heading).title, component: n.component ?? null, chapter: chapterOfNode(n) } : null;
+    };
+    const exLabel = (id: string) => {
+      const e = exById2.get(id);
+      return e ? { title: e.title, component: e.component, chapter: e.parentEntryId ? exById2.get(e.parentEntryId)?.title ?? null : null } : null;
+    };
+    const changeList = {
+      added: [...addedTmps].map(nodeLabel).filter(Boolean),
+      removed: [...removedIds].map((id) => ({ ...exLabel(id), markCount: exById2.get(id)?.markCount || 0 })),
+      changed: diff.kept
+        .filter((k) => k.changes.length > 0 && keptMap.get(k.oldId) === k.newTmp)
+        .map((k) => ({ ...nodeLabel(k.newTmp), changes: k.changes })),
+      renamed: diff.proposals
+        .filter((p) => keptMap.get(p.oldId) === p.newTmp)
+        .map((p) => ({ from: exLabel(p.oldId), to: nodeLabel(p.newTmp) })),
+    };
+
     // 1) snapshot the current state as a revision (pre-apply), then prune.
-    await this.snapshotAndPrune(plan, existing, diff, note, schoolId, userId);
+    await this.snapshotAndPrune(plan, existing, diff, changeList, note, schoolId, userId);
 
     // 2) store the new source doc.
     const stored = await fileStorageService.upload({
@@ -360,6 +387,7 @@ class SyllabusReconcileService {
     plan: PlanRow,
     existing: ExistingEntry[],
     diff: DiffPlan,
+    changes: unknown,
     note: string | undefined,
     schoolId: string,
     userId: string,
@@ -372,12 +400,13 @@ class SyllabusReconcileService {
     await DB.query(
       singleLineString`
         insert into syllabus_revision
-        (uuid, school_id, syllabus_id, rev_no, note, source_file_id, snapshot, counts, createdby_userid, created_at)
-        values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+        (uuid, school_id, syllabus_id, rev_no, note, source_file_id, snapshot, counts, changes, createdby_userid, created_at)
+        values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
       `,
       [
         generateShortUuid(12), schoolId, plan.uuid, nextNo, note?.slice(0, 256) || null,
-        plan.sourceFileId, JSON.stringify(snapshot), JSON.stringify(diff.counts), userId, new Date(),
+        plan.sourceFileId, JSON.stringify(snapshot), JSON.stringify(diff.counts), JSON.stringify(changes || {}),
+        userId, new Date(),
       ],
     );
     await this.prune(plan.uuid, schoolId);
@@ -416,7 +445,7 @@ class SyllabusReconcileService {
   public async listRevisions(planId: string, schoolId: string): Promise<any[]> {
     return DB.query(
       singleLineString`
-        select uuid, rev_no, note, source_file_id, counts, createdby_userid, created_at
+        select uuid, rev_no, note, source_file_id, counts, changes, createdby_userid, created_at
         from syllabus_revision where syllabus_id = $1 and school_id = $2 order by rev_no desc
       `,
       [planId, schoolId],

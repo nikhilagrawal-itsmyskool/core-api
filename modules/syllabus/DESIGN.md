@@ -133,13 +133,18 @@ transaction: snapshot the plan → prune to last 10 → UPDATE kept (uuid kept, 
 stamped) + INSERT new + soft-delete removed (and their progress) + resequence + store the new
 `.docx`. `syllabus_progress` for kept entries is never touched.
 
-**Revisions.** `syllabus_revision` snapshots the plan (entry tree + source `.docx` + counts)
-on every apply, keeping the newest 10 (older pruned, orphan source files deleted).
-`GET /syllabi/{id}/revisions` + `GET /revisions/{id}/source` (download any). **Restore is
-Phase B** (reconcile-in-reverse); Phase A only captures snapshots + browse/download.
+**Revisions.** `syllabus_revision` snapshots the plan on every apply (entry tree + source
+`.docx` + counts + an itemized `changes` list = what that reconcile added/removed/changed/
+renamed), keeping the newest 10 (older pruned, orphan source files deleted).
+`GET /syllabi/{id}/revisions` (with `changes`) + `GET /revisions/{id}/source` (download any).
 
-**Surface (Phase A).** On the plan editor: `Upload revised .docx` (inline diff → Apply) +
-`Revisions` strip, admin/god only. Restore and opening beyond admin/god are Phase B.
+**Restore is intentionally NOT a feature** (decided against reconcile-in-reverse). Rollback is
+a manual, transparent step: each revision shows exactly what it changed and lets you download
+its `.docx`; to roll back you download the version you want as the base, redo the edits you
+want to keep, and re-upload it through the normal reconcile (same review + mark guardrail).
+
+**Surface.** On the plan editor (admin/god): `Upload revised .docx` (inline diff → Apply) +
+`Revisions` (expandable per-revision change list + Word download). No restore button.
 
 ## Handover checklist
 
