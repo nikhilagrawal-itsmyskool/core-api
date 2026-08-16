@@ -105,6 +105,13 @@ alter table syllabus_entry add constraint syllabus_entry_entry_type_check
     check (entry_type in ('topic','section','activity','revision','exam','refresher','note','unit','chapter','item'));
 create index if not exists idx_syllabus_entry_parent on syllabus_entry(parent_entry_id) where status = 'active';
 
+-- Reconcile (in-place re-import): a durable match fingerprint so a re-uploaded
+-- document can find "the same entry" by equal key instead of re-guessing. Stamped
+-- on every active entry at reconcile time; nullable for entries created before it.
+alter table syllabus_entry add column if not exists source_key varchar(64);
+create index if not exists idx_syllabus_entry_source_key
+    on syllabus_entry(syllabus_id, source_key) where status = 'active';
+
 -- Table 4: syllabus_progress (per-section coverage against an entry)
 create table if not exists syllabus_progress (
     uuid varchar(12) primary key,
@@ -203,3 +210,29 @@ create index if not exists idx_model_paper_doc_pending
 alter table syllabus_model_paper_doc drop constraint if exists syllabus_model_paper_doc_pdf_status_check;
 alter table syllabus_model_paper_doc add constraint syllabus_model_paper_doc_pdf_status_check
     check (pdf_status in ('pending', 'converting', 'ready', 'failed', 'none'));
+
+-- Table 8: syllabus_revision (plan snapshots for in-place reconcile).
+-- Each successful reconcile snapshots the plan's prior entry tree here BEFORE
+-- applying, so the last 10 states are recoverable. `snapshot` is the full ordered
+-- entry list (structure + text + keys); `source_file_id` is the .docx that produced
+-- the state. Only the last 10 per plan are kept (older pruned on write).
+-- syllabus_progress is intentionally NOT snapshotted — coverage is live per-section.
+create table if not exists syllabus_revision (
+    uuid varchar(12) primary key,
+    school_id varchar(12) not null,
+    syllabus_id varchar(12) not null,
+    rev_no integer not null,
+    note varchar(256),
+    source_file_id varchar(12),
+    snapshot jsonb not null,
+    counts jsonb,
+    createdby_userid varchar(12),
+    created_at timestamp(0)
+);
+
+-- Newest-first lookup per plan (list the strip, find the prune cutoff).
+create index if not exists idx_syllabus_revision_plan
+    on syllabus_revision(syllabus_id, rev_no desc);
+-- One revision number per plan.
+create unique index if not exists idx_syllabus_revision_unique
+    on syllabus_revision(syllabus_id, rev_no);

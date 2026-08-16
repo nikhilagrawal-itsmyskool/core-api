@@ -192,6 +192,43 @@
           method: delete
           cors: true
 
+  # ── Reconcile (in-place re-import; admin/god) ─────────────────────────────
+  reconcile-preview:
+    handler: syllabus-reconcile-handler.preview
+    name: ${self:service}-reconcile-preview
+    events:
+      - http:
+          path: syllabi/{id}/reconcile/preview
+          method: post
+          cors: true
+
+  reconcile-apply:
+    handler: syllabus-reconcile-handler.apply
+    name: ${self:service}-reconcile-apply
+    events:
+      - http:
+          path: syllabi/{id}/reconcile/apply
+          method: post
+          cors: true
+
+  list-revisions:
+    handler: syllabus-reconcile-handler.listRevisions
+    name: ${self:service}-list-revisions
+    events:
+      - http:
+          path: syllabi/{id}/revisions
+          method: get
+          cors: true
+
+  download-revision-source:
+    handler: syllabus-reconcile-handler.downloadRevision
+    name: ${self:service}-download-revision-source
+    events:
+      - http:
+          path: revisions/{id}/source
+          method: get
+          cors: true
+
   # ── Progress (teacher) ────────────────────────────────────────────────────
   progress-roster:
     handler: syllabus-progress-handler.getRoster

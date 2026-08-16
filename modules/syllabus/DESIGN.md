@@ -103,6 +103,44 @@ Integration tests (`__tests__/syllabus.test.ts`, run against the gateway): subje
 
 - **`scripts/import-syllabus.js`** — dependency-free `.docx` importer for the school's GK syllabus sheets. Parses both layouts (junior single-table, senior two-column with `Topic:` section headers and `#…` note rows), auto-detects grade/subject/layout, and seeds the plan via the API. `--file`/`--dir`, `--school`, `--stage`, `--mode append|replace`, `--dry-run`. Reuse for future syllabus documents.
 
+## In-place update (reconcile) — Phase A
+
+**Problem.** A revised document (minor changes) must be re-imported **without** losing
+teacher coverage. Coverage (`syllabus_progress`) is keyed on `syllabus_entry_id`, so an
+entry's uuid *is* its identity — the old delete-all + re-insert path (`bulk replace`,
+`import-syllabus-v2`) orphans every mark. Reconcile updates matched entries **in place**
+(uuid kept → marks preserved) instead.
+
+**Match key (see the design note).** Title is the **primary** key; the chapter/topic
+**number is only a tiebreak** (it drifts on insert). `page_ref`/`month` are **never**
+matched on — they're updated in place. Matching is **hierarchical**: anchors (nodes with
+children — chapters/sections/units) match first by normalized title; leaves then match
+*within* a matched anchor by `(component, ordinal|normalized-text)` — page-only items
+(`"7-14"`) and repeated components fall back to the ordinal. Three tiers: equal
+`source_key` → exact normalized key → fuzzy (≥0.88 auto, [0.55,0.88) → a **proposal**
+that needs confirmation). See `syllabus-match.ts`; `deriveTitleParts` keeps the GK
+`topic_no`/title split so a re-import isn't a spurious title change.
+
+**Files.** `syllabus-parse.ts` (buffer-based port of the v2 parser, Lambda-usable),
+`syllabus-match.ts` (pure matcher → `DiffPlan`), `syllabus-reconcile-service.ts`
+(preview + apply + revisions), `syllabus-reconcile-handler.ts` (admin/god-gated).
+
+**Flow.** `POST /syllabi/{id}/reconcile/preview` (parse+match, no writes) → the admin-portal
+plan page shows the diff (kept / new / removed / proposals) with a grade/subject sanity
+check; the **one guardrail** is that a proposal or removal that would drop marks must be
+explicitly resolved. `POST /syllabi/{id}/reconcile/apply` (with the human decisions) runs one
+transaction: snapshot the plan → prune to last 10 → UPDATE kept (uuid kept, `source_key`
+stamped) + INSERT new + soft-delete removed (and their progress) + resequence + store the new
+`.docx`. `syllabus_progress` for kept entries is never touched.
+
+**Revisions.** `syllabus_revision` snapshots the plan (entry tree + source `.docx` + counts)
+on every apply, keeping the newest 10 (older pruned, orphan source files deleted).
+`GET /syllabi/{id}/revisions` + `GET /revisions/{id}/source` (download any). **Restore is
+Phase B** (reconcile-in-reverse); Phase A only captures snapshots + browse/download.
+
+**Surface (Phase A).** On the plan editor: `Upload revised .docx` (inline diff → Apply) +
+`Revisions` strip, admin/god only. Restore and opening beyond admin/god are Phase B.
+
 ## Handover checklist
 
 - [ ] Deploy DB (`node modules/syllabus/scripts/db-setup.js --stage <stage> --action setup`).
