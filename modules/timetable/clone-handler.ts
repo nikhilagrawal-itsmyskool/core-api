@@ -5,6 +5,8 @@ import {
 } from "../../shared/lib/api.interfaces";
 import { ResponseBuilder } from "../../shared/lib/response-builder";
 import { ErrorCode } from "../../shared/lib/error-codes";
+import { guard } from "../auth/authz";
+import { TIMETABLE_ACTIONS } from "./timetable-actions";
 import { resolveSchool, parseBody } from "./handler-util";
 import { timetableService } from "./timetable-service";
 import { cloneService } from "./clone-service";
@@ -68,4 +70,4 @@ class CloneHandler {
 }
 
 const handler = new CloneHandler();
-export const cloneClassSetup = handler.cloneClassSetup;
+export const cloneClassSetup = guard(TIMETABLE_ACTIONS['clone-handler.cloneClassSetup'], handler.cloneClassSetup);

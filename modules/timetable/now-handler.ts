@@ -1,6 +1,8 @@
 import { ApiCallback, ApiContext, ApiEvent } from "../../shared/lib/api.interfaces";
 import { ResponseBuilder } from "../../shared/lib/response-builder";
 import { ErrorCode } from "../../shared/lib/error-codes";
+import { guard } from "../auth/authz";
+import { TIMETABLE_ACTIONS } from "./timetable-actions";
 import { resolveSchool } from "./handler-util";
 import { nowService } from "./now-service";
 import { guardActiveStudent } from "../auth/auth-utils";
@@ -90,7 +92,7 @@ class NowHandler {
 }
 
 const handler = new NowHandler();
-export const now = handler.now;
-export const myNow = handler.myNow;
-export const myWeek = handler.myWeek;
-export const today = handler.today;
+export const now = guard(TIMETABLE_ACTIONS['now-handler.now'], handler.now);
+export const myNow = handler.myNow; // public/exempt
+export const myWeek = handler.myWeek; // public/exempt
+export const today = guard(TIMETABLE_ACTIONS['now-handler.today'], handler.today);

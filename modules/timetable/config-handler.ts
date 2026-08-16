@@ -5,6 +5,8 @@ import {
 } from "../../shared/lib/api.interfaces";
 import { ResponseBuilder } from "../../shared/lib/response-builder";
 import { ErrorCode } from "../../shared/lib/error-codes";
+import { guard } from "../auth/authz";
+import { TIMETABLE_ACTIONS } from "./timetable-actions";
 import { resolveSchool, parseBody, requireParam } from "./handler-util";
 import { configService } from "./config-service";
 import {
@@ -537,18 +539,18 @@ class ConfigHandler {
 }
 
 const handler = new ConfigHandler();
-export const listConfigs = handler.listConfigs;
-export const getConfig = handler.getConfig;
-export const createConfig = handler.createConfig;
-export const updateConfig = handler.updateConfig;
-export const removeConfig = handler.removeConfig;
-export const lock = handler.lock;
-export const unlock = handler.unlock;
-export const clone = handler.clone;
-export const createDay = handler.createDay;
-export const updateDay = handler.updateDay;
-export const removeDay = handler.removeDay;
-export const cloneDaySlots = handler.cloneDaySlots;
-export const createSlot = handler.createSlot;
-export const updateSlot = handler.updateSlot;
-export const removeSlot = handler.removeSlot;
+export const listConfigs = guard(TIMETABLE_ACTIONS['config-handler.listConfigs'], handler.listConfigs);
+export const getConfig = guard(TIMETABLE_ACTIONS['config-handler.getConfig'], handler.getConfig);
+export const createConfig = guard(TIMETABLE_ACTIONS['config-handler.createConfig'], handler.createConfig);
+export const updateConfig = guard(TIMETABLE_ACTIONS['config-handler.updateConfig'], handler.updateConfig);
+export const removeConfig = guard(TIMETABLE_ACTIONS['config-handler.removeConfig'], handler.removeConfig);
+export const lock = guard(TIMETABLE_ACTIONS['config-handler.lock'], handler.lock);
+export const unlock = guard(TIMETABLE_ACTIONS['config-handler.unlock'], handler.unlock);
+export const clone = guard(TIMETABLE_ACTIONS['config-handler.clone'], handler.clone);
+export const createDay = guard(TIMETABLE_ACTIONS['config-handler.createDay'], handler.createDay);
+export const updateDay = guard(TIMETABLE_ACTIONS['config-handler.updateDay'], handler.updateDay);
+export const removeDay = guard(TIMETABLE_ACTIONS['config-handler.removeDay'], handler.removeDay);
+export const cloneDaySlots = guard(TIMETABLE_ACTIONS['config-handler.cloneDaySlots'], handler.cloneDaySlots);
+export const createSlot = guard(TIMETABLE_ACTIONS['config-handler.createSlot'], handler.createSlot);
+export const updateSlot = guard(TIMETABLE_ACTIONS['config-handler.updateSlot'], handler.updateSlot);
+export const removeSlot = guard(TIMETABLE_ACTIONS['config-handler.removeSlot'], handler.removeSlot);

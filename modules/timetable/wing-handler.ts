@@ -1,6 +1,8 @@
 import { ApiCallback, ApiContext, ApiEvent } from '../../shared/lib/api.interfaces';
 import { ResponseBuilder } from '../../shared/lib/response-builder';
 import { ErrorCode } from '../../shared/lib/error-codes';
+import { guard } from '../auth/authz';
+import { TIMETABLE_ACTIONS } from './timetable-actions';
 import { resolveSchool, parseBody, requireParam } from './handler-util';
 import { wingService } from './wing-service';
 import { timetableService } from './timetable-service';
@@ -101,8 +103,8 @@ class WingHandler {
 }
 
 const handler = new WingHandler();
-export const list = handler.list;
-export const getById = handler.getById;
-export const create = handler.create;
-export const update = handler.update;
-export const remove = handler.remove;
+export const list = guard(TIMETABLE_ACTIONS['wing-handler.list'], handler.list);
+export const getById = guard(TIMETABLE_ACTIONS['wing-handler.getById'], handler.getById);
+export const create = guard(TIMETABLE_ACTIONS['wing-handler.create'], handler.create);
+export const update = guard(TIMETABLE_ACTIONS['wing-handler.update'], handler.update);
+export const remove = guard(TIMETABLE_ACTIONS['wing-handler.remove'], handler.remove);

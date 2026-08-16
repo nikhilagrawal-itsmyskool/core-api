@@ -1,6 +1,8 @@
 import { ApiCallback, ApiContext, ApiEvent } from "../../shared/lib/api.interfaces";
 import { ResponseBuilder } from "../../shared/lib/response-builder";
 import { ErrorCode } from "../../shared/lib/error-codes";
+import { guard } from "../auth/authz";
+import { TIMETABLE_ACTIONS } from "./timetable-actions";
 import { resolveSchool, parseBody, requireParam } from "./handler-util";
 import { seasonService } from "./season-service";
 import {
@@ -274,16 +276,16 @@ class SeasonHandler {
 }
 
 const handler = new SeasonHandler();
-export const list = handler.list;
-export const getById = handler.getById;
-export const create = handler.create;
-export const update = handler.update;
-export const remove = handler.remove;
-export const listSlotTimes = handler.listSlotTimes;
-export const setSlotTimes = handler.setSlotTimes;
-export const prefill = handler.prefill;
-export const removeSlotTime = handler.removeSlotTime;
-export const listActivations = handler.listActivations;
-export const createActivation = handler.createActivation;
-export const updateActivation = handler.updateActivation;
-export const removeActivation = handler.removeActivation;
+export const list = guard(TIMETABLE_ACTIONS['season-handler.list'], handler.list);
+export const getById = guard(TIMETABLE_ACTIONS['season-handler.getById'], handler.getById);
+export const create = guard(TIMETABLE_ACTIONS['season-handler.create'], handler.create);
+export const update = guard(TIMETABLE_ACTIONS['season-handler.update'], handler.update);
+export const remove = guard(TIMETABLE_ACTIONS['season-handler.remove'], handler.remove);
+export const listSlotTimes = guard(TIMETABLE_ACTIONS['season-handler.listSlotTimes'], handler.listSlotTimes);
+export const setSlotTimes = guard(TIMETABLE_ACTIONS['season-handler.setSlotTimes'], handler.setSlotTimes);
+export const prefill = guard(TIMETABLE_ACTIONS['season-handler.prefill'], handler.prefill);
+export const removeSlotTime = guard(TIMETABLE_ACTIONS['season-handler.removeSlotTime'], handler.removeSlotTime);
+export const listActivations = guard(TIMETABLE_ACTIONS['season-handler.listActivations'], handler.listActivations);
+export const createActivation = guard(TIMETABLE_ACTIONS['season-handler.createActivation'], handler.createActivation);
+export const updateActivation = guard(TIMETABLE_ACTIONS['season-handler.updateActivation'], handler.updateActivation);
+export const removeActivation = guard(TIMETABLE_ACTIONS['season-handler.removeActivation'], handler.removeActivation);

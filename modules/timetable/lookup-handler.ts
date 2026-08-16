@@ -1,5 +1,7 @@
 import { ApiCallback, ApiContext, ApiEvent } from '../../shared/lib/api.interfaces';
 import { ResponseBuilder } from '../../shared/lib/response-builder';
+import { guard } from '../auth/authz';
+import { TIMETABLE_ACTIONS } from './timetable-actions';
 import {
   SUBJECT_KINDS, SLOT_TYPES, CONSTRAINT_TYPES, HARDNESS_VALUES, DAYS_OF_WEEK,
 } from './timetable-constants';
@@ -23,4 +25,4 @@ class LookupHandler {
 }
 
 const handler = new LookupHandler();
-export const getAll = handler.getAll;
+export const getAll = guard(TIMETABLE_ACTIONS['lookup-handler.getAll'], handler.getAll);

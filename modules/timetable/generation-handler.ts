@@ -1,6 +1,8 @@
 import { ApiCallback, ApiContext, ApiEvent } from '../../shared/lib/api.interfaces';
 import { ResponseBuilder } from '../../shared/lib/response-builder';
 import { ErrorCode } from '../../shared/lib/error-codes';
+import { guard } from '../auth/authz';
+import { TIMETABLE_ACTIONS } from './timetable-actions';
 import { resolveSchool, parseBody, requireParam } from './handler-util';
 import { generationService } from './generation-service';
 
@@ -271,19 +273,19 @@ class GenerationHandler {
 }
 
 const handler = new GenerationHandler();
-export const feasibility = handler.feasibility;
-export const generate = handler.generate;
-export const listRuns = handler.listRuns;
-export const getRun = handler.getRun;
-export const getCandidates = handler.getCandidates;
-export const processNext = handler.processNext;
-export const claimAndDump = handler.claimAndDump;
-export const importSolution = handler.importSolution;
-export const exportRun = handler.exportRun;
-export const publish = handler.publish;
-export const getPublished = handler.getPublished;
-export const listPublished = handler.listPublished;
-export const validateMove = handler.validateMove;
-export const moveEntry = handler.moveEntry;
-export const editEntry = handler.editEntry;
-export const swapEntries = handler.swapEntries;
+export const feasibility = guard(TIMETABLE_ACTIONS['generation-handler.feasibility'], handler.feasibility);
+export const generate = guard(TIMETABLE_ACTIONS['generation-handler.generate'], handler.generate);
+export const listRuns = guard(TIMETABLE_ACTIONS['generation-handler.listRuns'], handler.listRuns);
+export const getRun = guard(TIMETABLE_ACTIONS['generation-handler.getRun'], handler.getRun);
+export const getCandidates = guard(TIMETABLE_ACTIONS['generation-handler.getCandidates'], handler.getCandidates);
+export const processNext = handler.processNext; // public/exempt
+export const claimAndDump = handler.claimAndDump; // public/exempt
+export const importSolution = handler.importSolution; // public/exempt
+export const exportRun = guard(TIMETABLE_ACTIONS['generation-handler.exportRun'], handler.exportRun);
+export const publish = guard(TIMETABLE_ACTIONS['generation-handler.publish'], handler.publish);
+export const getPublished = guard(TIMETABLE_ACTIONS['generation-handler.getPublished'], handler.getPublished);
+export const listPublished = guard(TIMETABLE_ACTIONS['generation-handler.listPublished'], handler.listPublished);
+export const validateMove = guard(TIMETABLE_ACTIONS['generation-handler.validateMove'], handler.validateMove);
+export const moveEntry = guard(TIMETABLE_ACTIONS['generation-handler.moveEntry'], handler.moveEntry);
+export const editEntry = guard(TIMETABLE_ACTIONS['generation-handler.editEntry'], handler.editEntry);
+export const swapEntries = guard(TIMETABLE_ACTIONS['generation-handler.swapEntries'], handler.swapEntries);

@@ -1,6 +1,8 @@
 import { ApiCallback, ApiContext, ApiEvent } from '../../shared/lib/api.interfaces';
 import { ResponseBuilder } from '../../shared/lib/response-builder';
 import { ErrorCode } from '../../shared/lib/error-codes';
+import { guard } from '../auth/authz';
+import { TIMETABLE_ACTIONS } from './timetable-actions';
 import { resolveSchool, parseBody, requireParam } from './handler-util';
 import { electiveService } from './elective-service';
 import { timetableService } from './timetable-service';
@@ -149,10 +151,10 @@ class ElectiveHandler {
 }
 
 const handler = new ElectiveHandler();
-export const listBands = handler.listBands;
-export const getBand = handler.getBand;
-export const createBand = handler.createBand;
-export const updateBand = handler.updateBand;
-export const removeBand = handler.removeBand;
-export const addOffering = handler.addOffering;
-export const removeOffering = handler.removeOffering;
+export const listBands = guard(TIMETABLE_ACTIONS['elective-handler.listBands'], handler.listBands);
+export const getBand = guard(TIMETABLE_ACTIONS['elective-handler.getBand'], handler.getBand);
+export const createBand = guard(TIMETABLE_ACTIONS['elective-handler.createBand'], handler.createBand);
+export const updateBand = guard(TIMETABLE_ACTIONS['elective-handler.updateBand'], handler.updateBand);
+export const removeBand = guard(TIMETABLE_ACTIONS['elective-handler.removeBand'], handler.removeBand);
+export const addOffering = guard(TIMETABLE_ACTIONS['elective-handler.addOffering'], handler.addOffering);
+export const removeOffering = guard(TIMETABLE_ACTIONS['elective-handler.removeOffering'], handler.removeOffering);

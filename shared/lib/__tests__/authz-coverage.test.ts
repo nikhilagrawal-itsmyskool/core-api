@@ -8,6 +8,7 @@ import { ATTENDANCE_ACTIONS, ATTENDANCE_PUBLIC } from '../../../modules/attendan
 import { ASSISTANT_ACTIONS, ASSISTANT_PUBLIC } from '../../../modules/assistant/assistant-actions';
 import { STUDENT_ACTIONS, STUDENT_PUBLIC } from '../../../modules/student/student-actions';
 import { TRANSPORT_ACTIONS, TRANSPORT_PUBLIC } from '../../../modules/transport/transport-actions';
+import { TIMETABLE_ACTIONS, TIMETABLE_PUBLIC } from '../../../modules/timetable/timetable-actions';
 
 // One coverage guard for every gated module: each `handler:` in the module's
 // *-endpoints.yml must have an explicit authorization decision — gated (in the
@@ -23,6 +24,7 @@ const MODULES: Array<{ name: string; yml: string; actions: Record<string, string
   { name: 'assistant', yml: 'modules/assistant/assistant-endpoints.yml', actions: ASSISTANT_ACTIONS, pub: ASSISTANT_PUBLIC },
   { name: 'student', yml: 'modules/student/student-endpoints.yml', actions: STUDENT_ACTIONS, pub: STUDENT_PUBLIC },
   { name: 'transport', yml: 'modules/transport/transport-endpoints.yml', actions: TRANSPORT_ACTIONS, pub: TRANSPORT_PUBLIC },
+  { name: 'timetable', yml: 'modules/timetable/timetable-endpoints.yml', actions: TIMETABLE_ACTIONS, pub: TIMETABLE_PUBLIC },
 ];
 
 function handlerRefs(ymlRel: string): string[] {
