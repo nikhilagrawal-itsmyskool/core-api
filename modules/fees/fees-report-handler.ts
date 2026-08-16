@@ -1,5 +1,7 @@
 import { ApiCallback, ApiContext, ApiEvent } from '../../shared/lib/api.interfaces';
 import { ResponseBuilder } from '../../shared/lib/response-builder';
+import { guard } from '../auth/authz';
+import { FEE_ACTIONS } from './fees-actions';
 import { resolveSchool } from './fees-util';
 import { feesReportService } from './fees-report-service';
 
@@ -109,14 +111,14 @@ class FeesReportHandler {
 }
 
 const handler = new FeesReportHandler();
-export const dailyCollection = handler.dailyCollection;
-export const overview = handler.overview;
-export const ungeneratedStudents = handler.ungeneratedStudents;
-export const dues = handler.dues;
-export const setFollowup = handler.setFollowup;
-export const getFollowup = handler.getFollowup;
-export const familyDues = handler.familyDues;
-export const withdraw = handler.withdraw;
-export const duesByYear = handler.duesByYear;
-export const studentConcessions = handler.studentConcessions;
-export const fineExemptions = handler.fineExemptions;
+export const dailyCollection = guard(FEE_ACTIONS['fees-report-handler.dailyCollection'], handler.dailyCollection);
+export const overview = guard(FEE_ACTIONS['fees-report-handler.overview'], handler.overview);
+export const ungeneratedStudents = guard(FEE_ACTIONS['fees-report-handler.ungeneratedStudents'], handler.ungeneratedStudents);
+export const dues = guard(FEE_ACTIONS['fees-report-handler.dues'], handler.dues);
+export const setFollowup = guard(FEE_ACTIONS['fees-report-handler.setFollowup'], handler.setFollowup);
+export const getFollowup = guard(FEE_ACTIONS['fees-report-handler.getFollowup'], handler.getFollowup);
+export const familyDues = guard(FEE_ACTIONS['fees-report-handler.familyDues'], handler.familyDues);
+export const withdraw = guard(FEE_ACTIONS['fees-report-handler.withdraw'], handler.withdraw);
+export const duesByYear = guard(FEE_ACTIONS['fees-report-handler.duesByYear'], handler.duesByYear);
+export const studentConcessions = guard(FEE_ACTIONS['fees-report-handler.studentConcessions'], handler.studentConcessions);
+export const fineExemptions = guard(FEE_ACTIONS['fees-report-handler.fineExemptions'], handler.fineExemptions);

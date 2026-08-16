@@ -1,6 +1,8 @@
 import { ApiCallback, ApiContext, ApiEvent } from '../../shared/lib/api.interfaces';
 import { ResponseBuilder } from '../../shared/lib/response-builder';
 import { validateSchoolCodeHeader } from '../auth/auth-utils';
+import { guard } from '../auth/authz';
+import { FEE_ACTIONS } from './fees-actions';
 import { resolveSchool, parseBody, requireParam } from './fees-util';
 import { feesReceiptService } from './fees-receipt-service';
 
@@ -101,12 +103,12 @@ class FeesReceiptHandler {
 }
 
 const handler = new FeesReceiptHandler();
-export const collect = handler.collect;
-export const adhoc = handler.adhoc;
-export const collectTransport = handler.collectTransport;
-export const cancel = handler.cancel;
-export const getById = handler.getById;
-export const list = handler.list;
-export const print = handler.print;
-export const verify = handler.verify;
-export const verifyStaff = handler.verifyStaff;
+export const collect = guard(FEE_ACTIONS['fees-receipt-handler.collect'], handler.collect);
+export const adhoc = guard(FEE_ACTIONS['fees-receipt-handler.adhoc'], handler.adhoc);
+export const collectTransport = guard(FEE_ACTIONS['fees-receipt-handler.collectTransport'], handler.collectTransport);
+export const cancel = guard(FEE_ACTIONS['fees-receipt-handler.cancel'], handler.cancel);
+export const getById = guard(FEE_ACTIONS['fees-receipt-handler.getById'], handler.getById);
+export const list = guard(FEE_ACTIONS['fees-receipt-handler.list'], handler.list);
+export const print = guard(FEE_ACTIONS['fees-receipt-handler.print'], handler.print);
+export const verify = handler.verify; // PUBLIC — authorizer-exempt QR verify, ungated
+export const verifyStaff = guard(FEE_ACTIONS['fees-receipt-handler.verifyStaff'], handler.verifyStaff);

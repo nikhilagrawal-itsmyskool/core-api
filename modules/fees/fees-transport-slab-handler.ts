@@ -1,6 +1,8 @@
 import { ApiCallback, ApiContext, ApiEvent } from '../../shared/lib/api.interfaces';
 import { ResponseBuilder } from '../../shared/lib/response-builder';
 import { ErrorCode } from '../../shared/lib/error-codes';
+import { guard } from '../auth/authz';
+import { FEE_ACTIONS } from './fees-actions';
 import { resolveSchool, parseBody, requireParam } from './fees-util';
 import { transportSlabService, CreateTransportSlabRequest, UpdateTransportSlabRequest } from './fees-transport-slab-service';
 
@@ -73,7 +75,7 @@ class TransportSlabHandler {
 }
 
 const handler = new TransportSlabHandler();
-export const create = handler.create;
-export const update = handler.update;
-export const remove = handler.remove;
-export const list = handler.list;
+export const create = guard(FEE_ACTIONS['fees-transport-slab-handler.create'], handler.create);
+export const update = guard(FEE_ACTIONS['fees-transport-slab-handler.update'], handler.update);
+export const remove = guard(FEE_ACTIONS['fees-transport-slab-handler.remove'], handler.remove);
+export const list = guard(FEE_ACTIONS['fees-transport-slab-handler.list'], handler.list);

@@ -1,5 +1,7 @@
 import { ApiCallback, ApiContext, ApiEvent } from '../../shared/lib/api.interfaces';
 import { ResponseBuilder } from '../../shared/lib/response-builder';
+import { guard } from '../auth/authz';
+import { FEE_ACTIONS } from './fees-actions';
 import { resolveSchool, parseBody } from './fees-util';
 import { feesRefundService } from './fees-refund-service';
 
@@ -25,5 +27,5 @@ class FeesRefundHandler {
 }
 
 const handler = new FeesRefundHandler();
-export const create = handler.create;
-export const list = handler.list;
+export const create = guard(FEE_ACTIONS['fees-refund-handler.create'], handler.create);
+export const list = guard(FEE_ACTIONS['fees-refund-handler.list'], handler.list);

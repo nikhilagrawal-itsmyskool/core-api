@@ -1,5 +1,7 @@
 import { ApiCallback, ApiContext, ApiEvent } from '../../shared/lib/api.interfaces';
 import { ResponseBuilder } from '../../shared/lib/response-builder';
+import { guard } from '../auth/authz';
+import { FEE_ACTIONS } from './fees-actions';
 import { resolveSchool, parseBody } from './fees-util';
 import { feesMigrationService } from './fees-migration-service';
 
@@ -16,4 +18,4 @@ class FeesMigrationHandler {
 }
 
 const handler = new FeesMigrationHandler();
-export const importData = handler.importData;
+export const importData = guard(FEE_ACTIONS['fees-migration-handler.importData'], handler.importData);

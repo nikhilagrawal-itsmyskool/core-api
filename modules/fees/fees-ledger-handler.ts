@@ -1,5 +1,7 @@
 import { ApiCallback, ApiContext, ApiEvent } from '../../shared/lib/api.interfaces';
 import { ResponseBuilder } from '../../shared/lib/response-builder';
+import { guard } from '../auth/authz';
+import { FEE_ACTIONS } from './fees-actions';
 import { resolveSchool, parseBody, requireParam } from './fees-util';
 import { feesLedgerService } from './fees-ledger-service';
 
@@ -38,6 +40,6 @@ class FeesLedgerHandler {
 }
 
 const handler = new FeesLedgerHandler();
-export const studentLedger = handler.studentLedger;
-export const studentSummary = handler.studentSummary;
-export const chargeRun = handler.chargeRun;
+export const studentLedger = guard(FEE_ACTIONS['fees-ledger-handler.studentLedger'], handler.studentLedger);
+export const studentSummary = guard(FEE_ACTIONS['fees-ledger-handler.studentSummary'], handler.studentSummary);
+export const chargeRun = guard(FEE_ACTIONS['fees-ledger-handler.chargeRun'], handler.chargeRun);

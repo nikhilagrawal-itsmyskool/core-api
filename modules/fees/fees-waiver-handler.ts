@@ -1,6 +1,8 @@
 import { ApiCallback, ApiContext, ApiEvent } from '../../shared/lib/api.interfaces';
 import { ResponseBuilder } from '../../shared/lib/response-builder';
 import { ErrorCode } from '../../shared/lib/error-codes';
+import { guard } from '../auth/authz';
+import { FEE_ACTIONS } from './fees-actions';
 import { resolveSchool, parseBody, requireParam } from './fees-util';
 import { waiverService, CreateWaiverRequest } from './fees-waiver-service';
 
@@ -54,6 +56,6 @@ class WaiverHandler {
 }
 
 const handler = new WaiverHandler();
-export const create = handler.create;
-export const remove = handler.remove;
-export const list = handler.list;
+export const create = guard(FEE_ACTIONS['fees-waiver-handler.create'], handler.create);
+export const remove = guard(FEE_ACTIONS['fees-waiver-handler.remove'], handler.remove);
+export const list = guard(FEE_ACTIONS['fees-waiver-handler.list'], handler.list);

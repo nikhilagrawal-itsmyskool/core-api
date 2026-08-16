@@ -1,6 +1,8 @@
 import { ApiCallback, ApiContext, ApiEvent } from '../../shared/lib/api.interfaces';
 import { ResponseBuilder } from '../../shared/lib/response-builder';
 import { ErrorCode } from '../../shared/lib/error-codes';
+import { guard } from '../auth/authz';
+import { FEE_ACTIONS } from './fees-actions';
 import { resolveSchool, parseBody, requireParam } from './fees-util';
 import {
   feeStructureService,
@@ -157,12 +159,12 @@ class FeeStructureHandler {
 }
 
 const handler = new FeeStructureHandler();
-export const create = handler.create;
-export const update = handler.update;
-export const remove = handler.remove;
-export const list = handler.list;
-export const bulkApply = handler.bulkApply;
-export const copyFromClass = handler.copyFromClass;
-export const listStudent = handler.listStudent;
-export const upsertStudent = handler.upsertStudent;
-export const removeStudent = handler.removeStudent;
+export const create = guard(FEE_ACTIONS['fees-structure-handler.create'], handler.create);
+export const update = guard(FEE_ACTIONS['fees-structure-handler.update'], handler.update);
+export const remove = guard(FEE_ACTIONS['fees-structure-handler.remove'], handler.remove);
+export const list = guard(FEE_ACTIONS['fees-structure-handler.list'], handler.list);
+export const bulkApply = guard(FEE_ACTIONS['fees-structure-handler.bulkApply'], handler.bulkApply);
+export const copyFromClass = guard(FEE_ACTIONS['fees-structure-handler.copyFromClass'], handler.copyFromClass);
+export const listStudent = guard(FEE_ACTIONS['fees-structure-handler.listStudent'], handler.listStudent);
+export const upsertStudent = guard(FEE_ACTIONS['fees-structure-handler.upsertStudent'], handler.upsertStudent);
+export const removeStudent = guard(FEE_ACTIONS['fees-structure-handler.removeStudent'], handler.removeStudent);

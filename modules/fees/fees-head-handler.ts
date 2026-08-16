@@ -1,6 +1,8 @@
 import { ApiCallback, ApiContext, ApiEvent } from '../../shared/lib/api.interfaces';
 import { ResponseBuilder } from '../../shared/lib/response-builder';
 import { ErrorCode } from '../../shared/lib/error-codes';
+import { guard } from '../auth/authz';
+import { FEE_ACTIONS } from './fees-actions';
 import { resolveSchool, parseBody, requireParam } from './fees-util';
 import { feeHeadService, CreateFeeHeadRequest, UpdateFeeHeadRequest } from './fees-head-service';
 
@@ -73,7 +75,7 @@ class FeeHeadHandler {
 }
 
 const handler = new FeeHeadHandler();
-export const create = handler.create;
-export const update = handler.update;
-export const remove = handler.remove;
-export const list = handler.list;
+export const create = guard(FEE_ACTIONS['fees-head-handler.create'], handler.create);
+export const update = guard(FEE_ACTIONS['fees-head-handler.update'], handler.update);
+export const remove = guard(FEE_ACTIONS['fees-head-handler.remove'], handler.remove);
+export const list = guard(FEE_ACTIONS['fees-head-handler.list'], handler.list);

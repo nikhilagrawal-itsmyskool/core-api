@@ -1,4 +1,4 @@
-import { ApiCallback, ApiEvent } from '../../shared/lib/api.interfaces';
+import { ApiCallback, ApiContext, ApiEvent } from '../../shared/lib/api.interfaces';
 import { ErrorCode } from '../../shared/lib/error-codes';
 import { ResponseBuilder } from '../../shared/lib/response-builder';
 import { can } from '../../shared/lib/authz-policy';
@@ -47,10 +47,14 @@ function parseOverrideRoles(authorizer: any): string[] | null {
 function offlineFallbackCaller(event: ApiEvent): Caller | null {
   if (!isOffline()) return null;
   const authorizer: any = event.requestContext && (event.requestContext as any).authorizer;
-  const roles = parseOverrideRoles(authorizer) || ['god'];
-  const principal = (authorizer && authorizer.principalId) || 'offline';
+  // serverless-offline surfaces the `sls-offline-authorizer-override` payload as
+  // `{ principalId, context: { type, roles } }` (nested), whereas real API Gateway
+  // flattens the context onto `authorizer`. Read whichever is present.
+  const ctx: any = (authorizer && authorizer.context) || authorizer;
+  const roles = parseOverrideRoles(ctx) || ['god'];
+  const principal = (authorizer && authorizer.principalId) || (ctx && ctx.principalId) || 'offline';
   return {
-    type: (authorizer && authorizer.type) || 'employee',
+    type: (ctx && ctx.type) || 'employee',
     employeeId: principal,
     loginId: principal,
     loginName: principal,
@@ -105,4 +109,19 @@ export function requireAction(event: ApiEvent, action: string, callback: ApiCall
     return null;
   }
   return caller;
+}
+
+type Handler = (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => any;
+
+// Export-site wrapper: gate a handler with `requireAction` before delegating. Used at
+// the bottom of a handler file so every export is visibly either guarded or explicitly
+// public, next to the module's <m>-actions.ts manifest:
+//   export const collect = guard(FEE_ACTIONS['fees-receipt-handler.collect'], handler.collect);
+// On auth/authz failure the wrapper writes the 401/403 and never calls the handler.
+export function guard(action: string, fn: Handler): Handler {
+  return (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    const caller = requireAction(event, action, callback);
+    if (!caller) return;
+    return fn(event, ctx, callback);
+  };
 }

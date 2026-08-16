@@ -100,9 +100,22 @@ describe('requireAction', () => {
       expect(caller!.roles).toEqual(['god']);
     });
 
-    it('honors roles from the offline authorizer override (negative-path tests)', () => {
+    // serverless-offline sets event.requestContext.authorizer to the ENTIRE parsed
+    // sls-offline-authorizer-override JSON, so roles live under authorizer.context.roles.
+    it('honors nested override roles (real serverless-offline shape) for negative tests', () => {
       const cap = capture();
-      const caller = requireAction(event(undefined, 'DBPASN', { principalId: '123', type: 'employee', roles: 'teacher' }), 'fee.collect', cap.cb);
+      const caller = requireAction(
+        event(undefined, 'DBPASN', { principalId: '123', context: { type: 'employee', roles: 'teacher' } }),
+        'fee.collect',
+        cap.cb
+      );
+      expect(caller).toBeNull();
+      expect(cap.status()).toBe(403);
+    });
+
+    it('also honors a flattened override shape (roles directly on authorizer)', () => {
+      const cap = capture();
+      const caller = requireAction(event(undefined, 'DBPASN', { principalId: '123', roles: 'teacher' }), 'fee.collect', cap.cb);
       expect(caller).toBeNull();
       expect(cap.status()).toBe(403);
     });

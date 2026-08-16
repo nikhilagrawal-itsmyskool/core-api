@@ -1,5 +1,7 @@
 import { ApiCallback, ApiContext, ApiEvent } from '../../shared/lib/api.interfaces';
 import { ResponseBuilder } from '../../shared/lib/response-builder';
+import { guard } from '../auth/authz';
+import { FEE_ACTIONS } from './fees-actions';
 import { resolveSchool } from './fees-util';
 import {
   FEE_HEAD_KINDS,
@@ -40,4 +42,4 @@ class FeeLookupHandler {
 }
 
 const handler = new FeeLookupHandler();
-export const lookups = handler.lookups;
+export const lookups = guard(FEE_ACTIONS['fees-lookup-handler.lookups'], handler.lookups);

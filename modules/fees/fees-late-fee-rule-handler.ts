@@ -1,6 +1,8 @@
 import { ApiCallback, ApiContext, ApiEvent } from '../../shared/lib/api.interfaces';
 import { ResponseBuilder } from '../../shared/lib/response-builder';
 import { ErrorCode } from '../../shared/lib/error-codes';
+import { guard } from '../auth/authz';
+import { FEE_ACTIONS } from './fees-actions';
 import { resolveSchool, parseBody, requireParam } from './fees-util';
 import { lateFeeRuleService, CreateLateFeeRuleRequest, UpdateLateFeeRuleRequest } from './fees-late-fee-rule-service';
 import { applyFineService } from './fees-apply-fine-service';
@@ -119,10 +121,10 @@ class LateFeeRuleHandler {
 }
 
 const handler = new LateFeeRuleHandler();
-export const create = handler.create;
-export const update = handler.update;
-export const remove = handler.remove;
-export const list = handler.list;
-export const applyPreview = handler.applyPreview;
-export const applyRun = handler.applyRun;
-export const nightly = handler.nightly;
+export const create = guard(FEE_ACTIONS['fees-late-fee-rule-handler.create'], handler.create);
+export const update = guard(FEE_ACTIONS['fees-late-fee-rule-handler.update'], handler.update);
+export const remove = guard(FEE_ACTIONS['fees-late-fee-rule-handler.remove'], handler.remove);
+export const list = guard(FEE_ACTIONS['fees-late-fee-rule-handler.list'], handler.list);
+export const applyPreview = guard(FEE_ACTIONS['fees-late-fee-rule-handler.applyPreview'], handler.applyPreview);
+export const applyRun = guard(FEE_ACTIONS['fees-late-fee-rule-handler.applyRun'], handler.applyRun);
+export const nightly = handler.nightly; // schedule event — no caller, ungated

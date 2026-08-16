@@ -1,6 +1,8 @@
 import { ApiCallback, ApiContext, ApiEvent } from '../../shared/lib/api.interfaces';
 import { ResponseBuilder } from '../../shared/lib/response-builder';
 import { ErrorCode } from '../../shared/lib/error-codes';
+import { guard } from '../auth/authz';
+import { FEE_ACTIONS } from './fees-actions';
 import { resolveSchool, parseBody, requireParam } from './fees-util';
 import {
   concessionService,
@@ -141,11 +143,11 @@ class ConcessionHandler {
 }
 
 const handler = new ConcessionHandler();
-export const create = handler.create;
-export const update = handler.update;
-export const remove = handler.remove;
-export const list = handler.list;
-export const multi = handler.multi;
-export const listStudents = handler.listStudents;
-export const addStudents = handler.addStudents;
-export const removeStudent = handler.removeStudent;
+export const create = guard(FEE_ACTIONS['fees-concession-handler.create'], handler.create);
+export const update = guard(FEE_ACTIONS['fees-concession-handler.update'], handler.update);
+export const remove = guard(FEE_ACTIONS['fees-concession-handler.remove'], handler.remove);
+export const list = guard(FEE_ACTIONS['fees-concession-handler.list'], handler.list);
+export const multi = guard(FEE_ACTIONS['fees-concession-handler.multi'], handler.multi);
+export const listStudents = guard(FEE_ACTIONS['fees-concession-handler.listStudents'], handler.listStudents);
+export const addStudents = guard(FEE_ACTIONS['fees-concession-handler.addStudents'], handler.addStudents);
+export const removeStudent = guard(FEE_ACTIONS['fees-concession-handler.removeStudent'], handler.removeStudent);
