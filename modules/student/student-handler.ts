@@ -6,6 +6,8 @@ import { maskContactFields } from '../../shared/util/mask-phone';
 import { STUDENT_MASKED_FIELDS } from './student-constants';
 import { studentService } from './student-service';
 import { getSignedPhotoUrl } from '../../shared/lib/file-storage';
+import { guard } from '../auth/authz';
+import { STUDENT_ACTIONS } from './student-actions';
 
 class StudentHandler {
   public search = async (
@@ -121,6 +123,6 @@ class StudentHandler {
 }
 
 const handler = new StudentHandler();
-export const search = handler.search;
-export const omni = handler.omni;
-export const classStrength = handler.classStrength;
+export const search = guard(STUDENT_ACTIONS['student-handler.search'], handler.search);
+export const omni = guard(STUDENT_ACTIONS['student-handler.omni'], handler.omni);
+export const classStrength = guard(STUDENT_ACTIONS['student-handler.classStrength'], handler.classStrength);

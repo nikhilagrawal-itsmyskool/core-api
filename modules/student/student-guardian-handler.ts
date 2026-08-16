@@ -5,6 +5,8 @@ import { validateSchoolCodeHeader } from '../auth/auth-utils';
 import { studentService } from './student-service';
 import { studentGuardianService } from './student-guardian-service';
 import { CreateGuardianRequest, UpdateGuardianRequest } from './student-interfaces';
+import { guard } from '../auth/authz';
+import { STUDENT_ACTIONS } from './student-actions';
 
 function userId(event: ApiEvent): string {
   return event.requestContext?.authorizer?.principalId || 'system';
@@ -89,7 +91,7 @@ class StudentGuardianHandler {
 }
 
 const handler = new StudentGuardianHandler();
-export const list = handler.list;
-export const create = handler.create;
-export const update = handler.update;
-export const remove = handler.remove;
+export const list = guard(STUDENT_ACTIONS['student-guardian-handler.list'], handler.list);
+export const create = guard(STUDENT_ACTIONS['student-guardian-handler.create'], handler.create);
+export const update = guard(STUDENT_ACTIONS['student-guardian-handler.update'], handler.update);
+export const remove = guard(STUDENT_ACTIONS['student-guardian-handler.remove'], handler.remove);

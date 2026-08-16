@@ -5,6 +5,8 @@ import { validateSchoolCodeHeader } from '../auth/auth-utils';
 import { studentService } from './student-service';
 import { promotionService } from './promotion-service';
 import { PromoteRequest, PromoteClassRequest, GraduateRequest } from './student-interfaces';
+import { guard } from '../auth/authz';
+import { STUDENT_ACTIONS } from './student-actions';
 
 function userId(event: ApiEvent): string {
   return event.requestContext?.authorizer?.principalId || 'system';
@@ -68,6 +70,6 @@ class PromotionHandler {
 }
 
 const handler = new PromotionHandler();
-export const promote = handler.promote;
-export const promoteClass = handler.promoteClass;
-export const graduate = handler.graduate;
+export const promote = guard(STUDENT_ACTIONS['promotion-handler.promote'], handler.promote);
+export const promoteClass = guard(STUDENT_ACTIONS['promotion-handler.promoteClass'], handler.promoteClass);
+export const graduate = guard(STUDENT_ACTIONS['promotion-handler.graduate'], handler.graduate);

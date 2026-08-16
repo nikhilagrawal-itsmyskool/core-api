@@ -4,6 +4,8 @@ import { ErrorCode } from '../../shared/lib/error-codes';
 import { validateSchoolCodeHeader } from '../auth/auth-utils';
 import { studentService } from './student-service';
 import { studentSiblingService } from './student-sibling-service';
+import { guard } from '../auth/authz';
+import { STUDENT_ACTIONS } from './student-actions';
 
 function userId(event: ApiEvent): string {
   return event.requestContext?.authorizer?.principalId || 'system';
@@ -70,6 +72,6 @@ class StudentSiblingHandler {
 }
 
 const handler = new StudentSiblingHandler();
-export const list = handler.list;
-export const create = handler.create;
-export const remove = handler.remove;
+export const list = guard(STUDENT_ACTIONS['student-sibling-handler.list'], handler.list);
+export const create = guard(STUDENT_ACTIONS['student-sibling-handler.create'], handler.create);
+export const remove = guard(STUDENT_ACTIONS['student-sibling-handler.remove'], handler.remove);

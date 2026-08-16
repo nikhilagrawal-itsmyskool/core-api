@@ -2,6 +2,8 @@ import { ApiCallback, ApiContext, ApiEvent } from '../../shared/lib/api.interfac
 import { ResponseBuilder } from '../../shared/lib/response-builder';
 import { ErrorCode } from '../../shared/lib/error-codes';
 import { resolveSchool, parseBody, requireParam } from './handler-util';
+import { guard } from '../auth/authz';
+import { COMMUNICATION_ACTIONS } from './communication-actions';
 import { templateService } from './template-service';
 import { CreateTemplateRequest, UpdateTemplateRequest } from './communication-interfaces';
 
@@ -97,9 +99,9 @@ class TemplateHandler {
 }
 
 const handler = new TemplateHandler();
-export const list = handler.list;
-export const getById = handler.getById;
-export const create = handler.create;
-export const update = handler.update;
-export const remove = handler.remove;
-export const restore = handler.restore;
+export const list = guard(COMMUNICATION_ACTIONS['template-handler.list'], handler.list);
+export const getById = guard(COMMUNICATION_ACTIONS['template-handler.getById'], handler.getById);
+export const create = guard(COMMUNICATION_ACTIONS['template-handler.create'], handler.create);
+export const update = guard(COMMUNICATION_ACTIONS['template-handler.update'], handler.update);
+export const remove = guard(COMMUNICATION_ACTIONS['template-handler.remove'], handler.remove);
+export const restore = guard(COMMUNICATION_ACTIONS['template-handler.restore'], handler.restore);

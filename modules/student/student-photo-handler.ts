@@ -5,6 +5,8 @@ import { validateSchoolCodeHeader } from '../auth/auth-utils';
 import { studentService } from './student-service';
 import { studentPhotoService } from './student-photo-service';
 import { UploadPhotoRequest } from './student-interfaces';
+import { guard } from '../auth/authz';
+import { STUDENT_ACTIONS } from './student-actions';
 
 function userId(event: ApiEvent): string {
   return event.requestContext?.authorizer?.principalId || 'system';
@@ -82,6 +84,6 @@ class StudentPhotoHandler {
 }
 
 const handler = new StudentPhotoHandler();
-export const upload = handler.upload;
-export const get = handler.get;
-export const remove = handler.remove;
+export const upload = guard(STUDENT_ACTIONS['student-photo-handler.upload'], handler.upload);
+export const get = guard(STUDENT_ACTIONS['student-photo-handler.get'], handler.get);
+export const remove = guard(STUDENT_ACTIONS['student-photo-handler.remove'], handler.remove);

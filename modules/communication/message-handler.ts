@@ -2,6 +2,8 @@ import { ApiCallback, ApiContext, ApiEvent } from '../../shared/lib/api.interfac
 import { ResponseBuilder } from '../../shared/lib/response-builder';
 import { ErrorCode } from '../../shared/lib/error-codes';
 import { resolveSchool, parseBody, requireParam } from './handler-util';
+import { guard } from '../auth/authz';
+import { COMMUNICATION_ACTIONS } from './communication-actions';
 import { getCallerContext } from '../auth/auth-utils';
 import { maskContactFields } from '../../shared/util/mask-phone';
 import { messageService } from './message-service';
@@ -141,11 +143,11 @@ class MessageHandler {
 }
 
 const handler = new MessageHandler();
-export const send = handler.send;
-export const preview = handler.preview;
-export const list = handler.list;
-export const getById = handler.getById;
-export const cancel = handler.cancel;
-export const processNext = handler.processNext;
-export const drain = handler.drain;
-export const webhook = handler.webhook;
+export const send = guard(COMMUNICATION_ACTIONS['message-handler.send'], handler.send);
+export const preview = guard(COMMUNICATION_ACTIONS['message-handler.preview'], handler.preview);
+export const list = guard(COMMUNICATION_ACTIONS['message-handler.list'], handler.list);
+export const getById = guard(COMMUNICATION_ACTIONS['message-handler.getById'], handler.getById);
+export const cancel = guard(COMMUNICATION_ACTIONS['message-handler.cancel'], handler.cancel);
+export const processNext = handler.processNext; // public/exempt
+export const drain = handler.drain; // public/exempt
+export const webhook = handler.webhook; // public/exempt

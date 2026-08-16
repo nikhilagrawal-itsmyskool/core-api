@@ -2,6 +2,8 @@ import { ApiCallback, ApiContext, ApiEvent } from '../../shared/lib/api.interfac
 import { ResponseBuilder } from '../../shared/lib/response-builder';
 import { ErrorCode } from '../../shared/lib/error-codes';
 import { resolveSchool, parseBody, requireParam } from './handler-util';
+import { guard } from '../auth/authz';
+import { TRANSPORT_ACTIONS } from './transport-actions';
 import { getCallerContext } from '../auth/auth-utils';
 import { maskContactFields } from '../../shared/util/mask-phone';
 import { TRANSPORT_PHONE_FIELDS } from './transport-constants';
@@ -157,11 +159,11 @@ class TransportRouteHandler {
 }
 
 const handler = new TransportRouteHandler();
-export const create = handler.create;
-export const update = handler.update;
-export const remove = handler.remove;
-export const getById = handler.getById;
-export const list = handler.list;
-export const addStops = handler.addStops;
-export const removeStop = handler.removeStop;
-export const reorderStops = handler.reorderStops;
+export const create = guard(TRANSPORT_ACTIONS['transport-route-handler.create'], handler.create);
+export const update = guard(TRANSPORT_ACTIONS['transport-route-handler.update'], handler.update);
+export const remove = guard(TRANSPORT_ACTIONS['transport-route-handler.remove'], handler.remove);
+export const getById = guard(TRANSPORT_ACTIONS['transport-route-handler.getById'], handler.getById);
+export const list = guard(TRANSPORT_ACTIONS['transport-route-handler.list'], handler.list);
+export const addStops = guard(TRANSPORT_ACTIONS['transport-route-handler.addStops'], handler.addStops);
+export const removeStop = guard(TRANSPORT_ACTIONS['transport-route-handler.removeStop'], handler.removeStop);
+export const reorderStops = guard(TRANSPORT_ACTIONS['transport-route-handler.reorderStops'], handler.reorderStops);

@@ -2,6 +2,8 @@ import { ApiCallback, ApiContext, ApiEvent } from '../../shared/lib/api.interfac
 import { ResponseBuilder } from '../../shared/lib/response-builder';
 import { ErrorCode } from '../../shared/lib/error-codes';
 import { resolveSchool, parseBody, requireParam } from './handler-util';
+import { guard } from '../auth/authz';
+import { TRANSPORT_ACTIONS } from './transport-actions';
 import { transportAttendanceService } from './transport-attendance-service';
 import { EditRecordRequest, OpenSessionRequest, SaveMarksRequest } from './transport-interfaces';
 
@@ -133,10 +135,10 @@ class TransportAttendanceHandler {
 }
 
 const handler = new TransportAttendanceHandler();
-export const getRoster = handler.getRoster;
-export const openSession = handler.openSession;
-export const saveMarks = handler.saveMarks;
-export const finalize = handler.finalize;
-export const getSession = handler.getSession;
-export const listSessions = handler.listSessions;
-export const editRecord = handler.editRecord;
+export const getRoster = guard(TRANSPORT_ACTIONS['transport-attendance-handler.getRoster'], handler.getRoster);
+export const openSession = guard(TRANSPORT_ACTIONS['transport-attendance-handler.openSession'], handler.openSession);
+export const saveMarks = guard(TRANSPORT_ACTIONS['transport-attendance-handler.saveMarks'], handler.saveMarks);
+export const finalize = guard(TRANSPORT_ACTIONS['transport-attendance-handler.finalize'], handler.finalize);
+export const getSession = guard(TRANSPORT_ACTIONS['transport-attendance-handler.getSession'], handler.getSession);
+export const listSessions = guard(TRANSPORT_ACTIONS['transport-attendance-handler.listSessions'], handler.listSessions);
+export const editRecord = guard(TRANSPORT_ACTIONS['transport-attendance-handler.editRecord'], handler.editRecord);

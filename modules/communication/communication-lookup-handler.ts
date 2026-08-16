@@ -1,5 +1,7 @@
 import { ApiCallback, ApiContext, ApiEvent } from '../../shared/lib/api.interfaces';
 import { ResponseBuilder } from '../../shared/lib/response-builder';
+import { guard } from '../auth/authz';
+import { COMMUNICATION_ACTIONS } from './communication-actions';
 import { CHANNELS } from './communication-constants';
 import { AUTO_CONTEXT_KEYS } from './communication-util';
 
@@ -20,5 +22,5 @@ class CommunicationLookupHandler {
 }
 
 const handler = new CommunicationLookupHandler();
-export const getChannels = handler.getChannels;
-export const getVariables = handler.getVariables;
+export const getChannels = guard(COMMUNICATION_ACTIONS['communication-lookup-handler.getChannels'], handler.getChannels);
+export const getVariables = guard(COMMUNICATION_ACTIONS['communication-lookup-handler.getVariables'], handler.getVariables);

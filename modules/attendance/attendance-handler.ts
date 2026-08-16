@@ -2,6 +2,8 @@ import { ApiCallback, ApiContext, ApiEvent } from '../../shared/lib/api.interfac
 import { ResponseBuilder } from '../../shared/lib/response-builder';
 import { ErrorCode } from '../../shared/lib/error-codes';
 import { resolveSchool, parseBody, requireParam } from './handler-util';
+import { guard } from '../auth/authz';
+import { ATTENDANCE_ACTIONS } from './attendance-actions';
 import { attendanceService } from './attendance-service';
 import { OpenSessionRequest, SaveMarksRequest, EditRecordRequest } from './attendance-interfaces';
 
@@ -170,12 +172,12 @@ class AttendanceHandler {
 }
 
 const handler = new AttendanceHandler();
-export const getStudentAttendance = handler.getStudentAttendance;
-export const getRegister = handler.getRegister;
-export const getRoster = handler.getRoster;
-export const openSession = handler.openSession;
-export const saveMarks = handler.saveMarks;
-export const finalize = handler.finalize;
-export const getSession = handler.getSession;
-export const listSessions = handler.listSessions;
-export const editRecord = handler.editRecord;
+export const getStudentAttendance = guard(ATTENDANCE_ACTIONS['attendance-handler.getStudentAttendance'], handler.getStudentAttendance);
+export const getRegister = guard(ATTENDANCE_ACTIONS['attendance-handler.getRegister'], handler.getRegister);
+export const getRoster = guard(ATTENDANCE_ACTIONS['attendance-handler.getRoster'], handler.getRoster);
+export const openSession = guard(ATTENDANCE_ACTIONS['attendance-handler.openSession'], handler.openSession);
+export const saveMarks = guard(ATTENDANCE_ACTIONS['attendance-handler.saveMarks'], handler.saveMarks);
+export const finalize = guard(ATTENDANCE_ACTIONS['attendance-handler.finalize'], handler.finalize);
+export const getSession = guard(ATTENDANCE_ACTIONS['attendance-handler.getSession'], handler.getSession);
+export const listSessions = guard(ATTENDANCE_ACTIONS['attendance-handler.listSessions'], handler.listSessions);
+export const editRecord = guard(ATTENDANCE_ACTIONS['attendance-handler.editRecord'], handler.editRecord);

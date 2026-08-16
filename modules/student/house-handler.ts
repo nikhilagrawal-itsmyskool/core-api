@@ -5,6 +5,8 @@ import { validateSchoolCodeHeader } from '../auth/auth-utils';
 import { studentService } from './student-service';
 import { houseService } from './house-service';
 import { CreateHouseRequest, UpdateHouseRequest, SetHouseTeachersRequest } from './student-interfaces';
+import { guard } from '../auth/authz';
+import { STUDENT_ACTIONS } from './student-actions';
 
 function userId(event: ApiEvent): string {
   return event.requestContext?.authorizer?.principalId || 'system';
@@ -147,11 +149,11 @@ class HouseHandler {
 }
 
 const handler = new HouseHandler();
-export const list = handler.list;
-export const create = handler.create;
-export const getById = handler.getById;
-export const update = handler.update;
-export const remove = handler.remove;
-export const listTeachers = handler.listTeachers;
-export const setTeachers = handler.setTeachers;
-export const assign = handler.assign;
+export const list = guard(STUDENT_ACTIONS['house-handler.list'], handler.list);
+export const create = guard(STUDENT_ACTIONS['house-handler.create'], handler.create);
+export const getById = guard(STUDENT_ACTIONS['house-handler.getById'], handler.getById);
+export const update = guard(STUDENT_ACTIONS['house-handler.update'], handler.update);
+export const remove = guard(STUDENT_ACTIONS['house-handler.remove'], handler.remove);
+export const listTeachers = guard(STUDENT_ACTIONS['house-handler.listTeachers'], handler.listTeachers);
+export const setTeachers = guard(STUDENT_ACTIONS['house-handler.setTeachers'], handler.setTeachers);
+export const assign = guard(STUDENT_ACTIONS['house-handler.assign'], handler.assign);

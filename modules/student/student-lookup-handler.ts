@@ -6,6 +6,8 @@ import { studentService } from './student-service';
 import { studentLookupService } from './student-lookup-service';
 import { CreateLookupRequest, UpdateLookupRequest } from './student-interfaces';
 import { LookupType } from './student-constants';
+import { guard } from '../auth/authz';
+import { STUDENT_ACTIONS } from './student-actions';
 
 function userId(event: ApiEvent): string {
   return event.requestContext?.authorizer?.principalId || 'system';
@@ -96,8 +98,8 @@ class StudentLookupHandler {
 }
 
 const handler = new StudentLookupHandler();
-export const list = handler.list;
-export const suggestByPincode = handler.suggestByPincode;
-export const create = handler.create;
-export const update = handler.update;
-export const remove = handler.remove;
+export const list = guard(STUDENT_ACTIONS['student-lookup-handler.list'], handler.list);
+export const suggestByPincode = guard(STUDENT_ACTIONS['student-lookup-handler.suggestByPincode'], handler.suggestByPincode);
+export const create = guard(STUDENT_ACTIONS['student-lookup-handler.create'], handler.create);
+export const update = guard(STUDENT_ACTIONS['student-lookup-handler.update'], handler.update);
+export const remove = guard(STUDENT_ACTIONS['student-lookup-handler.remove'], handler.remove);

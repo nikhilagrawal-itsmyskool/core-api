@@ -2,6 +2,8 @@ import { ApiCallback, ApiContext, ApiEvent } from '../../shared/lib/api.interfac
 import { ResponseBuilder } from '../../shared/lib/response-builder';
 import { ErrorCode } from '../../shared/lib/error-codes';
 import { resolveSchool, parseBody, requireParam } from './handler-util';
+import { guard } from '../auth/authz';
+import { TRANSPORT_ACTIONS } from './transport-actions';
 import { transportStopService } from './transport-stop-service';
 import { BulkStopRequest, CreateStopRequest, UpdateStopRequest } from './transport-interfaces';
 
@@ -105,9 +107,9 @@ class TransportStopHandler {
 }
 
 const handler = new TransportStopHandler();
-export const create = handler.create;
-export const bulkUpsert = handler.bulkUpsert;
-export const update = handler.update;
-export const remove = handler.remove;
-export const getById = handler.getById;
-export const list = handler.list;
+export const create = guard(TRANSPORT_ACTIONS['transport-stop-handler.create'], handler.create);
+export const bulkUpsert = guard(TRANSPORT_ACTIONS['transport-stop-handler.bulkUpsert'], handler.bulkUpsert);
+export const update = guard(TRANSPORT_ACTIONS['transport-stop-handler.update'], handler.update);
+export const remove = guard(TRANSPORT_ACTIONS['transport-stop-handler.remove'], handler.remove);
+export const getById = guard(TRANSPORT_ACTIONS['transport-stop-handler.getById'], handler.getById);
+export const list = guard(TRANSPORT_ACTIONS['transport-stop-handler.list'], handler.list);

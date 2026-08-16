@@ -2,6 +2,8 @@ import { ApiCallback, ApiContext, ApiEvent } from '../../shared/lib/api.interfac
 import { ResponseBuilder } from '../../shared/lib/response-builder';
 import { ErrorCode } from '../../shared/lib/error-codes';
 import { validateSchoolCodeHeader } from '../auth/auth-utils';
+import { guard } from '../auth/authz';
+import { TRANSFER_ACTIONS } from './transfer-actions';
 import { getSchoolIdByCode } from './transfer-common';
 import { transferService } from './transfer-service';
 import { CreateTcRequest, UpdateTcRequest } from './transfer-interfaces';
@@ -84,7 +86,7 @@ class TransferHandler {
 }
 
 const handler = new TransferHandler();
-export const list = handler.list;
-export const listAll = handler.listAll;
-export const create = handler.create;
-export const update = handler.update;
+export const list = guard(TRANSFER_ACTIONS['transfer-handler.list'], handler.list);
+export const listAll = guard(TRANSFER_ACTIONS['transfer-handler.listAll'], handler.listAll);
+export const create = guard(TRANSFER_ACTIONS['transfer-handler.create'], handler.create);
+export const update = guard(TRANSFER_ACTIONS['transfer-handler.update'], handler.update);

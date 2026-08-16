@@ -1,5 +1,7 @@
 import { ApiCallback, ApiContext, ApiEvent } from '../../shared/lib/api.interfaces';
 import { ResponseBuilder } from '../../shared/lib/response-builder';
+import { guard } from '../auth/authz';
+import { TRANSPORT_ACTIONS } from './transport-actions';
 import {
   ATTENDANCE_STATUSES,
   OWNERSHIP_TYPES,
@@ -24,4 +26,4 @@ class TransportLookupHandler {
 }
 
 const handler = new TransportLookupHandler();
-export const getLookups = handler.getLookups;
+export const getLookups = guard(TRANSPORT_ACTIONS['transport-lookup-handler.getLookups'], handler.getLookups);

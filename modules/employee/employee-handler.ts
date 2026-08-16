@@ -2,6 +2,8 @@ import { ApiCallback, ApiContext, ApiEvent } from '../../shared/lib/api.interfac
 import { ResponseBuilder } from '../../shared/lib/response-builder';
 import { ErrorCode } from '../../shared/lib/error-codes';
 import { validateSchoolCodeHeader, getCallerContext, revealEmployee } from '../auth/auth-utils';
+import { guard } from '../auth/authz';
+import { EMPLOYEE_ACTIONS } from './employee-actions';
 import { maskContactFields } from '../../shared/util/mask-phone';
 import { employeeService } from './employee-service';
 import { CreateEmployeeRequest, UpdateEmployeeRequest } from './employee-interfaces';
@@ -238,12 +240,12 @@ class EmployeeHandler {
 }
 
 const handler = new EmployeeHandler();
-export const search = handler.search;
-export const listRoles = handler.listRoles;
-export const create = handler.create;
-export const getById = handler.getById;
-export const update = handler.update;
-export const remove = handler.remove;
-export const restore = handler.restore;
-export const getCredentials = handler.getCredentials;
-export const resetPassword = handler.resetPassword;
+export const search = guard(EMPLOYEE_ACTIONS['employee-handler.search'], handler.search);
+export const listRoles = guard(EMPLOYEE_ACTIONS['employee-handler.listRoles'], handler.listRoles);
+export const create = guard(EMPLOYEE_ACTIONS['employee-handler.create'], handler.create);
+export const getById = guard(EMPLOYEE_ACTIONS['employee-handler.getById'], handler.getById);
+export const update = guard(EMPLOYEE_ACTIONS['employee-handler.update'], handler.update);
+export const remove = guard(EMPLOYEE_ACTIONS['employee-handler.remove'], handler.remove);
+export const restore = guard(EMPLOYEE_ACTIONS['employee-handler.restore'], handler.restore);
+export const getCredentials = guard(EMPLOYEE_ACTIONS['employee-handler.getCredentials'], handler.getCredentials);
+export const resetPassword = guard(EMPLOYEE_ACTIONS['employee-handler.resetPassword'], handler.resetPassword);

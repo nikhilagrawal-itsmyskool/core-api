@@ -2,6 +2,8 @@ import { ApiCallback, ApiContext, ApiEvent } from '../../shared/lib/api.interfac
 import { ResponseBuilder } from '../../shared/lib/response-builder';
 import { ErrorCode } from '../../shared/lib/error-codes';
 import { resolveSchool, parseBody, requireParam } from './handler-util';
+import { guard } from '../auth/authz';
+import { TRANSPORT_ACTIONS } from './transport-actions';
 import { transportAssignmentService } from './transport-assignment-service';
 import { CreateAssignmentRequest, UpdateAssignmentRequest } from './transport-interfaces';
 import { DIRECTION_VALUES, TRANSPORT_PHONE_FIELDS } from './transport-constants';
@@ -138,10 +140,10 @@ class TransportAssignmentHandler {
 }
 
 const handler = new TransportAssignmentHandler();
-export const create = handler.create;
-export const update = handler.update;
-export const remove = handler.remove;
-export const list = handler.list;
-export const routeRoster = handler.routeRoster;
-export const studentReport = handler.studentReport;
-export const myTransport = handler.myTransport;
+export const create = guard(TRANSPORT_ACTIONS['transport-assignment-handler.create'], handler.create);
+export const update = guard(TRANSPORT_ACTIONS['transport-assignment-handler.update'], handler.update);
+export const remove = guard(TRANSPORT_ACTIONS['transport-assignment-handler.remove'], handler.remove);
+export const list = guard(TRANSPORT_ACTIONS['transport-assignment-handler.list'], handler.list);
+export const routeRoster = guard(TRANSPORT_ACTIONS['transport-assignment-handler.routeRoster'], handler.routeRoster);
+export const studentReport = guard(TRANSPORT_ACTIONS['transport-assignment-handler.studentReport'], handler.studentReport);
+export const myTransport = handler.myTransport; // public/exempt — parent app (family token + X-Student-Id), guardActiveStudent

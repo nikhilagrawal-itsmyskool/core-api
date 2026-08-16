@@ -7,6 +7,8 @@ import { STUDENT_MASKED_FIELDS } from './student-constants';
 import { studentService } from './student-service';
 import { studentAdminService } from './student-admin-service';
 import { CreateStudentRequest, UpdateStudentRequest } from './student-interfaces';
+import { guard } from '../auth/authz';
+import { STUDENT_ACTIONS } from './student-actions';
 
 function userId(event: ApiEvent): string {
   return event.requestContext?.authorizer?.principalId || 'system';
@@ -189,11 +191,11 @@ class StudentAdminHandler {
 }
 
 const handler = new StudentAdminHandler();
-export const list = handler.list;
-export const commsSummary = handler.commsSummary;
-export const getById = handler.getById;
-export const create = handler.create;
-export const update = handler.update;
-export const remove = handler.remove;
-export const getCredentials = handler.getCredentials;
-export const resetPassword = handler.resetPassword;
+export const list = guard(STUDENT_ACTIONS['student-admin-handler.list'], handler.list);
+export const commsSummary = guard(STUDENT_ACTIONS['student-admin-handler.commsSummary'], handler.commsSummary);
+export const getById = guard(STUDENT_ACTIONS['student-admin-handler.getById'], handler.getById);
+export const create = guard(STUDENT_ACTIONS['student-admin-handler.create'], handler.create);
+export const update = guard(STUDENT_ACTIONS['student-admin-handler.update'], handler.update);
+export const remove = guard(STUDENT_ACTIONS['student-admin-handler.remove'], handler.remove);
+export const getCredentials = guard(STUDENT_ACTIONS['student-admin-handler.getCredentials'], handler.getCredentials);
+export const resetPassword = guard(STUDENT_ACTIONS['student-admin-handler.resetPassword'], handler.resetPassword);
