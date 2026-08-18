@@ -6,6 +6,7 @@ import {
 import { ResponseBuilder } from "../../shared/lib/response-builder";
 import { ErrorCode } from "../../shared/lib/error-codes";
 import { resolveSchool, parseBody, requireParam } from "./handler-util";
+import { requireAction } from "../auth/authz";
 import { syllabusPlanService } from "./syllabus-plan-service";
 import {
   BulkEntriesRequest,
@@ -46,6 +47,8 @@ class SyllabusPlanHandler {
   ) => {
     _context.callbackWaitsForEmptyEventLoop = false;
     try {
+      // Lists every plan in the school — managers only. Teachers use /my-plans.
+      if (!requireAction(event, "syllabus.manage", callback)) return;
       const ctx = await resolveSchool(event, callback);
       if (!ctx) return;
       const q = event.queryStringParameters || {};
