@@ -10,15 +10,28 @@ export interface EmployeeLogin {
 }
 
 export class EmployeeAuthService {
-  public signToken(data: any): string {
+  // expiresIn overrides the default 7-day admin expiry — device tokens use a short (~24h) life
+  // so a portal revocation kills a lost device within a day (it can't refresh past that).
+  public signToken(data: any, expiresIn?: string): string {
     let token = undefined;
     try {
-      token = jwt.sign(data, process.env.JWT_SECRET, { expiresIn: process.env.JWT_ADMIN_EXPIRY_TIME });
+      token = jwt.sign(data, process.env.JWT_SECRET, { expiresIn: expiresIn || process.env.JWT_ADMIN_EXPIRY_TIME });
     } catch (e) {
       console.log(e, 'Error');
       console.log('Error signing token: ', JSON.stringify(e));
     }
     return token;
+  }
+
+  // Verify a token and return its claims iff it's a valid, unexpired EMPLOYEE token.
+  // Used by the silent-refresh + device-management endpoints (they re-sign / gate on these claims).
+  public verifyEmployeeToken(token: string): any | null {
+    try {
+      const decoded: any = jwt.verify(token, process.env.JWT_SECRET);
+      return decoded && decoded.type === 'employee' ? decoded : null;
+    } catch {
+      return null; // invalid or expired — caller must do a fresh interactive login
+    }
   }
 
   public async getSchoolIdByCode(schoolCode: string): Promise<string | null> {

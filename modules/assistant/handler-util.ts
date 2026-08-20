@@ -28,6 +28,28 @@ export async function resolveSchool(event: ApiEvent, callback: ApiCallback): Pro
   return { schoolId, schoolCode, userId, authorization: getAuthorizationHeader(event) };
 }
 
+// The verify-token authorizer has already validated the signature by the time we run, so we
+// just read the (trusted) claims from the JWT payload to gate on role — no re-verify / no
+// jsonwebtoken dependency. The assistant carries a god token on the desk device and exposes the
+// whole read surface, so we restrict its use to GOD callers only (not admin).
+function claimsFromEvent(event: ApiEvent): any | null {
+  const h = getAuthorizationHeader(event) || "";
+  const token = h.replace(/^Bearer\s+/i, "").trim();
+  const part = token.split(".")[1];
+  if (!part) return null;
+  try {
+    return JSON.parse(Buffer.from(part.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8"));
+  } catch {
+    return null;
+  }
+}
+
+export function isGodCaller(event: ApiEvent): boolean {
+  const c = claimsFromEvent(event);
+  const roles: string[] = Array.isArray(c?.roles) ? c.roles : [];
+  return c?.type === "employee" && roles.includes("god");
+}
+
 export function parseBody<T>(event: ApiEvent, callback: ApiCallback): T | null {
   if (!event.body) {
     ResponseBuilder.badRequest(ErrorCode.InvalidInput, "Request body is required", callback);

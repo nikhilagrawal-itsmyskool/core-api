@@ -28,6 +28,33 @@
           method: post
           cors: true
 
+  refresh-employee:
+    handler: employee-auth-handler.refresh
+    name: ${self:service}-refresh-employee
+    events:
+      - http:
+          path: employee/refresh
+          method: post
+          cors: true
+
+  list-devices:
+    handler: employee-auth-handler.devices
+    name: ${self:service}-list-devices
+    events:
+      - http:
+          path: employee/devices
+          method: get
+          cors: true
+
+  revoke-device:
+    handler: employee-auth-handler.revoke
+    name: ${self:service}-revoke-device
+    events:
+      - http:
+          path: employee/devices/{deviceId}/revoke
+          method: post
+          cors: true
+
   change-password-employee:
     handler: employee-password-handler.changePassword
     name: ${self:service}-change-password-employee
