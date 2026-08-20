@@ -8,6 +8,7 @@ import { Weekday } from './assembly-constants';
 import { assemblyNodeService } from './assembly-node-service';
 import { assemblyThemeService } from './assembly-theme-service';
 import { assemblyHouseService } from './assembly-house-service';
+import { assemblyReferenceService } from './assembly-reference-service';
 import { isValidDate } from './assembly-common';
 import { getSignedPhotoUrl } from '../../shared/lib/file-storage';
 
@@ -27,6 +28,9 @@ function mondayOf(dateStr: string): string {
 interface ResolveOptions {
   // When true (the /me path), only a published plan yields an assembly.
   publishedPlanOnly?: boolean;
+  // When true (the STAFF /resolve path), attach the day's references (description +
+  // image). Never set on the student /me path — references are staff-only.
+  includeReferences?: boolean;
 }
 
 class AssemblyResolveService {
@@ -64,7 +68,7 @@ class AssemblyResolveService {
       return this.withHouseMode({
         planId, date, weekday, held: true, source: 'special', specialId: sp[0].uuid, title: sp[0].title,
         themes, nodes: this.toResolved(nested, [], date),
-      }, schoolId);
+      }, schoolId, opts);
     }
 
     // Otherwise the day-filtered template, but only if the plan runs that weekday.
@@ -77,14 +81,14 @@ class AssemblyResolveService {
 
     const nested = await assemblyNodeService.getFilteredTree(planId, schoolId, weekday);
     const result: ResolvedAssembly = { planId, date, weekday, held: true, source: 'template', themes, nodes: this.toResolved(nested, [], date) };
-    return this.withHouseMode(result, schoolId);
+    return this.withHouseMode(result, schoolId, opts);
   }
 
   // House-mode enrichment: attach the house on duty for the date's week and, when
   // an APPROVED roster exists, overlay it onto the template (fill 'roster' slots,
   // prune opted-out optional nodes, attach the day's anchors/owner). No-op for
   // template-mode schools. Specials get the house label but no roster overlay.
-  private async withHouseMode(result: ResolvedAssembly, schoolId: string): Promise<ResolvedAssembly> {
+  private async withHouseMode(result: ResolvedAssembly, schoolId: string, opts: ResolveOptions = {}): Promise<ResolvedAssembly> {
     // Birthday-spotlight is independent of house mode — fill it before the early return.
     await this.attachBirthdays(result, schoolId);
     const config = await assemblyHouseService.getConfig(schoolId);
@@ -129,6 +133,13 @@ class AssemblyResolveService {
     if (commanders.length) result.commanders = commanders;
     if (drummers.length) result.drummers = drummers;
     if (dayOwners.length) result.dayOwners = dayOwners;
+
+    // Day-level references — STAFF ONLY. Only attached on the staff /resolve path
+    // (includeReferences); the student /me path never receives them.
+    if (opts.includeReferences) {
+      const refs = await assemblyReferenceService.listForDate(schoolId, weekId, result.date);
+      if (refs.length) result.references = refs;
+    }
 
     // Roster only overlays the recurring template — specials are standalone.
     if (result.source === 'template') {

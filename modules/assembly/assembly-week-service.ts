@@ -10,6 +10,7 @@ import { WEEKDAY_VALUES, Weekday, WeekStatus, RESPONSIBLE_TARGET_TYPE_VALUES } f
 import { isValidDate, findEmployee, findClass, resolveStudentInfo } from './assembly-common';
 import { assemblyHouseService } from './assembly-house-service';
 import { assemblyNodeService } from './assembly-node-service';
+import { assemblyReferenceService } from './assembly-reference-service';
 const { generateShortUuid } = require('../../shared/util/generate-uuid.js');
 
 const iso = (d: Date) => d.toISOString().slice(0, 10);
@@ -110,6 +111,12 @@ class AssemblyWeekService {
       targetText: r.targetText || undefined, sortOrder: r.sortOrder,
     });
 
+    // Day-level references (description + image), grouped by date.
+    const refsByDate = new Map<string, any[]>();
+    for (const r of await assemblyReferenceService.listForWeek(schoolId, weekId)) {
+      (refsByDate.get(r.entryDate) || refsByDate.set(r.entryDate, []).get(r.entryDate)!).push(r);
+    }
+
     const days: RosterDayView[] = [];
     for (const { wd, date } of dates) {
       const slots = (await this.fillableSlots(week.planId, schoolId, wd)).map(s => {
@@ -128,6 +135,7 @@ class AssemblyWeekService {
         owners: dp.filter(r => r.role === 'day-owner').map(view),
         commanders: dp.filter(r => r.role === 'commander').map(view),
         drummers: dp.filter(r => r.role === 'drummer').map(view),
+        references: refsByDate.get(date) || [],
         slots,
       });
     }
@@ -272,6 +280,18 @@ class AssemblyWeekService {
       [userId, now, weekId],
     );
     return this.getWeek(weekId, schoolId);
+  }
+
+  // Load a week for editing its day-level attachments (references). Returns null when
+  // the week is missing (→ 404), throws when it is not editable. Also yields the set
+  // of the week's valid assembly dates so callers can validate an entry_date.
+  public async assertEditableWeek(weekId: string, schoolId: string): Promise<{ week: AssemblyWeek; validDates: Set<string> } | null> {
+    const week = await this.weekOr404(weekId, schoolId);
+    if (!week) return null;
+    if (!week.editable) throw new BusinessErrorResult(ErrorCode.BusinessError, this.notEditableReason(week));
+    const planDays = await this.planDays(week.planId, schoolId);
+    const validDates = new Set(WEEKDAY_VALUES.filter(wd => planDays.includes(wd)).map(wd => dateInWeek(week.weekStart, wd)));
+    return { week, validDates };
   }
 
   // ── Internal helpers ─────────────────────────────────────────────────────────

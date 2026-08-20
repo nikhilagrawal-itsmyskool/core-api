@@ -63,6 +63,14 @@ export type FillMode = typeof FILL_MODES[number];
 export type WeekStatus = typeof WEEK_STATUSES[number];
 export type ChecklistScope = typeof CHECKLIST_SCOPES[number];
 
+// Day-level roster references (description + one image). Image bytes live in the
+// shared file_storage under this entity type; same limits as homework photos.
+export const REFERENCE_ENTITY_TYPE = 'assembly_reference';
+export const REFERENCE_MAX_PER_DAY = 5;
+export const REFERENCE_IMAGE_MAX_BYTES = 10 * 1024 * 1024; // 10 MB
+export const REFERENCE_ALLOWED_MIME = ['image/jpeg', 'image/png', 'image/webp'] as const;
+export const REFERENCE_DESCRIPTION_MAX = 2000;
+
 export const DEFAULTS = {
   STATUS: 'active' as const,
   PUBLISH_DRAFT: 'draft' as PublishStatus,

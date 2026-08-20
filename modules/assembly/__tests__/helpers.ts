@@ -86,7 +86,10 @@ export async function cleanupPlan(planId: string): Promise<void> {
       }
       await p.query(`delete from assembly_grade where week_id = any($1)`, [weeks]);
     }
-    for (const t of ['assembly_roster_entry', 'assembly_roster_participant', 'assembly_week_unlock', 'assembly_checklist_tick', 'assembly_checklist_signoff']) {
+    // Day-level references + their image bytes in the shared file_storage.
+    const refFiles = (await p.query(`select file_id from assembly_roster_reference where week_id = any($1)`, [weeks])).rows.map(r => r.file_id);
+    if (refFiles.length) await p.query(`delete from file_storage where uuid = any($1)`, [refFiles]);
+    for (const t of ['assembly_roster_entry', 'assembly_roster_participant', 'assembly_roster_reference', 'assembly_week_unlock', 'assembly_checklist_tick', 'assembly_checklist_signoff']) {
       await p.query(`delete from ${t} where week_id = any($1)`, [weeks]);
     }
     await p.query(`delete from assembly_week where plan_id = $1`, [planId]);

@@ -357,6 +357,42 @@ describe('house mode: weekly roster', () => {
     expect(titlesOf(r.body.nodes)).not.toContain('Special Item'); // opted out
   });
 
+  it('adds day-level references (max 5, description+image), embeds them in getWeek, and surfaces them on staff resolve', async () => {
+    // 1x1 png; references require both a description and an image.
+    const PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+    const REF_MON = dateForWeekday(2026, 10, 1); // an independent Monday for this plan
+    const refWeek = (await api('POST', `/plans/${planId}/weeks`, { weekStart: REF_MON })).body.uuid;
+
+    // Add one; both fields are required, and the date must be an assembly day.
+    let r = await api('POST', `/weeks/${refWeek}/references`, { entryDate: REF_MON, description: 'Republic Day theme', mimeType: 'image/png', base64Data: PNG, fileName: 'a.png' });
+    expect(r.status).toBe(200);
+    expect(r.body).toHaveLength(1);
+    expect(r.body[0].description).toBe('Republic Day theme');
+    expect((await api('POST', `/weeks/${refWeek}/references`, { entryDate: REF_MON, description: '   ', mimeType: 'image/png', base64Data: PNG })).status).toBe(400);
+    expect((await api('POST', `/weeks/${refWeek}/references`, { entryDate: REF_MON, description: 'no image' })).status).toBe(400);
+    expect((await api('POST', `/weeks/${refWeek}/references`, { entryDate: TUE, description: 'wrong day', mimeType: 'image/png', base64Data: PNG })).status).toBe(400);
+
+    // Fill to 5; the 6th is rejected.
+    for (let i = 2; i <= 5; i++) r = await api('POST', `/weeks/${refWeek}/references`, { entryDate: REF_MON, description: `Ref ${i}`, mimeType: 'image/png', base64Data: PNG });
+    expect(r.body).toHaveLength(5);
+    expect((await api('POST', `/weeks/${refWeek}/references`, { entryDate: REF_MON, description: 'Ref 6', mimeType: 'image/png', base64Data: PNG })).status).toBe(400);
+
+    // getWeek embeds them per day; edit + remove work while draft.
+    const gwDay = (await api('GET', `/weeks/${refWeek}`)).body.days.find((d: any) => d.date === REF_MON);
+    expect(gwDay.references).toHaveLength(5);
+    const refId = gwDay.references[0].uuid;
+    expect((await api('PUT', `/weeks/${refWeek}/references/${refId}`, { description: 'Edited' })).body.find((x: any) => x.uuid === refId).description).toBe('Edited');
+    expect((await api('DELETE', `/weeks/${refWeek}/references/${refId}`)).body).toHaveLength(4);
+
+    // Approve → locked (no more edits); staff resolve carries the references.
+    await api('POST', `/weeks/${refWeek}/submit`);
+    expect((await api('POST', `/weeks/${refWeek}/approve`)).body.status).toBe('approved');
+    expect((await api('POST', `/weeks/${refWeek}/references`, { entryDate: REF_MON, description: 'after approve', mimeType: 'image/png', base64Data: PNG })).status).toBe(400);
+    const res = await api('GET', `/resolve?planId=${planId}&date=${REF_MON}`);
+    expect(res.body.references).toHaveLength(4);
+    expect(res.body.references[0].description).toBeTruthy();
+  }, 30000);
+
   it('blocks edits once approved, then re-opens on unlock', async () => {
     const blocked = await api('PUT', `/weeks/${weekId}/roster`, { entries: [] });
     expect(blocked.status).toBe(400);

@@ -14,7 +14,8 @@ class AssemblyResolveHandler {
       const q = event.queryStringParameters || {};
       if (!q.planId) { ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'planId is required', callback); return; }
       if (!q.date) { ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'date is required', callback); return; }
-      const result = await assemblyResolveService.resolve(q.planId, q.date, ctx.schoolId);
+      // Staff surface: include day-level references (staff-only; the student /me path omits them).
+      const result = await assemblyResolveService.resolve(q.planId, q.date, ctx.schoolId, { includeReferences: true });
       if (!result) { ResponseBuilder.notFound(ErrorCode.InvalidId, 'Plan not found', callback); return; }
       ResponseBuilder.ok(result, callback);
     } catch (err: any) {

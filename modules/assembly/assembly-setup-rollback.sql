@@ -16,6 +16,7 @@ drop table if exists assembly_checklist_tick;
 drop table if exists assembly_checklist_item;
 
 -- House mode Phase B (weekly roster)
+drop table if exists assembly_roster_reference;
 drop table if exists assembly_week_unlock;
 drop table if exists assembly_roster_participant;
 drop table if exists assembly_roster_entry;

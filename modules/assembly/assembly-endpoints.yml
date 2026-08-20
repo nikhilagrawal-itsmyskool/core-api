@@ -100,6 +100,53 @@
           path: weeks/{id}/roster
           method: put
           cors: true
+
+  # ── Day-level references (description + one image, up to 5 per day) ──────────
+  list-week-references:
+    handler: assembly-reference-handler.list
+    name: ${self:service}-list-week-references
+    events:
+      - http:
+          path: weeks/{id}/references
+          method: get
+          cors: true
+  add-week-reference:
+    handler: assembly-reference-handler.add
+    name: ${self:service}-add-week-reference
+    memorySize: 512
+    timeout: 20
+    events:
+      - http:
+          path: weeks/{id}/references
+          method: post
+          cors: true
+  update-week-reference:
+    handler: assembly-reference-handler.update
+    name: ${self:service}-update-week-reference
+    events:
+      - http:
+          path: weeks/{id}/references/{refId}
+          method: put
+          cors: true
+  delete-week-reference:
+    handler: assembly-reference-handler.remove
+    name: ${self:service}-delete-week-reference
+    events:
+      - http:
+          path: weeks/{id}/references/{refId}
+          method: delete
+          cors: true
+  get-reference-file:
+    handler: assembly-reference-handler.getFile
+    name: ${self:service}-get-reference-file
+    memorySize: 512
+    timeout: 20
+    events:
+      - http:
+          path: references/{id}/file
+          method: get
+          cors: true
+
   submit-week:
     handler: assembly-week-handler.submit
     name: ${self:service}-submit-week
@@ -699,6 +746,32 @@
       - http:
           path: me/assembly/weeks/{id}/roster
           method: put
+          cors: true
+  my-assembly-add-reference:
+    handler: assembly-duties-handler.addReference
+    name: ${self:service}-my-assembly-add-reference
+    memorySize: 512
+    timeout: 20
+    events:
+      - http:
+          path: me/assembly/weeks/{id}/references
+          method: post
+          cors: true
+  my-assembly-update-reference:
+    handler: assembly-duties-handler.updateReference
+    name: ${self:service}-my-assembly-update-reference
+    events:
+      - http:
+          path: me/assembly/weeks/{id}/references/{refId}
+          method: put
+          cors: true
+  my-assembly-delete-reference:
+    handler: assembly-duties-handler.removeReference
+    name: ${self:service}-my-assembly-delete-reference
+    events:
+      - http:
+          path: me/assembly/weeks/{id}/references/{refId}
+          method: delete
           cors: true
   my-assembly-submit-week:
     handler: assembly-duties-handler.submit

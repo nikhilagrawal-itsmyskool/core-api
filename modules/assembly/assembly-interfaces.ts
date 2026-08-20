@@ -117,6 +117,31 @@ export interface RosterSlot {
   participants: RosterParticipantView[]; // speakers / performers / group
 }
 
+// A day-level assembly reference: a short description + one image. Up to 5 per day.
+// imageUrl is a presigned GET (prod) or null (local dev — fetch bytes via getFile).
+export interface RosterReferenceView {
+  uuid: string;
+  entryDate: string;    // yyyy-mm-dd
+  sortOrder: number;
+  description: string;
+  fileName?: string;
+  mimeType?: string;
+  sizeBytes?: number;
+  imageUrl?: string | null;
+  fileId?: string;
+}
+
+export interface AddReferenceRequest {
+  entryDate: string;
+  description: string;
+  fileName?: string;
+  mimeType?: string;
+  base64Data: string;
+}
+export interface UpdateReferenceRequest {
+  description: string;
+}
+
 export interface RosterDayView {
   date: string;         // yyyy-mm-dd
   weekday: Weekday;
@@ -124,6 +149,7 @@ export interface RosterDayView {
   owners: RosterParticipantView[];      // scope='day', role 'day-owner'
   commanders: RosterParticipantView[];  // scope='day', role 'commander' (student)
   drummers: RosterParticipantView[];    // scope='day', role 'drummer' (student)
+  references: RosterReferenceView[];    // day-level references (description + image)
   slots: RosterSlot[];
 }
 
@@ -616,6 +642,7 @@ export interface ResolvedAssembly {
   commanders?: ResolvedAnchor[]; // assembly commander(s), students
   drummers?: ResolvedAnchor[];   // assembly drummer(s), students
   dayOwners?: { employeeId?: string; name?: string }[];
+  references?: RosterReferenceView[]; // day-level references (STAFF ONLY; approved weeks)
 }
 
 export interface ResolvedAnchor {

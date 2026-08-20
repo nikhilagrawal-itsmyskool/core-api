@@ -402,6 +402,29 @@ create table if not exists assembly_week_unlock (
 );
 create index if not exists idx_assembly_week_unlock_week on assembly_week_unlock(week_id);
 
+-- Table 19b: assembly_roster_reference (day-level references: description + one image)
+-- Up to 5 per (week, date). Image bytes live in the shared file_storage
+-- (entity_type='assembly_reference'); this row holds the metadata + file_id.
+-- Editable while the week is a draft; visible to staff once the week is approved.
+create table if not exists assembly_roster_reference (
+    uuid varchar(12) primary key,
+    school_id varchar(12) not null,
+    week_id varchar(12) not null,
+    entry_date date not null,
+    sort_order integer not null,
+    description text not null,
+    file_id varchar(12) not null,
+    file_name varchar(256),
+    mime_type varchar(128),
+    size_bytes integer,
+    status varchar(16) not null check (status in ('active', 'deleted')),
+    createdby_userid varchar(12),
+    created_at timestamp(0),
+    updatedby_userid varchar(12),
+    updated_at timestamp(0)
+);
+create index if not exists idx_assembly_roster_reference_day on assembly_roster_reference(week_id, entry_date) where status = 'active';
+
 -- ---------------------------------------------------------------------------
 -- House mode Phase C: the execution checklist (configurable; recorded, not gating).
 -- ---------------------------------------------------------------------------

@@ -7,7 +7,8 @@ import { assemblyDutiesService } from './assembly-duties-service';
 import { assemblyWeekService } from './assembly-week-service';
 import { assemblyChecklistService } from './assembly-checklist-service';
 import { assemblyGradingService } from './assembly-grading-service';
-import { SaveRosterRequest, SaveChecklistRequest, SignoffRequest, SaveGradeRequest } from './assembly-interfaces';
+import { assemblyReferenceService } from './assembly-reference-service';
+import { SaveRosterRequest, SaveChecklistRequest, SignoffRequest, SaveGradeRequest, AddReferenceRequest, UpdateReferenceRequest } from './assembly-interfaces';
 
 const iso = (d: Date) => d.toISOString().slice(0, 10);
 const istToday = () => iso(new Date(Date.now() + 5.5 * 3600 * 1000));
@@ -59,6 +60,28 @@ class AssemblyDutiesHandler {
   public recall = (event: ApiEvent, _c: ApiContext, callback: ApiCallback) => {
     _c.callbackWaitsForEmptyEventLoop = false;
     return this.guardedWeek(event, callback, (id, s, e) => assemblyWeekService.recall(id, s, e)).catch((err) => ResponseBuilder.handleError(err, callback));
+  };
+
+  // POST /me/assembly/weeks/{id}/references — add a day-level reference (my house).
+  public addReference = (event: ApiEvent, _c: ApiContext, callback: ApiCallback) => {
+    _c.callbackWaitsForEmptyEventLoop = false;
+    const body = parseBody<AddReferenceRequest>(event, callback); if (!body) return;
+    return this.guardedWeek(event, callback, (id, s, e) => assemblyReferenceService.add(s, e, id, body)).catch((err) => ResponseBuilder.handleError(err, callback));
+  };
+
+  // PUT /me/assembly/weeks/{id}/references/{refId} — edit a reference's description.
+  public updateReference = (event: ApiEvent, _c: ApiContext, callback: ApiCallback) => {
+    _c.callbackWaitsForEmptyEventLoop = false;
+    const refId = requireParam(event, 'refId', callback); if (!refId) return;
+    const body = parseBody<UpdateReferenceRequest>(event, callback); if (!body) return;
+    return this.guardedWeek(event, callback, (id, s, e) => assemblyReferenceService.update(s, e, id, refId, body)).catch((err) => ResponseBuilder.handleError(err, callback));
+  };
+
+  // DELETE /me/assembly/weeks/{id}/references/{refId} — remove a reference.
+  public removeReference = (event: ApiEvent, _c: ApiContext, callback: ApiCallback) => {
+    _c.callbackWaitsForEmptyEventLoop = false;
+    const refId = requireParam(event, 'refId', callback); if (!refId) return;
+    return this.guardedWeek(event, callback, (id, s, e) => assemblyReferenceService.remove(s, e, id, refId)).catch((err) => ResponseBuilder.handleError(err, callback));
   };
 
   public getChecklist = (event: ApiEvent, _c: ApiContext, callback: ApiCallback) => {
@@ -133,6 +156,9 @@ export const getWeek = handler.getWeek;
 export const saveRoster = handler.saveRoster;
 export const submit = handler.submit;
 export const recall = handler.recall;
+export const addReference = handler.addReference;
+export const updateReference = handler.updateReference;
+export const removeReference = handler.removeReference;
 export const getChecklist = handler.getChecklist;
 export const saveChecklist = handler.saveChecklist;
 export const signoff = handler.signoff;
