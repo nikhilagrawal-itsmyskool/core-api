@@ -7,6 +7,9 @@ import {
   UpdateStudentRequest,
   StudentDetail,
   EnrollmentRow,
+  BulkClassRosterRow,
+  BulkUpdateRequest,
+  BulkUpdateResult,
 } from './student-interfaces';
 import { DEFAULTS, DEFAULT_PASSWORD } from './student-constants';
 import { studentGuardianService } from './student-guardian-service';
@@ -113,10 +116,10 @@ class StudentAdminService {
          communication_preference, old_admission_number, house_id,
          student_email, student_mobile, student_whatsapp, category_code, nationality_code,
          mother_tongue_code, blood_group_code, aadhaar_number, previous_school,
-         admission_date, withdrawal_date, withdrawal_remarks, status,
+         admission_date, withdrawal_date, withdrawal_remarks, exam_only, exam_only_reason, status,
          school_id, createdby_userid, created_at)
         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
-                $16, $17, $18, $19, $20, $21, $22, $23, $24, $25)
+                $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27)
       `,
       [
         uuid,
@@ -140,6 +143,8 @@ class StudentAdminService {
         data.admissionDate || null,
         data.withdrawalDate || null,
         data.withdrawalRemarks || null,
+        data.examOnly ?? false,
+        data.examOnlyReason || null,
         DEFAULTS.STATUS,
         schoolId,
         userId,
@@ -238,6 +243,8 @@ class StudentAdminService {
     if (data.admissionDate !== undefined) set('admission_date', data.admissionDate);
     if (data.withdrawalDate !== undefined) set('withdrawal_date', data.withdrawalDate);
     if (data.withdrawalRemarks !== undefined) set('withdrawal_remarks', data.withdrawalRemarks);
+    if (data.examOnly !== undefined) set('exam_only', data.examOnly);
+    if (data.examOnlyReason !== undefined) set('exam_only_reason', data.examOnlyReason);
     if (data.status !== undefined) set('status', data.status);
 
     if (fields.length > 0) {
@@ -290,6 +297,218 @@ class StudentAdminService {
     return rows.length > 0;
   }
 
+  // ---- Bulk class edit ----
+
+  // The roster the bulk-edit grid loads: every active student in the class for the
+  // given year, ordered by admission date (so rows line up with increasing roll
+  // number), each with roll / house / father-mother-guardian contacts. Contacts are
+  // the first active guardian per relation, falling back to the denormalised
+  // student.* columns for legacy students with no guardian row.
+  public async bulkClassRoster(
+    schoolId: string,
+    classId: string,
+    academicYearId: string
+  ): Promise<BulkClassRosterRow[]> {
+    return (await DB.query(
+      singleLineString`
+        select
+          s.uuid, s.admission_number, s.name, s.admission_date, s.house_id,
+          sc.roll_number,
+          f.uuid as father_guardian_id,
+          coalesce(f.mobile, s.father_mobile) as father_mobile,
+          coalesce(f.whatsapp, s.father_whatsapp) as father_whatsapp,
+          m.uuid as mother_guardian_id,
+          coalesce(m.mobile, s.mother_mobile) as mother_mobile,
+          coalesce(m.whatsapp, s.mother_whatsapp) as mother_whatsapp,
+          g.uuid as guardian_guardian_id,
+          coalesce(g.mobile, s.guardian_mobile) as guardian_mobile,
+          coalesce(g.whatsapp, s.guardian_whatsapp) as guardian_whatsapp
+        from student_class sc
+        join student s on s.uuid = sc.student_id and s.school_id = sc.school_id
+        left join lateral (
+          select uuid, mobile, whatsapp from student_guardian
+          where student_id = s.uuid and school_id = s.school_id and status = 'active' and relation = 'father'
+          order by created_at limit 1
+        ) f on true
+        left join lateral (
+          select uuid, mobile, whatsapp from student_guardian
+          where student_id = s.uuid and school_id = s.school_id and status = 'active' and relation = 'mother'
+          order by created_at limit 1
+        ) m on true
+        left join lateral (
+          select uuid, mobile, whatsapp from student_guardian
+          where student_id = s.uuid and school_id = s.school_id and status = 'active' and relation = 'guardian'
+          order by created_at limit 1
+        ) g on true
+        where sc.school_id = $1 and sc.class_id = $2 and sc.academic_year_id = $3
+          and (sc.status is null or sc.status <> 'deleted') and s.status <> 'deleted'
+        order by s.admission_date asc nulls last, s.admission_number asc
+      `,
+      [schoolId, classId, academicYearId]
+    )) as BulkClassRosterRow[];
+  }
+
+  private isUniqueViolation(e: any): boolean {
+    return !!e && (e.code === '23505' || /duplicate key|unique constraint/i.test(String(e?.message || '')));
+  }
+
+  // Apply staged grid edits for one class + year. Roll numbers, house and contacts
+  // are written independently per student and failures are reported per row (a
+  // duplicate roll never loses the rest). Roll numbers get a validate-then-write pass
+  // so a re-sequencing / swap inside the selection can't trip the unique index, and a
+  // roll that collides with a student OUTSIDE the selection is reported, not forced.
+  public async bulkUpdate(
+    data: BulkUpdateRequest,
+    schoolId: string,
+    userId: string
+  ): Promise<BulkUpdateResult> {
+    const { classId, academicYearId, items } = data;
+    if (!classId || !academicYearId) {
+      throw new BusinessErrorResult(ErrorCode.BusinessError, 'classId and academicYearId are required');
+    }
+    await this.assertBelongsToSchool('class', classId, schoolId, 'class');
+    await this.assertBelongsToSchool('academic_year', academicYearId, schoolId, 'academic year');
+    if (!Array.isArray(items) || items.length === 0) {
+      return { updated: 0, failed: 0, results: [] };
+    }
+
+    const errors = new Map<string, string>();
+    const touched = new Set<string>();
+
+    // Full roster for the class+year (not just the selection) — enrolment row + its
+    // current roll, needed both to target roll writes and to validate roll conflicts
+    // against students that weren't edited.
+    const enrolRows = await DB.query(
+      singleLineString`
+        select student_id, uuid, roll_number from student_class
+        where school_id = $1 and class_id = $2 and academic_year_id = $3
+          and (status is null or status <> 'deleted')
+      `,
+      [schoolId, classId, academicYearId]
+    );
+    const enrolByStudent = new Map<string, { uuid: string; roll: number | null }>();
+    for (const e of enrolRows) enrolByStudent.set(e.studentId, { uuid: e.uuid, roll: e.rollNumber ?? null });
+
+    // Validate the houses referenced by the batch once.
+    const houseIds = Array.from(new Set(items.map((it) => it.houseId).filter((h): h is string => !!h)));
+    const validHouses = new Set<string>();
+    if (houseIds.length > 0) {
+      const rows = await DB.query(
+        `select uuid from house where school_id = $1 and status = 'active' and uuid = any($2)`,
+        [schoolId, houseIds]
+      );
+      for (const r of rows) validHouses.add(r.uuid);
+    }
+
+    // ---- Roll numbers: build the final roll map for the whole class, then resolve
+    // conflicts by reverting the (batch) students involved, until it's collision-free.
+    const finalRoll = new Map<string, number | null>();
+    for (const [sid, info] of enrolByStudent) finalRoll.set(sid, info.roll);
+    const changers = new Set<string>(); // batch students whose roll change still stands
+    for (const it of items) {
+      if (it.rollNumber === undefined) continue;
+      if (!enrolByStudent.has(it.studentId)) continue; // handled in the per-student pass
+      finalRoll.set(it.studentId, it.rollNumber === null ? null : it.rollNumber);
+      changers.add(it.studentId);
+    }
+    // Iteratively drop conflicting changers (converges: each pass reverts ≥1 changer).
+    for (;;) {
+      const byRoll = new Map<string, string[]>();
+      for (const [sid, roll] of finalRoll) {
+        if (roll === null || roll === undefined) continue;
+        const k = String(roll);
+        const arr = byRoll.get(k);
+        if (arr) arr.push(sid); else byRoll.set(k, [sid]);
+      }
+      let reverted = false;
+      for (const [k, sids] of byRoll) {
+        if (sids.length < 2) continue;
+        for (const sid of sids) {
+          if (changers.has(sid)) {
+            errors.set(sid, `Roll number ${k} is already taken in this class`);
+            finalRoll.set(sid, enrolByStudent.get(sid)!.roll); // revert to current
+            changers.delete(sid);
+            reverted = true;
+          }
+        }
+      }
+      if (!reverted) break;
+    }
+
+    // Apply the surviving roll changes: clear them all first so a permutation writes
+    // cleanly, then set. The set is now guaranteed collision-free.
+    const rollWriterIds = items
+      .filter((it) => changers.has(it.studentId))
+      .map((it) => enrolByStudent.get(it.studentId)!.uuid);
+    if (rollWriterIds.length > 0) {
+      await DB.query(
+        `update student_class set roll_number = null, updatedby_userid = $1, updated_at = $2 where uuid = any($3) and school_id = $4`,
+        [userId, new Date(), rollWriterIds, schoolId]
+      );
+      for (const it of items) {
+        if (!changers.has(it.studentId)) continue;
+        const enrol = enrolByStudent.get(it.studentId)!;
+        const roll = finalRoll.get(it.studentId) ?? null;
+        try {
+          await DB.query(
+            `update student_class set roll_number = $1, updatedby_userid = $2, updated_at = $3 where uuid = $4 and school_id = $5`,
+            [roll, userId, new Date(), enrol.uuid, schoolId]
+          );
+          touched.add(it.studentId);
+        } catch (e: any) {
+          // Should not happen post-validation; restore the original roll so a clear
+          // isn't left behind, and report it.
+          errors.set(it.studentId, this.isUniqueViolation(e) ? `Roll number ${roll} is already taken in this class` : 'Failed to set roll number');
+          await DB.query(
+            `update student_class set roll_number = $1, updatedby_userid = $2, updated_at = $3 where uuid = $4 and school_id = $5`,
+            [enrol.roll, userId, new Date(), enrol.uuid, schoolId]
+          ).catch(() => undefined);
+        }
+      }
+    }
+
+    // ---- House + contacts, independent per student ----
+    for (const it of items) {
+      const sid = it.studentId;
+      if (!enrolByStudent.has(sid)) {
+        errors.set(sid, 'Not enrolled in this class for the selected year');
+        continue;
+      }
+      if (it.houseId !== undefined) {
+        if (it.houseId && !validHouses.has(it.houseId)) {
+          errors.set(sid, 'Invalid house');
+        } else {
+          try {
+            await DB.query(
+              `update student set house_id = $1, updatedby_userid = $2, updated_at = $3 where uuid = $4 and school_id = $5 and status <> 'deleted'`,
+              [it.houseId || null, userId, new Date(), sid, schoolId]
+            );
+            touched.add(sid);
+          } catch {
+            errors.set(sid, 'Failed to set house');
+          }
+        }
+      }
+      if (it.contacts) {
+        try {
+          await studentGuardianService.setContacts(sid, it.contacts, schoolId, userId);
+          touched.add(sid);
+        } catch (e: any) {
+          errors.set(sid, e?.message || 'Failed to update contacts');
+        }
+      }
+    }
+
+    const results = items.map((it) => ({
+      studentId: it.studentId,
+      ok: !errors.has(it.studentId),
+      error: errors.get(it.studentId),
+    }));
+    const failed = results.filter((r) => !r.ok).length;
+    const updated = results.filter((r) => r.ok && touched.has(r.studentId)).length;
+    return { updated, failed, results };
+  }
+
   public async getDetail(id: string, schoolId: string): Promise<StudentDetail | null> {
     const rows = await DB.query(
       singleLineString`
@@ -299,7 +518,7 @@ class StudentAdminService {
           s.house_id, h.name as house_name, h.color as house_color,
           s.student_email, s.student_mobile, s.student_whatsapp, s.category_code, s.nationality_code,
           s.mother_tongue_code, s.blood_group_code, s.aadhaar_number, s.previous_school,
-          s.admission_date, s.withdrawal_date, s.withdrawal_remarks,
+          s.admission_date, s.withdrawal_date, s.withdrawal_remarks, s.exam_only, s.exam_only_reason,
           cur.academic_year_id as current_academic_year_id,
           cur.academic_year_name as current_academic_year_name,
           cur.class_id as current_class_id,

@@ -106,6 +106,12 @@ alter table student add column if not exists admission_date date;              -
 alter table student add column if not exists withdrawal_date date;
 alter table student add column if not exists withdrawal_remarks varchar(512);
 
+-- exam_only: student registered here but studying at another school — enrolled with
+-- us only to sit exams. A student attribute (not a fee concept). The fees module reads
+-- this flag to skip demand generation and to find/cancel demands for these students.
+alter table student add column if not exists exam_only boolean;
+alter table student add column if not exists exam_only_reason varchar(256);
+
 -- student_class.join_date — "Date Of Joining" for that enrollment.
 alter table student_class add column if not exists join_date date;
 

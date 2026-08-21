@@ -108,6 +108,24 @@ class FeesReportHandler {
       ResponseBuilder.ok(result, callback);
     } catch (err: any) { ResponseBuilder.handleError(err, callback); }
   };
+
+  public examOnlyStudents = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const rc = await resolveSchool(event, callback); if (!rc) return;
+      const result = await feesReportService.examOnlyStudents(rc.schoolId, event.queryStringParameters || {});
+      ResponseBuilder.ok(result, callback);
+    } catch (err: any) { ResponseBuilder.handleError(err, callback); }
+  };
+
+  public cancelExamOnlyDemands = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const rc = await resolveSchool(event, callback); if (!rc) return;
+      const result = await feesReportService.cancelExamOnlyDemands(rc.schoolId, JSON.parse(event.body || '{}'), rc.userId);
+      ResponseBuilder.ok(result, callback);
+    } catch (err: any) { ResponseBuilder.handleError(err, callback); }
+  };
 }
 
 const handler = new FeesReportHandler();
@@ -122,3 +140,5 @@ export const withdraw = guard(FEE_ACTIONS['fees-report-handler.withdraw'], handl
 export const duesByYear = guard(FEE_ACTIONS['fees-report-handler.duesByYear'], handler.duesByYear);
 export const studentConcessions = guard(FEE_ACTIONS['fees-report-handler.studentConcessions'], handler.studentConcessions);
 export const fineExemptions = guard(FEE_ACTIONS['fees-report-handler.fineExemptions'], handler.fineExemptions);
+export const examOnlyStudents = guard(FEE_ACTIONS['fees-report-handler.examOnlyStudents'], handler.examOnlyStudents);
+export const cancelExamOnlyDemands = guard(FEE_ACTIONS['fees-report-handler.cancelExamOnlyDemands'], handler.cancelExamOnlyDemands);

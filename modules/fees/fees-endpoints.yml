@@ -355,6 +355,16 @@
     name: ${self:service}-fine-exemptions
     events:
       - http: { path: 'reports/fine-exemptions', method: get, cors: true }
+  exam-only-students:
+    handler: fees-report-handler.examOnlyStudents
+    name: ${self:service}-exam-only-students
+    events:
+      - http: { path: 'reports/exam-only-students', method: get, cors: true }
+  exam-only-cancel:
+    handler: fees-report-handler.cancelExamOnlyDemands
+    name: ${self:service}-exam-only-cancel
+    events:
+      - http: { path: 'reports/exam-only-cancel', method: post, cors: true }
 
   # ---- Migration ----
   migration-import:

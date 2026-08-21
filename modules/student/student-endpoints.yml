@@ -234,6 +234,25 @@
           method: post
           cors: true
 
+  # ---- Bulk class edit (roster load + apply) — literal paths, before '{id}' ----
+  bulk-class-roster:
+    handler: student-bulk-handler.roster
+    name: ${self:service}-bulk-class-roster
+    events:
+      - http:
+          path: bulk-class
+          method: get
+          cors: true
+
+  bulk-class-apply:
+    handler: student-bulk-handler.apply
+    name: ${self:service}-bulk-class-apply
+    events:
+      - http:
+          path: bulk-update
+          method: post
+          cors: true
+
   # ---- Guardians (nested under a student) ----
   list-guardians:
     handler: student-guardian-handler.list

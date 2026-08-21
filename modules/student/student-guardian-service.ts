@@ -1,7 +1,7 @@
 import { DB, singleLineString } from '../../shared/lib/db';
 import { BusinessErrorResult } from '../../shared/lib/errors';
 import { ErrorCode } from '../../shared/lib/error-codes';
-import { Guardian, CreateGuardianRequest, UpdateGuardianRequest } from './student-interfaces';
+import { Guardian, CreateGuardianRequest, UpdateGuardianRequest, BulkContacts } from './student-interfaces';
 import { GUARDIAN_RELATIONS, DEFAULTS } from './student-constants';
 const { generateShortUuid } = require('../../shared/util/generate-uuid.js');
 
@@ -204,6 +204,75 @@ class StudentGuardianService {
     }
     if (rows.length > 0) await this.syncStudentContacts(rows[0].studentId, schoolId, userId);
     return rows.length > 0 ? rows[0] : null;
+  }
+
+  // Bulk-edit helper: set a student's father / mother / guardian phone numbers in
+  // one shot. For each relation present in `contacts`, updates the FIRST active
+  // guardian row (by created_at — the same row syncStudentContacts mirrors), or
+  // creates one with a default name ("Father"/"Mother"/"Guardian") when the student
+  // has none yet (Decision 1 of the bulk-edit design). Only the fields present in
+  // each relation object are written; the contact mirror runs once at the end so the
+  // denormalised student.*_mobile/whatsapp columns the comms ladder reads stay in
+  // step. No-op relations (nothing to create) are skipped.
+  public async setContacts(
+    studentId: string,
+    contacts: BulkContacts,
+    schoolId: string,
+    userId: string
+  ): Promise<void> {
+    const norm = (v: any) => (v !== undefined && v !== null && String(v).trim() ? String(v).trim() : null);
+    const has = (o: any, k: string) => Object.prototype.hasOwnProperty.call(o, k);
+    let changed = false;
+
+    for (const rel of ['father', 'mother', 'guardian'] as const) {
+      const c = (contacts as any)[rel];
+      if (!c) continue;
+      const setMobile = has(c, 'mobile');
+      const setWhatsapp = has(c, 'whatsapp');
+      if (!setMobile && !setWhatsapp) continue;
+
+      const existing = await DB.query(
+        singleLineString`
+          select uuid from student_guardian
+          where student_id = $1 and school_id = $2 and status = 'active' and relation = $3
+          order by created_at limit 1
+        `,
+        [studentId, schoolId, rel]
+      );
+
+      if (existing.length > 0) {
+        const fields: string[] = [];
+        const params: any[] = [];
+        const set = (col: string, val: any) => { params.push(val); fields.push(`${col} = $${params.length}`); };
+        if (setMobile) set('mobile', norm(c.mobile));
+        if (setWhatsapp) set('whatsapp', norm(c.whatsapp));
+        set('updatedby_userid', userId);
+        set('updated_at', new Date());
+        params.push(existing[0].uuid, schoolId);
+        await DB.query(
+          `update student_guardian set ${fields.join(', ')} where uuid = $${params.length - 1} and school_id = $${params.length} and status = 'active'`,
+          params
+        );
+        changed = true;
+      } else {
+        const mobile = setMobile ? norm(c.mobile) : null;
+        const whatsapp = setWhatsapp ? norm(c.whatsapp) : null;
+        if (!mobile && !whatsapp) continue; // nothing worth a new record
+        const label = rel.charAt(0).toUpperCase() + rel.slice(1); // Father / Mother / Guardian
+        await DB.query(
+          singleLineString`
+            insert into student_guardian
+            (uuid, school_id, student_id, relation, name, mobile, whatsapp,
+             is_primary_contact, status, createdby_userid, created_at)
+            values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+          `,
+          [generateShortUuid(12), schoolId, studentId, rel, label, mobile, whatsapp, null, DEFAULTS.STATUS, userId, new Date()]
+        );
+        changed = true;
+      }
+    }
+
+    if (changed) await this.syncStudentContacts(studentId, schoolId, userId);
   }
 
   public async delete(id: string, schoolId: string, userId: string): Promise<boolean> {

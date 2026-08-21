@@ -16,6 +16,9 @@ export const STUDENT_ACTIONS: Record<string, string> = {
   'student-admin-handler.list': STUDENT_VIEW,
   'student-admin-handler.commsSummary': STUDENT_VIEW,
   'student-admin-handler.getById': STUDENT_VIEW,
+  // bulk-edit roster load is a write-screen surface (reveals unmasked contacts to
+  // admin/god) — gate at manage, same as the credentials view.
+  'student-bulk-handler.roster': STUDENT_MANAGE,
   'house-handler.list': STUDENT_VIEW,
   'house-handler.getById': STUDENT_VIEW,
   'house-handler.listTeachers': STUDENT_VIEW,
@@ -45,6 +48,7 @@ export const STUDENT_ACTIONS: Record<string, string> = {
   'promotion-handler.promote': STUDENT_MANAGE,
   'promotion-handler.promoteClass': STUDENT_MANAGE,
   'promotion-handler.graduate': STUDENT_MANAGE,
+  'student-bulk-handler.apply': STUDENT_MANAGE,
   'student-guardian-handler.create': STUDENT_MANAGE,
   'student-guardian-handler.update': STUDENT_MANAGE,
   'student-guardian-handler.remove': STUDENT_MANAGE,

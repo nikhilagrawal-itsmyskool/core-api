@@ -101,6 +101,9 @@ export const FEE_ACTIONS: Record<string, string> = {
   'fees-report-handler.duesByYear': FEE_VIEW,
   'fees-report-handler.studentConcessions': FEE_VIEW,
   'fees-report-handler.fineExemptions': FEE_VIEW,
+  // Exam-only (studying elsewhere): list = view; cancel demands changes fee status → manage
+  'fees-report-handler.examOnlyStudents': FEE_VIEW,
+  'fees-report-handler.cancelExamOnlyDemands': FEE_MANAGE,
 
   // Migration (god-only)
   'fees-migration-handler.importData': MIGRATION_IMPORT,

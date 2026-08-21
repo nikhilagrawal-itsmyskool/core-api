@@ -41,6 +41,9 @@ export interface StudentCoreFields {
   admissionDate?: string;
   withdrawalDate?: string;
   withdrawalRemarks?: string;
+  // exam_only: enrolled here but studying elsewhere — registered only to sit exams
+  examOnly?: boolean;
+  examOnlyReason?: string;
 }
 
 export interface CreateStudentRequest extends StudentCoreFields {
@@ -92,6 +95,8 @@ export interface StudentDetail {
   admissionDate?: string;
   withdrawalDate?: string;
   withdrawalRemarks?: string;
+  examOnly?: boolean;
+  examOnlyReason?: string;
   currentAcademicYearId?: string;
   currentAcademicYearName?: string;
   currentClassId?: string;
@@ -326,4 +331,70 @@ export interface PromotionResult {
   done: number;
   skipped: number;
   results: PromotionResultRow[];
+}
+
+// ---- Bulk class edit ----
+
+// One roster row for the bulk-edit grid: the student's current values for the
+// selected class + academic year, ordered by admission date. Contact numbers come
+// from the first active guardian per relation, falling back to the denormalised
+// student.* columns for legacy students who have no backing guardian row. The
+// *GuardianId is that guardian row's uuid (null when only the denormalised value
+// exists) so a save can target the right row.
+export interface BulkClassRosterRow {
+  uuid: string;
+  admissionNumber?: string;
+  name: string;
+  admissionDate?: string;
+  rollNumber?: number;
+  houseId?: string | null;
+  fatherGuardianId?: string | null;
+  fatherMobile?: string;
+  fatherWhatsapp?: string;
+  motherGuardianId?: string | null;
+  motherMobile?: string;
+  motherWhatsapp?: string;
+  guardianGuardianId?: string | null;
+  guardianMobile?: string;
+  guardianWhatsapp?: string;
+}
+
+// A contact edit for one relation. A field present means "write this value"
+// (empty string / null clears it); an absent field is left untouched.
+export interface BulkContactValue {
+  mobile?: string | null;
+  whatsapp?: string | null;
+}
+
+export interface BulkContacts {
+  father?: BulkContactValue;
+  mother?: BulkContactValue;
+  guardian?: BulkContactValue;
+}
+
+// One student's staged edits. Every field is optional — only what the user changed
+// is sent. rollNumber null clears the roll; houseId null clears the house.
+export interface BulkUpdateItem {
+  studentId: string;
+  rollNumber?: number | null;
+  houseId?: string | null;
+  contacts?: BulkContacts;
+}
+
+export interface BulkUpdateRequest {
+  classId: string;
+  academicYearId: string;
+  items: BulkUpdateItem[];
+}
+
+export interface BulkUpdateResultRow {
+  studentId: string;
+  ok: boolean;
+  error?: string;
+}
+
+export interface BulkUpdateResult {
+  updated: number;
+  failed: number;
+  results: BulkUpdateResultRow[];
 }

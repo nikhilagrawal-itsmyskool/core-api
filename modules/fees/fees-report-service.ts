@@ -319,6 +319,98 @@ class FeesReportService {
     return { studentId, withdrawalDate: date, cyclesVoided: toVoid.length, amountVoided: Math.round(amount) };
   }
 
+  // ---- Exam-only students (registered here, studying elsewhere) ----
+
+  // List students flagged exam_only on the student record, with their open demand for
+  // the year (net of concessions/waivers/payments) and a count of open charge lines.
+  // This is the working set for the "Fee exempt" screen — the flag is a student
+  // attribute; here we surface the fee consequence.
+  public async examOnlyStudents(schoolId: string, q: any) {
+    const ay = q?.academicYearId;
+    if (!ay) throw new BadRequestResult(ErrorCode.InvalidInput, 'academicYearId is required');
+    const rows = await DB.query(singleLineString`
+      select s.uuid as student_id, s.name, s.admission_number, s.exam_only_reason,
+        sc.class_id, c.name as class_name,
+        coalesce((select sum(l.debit) from student_ledger_entry l
+           where l.school_id = s.school_id and l.student_id = s.uuid and l.academic_year_id = $2
+             and l.status = 'active' and l.kind = 'charge'), 0) as charged,
+        coalesce((select sum(l.credit) from student_ledger_entry l
+           where l.school_id = s.school_id and l.student_id = s.uuid and l.academic_year_id = $2
+             and l.status = 'active' and l.kind in ('concession','waiver','payment','adjust')), 0) as credited,
+        coalesce((select sum(l.credit) from student_ledger_entry l
+           where l.school_id = s.school_id and l.student_id = s.uuid and l.academic_year_id = $2
+             and l.status = 'active' and l.kind = 'payment'), 0) as paid,
+        coalesce((select count(*) from student_ledger_entry l
+           where l.school_id = s.school_id and l.student_id = s.uuid and l.academic_year_id = $2
+             and l.status = 'active' and l.kind = 'charge'
+             and coalesce((select sum(cr.credit) from student_ledger_entry cr
+                where cr.settles_entry_id = l.uuid and cr.status = 'active' and cr.kind = 'payment'), 0) < 0.5), 0) as open_charges
+      from student s
+      left join student_class sc on sc.student_id = s.uuid and sc.school_id = s.school_id
+        and sc.academic_year_id = $2 and (sc.status is null or sc.status <> 'deleted')
+      left join class c on c.uuid = sc.class_id
+      where s.school_id = $1 and coalesce(s.exam_only, false) = true and s.status <> 'deleted'
+      order by c.name nulls last, s.name`, [schoolId, ay]);
+    const students = rows.map((r: any) => ({
+      studentId: r.studentId, name: r.name, admissionNumber: r.admissionNumber,
+      className: r.className || null, reason: r.examOnlyReason || null,
+      openDemand: Math.max(0, Math.round(Number(r.charged) - Number(r.credited))),
+      openCharges: Number(r.openCharges), paid: Math.round(Number(r.paid)),
+    }));
+    return {
+      students,
+      totalStudents: students.length,
+      totalOpenDemand: students.reduce((s: number, r: any) => s + r.openDemand, 0),
+      totalOpenCharges: students.reduce((s: number, r: any) => s + r.openCharges, 0),
+    };
+  }
+
+  // Cancel (roll back) demands for exam-only students for a year. Voids every active,
+  // UNPAID charge line and its settling concession/waiver lines. Charges with any
+  // payment against them are left untouched (surfaced separately). dryRun previews.
+  // Server-side gate: only students actually flagged exam_only are ever affected, even
+  // if arbitrary studentIds are passed.
+  public async cancelExamOnlyDemands(schoolId: string, body: any, userId: string) {
+    const ay = body?.academicYearId;
+    if (!ay) throw new BadRequestResult(ErrorCode.InvalidInput, 'academicYearId is required');
+    const dryRun = !!body?.dryRun;
+    const subset: string[] = Array.isArray(body?.studentIds) ? body.studentIds.filter(Boolean) : [];
+
+    const params: any[] = [schoolId, ay];
+    let subsetWhere = '';
+    if (subset.length) { params.push(subset); subsetWhere = `and l.student_id = any($${params.length})`; }
+
+    const charges = await DB.query(singleLineString`
+      select l.uuid, l.debit, l.student_id,
+        coalesce((select sum(cr.credit) from student_ledger_entry cr where cr.settles_entry_id = l.uuid and cr.status = 'active' and cr.kind = 'payment'), 0) as pay,
+        coalesce((select sum(cr.credit) from student_ledger_entry cr where cr.settles_entry_id = l.uuid and cr.status = 'active'), 0) as paid
+      from student_ledger_entry l
+      join student s on s.uuid = l.student_id and s.school_id = l.school_id
+      where l.school_id = $1 and l.academic_year_id = $2 and l.kind = 'charge' and l.status = 'active'
+        and coalesce(s.exam_only, false) = true ${subsetWhere}`, params);
+
+    const toVoid = charges.filter((c: any) => Number(c.pay) < 0.5); // never void a paid charge
+    const skippedPaid = charges.length - toVoid.length;
+    const affected = new Set<string>();
+    let amount = 0;
+    for (const c of toVoid) { affected.add(c.studentId); amount += Number(c.debit) - Number(c.paid); }
+
+    if (dryRun) {
+      return { dryRun: true, students: affected.size, chargesVoided: toVoid.length, skippedPaidCharges: skippedPaid, amountVoided: Math.round(amount) };
+    }
+
+    const queries: string[] = [];
+    const qParams: any[][] = [];
+    for (const c of toVoid) {
+      queries.push(singleLineString`update student_ledger_entry set status = 'cancelled', remarks = coalesce(remarks, '') || ' [exam-only-cancel]', updated_at = now(), updatedby_userid = $2 where uuid = $1 and status = 'active'`);
+      qParams.push([c.uuid, userId]);
+      queries.push(singleLineString`update student_ledger_entry set status = 'cancelled', remarks = coalesce(remarks, '') || ' [exam-only-cancel]', updated_at = now() where school_id = $1 and settles_entry_id = $2 and status = 'active' and kind in ('concession', 'waiver')`);
+      qParams.push([schoolId, c.uuid]);
+    }
+    if (queries.length) await DB.queriesInTransaction(queries, qParams);
+    return { students: affected.size, chargesVoided: toVoid.length, skippedPaidCharges: skippedPaid, amountVoided: Math.round(amount) };
+  }
+
   // Add a follow-up timeline entry (note + status + optional attachments). Many per student/year.
   public async setFollowup(schoolId: string, body: any, userId: string) {
     if (!body?.studentId || !body?.academicYearId) throw new BadRequestResult(ErrorCode.InvalidInput, 'studentId and academicYearId are required');
