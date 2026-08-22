@@ -21,6 +21,142 @@ class HouseService {
     );
   }
 
+  // House-balance analytics for one academic year: house sizes, gender split per
+  // house, the grade×house spread, the unassigned roster (with a balance-preserving
+  // suggested house), and same-house sibling clusters (siblings-apart rule). One
+  // roster query; everything else is computed in memory.
+  public async analytics(schoolId: string, academicYearId: string): Promise<any> {
+    const houses = await DB.query(
+      singleLineString`select uuid, name, code, color from house where school_id = $1 and status = 'active' order by name`,
+      [schoolId]
+    );
+    const roster = await DB.query(
+      singleLineString`
+        select s.uuid, s.name, s.gender, s.house_id,
+               s.family_unique_number as fk,
+               split_part(c.name, '-', 1) as grade, c.name as class_name
+        from student_class sc
+        join student s on s.uuid = sc.student_id and s.school_id = sc.school_id
+        left join class c on c.uuid = sc.class_id
+        where sc.school_id = $1 and sc.academic_year_id = $2
+          and (sc.status is null or sc.status <> 'deleted') and s.status <> 'deleted'
+      `,
+      [schoolId, academicYearId]
+    );
+
+    const perHouse: Record<string, { total: number; boys: number; girls: number }> = {};
+    houses.forEach((h: any) => (perHouse[h.uuid] = { total: 0, boys: 0, girls: 0 }));
+    const grades: Record<string, { counts: Record<string, number>; none: number; total: number }> = {};
+    const famMap: Record<string, any[]> = {};
+    const unassigned: any[] = [];
+    let boys = 0, girls = 0, assigned = 0;
+
+    for (const r of roster) {
+      const g = String(r.gender || '').toUpperCase();
+      if (g === 'M') boys++; else if (g === 'F') girls++;
+      const grade = r.grade || '?';
+      if (!grades[grade]) grades[grade] = { counts: {}, none: 0, total: 0 };
+      grades[grade].total++;
+      if (r.houseId && perHouse[r.houseId]) {
+        assigned++;
+        perHouse[r.houseId].total++;
+        if (g === 'M') perHouse[r.houseId].boys++; else if (g === 'F') perHouse[r.houseId].girls++;
+        grades[grade].counts[r.houseId] = (grades[grade].counts[r.houseId] || 0) + 1;
+      } else {
+        grades[grade].none++;
+        unassigned.push(r);
+      }
+      if (r.fk) (famMap[r.fk] = famMap[r.fk] || []).push(r);
+    }
+
+    // Same-house sibling clusters: 2+ children on roll, all in one house, none
+    // unassigned. Families of 5+ are exempt (auto-exception in the siblings-apart rule).
+    const clustered: any[] = [];
+    for (const fk of Object.keys(famMap)) {
+      const members = famMap[fk];
+      if (members.length < 2 || members.length >= 5) continue;
+      if (members.some((m: any) => !m.houseId)) continue;
+      const houseIds = new Set(members.map((m: any) => m.houseId));
+      if (houseIds.size !== 1) continue;
+      const houseId = members[0].houseId;
+      const house = houses.find((h: any) => h.uuid === houseId);
+      clustered.push({
+        familyKey: fk,
+        houseId,
+        houseName: house ? house.name : null,
+        members: members
+          .map((m: any) => ({ uuid: m.uuid, name: m.name, className: m.className, gender: m.gender }))
+          .sort((a: any, b: any) => String(a.className || '').localeCompare(String(b.className || ''))),
+      });
+    }
+    clustered.sort((a, b) => String(a.houseName || '').localeCompare(String(b.houseName || '')));
+
+    const GRADE_RANK: Record<string, number> = {
+      NURSERY: 0, LKG: 1, UKG: 2, I: 3, II: 4, III: 5, IV: 6, V: 7, VI: 8, VII: 9, VIII: 10, IX: 11, X: 12, XI: 13, XII: 14,
+    };
+    const gradeArr = Object.keys(grades)
+      .map((grade) => ({
+        grade,
+        counts: houses.map((h: any) => ({ houseId: h.uuid, n: grades[grade].counts[h.uuid] || 0 })),
+        none: grades[grade].none,
+        total: grades[grade].total,
+      }))
+      .sort((a, b) => (GRADE_RANK[a.grade] ?? 99) - (GRADE_RANK[b.grade] ?? 99) || a.grade.localeCompare(b.grade));
+
+    // Balance-preserving suggestions for the WHOLE unassigned batch. Each student is
+    // suggested the house currently holding the fewest of their grade (tie → smallest
+    // house overall), and the running counts are updated as we go — so a large batch
+    // (e.g. a full unassigned section) fans out across houses instead of all piling
+    // into whichever house happens to be the current minimum.
+    const workGrade: Record<string, Record<string, number>> = {};
+    Object.keys(grades).forEach((g) => (workGrade[g] = { ...grades[g].counts }));
+    const workTotal: Record<string, number> = {};
+    houses.forEach((h: any) => (workTotal[h.uuid] = perHouse[h.uuid].total));
+    const unassignedList = unassigned
+      .sort(
+        (a, b) =>
+          String(a.className || '').localeCompare(String(b.className || '')) ||
+          String(a.name || '').localeCompare(String(b.name || ''))
+      )
+      .map((r: any) => {
+        const grade = r.grade || '?';
+        const gc = (workGrade[grade] = workGrade[grade] || {});
+        let best: string | null = null, bestN = Infinity, bestTotal = Infinity;
+        for (const h of houses) {
+          const n = gc[h.uuid] || 0;
+          const t = workTotal[h.uuid] || 0;
+          if (n < bestN || (n === bestN && t < bestTotal)) { best = h.uuid; bestN = n; bestTotal = t; }
+        }
+        if (best) { gc[best] = (gc[best] || 0) + 1; workTotal[best] = (workTotal[best] || 0) + 1; }
+        return { uuid: r.uuid, name: r.name, className: r.className, gender: r.gender, suggestedHouseId: best };
+      });
+
+    const onRoll = roster.length;
+    return {
+      academicYearId,
+      summary: {
+        onRoll,
+        assigned,
+        unassigned: onRoll - assigned,
+        boys,
+        girls,
+        familiesClustered: clustered.length,
+      },
+      houses: houses.map((h: any) => ({
+        uuid: h.uuid,
+        name: h.name,
+        code: h.code,
+        color: h.color,
+        total: perHouse[h.uuid].total,
+        boys: perHouse[h.uuid].boys,
+        girls: perHouse[h.uuid].girls,
+      })),
+      grades: gradeArr,
+      unassigned: unassignedList,
+      siblingsClustered: clustered,
+    };
+  }
+
   public async getById(id: string, schoolId: string): Promise<House | null> {
     const rows = await DB.query(
       singleLineString`select * from house where uuid = $1 and school_id = $2 and status = 'active'`,

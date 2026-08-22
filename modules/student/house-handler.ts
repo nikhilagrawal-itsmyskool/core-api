@@ -35,6 +35,28 @@ class HouseHandler {
     }
   };
 
+  // GET /houses/analytics?academicYearId=  (defaults to the current session)
+  public analytics = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
+    _context.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const schoolId = await this.resolveSchool(event, callback);
+      if (!schoolId) return;
+      const q = event.queryStringParameters || {};
+      const academicYearId = q.academicYearId || (await studentService.getCurrentAcademicYearId(schoolId));
+      if (!academicYearId) {
+        ResponseBuilder.ok(
+          { academicYearId: null, summary: null, houses: [], grades: [], unassigned: [], siblingsClustered: [] },
+          callback
+        );
+        return;
+      }
+      const result = await houseService.analytics(schoolId, academicYearId);
+      ResponseBuilder.ok(result, callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
   public create = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
     _context.callbackWaitsForEmptyEventLoop = false;
     try {
@@ -150,6 +172,7 @@ class HouseHandler {
 
 const handler = new HouseHandler();
 export const list = guard(STUDENT_ACTIONS['house-handler.list'], handler.list);
+export const analytics = guard(STUDENT_ACTIONS['house-handler.analytics'], handler.analytics);
 export const create = guard(STUDENT_ACTIONS['house-handler.create'], handler.create);
 export const getById = guard(STUDENT_ACTIONS['house-handler.getById'], handler.getById);
 export const update = guard(STUDENT_ACTIONS['house-handler.update'], handler.update);

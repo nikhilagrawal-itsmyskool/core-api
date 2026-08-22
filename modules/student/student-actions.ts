@@ -20,6 +20,7 @@ export const STUDENT_ACTIONS: Record<string, string> = {
   // admin/god) — gate at manage, same as the credentials view.
   'student-bulk-handler.roster': STUDENT_MANAGE,
   'house-handler.list': STUDENT_VIEW,
+  'house-handler.analytics': STUDENT_VIEW,
   'house-handler.getById': STUDENT_VIEW,
   'house-handler.listTeachers': STUDENT_VIEW,
   'student-lookup-handler.list': STUDENT_VIEW,

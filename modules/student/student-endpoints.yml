@@ -87,6 +87,16 @@
           method: post
           cors: true
 
+  # Literal 'houses/analytics' before 'houses/{id}' so it isn't swallowed by the matcher.
+  house-analytics:
+    handler: house-handler.analytics
+    name: ${self:service}-house-analytics
+    events:
+      - http:
+          path: houses/analytics
+          method: get
+          cors: true
+
   get-house:
     handler: house-handler.getById
     name: ${self:service}-get-house
