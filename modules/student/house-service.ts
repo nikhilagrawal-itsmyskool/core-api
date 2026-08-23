@@ -33,7 +33,7 @@ class HouseService {
     const roster = await DB.query(
       singleLineString`
         select s.uuid, s.name, s.gender, s.house_id,
-               s.family_unique_number as fk,
+               s.family_unique_number as fk, coalesce(s.exam_only, false) as exam_only,
                split_part(c.name, '-', 1) as grade, c.name as class_name
         from student_class sc
         join student s on s.uuid = sc.student_id and s.school_id = sc.school_id
@@ -49,9 +49,12 @@ class HouseService {
     const grades: Record<string, { counts: Record<string, number>; none: number; total: number }> = {};
     const famMap: Record<string, any[]> = {};
     const unassigned: any[] = [];
-    let boys = 0, girls = 0, assigned = 0;
+    let boys = 0, girls = 0, assigned = 0, examOnly = 0;
 
     for (const r of roster) {
+      // Exam-only students (registered here but studying elsewhere) sit outside the
+      // house system: counted separately, excluded from every house metric + list.
+      if (r.examOnly) { examOnly++; continue; }
       const g = String(r.gender || '').toUpperCase();
       if (g === 'M') boys++; else if (g === 'F') girls++;
       const grade = r.grade || '?';
@@ -172,8 +175,9 @@ class HouseService {
       academicYearId,
       summary: {
         onRoll,
+        examOnly,
         assigned,
-        unassigned: onRoll - assigned,
+        needHouse: unassignedList.length,
         boys,
         girls,
         familiesClustered: clustered.length,
