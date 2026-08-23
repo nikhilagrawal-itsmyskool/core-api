@@ -273,7 +273,10 @@ class ConcessionService {
   // applies only to cycles due on/after that date (null = whole year). (3) cycle_scope — a comma list
   // of cycle names/ids restricting which cycles it applies to (null = all). Pass opts.dryRun to
   // compute the plan WITHOUT writing (used to prove safety before relying on the engine).
-  public async syncConcessions(schoolId: string, academicYearId: string, studentIds: string[], userId: string, opts: { dryRun?: boolean } = {}) {
+  // opts.assignmentsOverride: reconcile against an in-memory assignment set instead of the DB roster —
+  // lets changeConcession PREVIEW the effect of not-yet-written bound changes with the exact same engine.
+  // opts.remark: stamped onto the concession lines this run cancels/creates (the change reason trail).
+  public async syncConcessions(schoolId: string, academicYearId: string, studentIds: string[], userId: string, opts: { dryRun?: boolean; assignmentsOverride?: any[]; remark?: string } = {}) {
     const empty = { students: 0, chargesAdjusted: 0, concessionAdded: 0, concessionRemoved: 0, plan: [] as any[] };
     if (!academicYearId || !studentIds || !studentIds.length) return empty;
     const n = (v: any) => (v == null ? 0 : Number(v));
@@ -304,8 +307,10 @@ class ConcessionService {
     });
 
     // active assignments — possibly MANY per (student, head) for stacking; carry effective_from + cycle_scope
-    const defs: any[] = await DB.query(
-      singleLineString`select cs.student_id, cs.effective_from, cs.cycle_scope, c.fee_head_id, c.value_type, c.value, c.name
+    // + cycle bounds (effective_from_cycle / effective_to_cycle, by fee_cycle.sort_order).
+    // assignmentsOverride short-circuits the DB read (used by changeConcession preview).
+    const defs: any[] = opts.assignmentsOverride ?? await DB.query(
+      singleLineString`select cs.student_id, cs.effective_from, cs.cycle_scope, cs.effective_from_cycle, cs.effective_to_cycle, c.fee_head_id, c.value_type, c.value, c.name
         from fee_concession_student cs join fee_concession c on c.uuid = cs.concession_id and c.status = 'active'
         where cs.school_id = $1 and c.academic_year_id = $2 and cs.status = 'active' and cs.student_id = any($3)`,
       [schoolId, academicYearId, studentIds]
@@ -313,17 +318,39 @@ class ConcessionService {
     const byStuHead: Record<string, Record<string, any[]>> = {};
     defs.forEach((d) => { ((byStuHead[d.studentId] ||= {})[d.feeHeadId] ||= []).push(d); });
 
+    // cycle order lookup (by id and by normalized name — migrated charges carry cycle_label, not cycle_id)
+    // used to honor effective_from_cycle / effective_to_cycle bounds on each assignment.
+    const cyc: any[] = await DB.query(
+      singleLineString`select uuid, name, sort_order from fee_cycle where school_id = $1 and academic_year_id = $2 and status = 'active'`,
+      [schoolId, academicYearId]
+    );
+    const ordById: Record<string, number> = {}; const ordByName: Record<string, number> = {};
+    cyc.forEach((c, i) => { const o = c.sortOrder == null ? i : Number(c.sortOrder); ordById[c.uuid] = o; ordByName[norm(c.name)] = o; });
+    const chargeOrd = (ch: any): number | null => {
+      const o = ordById[ch.cycleId]; if (o != null) return o;
+      const o2 = ordByName[norm(ch.cycleLabel)]; return o2 == null ? null : o2;
+    };
+
     const queries: string[] = []; const params: any[][] = []; const now = new Date();
     const today = now.toISOString().slice(0, 10);
     let chargesAdjusted = 0, added = 0, removed = 0; const touched = new Set<string>(); const plan: any[] = [];
 
     for (const ch of charges) {
       if (!ch.feeHeadId) continue; // SAFETY: never reconcile a charge whose head isn't resolved (would spuriously strip)
+      const chOrd = chargeOrd(ch);
       const applicable = (byStuHead[ch.studentId]?.[ch.feeHeadId] || []).filter((d) => {
         if (d.effectiveFrom && ch.cycleDue && new Date(ch.cycleDue) < new Date(d.effectiveFrom)) return false;
         if (d.cycleScope) {
           const scope = String(d.cycleScope).split(',').map(norm).filter(Boolean);
           if (scope.length && !scope.includes(norm(ch.cycleLabel)) && !scope.includes(norm(ch.cycleId))) return false;
+        }
+        // cycle bounds (inclusive, by sort_order). only enforced when the charge's cycle order resolves;
+        // an unresolvable cycle is left alone (never spuriously stripped).
+        if (chOrd != null) {
+          const fromO = d.effectiveFromCycle != null ? ordById[d.effectiveFromCycle] : undefined;
+          const toO = d.effectiveToCycle != null ? ordById[d.effectiveToCycle] : undefined;
+          if (fromO != null && chOrd < fromO) return false;
+          if (toO != null && chOrd > toO) return false;
         }
         return true;
       });
@@ -345,25 +372,168 @@ class ConcessionService {
         const want = round2(desired[sName] || 0);
         const have = round2(cur[sName]?.sum || 0);
         if (Math.abs(want - have) < 0.005) continue;
+        const remark = opts.remark || null;
         for (const eid of (cur[sName]?.ids || [])) {
-          queries.push(singleLineString`update student_ledger_entry set status = 'cancelled', updatedby_userid = $1, updated_at = $2 where uuid = $3`);
-          params.push([userId, now, eid]);
+          queries.push(singleLineString`update student_ledger_entry set status = 'cancelled', updatedby_userid = $1, updated_at = $2,
+            remarks = case when $4::text is null then remarks when remarks is null or remarks = '' then $4 else left(remarks || ' | ' || $4, 512) end
+            where uuid = $3`);
+          params.push([userId, now, eid, remark]);
         }
         if (have > 0) removed = round2(removed + have);
         if (want > 0.005) {
           queries.push(singleLineString`
-            insert into student_ledger_entry (uuid, school_id, student_id, academic_year_id, entry_date, category, fee_head_id, cycle_id, head_label, cycle_label, kind, credit, settles_entry_id, source_module, allocation, status, createdby_userid, created_at)
-            values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'concession',$11,$12,'fees','resynced','active',$13,$14)`);
-          params.push([generateShortUuid(12), schoolId, ch.studentId, academicYearId, today, ch.category, ch.feeHeadId, ch.cycleId, sName, ch.cycleLabel, want, ch.uuid, userId, now]);
+            insert into student_ledger_entry (uuid, school_id, student_id, academic_year_id, entry_date, category, fee_head_id, cycle_id, head_label, cycle_label, kind, credit, settles_entry_id, source_module, allocation, remarks, status, createdby_userid, created_at)
+            values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'concession',$11,$12,'fees','resynced',$15,'active',$13,$14)`);
+          params.push([generateShortUuid(12), schoolId, ch.studentId, academicYearId, today, ch.category, ch.feeHeadId, ch.cycleId, sName, ch.cycleLabel, want, ch.uuid, userId, now, remark]);
           added = round2(added + want);
         }
-        if (opts.dryRun) plan.push({ studentId: ch.studentId, cycle: ch.cycleLabel, scheme: sName, from: have, to: want });
+        if (opts.dryRun) plan.push({ studentId: ch.studentId, chargeId: ch.uuid, cycleId: ch.cycleId, cycle: ch.cycleLabel, scheme: sName, from: have, to: want, debit: n(ch.debit) });
         chargeTouched = true;
       }
       if (chargeTouched) { chargesAdjusted++; touched.add(ch.studentId); }
     }
     if (!opts.dryRun && queries.length) await DB.queriesInTransaction(queries, params);
     return { students: touched.size, chargesAdjusted, concessionAdded: added, concessionRemoved: removed, plan };
+  }
+
+  // ---- Mid-year concession CHANGE: close a scheme at a cycle, open another (or none) from a cycle ----
+  // One scheme-group at a time; retroactive allowed; adjusts paid cycles (remove => becomes due,
+  // add => advance). dryRun returns the per-cycle impact preview WITHOUT writing. Reason is mandatory
+  // and is stamped onto every ledger line the recompute touches.
+  public async changeConcession(schoolId: string, data: any, userId: string) {
+    const studentId = data.studentId; const academicYearId = data.academicYearId; const fromCycleId = data.fromCycleId;
+    const dryRun = !!data.dryRun;
+    const closeIds: string[] = Array.isArray(data.closeConcessionIds) ? data.closeConcessionIds : [];
+    const openIds: string[] = Array.isArray(data.openConcessionIds) ? data.openConcessionIds : [];
+    if (!studentId || !academicYearId || !fromCycleId) throw new BadRequestResult(ErrorCode.InvalidInput, 'studentId, academicYearId, fromCycleId are required');
+    if (!data.reason || !String(data.reason).trim()) throw new BadRequestResult(ErrorCode.InvalidInput, 'reason is required');
+    if (!closeIds.length && !openIds.length) throw new BadRequestResult(ErrorCode.InvalidInput, 'nothing to change (pick a scheme to stop and/or one to start)');
+    const reasonTxt = String(data.reason).trim().slice(0, 200);
+
+    // ordered cycles + the cycle just before the change point
+    const cyc: any[] = await DB.query(singleLineString`select uuid, name, sort_order from fee_cycle where school_id = $1 and academic_year_id = $2 and status = 'active'`, [schoolId, academicYearId]);
+    const ordById: Record<string, number> = {};
+    const ordered = cyc.map((c: any, i: number) => ({ uuid: c.uuid, name: c.name, ord: c.sortOrder == null ? i : Number(c.sortOrder) })).sort((a, b) => a.ord - b.ord);
+    ordered.forEach((c) => { ordById[c.uuid] = c.ord; });
+    const fromOrd = ordById[fromCycleId];
+    if (fromOrd == null) throw new BadRequestResult(ErrorCode.InvalidInput, 'fromCycleId not found in this year');
+    const prev = ordered.filter((c) => c.ord < fromOrd).pop();
+    const prevCycleId = prev ? prev.uuid : null;
+
+    // current active assignments (+ concession detail) and the detail of schemes being opened
+    const cur: any[] = await DB.query(singleLineString`
+      select cs.uuid, cs.concession_id, cs.effective_from, cs.cycle_scope, cs.effective_from_cycle, cs.effective_to_cycle,
+             c.fee_head_id, c.value_type, c.value, c.name
+      from fee_concession_student cs join fee_concession c on c.uuid = cs.concession_id and c.status = 'active'
+      where cs.school_id = $1 and c.academic_year_id = $2 and cs.status = 'active' and cs.student_id = $3`,
+      [schoolId, academicYearId, studentId]);
+    const openDefs: any[] = openIds.length
+      ? await DB.query(singleLineString`select uuid, fee_head_id, value_type, value, name from fee_concession where school_id = $1 and academic_year_id = $2 and status = 'active' and uuid = any($3)`, [schoolId, academicYearId, openIds])
+      : [];
+
+    // build the resulting (post-change) assignment set + the DB write plan
+    const closeSet = new Set(closeIds);
+    const resultingDefs: any[] = []; const updates: any[] = []; const inserts: any[] = [];
+    for (const a of cur) {
+      if (closeSet.has(a.concessionId)) {
+        const aFromOrd = a.effectiveFromCycle != null ? (ordById[a.effectiveFromCycle] ?? -Infinity) : -Infinity;
+        if (prevCycleId == null || aFromOrd > (prev ? prev.ord : -Infinity)) {
+          updates.push({ uuid: a.uuid, del: true }); // span empties → remove entirely
+        } else {
+          updates.push({ uuid: a.uuid, toCycle: prevCycleId, del: false });
+          resultingDefs.push({ studentId, effectiveFrom: a.effectiveFrom, cycleScope: a.cycleScope, effectiveFromCycle: a.effectiveFromCycle, effectiveToCycle: prevCycleId, feeHeadId: a.feeHeadId, valueType: a.valueType, value: a.value, name: a.name });
+        }
+      } else {
+        resultingDefs.push({ studentId, effectiveFrom: a.effectiveFrom, cycleScope: a.cycleScope, effectiveFromCycle: a.effectiveFromCycle, effectiveToCycle: a.effectiveToCycle, feeHeadId: a.feeHeadId, valueType: a.valueType, value: a.value, name: a.name });
+      }
+    }
+    for (const od of openDefs) {
+      inserts.push({ concessionId: od.uuid });
+      resultingDefs.push({ studentId, effectiveFrom: null, cycleScope: null, effectiveFromCycle: fromCycleId, effectiveToCycle: null, feeHeadId: od.feeHeadId, valueType: od.valueType, value: od.value, name: od.name });
+    }
+
+    const closeNames = cur.filter((a) => closeSet.has(a.concessionId)).map((a) => a.name);
+    const fromName = ordered.find((c) => c.uuid === fromCycleId)?.name || 'cycle';
+    const transition = `${[...new Set(closeNames)].join('+') || 'none'} → ${openDefs.map((o) => o.name).join('+') || 'none'}`;
+    const remark = `[concession-change] ${transition} from ${fromName} · "${reasonTxt}"`;
+
+    // PREVIEW: run the exact reconciliation engine against the in-memory resulting assignments (no writes)
+    const sim = await this.syncConcessions(schoolId, academicYearId, [studentId], userId, { dryRun: true, assignmentsOverride: resultingDefs, remark });
+    const impact = await this.previewImpact(schoolId, academicYearId, studentId, sim.plan);
+
+    if (dryRun) return { dryRun: true, transition, fromCycle: fromName, remark, ...impact };
+
+    // APPLY: write bound changes, then reconcile the ledger with the reason stamped onto each line.
+    const q: string[] = []; const p: any[][] = []; const now = new Date();
+    for (const u of updates) {
+      if (u.del) { q.push(singleLineString`update fee_concession_student set status = 'deleted', change_reason = $1, updatedby_userid = $2, updated_at = $3 where uuid = $4 and school_id = $5 and status = 'active'`); p.push([reasonTxt, userId, now, u.uuid, schoolId]); }
+      else { q.push(singleLineString`update fee_concession_student set effective_to_cycle = $1, change_reason = $2, updatedby_userid = $3, updated_at = $4 where uuid = $5 and school_id = $6 and status = 'active'`); p.push([u.toCycle, reasonTxt, userId, now, u.uuid, schoolId]); }
+    }
+    for (const ins of inserts) { q.push(singleLineString`insert into fee_concession_student (uuid, school_id, concession_id, student_id, effective_from_cycle, effective_to_cycle, change_reason, status, createdby_userid, created_at) values ($1,$2,$3,$4,$5,null,$6,'active',$7,$8)`); p.push([generateShortUuid(12), schoolId, ins.concessionId, studentId, fromCycleId, reasonTxt, userId, now]); }
+    if (q.length) await DB.queriesInTransaction(q, p);
+    const applied = await this.syncConcessions(schoolId, academicYearId, [studentId], userId, { remark });
+    return { dryRun: false, transition, fromCycle: fromName, applied, ...impact };
+  }
+
+  // Translate a dry-run concession plan into per-cycle due/advance impact (using charge debit + payments).
+  private async previewImpact(schoolId: string, academicYearId: string, studentId: string, plan: any[]) {
+    const n = (v: any) => (v == null ? 0 : Number(v));
+    const deltaByCharge: Record<string, number> = {};
+    plan.forEach((pl) => { deltaByCharge[pl.chargeId] = (deltaByCharge[pl.chargeId] || 0) + (n(pl.to) - n(pl.from)); });
+    const chargeIds = Object.keys(deltaByCharge);
+    if (!chargeIds.length) return { affectedCycles: [], totalDue: 0, totalAdvance: 0, affectedCount: 0, paidAffected: 0 };
+    const charges: any[] = await DB.query(singleLineString`select uuid, cycle_label, debit from student_ledger_entry where school_id = $1 and academic_year_id = $2 and student_id = $3 and kind = 'charge' and status = 'active' and uuid = any($4)`, [schoolId, academicYearId, studentId, chargeIds]);
+    const credits: any[] = await DB.query(singleLineString`select settles_entry_id, kind, sum(credit) as c from student_ledger_entry where school_id = $1 and academic_year_id = $2 and student_id = $3 and status = 'active' and kind in ('payment','concession','waiver') and settles_entry_id = any($4) group by settles_entry_id, kind`, [schoolId, academicYearId, studentId, chargeIds]);
+    const conc: Record<string, number> = {}; const pay: Record<string, number> = {};
+    credits.forEach((r) => { if (r.kind === 'payment') pay[r.settlesEntryId] = n(r.c); else conc[r.settlesEntryId] = (conc[r.settlesEntryId] || 0) + n(r.c); });
+    let totalDue = 0, totalAdvance = 0, paidAffected = 0; const rows: any[] = [];
+    charges.forEach((ch) => {
+      const debit = n(ch.debit), curConc = conc[ch.uuid] || 0, paid = pay[ch.uuid] || 0, dConc = deltaByCharge[ch.uuid] || 0;
+      const oldOut = debit - curConc - paid, newOut = debit - (curConc + dConc) - paid;
+      const dueDelta = Math.round((Math.max(0, newOut) - Math.max(0, oldOut)) * 100) / 100;
+      const advDelta = Math.round((Math.max(0, -newOut) - Math.max(0, -oldOut)) * 100) / 100;
+      if (paid > 0.005) paidAffected++;
+      if (dueDelta > 0.005) totalDue += dueDelta;
+      if (advDelta > 0.005) totalAdvance += advDelta;
+      rows.push({ cycle: ch.cycleLabel, wasPaid: paid > 0.005, dueDelta: Math.round(dueDelta), advanceDelta: Math.round(advDelta) });
+    });
+    return { affectedCycles: rows, totalDue: Math.round(totalDue), totalAdvance: Math.round(totalAdvance), affectedCount: rows.length, paidAffected };
+  }
+
+  // Per-cycle concession timeline for the student app / admin timeline screen.
+  public async concessionTimeline(schoolId: string, studentId: string, academicYearId: string) {
+    const n = (v: any) => (v == null ? 0 : Number(v));
+    const nrm = (s: any) => String(s ?? '').trim().toLowerCase();
+    const cyc: any[] = await DB.query(singleLineString`select uuid, name, sort_order from fee_cycle where school_id = $1 and academic_year_id = $2 and status = 'active'`, [schoolId, academicYearId]);
+    const ordered = cyc.map((c: any, i: number) => ({ uuid: c.uuid, name: c.name, ord: c.sortOrder == null ? i : Number(c.sortOrder) })).sort((a, b) => a.ord - b.ord);
+    const ordByName: Record<string, number> = {}; ordered.forEach((c) => { ordByName[nrm(c.name)] = c.ord; });
+
+    const charges: any[] = await DB.query(singleLineString`select uuid, fee_head_id, cycle_id, head_label, cycle_label, debit from student_ledger_entry where school_id = $1 and academic_year_id = $2 and student_id = $3 and kind = 'charge' and status = 'active'`, [schoolId, academicYearId, studentId]);
+    const credits: any[] = await DB.query(singleLineString`select settles_entry_id, kind, head_label, sum(credit) as c from student_ledger_entry where school_id = $1 and academic_year_id = $2 and student_id = $3 and status = 'active' and kind in ('payment','concession','waiver') and settles_entry_id is not null group by settles_entry_id, kind, head_label`, [schoolId, academicYearId, studentId]);
+    const byCharge: Record<string, { conc: number; pay: number; schemes: string[] }> = {};
+    credits.forEach((r) => { const e = (byCharge[r.settlesEntryId] ||= { conc: 0, pay: 0, schemes: [] }); if (r.kind === 'payment') e.pay += n(r.c); else { e.conc += n(r.c); if (r.headLabel) e.schemes.push(r.headLabel); } });
+
+    // group charges by cycle
+    const cycleMap: Record<string, any> = {};
+    charges.forEach((ch) => {
+      const key = ch.cycleLabel || ch.cycleId || '—';
+      const ord = ordByName[nrm(ch.cycleLabel)] ?? 9999;
+      const g = (cycleMap[key] ||= { cycle: ch.cycleLabel || '—', ord, fee: 0, concession: 0, paid: 0, schemes: new Set<string>(), heads: [] as any[] });
+      const cr = byCharge[ch.uuid] || { conc: 0, pay: 0, schemes: [] };
+      g.fee += n(ch.debit); g.concession += cr.conc; g.paid += cr.pay;
+      cr.schemes.forEach((s: string) => g.schemes.add(s));
+      g.heads.push({ head: ch.headLabel, fee: n(ch.debit), concession: cr.conc, schemes: cr.schemes });
+    });
+    const rows = Object.values(cycleMap).map((g: any) => {
+      const net = Math.round(g.fee - g.concession), out = Math.round(g.fee - g.concession - g.paid);
+      const state = out < 0 ? 'advance' : out === 0 ? 'covered' : g.paid > 0 ? 'partial' : 'due';
+      return { cycle: g.cycle, ord: g.ord, fee: Math.round(g.fee), concession: Math.round(g.concession), net, paid: Math.round(g.paid),
+        outstanding: out, state, schemes: [...g.schemes], heads: g.heads };
+    }).sort((a: any, b: any) => a.ord - b.ord);
+
+    // change history (the markers)
+    const changes: any[] = await DB.query(singleLineString`select cs.change_reason, cs.effective_from_cycle, cs.effective_to_cycle, cs.updated_at, c.name, cs.status from fee_concession_student cs join fee_concession c on c.uuid = cs.concession_id where cs.school_id = $1 and cs.student_id = $2 and c.academic_year_id = $3 and cs.change_reason is not null order by cs.updated_at`, [schoolId, studentId, academicYearId]);
+    return { studentId, academicYearId, cycles: rows, changes };
   }
 }
 

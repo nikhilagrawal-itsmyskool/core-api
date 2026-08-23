@@ -121,6 +121,37 @@ class ConcessionHandler {
     }
   };
 
+  // Mid-year concession change (stop/switch a scheme from a cycle). POST body carries dryRun for preview.
+  public changeConcession = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
+    _context.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const ctx = await resolveSchool(event, callback);
+      if (!ctx) return;
+      const body = parseBody<any>(event, callback);
+      if (!body) return;
+      const result = await concessionService.changeConcession(ctx.schoolId, body, ctx.userId);
+      ResponseBuilder.ok(result, callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
+  public timeline = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
+    _context.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const ctx = await resolveSchool(event, callback);
+      if (!ctx) return;
+      const studentId = requireParam(event, 'id', callback);
+      if (!studentId) return;
+      const academicYearId = event.queryStringParameters?.academicYearId;
+      if (!academicYearId) { ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'academicYearId is required', callback); return; }
+      const result = await concessionService.concessionTimeline(ctx.schoolId, studentId, academicYearId);
+      ResponseBuilder.ok(result, callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
   public removeStudent = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
     _context.callbackWaitsForEmptyEventLoop = false;
     try {
@@ -151,3 +182,5 @@ export const multi = guard(FEE_ACTIONS['fees-concession-handler.multi'], handler
 export const listStudents = guard(FEE_ACTIONS['fees-concession-handler.listStudents'], handler.listStudents);
 export const addStudents = guard(FEE_ACTIONS['fees-concession-handler.addStudents'], handler.addStudents);
 export const removeStudent = guard(FEE_ACTIONS['fees-concession-handler.removeStudent'], handler.removeStudent);
+export const changeConcession = guard(FEE_ACTIONS['fees-concession-handler.changeConcession'], handler.changeConcession);
+export const timeline = guard(FEE_ACTIONS['fees-concession-handler.timeline'], handler.timeline);

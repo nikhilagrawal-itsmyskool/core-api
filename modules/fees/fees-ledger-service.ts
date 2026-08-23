@@ -30,7 +30,11 @@ const n = (v: any): number => (v == null ? 0 : Number(v));
 
 class FeesLedgerService {
   // ---- READ: full ledger for a student (optionally a single year) ----
-  public async studentLedger(schoolId: string, studentId: string, academicYearId?: string) {
+  // includeCancelled: also return the meaningful cancelled/superseded entries (charges, concessions,
+  // waivers, receipt-voided payments) so the UI can show a history trail — e.g. an exam-only rollback
+  // or a concession change. Reallocation churn (updatedby='reallocate') is excluded as noise. Active
+  // lines/totals are unaffected (dues never count cancelled rows).
+  public async studentLedger(schoolId: string, studentId: string, academicYearId?: string, includeCancelled = false) {
     const params: any[] = [schoolId, studentId];
     let where = `school_id = $1 and student_id = $2 and status = 'active'`;
     if (academicYearId) { params.push(academicYearId); where += ` and academic_year_id = $3`; }
@@ -109,7 +113,19 @@ class FeesLedgerService {
       quarterEndLabel: bkt.quarterEndLabel, // e.g. "till Sep end"
       yearEndLabel: bkt.yearEndLabel,       // "till Mar end"
     };
-    return { studentId, academicYearId: academicYearId || null, lines, entries: rows, totals };
+    // cancelled/superseded entries (opt-in) — the audit trail for rollbacks & concession changes.
+    // Excludes reallocation churn so only real cancellations surface.
+    let cancelledEntries: any[] = [];
+    if (includeCancelled) {
+      const cp: any[] = [schoolId, studentId];
+      let cwhere = `school_id = $1 and student_id = $2 and status = 'cancelled' and coalesce(updatedby_userid,'') <> 'reallocate'`;
+      if (academicYearId) { cp.push(academicYearId); cwhere += ` and academic_year_id = $3`; }
+      cancelledEntries = await DB.query(
+        singleLineString`select uuid, kind, head_label, cycle_label, debit, credit, remarks, entry_date, updated_at, updatedby_userid, source_ref from student_ledger_entry where ${cwhere} order by entry_date, kind, head_label`,
+        cp
+      );
+    }
+    return { studentId, academicYearId: academicYearId || null, lines, entries: rows, totals, cancelledEntries };
   }
 
   public async studentSummary(schoolId: string, studentId: string, academicYearId?: string) {
@@ -166,10 +182,12 @@ class FeesLedgerService {
 
     // 2. reference config for the year
     const cycles: any[] = await DB.query(
-      singleLineString`select uuid, name, from_date, due_date from fee_cycle where school_id = $1 and academic_year_id = $2 and status = 'active'`,
+      singleLineString`select uuid, name, from_date, due_date, sort_order from fee_cycle where school_id = $1 and academic_year_id = $2 and status = 'active'`,
       [schoolId, ay]
     );
     const cycleById: Record<string, any> = {}; cycles.forEach((c) => (cycleById[c.uuid] = c));
+    // cycle order (by id) so a bounded concession is only applied within its from/to cycle span
+    const cycleOrd: Record<string, number> = {}; cycles.forEach((c, i) => (cycleOrd[c.uuid] = c.sortOrder == null ? i : Number(c.sortOrder)));
     const heads: any[] = await DB.query(
       singleLineString`select uuid, name, kind, one_time from fee_head where school_id = $1 and academic_year_id = $2 and status = 'active'`,
       [schoolId, ay]
@@ -202,9 +220,10 @@ class FeesLedgerService {
       );
       const done = new Set(existing.map((e) => `${e.feeHeadId}|${e.cycleId}`));
 
-      // student's active concessions (by head)
+      // student's active concessions (by head), carrying cycle bounds so a stopped scheme
+      // isn't re-applied to out-of-range cycles by a later charge run.
       const concs: any[] = await DB.query(
-        singleLineString`select c.fee_head_id, c.value_type, c.value, c.name from fee_concession_student cs join fee_concession c on c.uuid = cs.concession_id and c.status = 'active' where cs.school_id = $1 and cs.student_id = $2 and c.academic_year_id = $3 and cs.status = 'active'`,
+        singleLineString`select c.fee_head_id, c.value_type, c.value, c.name, cs.effective_from_cycle, cs.effective_to_cycle from fee_concession_student cs join fee_concession c on c.uuid = cs.concession_id and c.status = 'active' where cs.school_id = $1 and cs.student_id = $2 and c.academic_year_id = $3 and cs.status = 'active'`,
         [schoolId, s.studentId, ay]
       );
       const concByHead: Record<string, any> = {}; concs.forEach((c) => (concByHead[c.feeHeadId] = c));
@@ -237,9 +256,14 @@ class FeesLedgerService {
           params.push([chargeId, schoolId, s.studentId, ay, asOf, category, headId, cycleId, head.name, cyc ? cyc.name : null, amount, userId, now]);
         }
 
-        // concession on this head
+        // concession on this head — only within the assignment's cycle bounds (if any)
         const conc = concByHead[headId];
-        if (conc) {
+        const cOrd = cycleOrd[cycleId];
+        const inBounds = !conc ? false : (
+          (conc.effectiveFromCycle == null || cOrd == null || cOrd >= (cycleOrd[conc.effectiveFromCycle] ?? -Infinity)) &&
+          (conc.effectiveToCycle == null || cOrd == null || cOrd <= (cycleOrd[conc.effectiveToCycle] ?? Infinity))
+        );
+        if (conc && inBounds) {
           const cval = conc.valueType === 'percent' ? (amount * n(conc.value)) / 100 : Math.min(n(conc.value), amount);
           if (cval > 0) {
             concessions++; totalConcession += cval;

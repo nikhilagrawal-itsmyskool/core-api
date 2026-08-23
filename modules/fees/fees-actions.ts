@@ -63,6 +63,8 @@ export const FEE_ACTIONS: Record<string, string> = {
   'fees-concession-handler.listStudents': FEE_VIEW,
   'fees-concession-handler.addStudents': FEE_MANAGE,
   'fees-concession-handler.removeStudent': FEE_MANAGE,
+  'fees-concession-handler.changeConcession': FEE_MANAGE,
+  'fees-concession-handler.timeline': FEE_VIEW,
 
   // Waivers
   'fees-waiver-handler.create': FEE_MANAGE,

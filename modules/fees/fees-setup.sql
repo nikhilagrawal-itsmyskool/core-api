@@ -141,6 +141,13 @@ create table if not exists fee_concession_student (
 );
 -- apply the discount only to cycles due on/after this date (null = whole year); backdatable
 alter table fee_concession_student add column if not exists effective_from date;
+-- cycle-bounded effectivity (by fee_cycle.sort_order). null from = first cycle; null to = ongoing.
+-- lets a scheme run only for a span of cycles (e.g. Staff Apr-Sep, then stop) — a mid-year change
+-- closes the old assignment (sets to_cycle) and opens the new one (from_cycle). change_reason is the
+-- mandatory free-text audit note carried onto the recompute's ledger remarks.
+alter table fee_concession_student add column if not exists effective_from_cycle varchar(12);
+alter table fee_concession_student add column if not exists effective_to_cycle varchar(12);
+alter table fee_concession_student add column if not exists change_reason varchar(200);
 create index if not exists idx_fee_concession_student on fee_concession_student (school_id, student_id);
 create index if not exists idx_fee_concession_student_c on fee_concession_student (school_id, concession_id);
 

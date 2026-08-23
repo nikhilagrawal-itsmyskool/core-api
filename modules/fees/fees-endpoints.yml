@@ -205,6 +205,16 @@
     name: ${self:service}-remove-concession-student
     events:
       - http: { path: 'concessions/{id}/students/{studentId}', method: delete, cors: true }
+  change-concession:
+    handler: fees-concession-handler.changeConcession
+    name: ${self:service}-change-concession
+    events:
+      - http: { path: 'concessions/change', method: post, cors: true }
+  concession-timeline:
+    handler: fees-concession-handler.timeline
+    name: ${self:service}-concession-timeline
+    events:
+      - http: { path: 'students/{id}/concession-timeline', method: get, cors: true }
 
   # ---- Waivers ----
   create-waiver:

@@ -12,7 +12,8 @@ class FeesLedgerHandler {
       const rc = await resolveSchool(event, callback); if (!rc) return;
       const studentId = requireParam(event, 'id', callback); if (!studentId) return;
       const academicYearId = event.queryStringParameters?.academicYearId;
-      const result = await feesLedgerService.studentLedger(rc.schoolId, studentId, academicYearId);
+      const includeCancelled = event.queryStringParameters?.includeCancelled === 'true';
+      const result = await feesLedgerService.studentLedger(rc.schoolId, studentId, academicYearId, includeCancelled);
       ResponseBuilder.ok(result, callback);
     } catch (err: any) { ResponseBuilder.handleError(err, callback); }
   };
