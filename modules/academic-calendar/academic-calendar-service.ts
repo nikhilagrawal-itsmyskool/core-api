@@ -2,7 +2,12 @@ import { DB, singleLineString } from "../../shared/lib/db";
 import { BusinessErrorResult } from "../../shared/lib/errors";
 import { ErrorCode } from "../../shared/lib/error-codes";
 import { DEFAULT_TYPES, HOLIDAY_KINDS, HolidayKind } from "./academic-calendar-constants";
+import { fileStorageService } from "../../shared/lib/file-storage";
 import { parseWorkbook, ParsedEntry } from "./academic-calendar-import";
+
+const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+const IMPORT_ENTITY = "academic_calendar_import";
+const MAX_IMPORT_VERSIONS = 10; // mirrors syllabus MAX_REVISIONS
 import {
   AddEntryRequest,
   CalendarDay,
@@ -495,9 +500,45 @@ class AcademicCalendarService {
     };
   }
 
+  // Store the uploaded workbook and keep only the last N per (school, year).
+  private async storeImportFile(schoolId: string, ay: string, base64: string, fileName: string | undefined, userId: string): Promise<void> {
+    await fileStorageService.upload({
+      fileName: fileName || "activity-calendar.xlsx",
+      mimeType: XLSX_MIME,
+      base64Data: base64.replace(/^data:[^;]+;base64,/, ""),
+      entityType: IMPORT_ENTITY,
+      entityId: ay,
+      schoolId,
+      userId,
+      variant: "original",
+    });
+    const old = await DB.query(
+      singleLineString`select uuid from file_storage
+        where school_id = $1 and entity_type = $2 and entity_id = $3
+        order by created_at desc offset $4`,
+      [schoolId, IMPORT_ENTITY, ay, MAX_IMPORT_VERSIONS],
+    );
+    for (const r of old) await fileStorageService.delete(r.uuid, schoolId);
+  }
+
+  async listImportHistory(schoolId: string, ay: string): Promise<any[]> {
+    return DB.query(
+      singleLineString`select uuid, file_name, size_bytes, createdby_userid, created_at
+        from file_storage where school_id = $1 and entity_type = $2 and entity_id = $3
+        order by created_at desc limit $4`,
+      [schoolId, IMPORT_ENTITY, ay, MAX_IMPORT_VERSIONS],
+    );
+  }
+
+  async getImportFile(schoolId: string, id: string): Promise<{ fileName: string; mimeType: string; data: string } | null> {
+    const f = await fileStorageService.getWithData(id, schoolId);
+    if (!f || f.entityType !== IMPORT_ENTITY) return null;
+    return { fileName: f.fileName, mimeType: f.mimeType, data: f.data };
+  }
+
   // Apply the workbook. replace=true wipes the AY calendar first; otherwise it's an
   // upsert (insert new entries, update changed detail, upsert holidays — never deletes).
-  async importApply(schoolId: string, ay: string, buffer: Buffer, opts: { includeAcademicActivities?: boolean; replace?: boolean }, userId: string) {
+  async importApply(schoolId: string, ay: string, buffer: Buffer, opts: { includeAcademicActivities?: boolean; replace?: boolean; fileBase64?: string; fileName?: string }, userId: string) {
     const { start, end } = await this.academicYearRange(schoolId, ay);
     const parsed = await parseWorkbook(buffer, start, end, opts);
     const typeByCode = await this.ensureImportTypes(schoolId, !!opts.includeAcademicActivities, userId);
@@ -553,6 +594,10 @@ class AcademicCalendarService {
       holidaysWritten++;
     }
 
+    if (opts.fileBase64) {
+      try { await this.storeImportFile(schoolId, ay, opts.fileBase64, opts.fileName, userId); }
+      catch (e: any) { console.error("[academic-calendar] import file store failed:", e.message); }
+    }
     await this.audit(schoolId, ay, "entry", "import", null, "create", `xlsx import: ${written} entries, ${holidaysWritten} holidays`, userId);
     return { entriesWritten: written, holidaysWritten };
   }

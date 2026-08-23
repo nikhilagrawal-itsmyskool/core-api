@@ -162,3 +162,23 @@
           path: import/apply
           method: post
           cors: true
+
+  import-history:
+    handler: academic-calendar-handler.importHistory
+    name: ${self:service}-import-history
+    events:
+      - http:
+          path: import/history
+          method: get
+          cors: true
+
+  import-file:
+    handler: academic-calendar-handler.importFile
+    name: ${self:service}-import-file
+    memorySize: 512
+    timeout: 20
+    events:
+      - http:
+          path: import/history/{id}/file
+          method: get
+          cors: true

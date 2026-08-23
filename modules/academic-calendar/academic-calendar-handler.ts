@@ -304,8 +304,40 @@ class AcademicCalendarHandler {
       if (!ay) return ResponseBuilder.badRequest(ErrorCode.BusinessError, "No current academic year", callback);
       const buffer = Buffer.from(body.fileBase64, "base64");
       const result = await academicCalendarService.importApply(auth.schoolId, ay, buffer,
-        { includeAcademicActivities: !!body.includeAcademicActivities, replace: !!body.replace }, auth.userId);
+        { includeAcademicActivities: !!body.includeAcademicActivities, replace: !!body.replace, fileBase64: body.fileBase64, fileName: body.fileName }, auth.userId);
       ResponseBuilder.ok(result, callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
+  // GET /academic-calendar/import/history?academicYearId= — last N uploaded workbooks
+  public importHistory = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const auth = await resolveSchool(event, callback);
+      if (!auth) return;
+      const q = event.queryStringParameters || {};
+      const ay = await resolveAy(auth.schoolId, q.academicYearId);
+      if (!ay) return ResponseBuilder.ok([], callback);
+      const rows = await academicCalendarService.listImportHistory(auth.schoolId, ay);
+      ResponseBuilder.ok(rows, callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
+  // GET /academic-calendar/import/history/{id}/file — download a stored workbook
+  public importFile = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const auth = await resolveSchool(event, callback);
+      if (!auth) return;
+      const id = requireParam(event, "id", callback);
+      if (!id) return;
+      const f = await academicCalendarService.getImportFile(auth.schoolId, id);
+      if (!f) return ResponseBuilder.notFound(ErrorCode.InvalidId, "File not found", callback);
+      ResponseBuilder.ok({ fileName: f.fileName, mimeType: f.mimeType, dataUri: `data:${f.mimeType};base64,${f.data}` }, callback);
     } catch (err: any) {
       ResponseBuilder.handleError(err, callback);
     }
@@ -353,6 +385,8 @@ export const setHoliday = h.setHoliday;
 export const deleteHoliday = h.deleteHoliday;
 export const importPreview = h.importPreview;
 export const importApply = h.importApply;
+export const importHistory = h.importHistory;
+export const importFile = h.importFile;
 export const getSettings = h.getSettings;
 export const setSettings = h.setSettings;
 export const getNonTeaching = h.getNonTeaching;
