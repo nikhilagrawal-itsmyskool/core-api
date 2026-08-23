@@ -1,7 +1,7 @@
 import { DB, singleLineString } from "../../shared/lib/db";
 import { BusinessErrorResult } from "../../shared/lib/errors";
 import { ErrorCode } from "../../shared/lib/error-codes";
-import { DEFAULT_TYPES, HOLIDAY_KINDS, HolidayKind, WEEKLY_OFF_DOW } from "./academic-calendar-constants";
+import { DEFAULT_TYPES, HOLIDAY_KINDS, HolidayKind } from "./academic-calendar-constants";
 import { parseWorkbook, ParsedEntry } from "./academic-calendar-import";
 import {
   AddEntryRequest,
@@ -315,9 +315,57 @@ class AcademicCalendarService {
     return true;
   }
 
+  // ── Weekly-off setting (stored as academic_year.weekly_off, per year) ───────
+
+  // Returns the non-teaching weekday numbers (0=Sun..6=Sat). null column -> [0]
+  // (Sunday only, the historical default); an explicit empty string -> [] (none).
+  async getWeeklyOff(schoolId: string, ay: string): Promise<number[]> {
+    const rows = await DB.query(
+      singleLineString`select weekly_off from academic_year where uuid = $1 and school_id = $2`,
+      [ay, schoolId],
+    );
+    const raw = rows.length ? rows[0].weeklyOff : null;
+    if (raw == null) return [0];
+    const s = String(raw).trim();
+    if (s === "") return [];
+    return [...new Set(s.split(",").map((x) => parseInt(x, 10)).filter((n) => n >= 0 && n <= 6))].sort((a, b) => a - b);
+  }
+
+  async setWeeklyOff(schoolId: string, ay: string, days: number[], userId: string): Promise<number[]> {
+    const clean = [...new Set((days || []).map((n) => Number(n)).filter((n) => n >= 0 && n <= 6))].sort((a, b) => a - b);
+    await DB.query(
+      singleLineString`update academic_year set weekly_off = $1 where uuid = $2 and school_id = $3`,
+      [clean.join(","), ay, schoolId],
+    );
+    await this.audit(schoolId, ay, "type", "weekly_off", null, "update", `weekly off = [${clean.join(",")}]`, userId);
+    return clean;
+  }
+
+  // Authoritative non-teaching dates in a range: full holidays + weekly-off weekdays.
+  // Restricted holidays are school-open, so excluded. Consumers (attendance %, 360)
+  // use this so "is this a holiday" has one definition.
+  async nonTeachingDates(schoolId: string, ay: string, from: string, to: string): Promise<{ date: string; kind: "holiday" | "weekly_off"; name: string }[]> {
+    const weeklyOff = await this.getWeeklyOff(schoolId, ay);
+    const holidays = await this.listHolidays(schoolId, ay, from, to);
+    const fullByDate = new Map(holidays.filter((h) => h.kind === "full").map((h) => [h.holidayDate, h.name || "Holiday"]));
+    const names = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+    const out: { date: string; kind: "holiday" | "weekly_off"; name: string }[] = [];
+    let cursor = new Date(`${from}T00:00:00Z`);
+    const end = new Date(`${to}T00:00:00Z`);
+    while (cursor.getTime() <= end.getTime()) {
+      const date = cursor.toISOString().slice(0, 10);
+      const dow = cursor.getUTCDay();
+      if (fullByDate.has(date)) out.push({ date, kind: "holiday", name: fullByDate.get(date)! });
+      else if (weeklyOff.includes(dow)) out.push({ date, kind: "weekly_off", name: names[dow] });
+      cursor.setUTCDate(cursor.getUTCDate() + 1);
+    }
+    return out;
+  }
+
   // ── Grid read ─────────────────────────────────────────────────────────────
 
   async getCalendar(schoolId: string, ay: string, from: string, to: string, userId: string): Promise<CalendarView> {
+    const weeklyOff = await this.getWeeklyOff(schoolId, ay);
     const types = await this.listTypes(schoolId, userId);
     const typeById = new Map(types.map((t) => [t.uuid, t]));
 
@@ -346,7 +394,7 @@ class AcademicCalendarService {
       days.push({
         date,
         weekday: weekdayOf(date),
-        isWeeklyOff: WEEKLY_OFF_DOW.includes(dowOf(date)),
+        isWeeklyOff: weeklyOff.includes(dowOf(date)),
         holiday: holidayByDate.get(date) || null,
         entries: entriesByDate.get(date) || [],
       });

@@ -112,6 +112,34 @@
           method: delete
           cors: true
 
+  # ── Settings (weekly-off) + non-teaching resolver ─────────────────────────
+  get-settings:
+    handler: academic-calendar-handler.getSettings
+    name: ${self:service}-get-settings
+    events:
+      - http:
+          path: settings
+          method: get
+          cors: true
+
+  set-settings:
+    handler: academic-calendar-handler.setSettings
+    name: ${self:service}-set-settings
+    events:
+      - http:
+          path: settings
+          method: put
+          cors: true
+
+  get-non-teaching:
+    handler: academic-calendar-handler.getNonTeaching
+    name: ${self:service}-get-non-teaching
+    events:
+      - http:
+          path: non-teaching
+          method: get
+          cors: true
+
   # ── Import (xlsx upload → diff preview → apply) ────────────────────────────
   import-preview:
     handler: academic-calendar-handler.importPreview

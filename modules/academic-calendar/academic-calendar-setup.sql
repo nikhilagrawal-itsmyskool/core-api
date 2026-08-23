@@ -75,6 +75,12 @@ create unique index if not exists idx_calendar_holiday_unique
 create index if not exists idx_calendar_holiday_range
     on calendar_holiday(school_id, academic_year_id, holiday_date, status);
 
+-- Weekly-off configuration lives as a single column on the existing academic_year
+-- row (per school + year) — NOT a new table. Comma-separated weekday numbers
+-- (0=Sun … 6=Sat); null is treated as '0' (Sunday only). A day is "non-teaching"
+-- when its weekday is in this set OR it has a full-holiday row in calendar_holiday.
+alter table academic_year add column if not exists weekly_off varchar(16);
+
 -- calendar_audit: append-only log of calendar changes (who / what / when).
 create table if not exists calendar_audit (
     uuid varchar(12) primary key,

@@ -215,6 +215,60 @@ class AcademicCalendarHandler {
     }
   };
 
+  // ── Settings (weekly-off) + non-teaching resolver ─────────────────────────
+
+  // GET /academic-calendar/settings?academicYearId=
+  public getSettings = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const auth = await resolveSchool(event, callback);
+      if (!auth) return;
+      const q = event.queryStringParameters || {};
+      const ay = await resolveAy(auth.schoolId, q.academicYearId);
+      if (!ay) return ResponseBuilder.badRequest(ErrorCode.BusinessError, "No current academic year", callback);
+      const weeklyOff = await academicCalendarService.getWeeklyOff(auth.schoolId, ay);
+      ResponseBuilder.ok({ academicYearId: ay, weeklyOff }, callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
+  // PUT /academic-calendar/settings { weeklyOff: number[], academicYearId? }
+  public setSettings = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const auth = await resolveSchool(event, callback);
+      if (!auth) return;
+      const body = parseBody<{ weeklyOff?: number[]; academicYearId?: string }>(event, callback);
+      if (!body) return;
+      if (!Array.isArray(body.weeklyOff)) return ResponseBuilder.badRequest(ErrorCode.InvalidInput, "weeklyOff must be an array of weekday numbers (0=Sun..6=Sat)", callback);
+      const ay = await resolveAy(auth.schoolId, body.academicYearId);
+      if (!ay) return ResponseBuilder.badRequest(ErrorCode.BusinessError, "No current academic year", callback);
+      const weeklyOff = await academicCalendarService.setWeeklyOff(auth.schoolId, ay, body.weeklyOff, auth.userId);
+      ResponseBuilder.ok({ academicYearId: ay, weeklyOff }, callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
+  // GET /academic-calendar/non-teaching?from=&to=&academicYearId=
+  public getNonTeaching = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const auth = await resolveSchool(event, callback);
+      if (!auth) return;
+      const q = event.queryStringParameters || {};
+      if (!isValidDate(q.from)) return badDate(callback, "from");
+      if (!isValidDate(q.to)) return badDate(callback, "to");
+      const ay = await resolveAy(auth.schoolId, q.academicYearId);
+      if (!ay) return ResponseBuilder.ok([], callback);
+      const rows = await academicCalendarService.nonTeachingDates(auth.schoolId, ay, q.from!, q.to!);
+      ResponseBuilder.ok(rows, callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
   // ── Import (xlsx) ──────────────────────────────────────────────────────────
 
   // POST /academic-calendar/import/preview { fileBase64, academicYearId?, includeAcademicActivities?, fileName? }
@@ -299,3 +353,6 @@ export const setHoliday = h.setHoliday;
 export const deleteHoliday = h.deleteHoliday;
 export const importPreview = h.importPreview;
 export const importApply = h.importApply;
+export const getSettings = h.getSettings;
+export const setSettings = h.setSettings;
+export const getNonTeaching = h.getNonTeaching;

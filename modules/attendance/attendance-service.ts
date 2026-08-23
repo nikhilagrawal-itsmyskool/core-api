@@ -5,7 +5,7 @@ import { ATTENDANCE_STATUS_VALUES, DEFAULTS } from './attendance-constants';
 import {
   AttendanceSession, AttendanceRecord, RosterEntry, MarkEntry, EditRecordRequest,
 } from './attendance-interfaces';
-import { notifyAbsences } from './attendance-util';
+import { notifyAbsences, nonTeachingDateSet } from './attendance-util';
 const { generateShortUuid } = require('../../shared/util/generate-uuid.js');
 
 function assertStatus(status: string): void {
@@ -359,8 +359,20 @@ class AttendanceService {
       params,
     );
 
+    // Exclude declared holidays + weekly-off days from the % denominator with
+    // certainty (e.g. a session accidentally finalized on a holiday shouldn't count).
+    // Each such day is flagged nonTeaching so the 360 view can render it distinctly.
+    let ntSet = new Set<string>();
+    if (filters.academicYearId && days.length) {
+      const from = days[days.length - 1].date; // days are DESC, so last is earliest
+      const to = days[0].date;
+      ntSet = await nonTeachingDateSet(schoolId, filters.academicYearId, from, to);
+    }
+
     const summary: Record<string, number> = { present: 0, absent: 0, late: 0, leave: 0, total: 0, percent: 0 };
     for (const d of days) {
+      d.nonTeaching = ntSet.has(d.date);
+      if (d.nonTeaching) continue; // holiday/weekly-off: not part of the working denominator
       if (summary[d.status] !== undefined) summary[d.status]++;
       summary.total++;
     }
@@ -421,10 +433,15 @@ class AttendanceService {
       byStudent.get(m.studentId)![m.d] = m.status;
     }
 
+    // Non-teaching days (full holidays + weekly-off) don't count toward working days,
+    // so the percentage is correct even if a session was created on such a day.
+    const ntSet = await nonTeachingDateSet(schoolId, academicYearId, from, to);
+
     const students = roster.map((st: any) => {
       const map = byStudent.get(st.studentId) || {};
       let present = 0, absent = 0, leave = 0, late = 0;
       for (const d of dates) {
+        if (ntSet.has(d)) continue; // holiday / weekly-off — excluded from working days
         const s = map[d];
         if (s === 'present') present++;
         else if (s === 'absent') absent++;
