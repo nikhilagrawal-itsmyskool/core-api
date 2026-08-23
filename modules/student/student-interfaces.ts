@@ -44,6 +44,8 @@ export interface StudentCoreFields {
   // exam_only: enrolled here but studying elsewhere — registered only to sit exams
   examOnly?: boolean;
   examOnlyReason?: string;
+  // rte: enrolled under the Right to Education quota
+  rte?: boolean;
 }
 
 export interface CreateStudentRequest extends StudentCoreFields {
@@ -97,6 +99,7 @@ export interface StudentDetail {
   withdrawalRemarks?: string;
   examOnly?: boolean;
   examOnlyReason?: string;
+  rte?: boolean;
   currentAcademicYearId?: string;
   currentAcademicYearName?: string;
   currentClassId?: string;
@@ -348,6 +351,7 @@ export interface BulkClassRosterRow {
   admissionDate?: string;
   rollNumber?: number;
   examOnly?: boolean; // editable in the grid — registered here only to sit exams
+  rte?: boolean; // editable in the grid — Right to Education quota
   houseId?: string | null;
   fatherGuardianId?: string | null;
   fatherMobile?: string;
@@ -380,6 +384,7 @@ export interface BulkUpdateItem {
   rollNumber?: number | null;
   houseId?: string | null;
   examOnly?: boolean;
+  rte?: boolean;
   contacts?: BulkContacts;
 }
 

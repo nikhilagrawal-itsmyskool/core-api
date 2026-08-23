@@ -117,9 +117,9 @@ class StudentAdminService {
          student_email, student_mobile, student_whatsapp, category_code, nationality_code,
          mother_tongue_code, blood_group_code, aadhaar_number, previous_school,
          admission_date, withdrawal_date, withdrawal_remarks, exam_only, exam_only_reason, status,
-         school_id, createdby_userid, created_at)
+         school_id, createdby_userid, created_at, rte)
         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
-                $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27)
+                $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28)
       `,
       [
         uuid,
@@ -149,6 +149,7 @@ class StudentAdminService {
         schoolId,
         userId,
         now,
+        data.rte ?? false,
       ]
     );
 
@@ -245,6 +246,7 @@ class StudentAdminService {
     if (data.withdrawalRemarks !== undefined) set('withdrawal_remarks', data.withdrawalRemarks);
     if (data.examOnly !== undefined) set('exam_only', data.examOnly);
     if (data.examOnlyReason !== undefined) set('exam_only_reason', data.examOnlyReason);
+    if (data.rte !== undefined) set('rte', data.rte);
     if (data.status !== undefined) set('status', data.status);
 
     if (fields.length > 0) {
@@ -313,7 +315,7 @@ class StudentAdminService {
       singleLineString`
         select
           s.uuid, s.admission_number, s.name, s.admission_date, s.house_id,
-          s.exam_only, sc.roll_number,
+          s.exam_only, s.rte, sc.roll_number,
           f.uuid as father_guardian_id,
           coalesce(f.mobile, s.father_mobile) as father_mobile,
           coalesce(f.whatsapp, s.father_whatsapp) as father_whatsapp,
@@ -485,6 +487,17 @@ class StudentAdminService {
           errors.set(sid, 'Failed to set exam-only');
         }
       }
+      if (it.rte !== undefined) {
+        try {
+          await DB.query(
+            `update student set rte = $1, updatedby_userid = $2, updated_at = $3 where uuid = $4 and school_id = $5 and status <> 'deleted'`,
+            [!!it.rte, userId, new Date(), sid, schoolId]
+          );
+          touched.add(sid);
+        } catch {
+          errors.set(sid, 'Failed to set RTE');
+        }
+      }
       if (it.houseId !== undefined) {
         if (it.houseId && !validHouses.has(it.houseId)) {
           errors.set(sid, 'Invalid house');
@@ -529,7 +542,7 @@ class StudentAdminService {
           s.house_id, h.name as house_name, h.color as house_color,
           s.student_email, s.student_mobile, s.student_whatsapp, s.category_code, s.nationality_code,
           s.mother_tongue_code, s.blood_group_code, s.aadhaar_number, s.previous_school,
-          s.admission_date, s.withdrawal_date, s.withdrawal_remarks, s.exam_only, s.exam_only_reason,
+          s.admission_date, s.withdrawal_date, s.withdrawal_remarks, s.exam_only, s.exam_only_reason, s.rte,
           cur.academic_year_id as current_academic_year_id,
           cur.academic_year_name as current_academic_year_name,
           cur.class_id as current_class_id,

@@ -112,6 +112,9 @@ alter table student add column if not exists withdrawal_remarks varchar(512);
 alter table student add column if not exists exam_only boolean;
 alter table student add column if not exists exam_only_reason varchar(256);
 
+-- rte: student admitted under the Right to Education (RTE) quota. A plain flag.
+alter table student add column if not exists rte boolean;
+
 -- student_class.join_date — "Date Of Joining" for that enrollment.
 alter table student_class add column if not exists join_date date;
 
