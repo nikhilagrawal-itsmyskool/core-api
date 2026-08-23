@@ -533,7 +533,15 @@ class ConcessionService {
 
     // change history (the markers)
     const changes: any[] = await DB.query(singleLineString`select cs.change_reason, cs.effective_from_cycle, cs.effective_to_cycle, cs.updated_at, c.name, cs.status from fee_concession_student cs join fee_concession c on c.uuid = cs.concession_id where cs.school_id = $1 and cs.student_id = $2 and c.academic_year_id = $3 and cs.change_reason is not null order by cs.updated_at`, [schoolId, studentId, academicYearId]);
-    return { studentId, academicYearId, cycles: rows, changes };
+
+    // current active schemes, grouped by name (a scheme may span heads) — for the Change dialog's "stop" picker
+    const assigns: any[] = await DB.query(singleLineString`select cs.concession_id, cs.effective_from_cycle, cs.effective_to_cycle, c.name, c.value_type, c.value, c.fee_head_id, fh.name as head_name from fee_concession_student cs join fee_concession c on c.uuid = cs.concession_id and c.status = 'active' left join fee_head fh on fh.uuid = c.fee_head_id where cs.school_id = $1 and cs.student_id = $2 and c.academic_year_id = $3 and cs.status = 'active' order by c.name`, [schoolId, studentId, academicYearId]);
+    const schemeMap: Record<string, any> = {};
+    assigns.forEach((a) => {
+      const g = (schemeMap[a.name] ||= { name: a.name, concessionIds: [], heads: [], valueType: a.valueType, value: n(a.value), fromCycle: a.effectiveFromCycle, toCycle: a.effectiveToCycle });
+      g.concessionIds.push(a.concessionId); if (a.headName) g.heads.push(a.headName);
+    });
+    return { studentId, academicYearId, cycles: rows, changes, currentSchemes: Object.values(schemeMap) };
   }
 }
 
