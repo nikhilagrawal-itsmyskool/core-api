@@ -9,7 +9,7 @@ import { assemblyNodeService } from './assembly-node-service';
 import { assemblyThemeService } from './assembly-theme-service';
 import { assemblyHouseService } from './assembly-house-service';
 import { assemblyReferenceService } from './assembly-reference-service';
-import { isValidDate } from './assembly-common';
+import { isValidDate, dailyThemeFor } from './assembly-common';
 import { getSignedPhotoUrl } from '../../shared/lib/file-storage';
 
 function weekdayOf(dateStr: string): Weekday {
@@ -48,8 +48,9 @@ class AssemblyResolveService {
     const plan = planRows[0];
     const weekday = weekdayOf(date);
     const themes = await assemblyThemeService.coveringDate(schoolId, plan.academicYearId, planId, date);
+    const dailyTheme = await dailyThemeFor(schoolId, date);
 
-    const notHeld = (): ResolvedAssembly => ({ planId, date, weekday, held: false, source: 'template', themes, nodes: [] });
+    const notHeld = (): ResolvedAssembly => ({ planId, date, weekday, held: false, source: 'template', themes, dailyTheme, nodes: [] });
 
     if (opts.publishedPlanOnly && plan.publishStatus !== 'published') return notHeld();
 
@@ -67,7 +68,7 @@ class AssemblyResolveService {
       // A special replaces the day; no roster overlay, but still surface the house on duty.
       return this.withHouseMode({
         planId, date, weekday, held: true, source: 'special', specialId: sp[0].uuid, title: sp[0].title,
-        themes, nodes: this.toResolved(nested, [], date),
+        themes, dailyTheme, nodes: this.toResolved(nested, [], date),
       }, schoolId, opts);
     }
 
@@ -80,7 +81,7 @@ class AssemblyResolveService {
     if (!planDays.includes(weekday)) return notHeld();
 
     const nested = await assemblyNodeService.getFilteredTree(planId, schoolId, weekday);
-    const result: ResolvedAssembly = { planId, date, weekday, held: true, source: 'template', themes, nodes: this.toResolved(nested, [], date) };
+    const result: ResolvedAssembly = { planId, date, weekday, held: true, source: 'template', themes, dailyTheme, nodes: this.toResolved(nested, [], date) };
     return this.withHouseMode(result, schoolId, opts);
   }
 

@@ -7,7 +7,7 @@ import {
   SaveRosterRequest,
 } from './assembly-interfaces';
 import { WEEKDAY_VALUES, Weekday, WeekStatus, RESPONSIBLE_TARGET_TYPE_VALUES } from './assembly-constants';
-import { isValidDate, findEmployee, findClass, resolveStudentInfo } from './assembly-common';
+import { isValidDate, findEmployee, findClass, resolveStudentInfo, dailyThemesForRange } from './assembly-common';
 import { assemblyHouseService } from './assembly-house-service';
 import { assemblyNodeService } from './assembly-node-service';
 import { assemblyReferenceService } from './assembly-reference-service';
@@ -117,6 +117,11 @@ class AssemblyWeekService {
       (refsByDate.get(r.entryDate) || refsByDate.set(r.entryDate, []).get(r.entryDate)!).push(r);
     }
 
+    // Academic-calendar "thought of the day" per date (read-only overlay).
+    const themeByDate = dates.length
+      ? await dailyThemesForRange(schoolId, dates[0].date, dates[dates.length - 1].date)
+      : new Map<string, string>();
+
     const days: RosterDayView[] = [];
     for (const { wd, date } of dates) {
       const slots = (await this.fillableSlots(week.planId, schoolId, wd)).map(s => {
@@ -136,6 +141,7 @@ class AssemblyWeekService {
         commanders: dp.filter(r => r.role === 'commander').map(view),
         drummers: dp.filter(r => r.role === 'drummer').map(view),
         references: refsByDate.get(date) || [],
+        dailyTheme: themeByDate.get(date) || null,
         slots,
       });
     }

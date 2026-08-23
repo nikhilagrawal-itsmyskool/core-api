@@ -2,6 +2,7 @@ import { ApiCallback, ApiContext, ApiEvent } from '../../shared/lib/api.interfac
 import { ResponseBuilder } from '../../shared/lib/response-builder';
 import { ErrorCode } from '../../shared/lib/error-codes';
 import { resolveSchool, parseBody, requireParam } from './handler-util';
+import { resolveDayFlags } from './attendance-util';
 import { guard } from '../auth/authz';
 import { ATTENDANCE_ACTIONS } from './attendance-actions';
 import { attendanceService } from './attendance-service';
@@ -20,7 +21,8 @@ class AttendanceHandler {
         return;
       }
       const result = await attendanceService.getRoster(ctx.schoolId, q.classId, q.academicYearId, q.date);
-      ResponseBuilder.ok(result, callback);
+      const dayInfo = await resolveDayFlags(ctx.schoolId, q.academicYearId, q.date);
+      ResponseBuilder.ok({ ...result, dayInfo }, callback);
     } catch (err: any) {
       ResponseBuilder.handleError(err, callback);
     }
@@ -39,7 +41,8 @@ class AttendanceHandler {
         return;
       }
       const session = await attendanceService.openSession(ctx.schoolId, body.classId, body.academicYearId, body.date, ctx.userId);
-      ResponseBuilder.ok(session, callback);
+      const dayInfo = await resolveDayFlags(ctx.schoolId, body.academicYearId, body.date);
+      ResponseBuilder.ok({ ...session, dayInfo }, callback);
     } catch (err: any) {
       ResponseBuilder.handleError(err, callback);
     }

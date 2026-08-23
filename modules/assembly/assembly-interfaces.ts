@@ -150,6 +150,7 @@ export interface RosterDayView {
   commanders: RosterParticipantView[];  // scope='day', role 'commander' (student)
   drummers: RosterParticipantView[];    // scope='day', role 'drummer' (student)
   references: RosterReferenceView[];    // day-level references (description + image)
+  dailyTheme?: string | null;           // academic-calendar "thought of the day" (Theme entry)
   slots: RosterSlot[];
 }
 
@@ -631,6 +632,7 @@ export interface ResolvedAssembly {
   specialId?: string;
   title?: string; // special title, when source = 'special'
   themes: AssemblyTheme[];
+  dailyTheme?: string | null; // academic-calendar "thought of the day" (Theme entry) for this date
   nodes: ResolvedNode[]; // top-level nodes, nested via children
   // House mode: the house on duty that week + (when an approved roster exists) the
   // day's anchors/owner. Absent for template-mode schools.

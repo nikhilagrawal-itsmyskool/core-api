@@ -1,0 +1,113 @@
+  # Health check
+  health:
+    handler: health-handler.health
+    events:
+      - http:
+          path: health
+          method: get
+          cors: true
+
+  # ── Types (per-school configurable "columns") ──────────────────────────────
+  list-types:
+    handler: academic-calendar-handler.listTypes
+    name: ${self:service}-list-types
+    events:
+      - http:
+          path: types
+          method: get
+          cors: true
+
+  create-type:
+    handler: academic-calendar-handler.createType
+    name: ${self:service}-create-type
+    events:
+      - http:
+          path: types
+          method: post
+          cors: true
+
+  update-type:
+    handler: academic-calendar-handler.updateType
+    name: ${self:service}-update-type
+    events:
+      - http:
+          path: types/{id}
+          method: put
+          cors: true
+
+  delete-type:
+    handler: academic-calendar-handler.deleteType
+    name: ${self:service}-delete-type
+    events:
+      - http:
+          path: types/{id}
+          method: delete
+          cors: true
+
+  # ── Calendar (grid read: entries + holidays grouped by date) ───────────────
+  get-calendar:
+    handler: academic-calendar-handler.getCalendar
+    name: ${self:service}-get-calendar
+    memorySize: 512
+    timeout: 20
+    events:
+      - http:
+          path: calendar
+          method: get
+          cors: true
+
+  # ── Entries ────────────────────────────────────────────────────────────────
+  add-entry:
+    handler: academic-calendar-handler.addEntry
+    name: ${self:service}-add-entry
+    events:
+      - http:
+          path: entries
+          method: post
+          cors: true
+
+  update-entry:
+    handler: academic-calendar-handler.updateEntry
+    name: ${self:service}-update-entry
+    events:
+      - http:
+          path: entries/{id}
+          method: put
+          cors: true
+
+  delete-entry:
+    handler: academic-calendar-handler.deleteEntry
+    name: ${self:service}-delete-entry
+    events:
+      - http:
+          path: entries/{id}
+          method: delete
+          cors: true
+
+  # ── Holidays (attendance/assembly consume list; grid marks them) ───────────
+  list-holidays:
+    handler: academic-calendar-handler.listHolidays
+    name: ${self:service}-list-holidays
+    events:
+      - http:
+          path: holidays
+          method: get
+          cors: true
+
+  set-holiday:
+    handler: academic-calendar-handler.setHoliday
+    name: ${self:service}-set-holiday
+    events:
+      - http:
+          path: holidays
+          method: post
+          cors: true
+
+  delete-holiday:
+    handler: academic-calendar-handler.deleteHoliday
+    name: ${self:service}-delete-holiday
+    events:
+      - http:
+          path: holidays/{id}
+          method: delete
+          cors: true

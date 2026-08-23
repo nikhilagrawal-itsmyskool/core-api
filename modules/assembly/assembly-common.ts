@@ -19,6 +19,52 @@ export async function getSchoolIdByCode(schoolCode: string): Promise<string | nu
   return results.length > 0 ? results[0].uuid : null;
 }
 
+// The academic-calendar module's daily "thought of the day" (Theme entry). Read
+// directly from the calendar tables (same DB, no FK). Returns null when the calendar
+// isn't in use or its tables aren't installed — assembly must never fail because the
+// calendar module is absent, so the query is wrapped defensively.
+export async function dailyThemeFor(schoolId: string, date: string): Promise<string | null> {
+  try {
+    const rows = await DB.query(
+      singleLineString`
+        select e.value from calendar_entry e
+        join calendar_type t on t.uuid = e.type_id and t.school_id = e.school_id
+        where e.school_id = $1 and e.entry_date = $2 and e.status = 'active'
+          and t.code = 'theme' and t.status = 'active'
+        order by e.sort_order nulls last limit 1
+      `,
+      [schoolId, date],
+    );
+    return rows.length > 0 ? rows[0].value : null;
+  } catch {
+    return null;
+  }
+}
+
+// Daily themes for a date range -> { 'yyyy-mm-dd': theme }. First entry per date wins.
+export async function dailyThemesForRange(
+  schoolId: string, from: string, to: string,
+): Promise<Map<string, string>> {
+  const map = new Map<string, string>();
+  try {
+    const rows = await DB.query(
+      singleLineString`
+        select to_char(e.entry_date, 'YYYY-MM-DD') as entry_date, e.value from calendar_entry e
+        join calendar_type t on t.uuid = e.type_id and t.school_id = e.school_id
+        where e.school_id = $1 and e.status = 'active'
+          and e.entry_date >= $2 and e.entry_date <= $3
+          and t.code = 'theme' and t.status = 'active'
+        order by e.entry_date, e.sort_order nulls last
+      `,
+      [schoolId, from, to],
+    );
+    for (const r of rows) if (!map.has(r.entryDate)) map.set(r.entryDate, r.value);
+  } catch {
+    /* calendar module not installed — no daily themes */
+  }
+  return map;
+}
+
 export async function academicYearExists(schoolId: string, academicYearId: string): Promise<boolean> {
   const rows = await DB.query(
     singleLineString`select 1 from academic_year where uuid = $1 and school_id = $2`,
