@@ -2,6 +2,7 @@ import { DB, singleLineString } from "../../shared/lib/db";
 import { BusinessErrorResult } from "../../shared/lib/errors";
 import { ErrorCode } from "../../shared/lib/error-codes";
 import { DEFAULT_TYPES, HOLIDAY_KINDS, HolidayKind, WEEKLY_OFF_DOW } from "./academic-calendar-constants";
+import { parseWorkbook, ParsedEntry } from "./academic-calendar-import";
 import {
   AddEntryRequest,
   CalendarDay,
@@ -352,6 +353,160 @@ class AcademicCalendarService {
       cursor.setUTCDate(cursor.getUTCDate() + 1);
     }
     return { academicYearId: ay, from, to, types, days };
+  }
+
+  // ── Import (xlsx) ───────────────────────────────────────────────────────────
+
+  private async academicYearRange(schoolId: string, ay: string): Promise<{ start: string; end: string }> {
+    const rows = await DB.query(
+      singleLineString`select to_char(start_date,'YYYY-MM-DD') as start, to_char(end_date,'YYYY-MM-DD') as end
+        from academic_year where uuid = $1 and school_id = $2`,
+      [ay, schoolId],
+    );
+    if (!rows.length) throw new BusinessErrorResult(ErrorCode.BusinessError, "Unknown academic year");
+    return rows[0];
+  }
+
+  // Ensure defaults + (optionally) the Academic Activities type, return code -> {id,name}.
+  private async ensureImportTypes(schoolId: string, includeAA: boolean, userId: string): Promise<Map<string, { id: string; name: string }>> {
+    await this.ensureTypesSeeded(schoolId, userId);
+    if (includeAA) {
+      const has = await DB.query(
+        singleLineString`select 1 from calendar_type where school_id = $1 and code = 'academic_activity' and status = 'active'`,
+        [schoolId],
+      );
+      if (!has.length) {
+        await DB.query(
+          singleLineString`insert into calendar_type (uuid, school_id, code, name, sort_order, status, createdby_userid, created_at)
+            values ($1, $2, 'academic_activity', 'Academic Activities', 70, 'active', $3, $4) on conflict do nothing`,
+          [generateShortUuid(12), schoolId, userId, new Date()],
+        );
+      }
+    }
+    const rows = await DB.query(
+      singleLineString`select uuid, code, name from calendar_type where school_id = $1 and status = 'active'`,
+      [schoolId],
+    );
+    return new Map(rows.map((r: any) => [r.code, { id: r.uuid, name: r.name }]));
+  }
+
+  private async existingEntryMap(schoolId: string, ay: string, codeById: Map<string, string>): Promise<Map<string, string | null>> {
+    const rows = await DB.query(
+      singleLineString`select to_char(entry_date,'YYYY-MM-DD') as entry_date, type_id, value, detail
+        from calendar_entry where school_id = $1 and academic_year_id = $2 and status = 'active'`,
+      [schoolId, ay],
+    );
+    const map = new Map<string, string | null>();
+    for (const r of rows) {
+      const code = codeById.get(r.typeId);
+      if (code) map.set(`${r.entryDate}|${code}|${r.value}`, r.detail || null);
+    }
+    return map;
+  }
+
+  // Compute the diff (added/changed/removed) without writing. `sample` is capped.
+  async importPreview(schoolId: string, ay: string, buffer: Buffer, opts: { includeAcademicActivities?: boolean; fileName?: string }, userId: string) {
+    const { start, end } = await this.academicYearRange(schoolId, ay);
+    const parsed = await parseWorkbook(buffer, start, end, opts);
+    const typeByCode = await this.ensureImportTypes(schoolId, !!opts.includeAcademicActivities, userId);
+    const codeById = new Map([...typeByCode.entries()].map(([code, v]) => [v.id, code]));
+    const existing = await this.existingEntryMap(schoolId, ay, codeById);
+
+    const targetKeys = new Set<string>();
+    const added: ParsedEntry[] = [], changed: ParsedEntry[] = [];
+    for (const e of parsed.entries) {
+      if (!typeByCode.has(e.code)) continue;
+      const key = `${e.date}|${e.code}|${e.value}`;
+      targetKeys.add(key);
+      if (!existing.has(key)) added.push(e);
+      else if ((existing.get(key) || null) !== (e.detail || null)) changed.push(e);
+    }
+    const removed: { date: string; code: string; value: string }[] = [];
+    for (const key of existing.keys()) {
+      if (!targetKeys.has(key)) { const [date, code, value] = key.split("|"); removed.push({ date, code, value }); }
+    }
+
+    let full = 0, restricted = 0;
+    for (const h of parsed.holidays.values()) (h.kind === "full" ? full++ : restricted++);
+
+    const nameOf = (code: string) => typeByCode.get(code)?.name || code;
+    const sample = [
+      ...added.map((e) => ({ date: e.date, typeName: nameOf(e.code), value: e.value, detail: e.detail, change: "add" as const })),
+      ...changed.map((e) => ({ date: e.date, typeName: nameOf(e.code), value: e.value, detail: e.detail, change: "update" as const })),
+      ...removed.map((e) => ({ date: e.date, typeName: nameOf(e.code), value: e.value, detail: null, change: "remove" as const })),
+    ].sort((a, b) => a.date.localeCompare(b.date)).slice(0, 30);
+
+    return {
+      fileName: opts.fileName || "workbook.xlsx",
+      dates: parsed.dates,
+      added: added.length, changed: changed.length, removed: removed.length,
+      holidaysFull: full, holidaysRestricted: restricted,
+      skipped: parsed.skipped.outOfMonth + parsed.skipped.outOfRange + parsed.skipped.blankDate,
+      unknownHeaders: parsed.unknownHeaders,
+      sample,
+    };
+  }
+
+  // Apply the workbook. replace=true wipes the AY calendar first; otherwise it's an
+  // upsert (insert new entries, update changed detail, upsert holidays — never deletes).
+  async importApply(schoolId: string, ay: string, buffer: Buffer, opts: { includeAcademicActivities?: boolean; replace?: boolean }, userId: string) {
+    const { start, end } = await this.academicYearRange(schoolId, ay);
+    const parsed = await parseWorkbook(buffer, start, end, opts);
+    const typeByCode = await this.ensureImportTypes(schoolId, !!opts.includeAcademicActivities, userId);
+    const now = new Date();
+
+    if (opts.replace) {
+      await DB.query(singleLineString`delete from calendar_entry where school_id = $1 and academic_year_id = $2`, [schoolId, ay]);
+      await DB.query(singleLineString`delete from calendar_holiday where school_id = $1 and academic_year_id = $2`, [schoolId, ay]);
+    }
+
+    const codeById = new Map([...typeByCode.entries()].map(([code, v]) => [v.id, code]));
+    const existing = opts.replace ? new Map<string, string | null>() : await this.existingEntryMap(schoolId, ay, codeById);
+    const existingIdByKey = new Map<string, string>();
+    if (!opts.replace) {
+      const rows = await DB.query(
+        singleLineString`select uuid, to_char(entry_date,'YYYY-MM-DD') as entry_date, type_id, value from calendar_entry
+          where school_id = $1 and academic_year_id = $2 and status = 'active'`,
+        [schoolId, ay],
+      );
+      for (const r of rows) { const code = codeById.get(r.typeId); if (code) existingIdByKey.set(`${r.entryDate}|${code}|${r.value}`, r.uuid); }
+    }
+
+    const seq: Record<string, number> = {};
+    let written = 0;
+    for (const e of parsed.entries) {
+      const type = typeByCode.get(e.code);
+      if (!type) continue;
+      const key = `${e.date}|${e.code}|${e.value}`;
+      const grp = `${e.date}|${e.code}`;
+      seq[grp] = (seq[grp] || 0) + 10;
+      if (existing.has(key)) {
+        if ((existing.get(key) || null) !== (e.detail || null)) {
+          await DB.query(
+            singleLineString`update calendar_entry set detail = $1, updatedby_userid = $2, updated_at = $3 where uuid = $4`,
+            [e.detail || null, userId, now, existingIdByKey.get(key)],
+          );
+          written++;
+        }
+        continue;
+      }
+      await DB.query(
+        singleLineString`insert into calendar_entry
+          (uuid, school_id, academic_year_id, entry_date, end_date, type_id, value, detail, sort_order, status, createdby_userid, created_at)
+          values ($1,$2,$3,$4,null,$5,$6,$7,$8,'active',$9,$10)`,
+        [generateShortUuid(12), schoolId, ay, e.date, type.id, e.value.slice(0, 512), e.detail ? e.detail.slice(0, 512) : null, seq[grp], userId, now],
+      );
+      written++;
+    }
+
+    let holidaysWritten = 0;
+    for (const [date, h] of parsed.holidays.entries()) {
+      await this.setHoliday(schoolId, ay, { holidayDate: date, name: h.name, kind: h.kind }, userId);
+      holidaysWritten++;
+    }
+
+    await this.audit(schoolId, ay, "entry", "import", null, "create", `xlsx import: ${written} entries, ${holidaysWritten} holidays`, userId);
+    return { entriesWritten: written, holidaysWritten };
   }
 }
 

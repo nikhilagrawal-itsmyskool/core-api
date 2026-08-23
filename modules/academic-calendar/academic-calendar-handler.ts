@@ -215,6 +215,48 @@ class AcademicCalendarHandler {
     }
   };
 
+  // ── Import (xlsx) ──────────────────────────────────────────────────────────
+
+  // POST /academic-calendar/import/preview { fileBase64, academicYearId?, includeAcademicActivities?, fileName? }
+  public importPreview = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const auth = await resolveSchool(event, callback);
+      if (!auth) return;
+      const body = parseBody<any>(event, callback);
+      if (!body) return;
+      if (!body.fileBase64) return ResponseBuilder.badRequest(ErrorCode.InvalidInput, "fileBase64 is required", callback);
+      const ay = await resolveAy(auth.schoolId, body.academicYearId);
+      if (!ay) return ResponseBuilder.badRequest(ErrorCode.BusinessError, "No current academic year", callback);
+      const buffer = Buffer.from(body.fileBase64, "base64");
+      const result = await academicCalendarService.importPreview(auth.schoolId, ay, buffer,
+        { includeAcademicActivities: !!body.includeAcademicActivities, fileName: body.fileName }, auth.userId);
+      ResponseBuilder.ok(result, callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
+  // POST /academic-calendar/import/apply { fileBase64, academicYearId?, includeAcademicActivities?, replace? }
+  public importApply = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const auth = await resolveSchool(event, callback);
+      if (!auth) return;
+      const body = parseBody<any>(event, callback);
+      if (!body) return;
+      if (!body.fileBase64) return ResponseBuilder.badRequest(ErrorCode.InvalidInput, "fileBase64 is required", callback);
+      const ay = await resolveAy(auth.schoolId, body.academicYearId);
+      if (!ay) return ResponseBuilder.badRequest(ErrorCode.BusinessError, "No current academic year", callback);
+      const buffer = Buffer.from(body.fileBase64, "base64");
+      const result = await academicCalendarService.importApply(auth.schoolId, ay, buffer,
+        { includeAcademicActivities: !!body.includeAcademicActivities, replace: !!body.replace }, auth.userId);
+      ResponseBuilder.ok(result, callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
   // DELETE /academic-calendar/holidays/{id}
   public deleteHoliday = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
     ctx.callbackWaitsForEmptyEventLoop = false;
@@ -255,3 +297,5 @@ export const deleteEntry = h.deleteEntry;
 export const listHolidays = h.listHolidays;
 export const setHoliday = h.setHoliday;
 export const deleteHoliday = h.deleteHoliday;
+export const importPreview = h.importPreview;
+export const importApply = h.importApply;

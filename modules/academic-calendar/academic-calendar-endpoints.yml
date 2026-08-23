@@ -111,3 +111,26 @@
           path: holidays/{id}
           method: delete
           cors: true
+
+  # ── Import (xlsx upload → diff preview → apply) ────────────────────────────
+  import-preview:
+    handler: academic-calendar-handler.importPreview
+    name: ${self:service}-import-preview
+    memorySize: 1024
+    timeout: 29
+    events:
+      - http:
+          path: import/preview
+          method: post
+          cors: true
+
+  import-apply:
+    handler: academic-calendar-handler.importApply
+    name: ${self:service}-import-apply
+    memorySize: 1024
+    timeout: 29
+    events:
+      - http:
+          path: import/apply
+          method: post
+          cors: true
