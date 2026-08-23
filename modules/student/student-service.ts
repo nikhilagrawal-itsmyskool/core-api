@@ -13,6 +13,9 @@ export interface StudentSearchFilters {
   // guardian all have no mobile and no WhatsApp — a notification can never reach
   // them (the student's own number is not used by the student ladder).
   unreachable?: boolean;
+  // Attribute filters — keep only students with the flag set.
+  examOnly?: boolean;
+  rte?: boolean;
 }
 
 // One line of the effective-contact breakdown: the role:channel the sender's
@@ -60,7 +63,7 @@ class StudentService {
     schoolId: string,
     filters: StudentSearchFilters = {}
   ): Promise<Student[] | StudentWithClass[]> {
-    const { name, classId, academicYearId, admissionNumber, phone, unreachable } = filters;
+    const { name, classId, academicYearId, admissionNumber, phone, unreachable, examOnly, rte } = filters;
     const namePattern = name && name.trim() ? `%${name.trim()}%` : '%';
 
     // Extra predicates shared by both query shapes. Built against the `student`
@@ -76,6 +79,8 @@ class StudentService {
         const cols = ['father_mobile', 'father_whatsapp', 'mother_mobile', 'mother_whatsapp', 'guardian_mobile', 'guardian_whatsapp'];
         parts.push('and ' + cols.map((c) => `coalesce(trim(${alias}${c}), '') = ''`).join(' and '));
       }
+      if (examOnly) parts.push(`and ${alias}exam_only is true`);
+      if (rte) parts.push(`and ${alias}rte is true`);
       if (phone && phone.trim()) {
         params.push(`%${phone.trim()}%`);
         const p = `$${params.length}`;
