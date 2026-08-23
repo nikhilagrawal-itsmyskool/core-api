@@ -459,7 +459,8 @@ class ConcessionService {
 
     // PREVIEW: run the exact reconciliation engine against the in-memory resulting assignments (no writes)
     const sim = await this.syncConcessions(schoolId, academicYearId, [studentId], userId, { dryRun: true, assignmentsOverride: resultingDefs, remark });
-    const impact = await this.previewImpact(schoolId, academicYearId, studentId, sim.plan);
+    const ordByName: Record<string, number> = {}; ordered.forEach((c) => { ordByName[String(c.name).trim().toLowerCase()] = c.ord; });
+    const impact = await this.previewImpact(schoolId, academicYearId, studentId, sim.plan, ordByName);
 
     if (dryRun) return { dryRun: true, transition, fromCycle: fromName, remark, ...impact };
 
@@ -475,18 +476,21 @@ class ConcessionService {
     return { dryRun: false, transition, fromCycle: fromName, applied, ...impact };
   }
 
-  // Translate a dry-run concession plan into per-cycle due/advance impact (using charge debit + payments).
-  private async previewImpact(schoolId: string, academicYearId: string, studentId: string, plan: any[]) {
+  // Translate a dry-run concession plan into per-cycle impact (using charge debit + payments).
+  // dueDelta > 0 = more owed (concession removed); dueDelta < 0 = discount, owes less (concession added);
+  // advanceDelta > 0 = a paid cycle became overpaid. Rows are returned in cycle (sort_order) order.
+  private async previewImpact(schoolId: string, academicYearId: string, studentId: string, plan: any[], ordByName: Record<string, number> = {}) {
     const n = (v: any) => (v == null ? 0 : Number(v));
+    const nrm = (s: any) => String(s ?? '').trim().toLowerCase();
     const deltaByCharge: Record<string, number> = {};
     plan.forEach((pl) => { deltaByCharge[pl.chargeId] = (deltaByCharge[pl.chargeId] || 0) + (n(pl.to) - n(pl.from)); });
     const chargeIds = Object.keys(deltaByCharge);
-    if (!chargeIds.length) return { affectedCycles: [], totalDue: 0, totalAdvance: 0, affectedCount: 0, paidAffected: 0 };
+    if (!chargeIds.length) return { affectedCycles: [], totalDue: 0, totalReduced: 0, totalAdvance: 0, affectedCount: 0, paidAffected: 0 };
     const charges: any[] = await DB.query(singleLineString`select uuid, cycle_label, debit from student_ledger_entry where school_id = $1 and academic_year_id = $2 and student_id = $3 and kind = 'charge' and status = 'active' and uuid = any($4)`, [schoolId, academicYearId, studentId, chargeIds]);
     const credits: any[] = await DB.query(singleLineString`select settles_entry_id, kind, sum(credit) as c from student_ledger_entry where school_id = $1 and academic_year_id = $2 and student_id = $3 and status = 'active' and kind in ('payment','concession','waiver') and settles_entry_id = any($4) group by settles_entry_id, kind`, [schoolId, academicYearId, studentId, chargeIds]);
     const conc: Record<string, number> = {}; const pay: Record<string, number> = {};
     credits.forEach((r) => { if (r.kind === 'payment') pay[r.settlesEntryId] = n(r.c); else conc[r.settlesEntryId] = (conc[r.settlesEntryId] || 0) + n(r.c); });
-    let totalDue = 0, totalAdvance = 0, paidAffected = 0; const rows: any[] = [];
+    let totalDue = 0, totalReduced = 0, totalAdvance = 0, paidAffected = 0; const rows: any[] = [];
     charges.forEach((ch) => {
       const debit = n(ch.debit), curConc = conc[ch.uuid] || 0, paid = pay[ch.uuid] || 0, dConc = deltaByCharge[ch.uuid] || 0;
       const oldOut = debit - curConc - paid, newOut = debit - (curConc + dConc) - paid;
@@ -494,10 +498,12 @@ class ConcessionService {
       const advDelta = Math.round((Math.max(0, -newOut) - Math.max(0, -oldOut)) * 100) / 100;
       if (paid > 0.005) paidAffected++;
       if (dueDelta > 0.005) totalDue += dueDelta;
+      else if (dueDelta < -0.005) totalReduced += -dueDelta;
       if (advDelta > 0.005) totalAdvance += advDelta;
-      rows.push({ cycle: ch.cycleLabel, wasPaid: paid > 0.005, dueDelta: Math.round(dueDelta), advanceDelta: Math.round(advDelta) });
+      rows.push({ cycle: ch.cycleLabel, ord: ordByName[nrm(ch.cycleLabel)] ?? 999, wasPaid: paid > 0.005, dueDelta: Math.round(dueDelta), advanceDelta: Math.round(advDelta) });
     });
-    return { affectedCycles: rows, totalDue: Math.round(totalDue), totalAdvance: Math.round(totalAdvance), affectedCount: rows.length, paidAffected };
+    rows.sort((a, b) => a.ord - b.ord);
+    return { affectedCycles: rows, totalDue: Math.round(totalDue), totalReduced: Math.round(totalReduced), totalAdvance: Math.round(totalAdvance), affectedCount: rows.length, paidAffected };
   }
 
   // Per-cycle concession timeline for the student app / admin timeline screen.
