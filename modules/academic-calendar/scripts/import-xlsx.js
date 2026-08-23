@@ -64,17 +64,32 @@ function normHeader(s) {
   return String(s || "").toLowerCase().replace(/[^a-z ]+/g, " ").replace(/\s+/g, " ").trim();
 }
 
+// exceljs cells can be rich-text / hyperlink / formula objects, not just strings.
+// Flatten any of those shapes to plain text (naive String() gives "[object Object]").
+function toText(v) {
+  if (v == null) return "";
+  if (typeof v === "string") return v;
+  if (typeof v === "number") return String(v);
+  if (v instanceof Date) return v.toISOString().slice(0, 10);
+  if (typeof v === "object") {
+    if (Array.isArray(v.richText)) return v.richText.map((rt) => rt.text || "").join("");
+    if (typeof v.text === "string") return v.text;   // hyperlink cell { text, hyperlink }
+    if (v.result != null) return toText(v.result);    // formula cell
+    return "";
+  }
+  return String(v);
+}
+
 // A cell value is "empty" if blank or just dashes / n-a.
 function isBlank(v) {
-  if (v == null) return true;
-  const s = String(v).trim();
+  const s = toText(v).trim();
   if (!s) return true;
   if (/^-+$/.test(s)) return true;
   if (/^n\/?a$/i.test(s)) return true;
   return false;
 }
 function clean(v) {
-  return String(v).replace(/\s+/g, " ").trim();
+  return toText(v).replace(/\s+/g, " ").trim();
 }
 
 // exceljs gives Date objects (UTC) for date cells, or a number (serial). Normalize
