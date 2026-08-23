@@ -91,6 +91,42 @@ class HouseService {
     }
     clustered.sort((a, b) => String(a.houseName || '').localeCompare(String(b.houseName || '')));
 
+    // Suggested balancing move per clustered family: move ONE child to a different
+    // house so the family is split while keeping grade + size even. Pick the child
+    // whose grade is most over-represented in the family's house, sending them to the
+    // house holding the fewest of that grade (tie → smallest house). Batch-aware —
+    // working counts update across families so the moves don't all target one house.
+    const sibGrade: Record<string, Record<string, number>> = {};
+    Object.keys(grades).forEach((g) => (sibGrade[g] = { ...grades[g].counts }));
+    const sibTotal: Record<string, number> = {};
+    houses.forEach((h: any) => (sibTotal[h.uuid] = perHouse[h.uuid].total));
+    for (const fam of clustered) {
+      const H = fam.houseId;
+      let pick: { member: any; grade: string; toHouseId: string; gain: number } | null = null;
+      for (const m of fam.members) {
+        const G = String(m.className || '').split('-')[0] || '?';
+        let bestT: string | null = null, bestN = Infinity, bestTot = Infinity;
+        for (const h of houses) {
+          if (h.uuid === H) continue;
+          const n = (sibGrade[G] && sibGrade[G][h.uuid]) || 0;
+          const t = sibTotal[h.uuid] || 0;
+          if (n < bestN || (n === bestN && t < bestTot)) { bestT = h.uuid; bestN = n; bestTot = t; }
+        }
+        if (!bestT) continue;
+        const gain = ((sibGrade[G] && sibGrade[G][H]) || 0) - bestN;
+        if (!pick || gain > pick.gain) pick = { member: m, grade: G, toHouseId: bestT, gain };
+      }
+      if (pick) {
+        const { grade: G, toHouseId: T } = pick;
+        if (sibGrade[G]) { sibGrade[G][H] = (sibGrade[G][H] || 0) - 1; sibGrade[G][T] = (sibGrade[G][T] || 0) + 1; }
+        sibTotal[H] = (sibTotal[H] || 0) - 1; sibTotal[T] = (sibTotal[T] || 0) + 1;
+        const th = houses.find((h: any) => h.uuid === T);
+        fam.suggestedMove = { studentId: pick.member.uuid, studentName: pick.member.name, toHouseId: T, toHouseName: th ? th.name : null };
+      } else {
+        fam.suggestedMove = null;
+      }
+    }
+
     const GRADE_RANK: Record<string, number> = {
       NURSERY: 0, LKG: 1, UKG: 2, I: 3, II: 4, III: 5, IV: 6, V: 7, VI: 8, VII: 9, VIII: 10, IX: 11, X: 12, XI: 13, XII: 14,
     };
