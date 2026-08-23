@@ -254,6 +254,15 @@
           method: get
           cors: true
 
+  exam-only-roster:
+    handler: student-bulk-handler.examOnlyRoster
+    name: ${self:service}-exam-only-roster
+    events:
+      - http:
+          path: exam-only-roster
+          method: get
+          cors: true
+
   bulk-class-apply:
     handler: student-bulk-handler.apply
     name: ${self:service}-bulk-class-apply

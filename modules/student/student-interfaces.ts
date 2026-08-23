@@ -347,6 +347,7 @@ export interface BulkClassRosterRow {
   name: string;
   admissionDate?: string;
   rollNumber?: number;
+  className?: string; // current class (display-only; set in the exam-only cross-class roster)
   houseId?: string | null;
   fatherGuardianId?: string | null;
   fatherMobile?: string;
@@ -381,9 +382,13 @@ export interface BulkUpdateItem {
   contacts?: BulkContacts;
 }
 
+// classId + academicYearId together put the update in "class mode" (roll numbers +
+// house + contacts, enrolment-validated). Omit both for "student mode" — a
+// cross-class cohort like exam-only students — where only student-level fields
+// (house + contacts) are written and roll numbers are ignored.
 export interface BulkUpdateRequest {
-  classId: string;
-  academicYearId: string;
+  classId?: string;
+  academicYearId?: string;
   items: BulkUpdateItem[];
 }
 

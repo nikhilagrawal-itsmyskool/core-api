@@ -348,6 +348,57 @@ class StudentAdminService {
     )) as BulkClassRosterRow[];
   }
 
+  // Cross-class roster for bulk-editing exam-only students (enrolled here but
+  // studying elsewhere, registered only to sit exams). Same shape as the class
+  // roster but sourced from the exam_only flag and carrying the current class name
+  // for context instead of a roll number (roll is class-scoped and not edited here).
+  public async examOnlyRoster(schoolId: string): Promise<BulkClassRosterRow[]> {
+    return (await DB.query(
+      singleLineString`
+        select
+          s.uuid, s.admission_number, s.name, s.admission_date, s.house_id,
+          cur.class_name,
+          f.uuid as father_guardian_id,
+          coalesce(f.mobile, s.father_mobile) as father_mobile,
+          coalesce(f.whatsapp, s.father_whatsapp) as father_whatsapp,
+          m.uuid as mother_guardian_id,
+          coalesce(m.mobile, s.mother_mobile) as mother_mobile,
+          coalesce(m.whatsapp, s.mother_whatsapp) as mother_whatsapp,
+          g.uuid as guardian_guardian_id,
+          coalesce(g.mobile, s.guardian_mobile) as guardian_mobile,
+          coalesce(g.whatsapp, s.guardian_whatsapp) as guardian_whatsapp
+        from student s
+        left join lateral (
+          select c.name as class_name
+          from student_class sc
+          join academic_year ay on ay.uuid = sc.academic_year_id
+          left join class c on c.uuid = sc.class_id
+          where sc.student_id = s.uuid and sc.school_id = s.school_id
+            and (sc.status is null or sc.status <> 'deleted')
+          order by ay.start_date desc nulls last limit 1
+        ) cur on true
+        left join lateral (
+          select uuid, mobile, whatsapp from student_guardian
+          where student_id = s.uuid and school_id = s.school_id and status = 'active' and relation = 'father'
+          order by created_at limit 1
+        ) f on true
+        left join lateral (
+          select uuid, mobile, whatsapp from student_guardian
+          where student_id = s.uuid and school_id = s.school_id and status = 'active' and relation = 'mother'
+          order by created_at limit 1
+        ) m on true
+        left join lateral (
+          select uuid, mobile, whatsapp from student_guardian
+          where student_id = s.uuid and school_id = s.school_id and status = 'active' and relation = 'guardian'
+          order by created_at limit 1
+        ) g on true
+        where s.school_id = $1 and s.exam_only = true and s.status <> 'deleted'
+        order by s.admission_date asc nulls last, s.admission_number asc
+      `,
+      [schoolId]
+    )) as BulkClassRosterRow[];
+  }
+
   private isUniqueViolation(e: any): boolean {
     return !!e && (e.code === '23505' || /duplicate key|unique constraint/i.test(String(e?.message || '')));
   }
@@ -363,11 +414,14 @@ class StudentAdminService {
     userId: string
   ): Promise<BulkUpdateResult> {
     const { classId, academicYearId, items } = data;
-    if (!classId || !academicYearId) {
-      throw new BusinessErrorResult(ErrorCode.BusinessError, 'classId and academicYearId are required');
+    // Class mode = roll + house + contacts, scoped to one class/year enrolment.
+    // Student mode (no class context) = house + contacts only, for a cross-class
+    // cohort like exam-only students; roll numbers are ignored (they're class-scoped).
+    const classMode = !!(classId && academicYearId);
+    if (classMode) {
+      await this.assertBelongsToSchool('class', classId, schoolId, 'class');
+      await this.assertBelongsToSchool('academic_year', academicYearId, schoolId, 'academic year');
     }
-    await this.assertBelongsToSchool('class', classId, schoolId, 'class');
-    await this.assertBelongsToSchool('academic_year', academicYearId, schoolId, 'academic year');
     if (!Array.isArray(items) || items.length === 0) {
       return { updated: 0, failed: 0, results: [] };
     }
@@ -377,17 +431,36 @@ class StudentAdminService {
 
     // Full roster for the class+year (not just the selection) — enrolment row + its
     // current roll, needed both to target roll writes and to validate roll conflicts
-    // against students that weren't edited.
-    const enrolRows = await DB.query(
-      singleLineString`
-        select student_id, uuid, roll_number from student_class
-        where school_id = $1 and class_id = $2 and academic_year_id = $3
-          and (status is null or status <> 'deleted')
-      `,
-      [schoolId, classId, academicYearId]
-    );
+    // against students that weren't edited. Empty in student mode.
     const enrolByStudent = new Map<string, { uuid: string; roll: number | null }>();
-    for (const e of enrolRows) enrolByStudent.set(e.studentId, { uuid: e.uuid, roll: e.rollNumber ?? null });
+    if (classMode) {
+      const enrolRows = await DB.query(
+        singleLineString`
+          select student_id, uuid, roll_number from student_class
+          where school_id = $1 and class_id = $2 and academic_year_id = $3
+            and (status is null or status <> 'deleted')
+        `,
+        [schoolId, classId, academicYearId]
+      );
+      for (const e of enrolRows) enrolByStudent.set(e.studentId, { uuid: e.uuid, roll: e.rollNumber ?? null });
+    }
+
+    // Membership for the house/contacts pass: enrolled students (class mode) or any
+    // existing student in the school (student mode).
+    const memberIds = new Set<string>();
+    if (classMode) {
+      for (const sid of enrolByStudent.keys()) memberIds.add(sid);
+    } else {
+      const ids = Array.from(new Set(items.map((it) => it.studentId)));
+      if (ids.length > 0) {
+        const rows = await DB.query(
+          `select uuid from student where school_id = $1 and status <> 'deleted' and uuid = any($2)`,
+          [schoolId, ids]
+        );
+        for (const r of rows) memberIds.add(r.uuid);
+      }
+    }
+    const notMemberMsg = classMode ? 'Not enrolled in this class for the selected year' : 'Student not found';
 
     // Validate the houses referenced by the batch once.
     const houseIds = Array.from(new Set(items.map((it) => it.houseId).filter((h): h is string => !!h)));
@@ -470,8 +543,8 @@ class StudentAdminService {
     // ---- House + contacts, independent per student ----
     for (const it of items) {
       const sid = it.studentId;
-      if (!enrolByStudent.has(sid)) {
-        errors.set(sid, 'Not enrolled in this class for the selected year');
+      if (!memberIds.has(sid)) {
+        errors.set(sid, notMemberMsg);
         continue;
       }
       if (it.houseId !== undefined) {
