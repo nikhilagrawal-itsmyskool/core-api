@@ -19,7 +19,6 @@ export const STUDENT_ACTIONS: Record<string, string> = {
   // bulk-edit roster load is a write-screen surface (reveals unmasked contacts to
   // admin/god) — gate at manage, same as the credentials view.
   'student-bulk-handler.roster': STUDENT_MANAGE,
-  'student-bulk-handler.examOnlyRoster': STUDENT_MANAGE,
   'house-handler.list': STUDENT_VIEW,
   'house-handler.analytics': STUDENT_VIEW,
   'house-handler.getById': STUDENT_VIEW,

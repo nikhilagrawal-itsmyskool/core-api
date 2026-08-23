@@ -54,23 +54,7 @@ class StudentBulkHandler {
     }
   };
 
-  // GET /exam-only-roster — cross-class roster of exam-only students.
-  public examOnlyRoster = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
-    _context.callbackWaitsForEmptyEventLoop = false;
-    try {
-      const schoolId = await this.resolveSchool(event, callback);
-      if (!schoolId) return;
-
-      const students = await studentAdminService.examOnlyRoster(schoolId);
-      const reveal = getCallerContext(event).isAdminGod;
-      (students as any[]).forEach((r) => maskContactFields(r, ROSTER_CONTACT_FIELDS, reveal));
-      ResponseBuilder.ok({ students }, callback);
-    } catch (err: any) {
-      ResponseBuilder.handleError(err, callback);
-    }
-  };
-
-  // POST /bulk-update  { classId?, academicYearId?, items: [...] }
+  // POST /bulk-update  { classId, academicYearId, items: [...] }
   public apply = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
     _context.callbackWaitsForEmptyEventLoop = false;
     try {
@@ -89,5 +73,4 @@ class StudentBulkHandler {
 
 const handler = new StudentBulkHandler();
 export const roster = guard(STUDENT_ACTIONS['student-bulk-handler.roster'], handler.roster);
-export const examOnlyRoster = guard(STUDENT_ACTIONS['student-bulk-handler.examOnlyRoster'], handler.examOnlyRoster);
 export const apply = guard(STUDENT_ACTIONS['student-bulk-handler.apply'], handler.apply);
