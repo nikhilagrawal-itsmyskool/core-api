@@ -25,6 +25,8 @@ export interface AddConcessionStudentsRequest {
   studentIds: string[];
   cycleScope?: string;
   effectiveFrom?: string; // apply only to cycles due on/after this date (null = whole year)
+  effectiveFromCycle?: string; // cycle-bounded start (by sort_order); null = first cycle
+  effectiveToCycle?: string;   // cycle-bounded end (inclusive); null = ongoing
   remarks?: string;
   attachmentFileId?: string;
 }
@@ -213,8 +215,8 @@ class ConcessionService {
       if (existingSet.has(studentId)) { continue; }
       queries.push(singleLineString`
         insert into fee_concession_student
-        (uuid, school_id, concession_id, student_id, cycle_scope, effective_from, remarks, attachment_file_id, status, createdby_userid, created_at)
-        values ($1, $2, $3, $4, $5, $6, $7, $8, 'active', $9, $10)
+        (uuid, school_id, concession_id, student_id, cycle_scope, effective_from, effective_from_cycle, effective_to_cycle, remarks, attachment_file_id, status, createdby_userid, created_at)
+        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'active', $11, $12)
       `);
       params.push([
         generateShortUuid(12),
@@ -223,6 +225,8 @@ class ConcessionService {
         studentId,
         data.cycleScope ?? null,
         data.effectiveFrom ?? null,
+        data.effectiveFromCycle ?? null,
+        data.effectiveToCycle ?? null,
         data.remarks ?? null,
         data.attachmentFileId ?? null,
         userId,
