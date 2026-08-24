@@ -336,6 +336,43 @@ export interface PromotionResult {
   results: PromotionResultRow[];
 }
 
+// ---- Section move (intra-year, single student) ----
+
+export interface MoveSectionTarget {
+  classId: string;
+  className: string;
+  headcount: number; // active students in the target section this year
+  nextRoll: number; // next free roll number in the target section
+}
+
+export interface MoveSectionOptions {
+  student: { uuid: string; name: string };
+  current: {
+    enrollmentId: string;
+    classId: string;
+    className: string;
+    academicYearId: string;
+    academicYearName: string;
+    rollNumber: number | null;
+  };
+  targets: MoveSectionTarget[];
+}
+
+export interface MoveSectionRequest {
+  studentId: string;
+  toClassId: string;
+  autoRoll?: boolean; // when true, server assigns the next free roll in the target
+  rollNumber?: number | null; // used when autoRoll is falsy (null clears the roll)
+}
+
+export interface MoveSectionResult {
+  done: boolean;
+  fromClassName: string;
+  toClassName: string;
+  rollNumber: number | null;
+  academicYearName: string;
+}
+
 // ---- Bulk class edit ----
 
 // One roster row for the bulk-edit grid: the student's current values for the

@@ -49,6 +49,8 @@ export const STUDENT_ACTIONS: Record<string, string> = {
   'promotion-handler.promote': STUDENT_MANAGE,
   'promotion-handler.promoteClass': STUDENT_MANAGE,
   'promotion-handler.graduate': STUDENT_MANAGE,
+  'promotion-handler.moveOptions': STUDENT_MANAGE,
+  'promotion-handler.moveSection': STUDENT_MANAGE,
   'student-bulk-handler.apply': STUDENT_MANAGE,
   'student-guardian-handler.create': STUDENT_MANAGE,
   'student-guardian-handler.update': STUDENT_MANAGE,

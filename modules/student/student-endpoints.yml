@@ -244,6 +244,25 @@
           method: post
           cors: true
 
+  # Section move (intra-year, single student) — literal 'move-section', before '{id}'
+  move-section-options:
+    handler: promotion-handler.moveOptions
+    name: ${self:service}-move-section-options
+    events:
+      - http:
+          path: move-section
+          method: get
+          cors: true
+
+  move-section:
+    handler: promotion-handler.moveSection
+    name: ${self:service}-move-section
+    events:
+      - http:
+          path: move-section
+          method: post
+          cors: true
+
   # ---- Bulk class edit (roster load + apply) — literal paths, before '{id}' ----
   bulk-class-roster:
     handler: student-bulk-handler.roster
