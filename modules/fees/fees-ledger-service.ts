@@ -57,12 +57,21 @@ class FeesLedgerService {
       return String(v).slice(0, 10);
     };
     const cycleDue: Record<string, string | null> = {};
+    // cycle + head display order (fee_cycle.sort_order / fee_head.sort_order), keyed by id AND name
+    // (migrated charges carry labels, not always ids) — so the ledger reads chronologically everywhere.
+    const cycleOrdById: Record<string, number> = {}, cycleOrdByName: Record<string, number> = {};
+    const headOrdById: Record<string, number> = {}, headOrdByName: Record<string, number> = {};
     if (academicYearId) {
       const cyc: any[] = await DB.query(
-        singleLineString`select name, due_date from fee_cycle where school_id = $1 and academic_year_id = $2 and status = 'active'`,
+        singleLineString`select uuid, name, due_date, sort_order from fee_cycle where school_id = $1 and academic_year_id = $2 and status = 'active'`,
         [schoolId, academicYearId]
       );
-      cyc.forEach((c) => (cycleDue[nrm(c.name)] = ymd(c.dueDate)));
+      cyc.forEach((c) => { cycleDue[nrm(c.name)] = ymd(c.dueDate); const o = c.sortOrder == null ? 999 : Number(c.sortOrder); cycleOrdById[c.uuid] = o; cycleOrdByName[nrm(c.name)] = o; });
+      const hds: any[] = await DB.query(
+        singleLineString`select uuid, name, sort_order from fee_head where school_id = $1 and academic_year_id = $2 and status = 'active'`,
+        [schoolId, academicYearId]
+      );
+      hds.forEach((h) => { const o = h.sortOrder == null ? 999 : Number(h.sortOrder); headOrdById[h.uuid] = o; headOrdByName[nrm(h.name)] = o; });
     }
     const bkt = dueBuckets(); // due-now (<= end of month) / this-or-next quarter / later
 
@@ -90,6 +99,13 @@ class FeesLedgerService {
           charged: n(c.debit), concession, waiver, paid, net, remaining, status, dueDate, due, bucket,
         };
       });
+
+    // order chronologically by cycle then head (sort_order), keeping the whole fees UI consistent
+    if (academicYearId) {
+      const co = (l: any) => cycleOrdById[l.cycleId] ?? cycleOrdByName[nrm(l.cycleLabel)] ?? 999;
+      const ho = (l: any) => headOrdById[l.feeHeadId] ?? headOrdByName[nrm(l.headLabel)] ?? 999;
+      lines.sort((a, b) => co(a) - co(b) || ho(a) - ho(b) || String(a.headLabel || '').localeCompare(String(b.headLabel || '')));
+    }
 
     const totalDebit = rows.reduce((s, r) => s + n(r.debit), 0);
     const totalCredit = rows.reduce((s, r) => s + n(r.credit), 0);
