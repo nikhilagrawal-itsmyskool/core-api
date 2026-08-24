@@ -6,6 +6,7 @@ import {
   AttendanceSession, AttendanceRecord, RosterEntry, MarkEntry, EditRecordRequest,
 } from './attendance-interfaces';
 import { notifyAbsences, nonTeachingDateSet } from './attendance-util';
+import { istToday } from '../../shared/util/datetime';
 const { generateShortUuid } = require('../../shared/util/generate-uuid.js');
 
 function assertStatus(status: string): void {
@@ -218,9 +219,13 @@ class AttendanceService {
     );
     const absentIds = absentRows.map((r: any) => r.studentId);
 
-    // Notify only on the first finalize (not on a re-finalize call).
+    // Notify only on the first finalize (not on a re-finalize call), and ONLY for
+    // the current day. Back-dated finalizes (correcting a past day's roll-call)
+    // must not fire SMS — families would get "absent today" alerts for a day that
+    // has already passed. attendance_date is 'YYYY-MM-DD'; compare to today (IST).
     let notifiedJobId: string | null = null;
-    if (session.status !== 'finalized' && absentIds.length > 0) {
+    const isToday = String(session.attendanceDate).slice(0, 10) === istToday();
+    if (session.status !== 'finalized' && absentIds.length > 0 && isToday) {
       const classRows = await DB.query(
         singleLineString`select name from class where uuid = $1 and school_id = $2`,
         [session.classId, schoolId],
