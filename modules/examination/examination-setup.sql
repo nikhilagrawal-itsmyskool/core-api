@@ -42,6 +42,11 @@ create index if not exists idx_examination_school_year
 -- datesheet grid shows only these columns.
 alter table examination add column if not exists grades varchar(256);
 
+-- Dues cutoff: the admit-card gate checks academic dues due ON OR BEFORE this date
+-- (typically set to a fee cycle's due date, e.g. "clear dues till Aug end"). Null =
+-- fall back to "due now" (arrears through the end of the current month).
+alter table examination add column if not exists dues_cutoff_date date;
+
 -- ── exam_paper: one cell of the grade × date datesheet ───────────────────────────
 -- `grade` is the grade-label prefix of the class name (I-A -> I). One active paper per
 -- (exam, grade, exam_date). `subject_label` is free text (e.g. "G.K., Value Edu.,

@@ -193,6 +193,20 @@ describe("examination: phase 2 — dues, admit cards, printing, branding", () =>
     await patch(`/examinations/${examId}`, { grades: [] });
   });
 
+  it("fee-cycles endpoint returns an array", async () => {
+    const r = await get(`/examinations/${examId}/fee-cycles`);
+    expect(r.status).toBe(200);
+    expect(Array.isArray(r.body)).toBe(true);
+  });
+
+  sectionIt("dues cutoff can be set and is echoed by the roster", async () => {
+    const p = await patch(`/examinations/${examId}`, { duesCutoffDate: '2026-08-31' });
+    expect(p.status).toBe(200);
+    const r = await get(`/examinations/${examId}/classes/${section!.sectionClassId}/roster`);
+    expect(r.body.duesCutoffDate).toBe('2026-08-31');
+    await patch(`/examinations/${examId}`, { duesCutoffDate: null }); // reset
+  });
+
   sectionIt("roster: lists section students with a per-student dues gate", async () => {
     const r = await get(`/examinations/${examId}/classes/${section!.sectionClassId}/roster`);
     expect(r.status).toBe(200);

@@ -1,7 +1,7 @@
 import { DB, singleLineString } from "../../shared/lib/db";
 import { BusinessErrorResult } from "../../shared/lib/errors";
 import { ErrorCode } from "../../shared/lib/error-codes";
-import { feesReportService } from "../fees/fees-report-service";
+import { feesLedgerService } from "../fees/fees-ledger-service";
 import { fileStorageService } from "../../shared/lib/file-storage";
 import { gradeOf, isValidDate } from "./examination-common";
 const QRCode = require("qrcode");
@@ -19,6 +19,7 @@ const { generateShortUuid } = require("../../shared/util/generate-uuid.js");
 const EXAM_COLS = singleLineString`
   uuid, academic_year_id, name, status, incharge_employee_id,
   dues_threshold_current, dues_threshold_prior, cards_per_page, grades,
+  to_char(dues_cutoff_date, 'YYYY-MM-DD') as dues_cutoff_date,
   to_char(start_date, 'YYYY-MM-DD') as start_date,
   to_char(end_date, 'YYYY-MM-DD') as end_date
 `;
@@ -141,6 +142,13 @@ class ExaminationService {
         ? [...new Set(req.grades.map((g) => String(g).trim()).filter(Boolean))].join(",")
         : null;
       push("grades", csv);
+    }
+    if (req.duesCutoffDate !== undefined) {
+      const d = req.duesCutoffDate;
+      if (d !== null && !isValidDate(d)) {
+        throw new BusinessErrorResult(ErrorCode.BusinessError, "duesCutoffDate must be YYYY-MM-DD or null");
+      }
+      push("dues_cutoff_date", d || null);
     }
     if (req.status !== undefined) {
       if (!EXAM_STATUSES.includes(req.status)) {
@@ -412,9 +420,48 @@ class ExaminationService {
     );
   }
 
+  // Dues for the admit-card gate — the exam module's own policy, built on the fees
+  // ledger's existing public API (no fees code is modified). Deliberately NOT the
+  // full-year balance:
+  //   currentDue = academic amount DUE BY NOW in the exam's year — the fees ledger's
+  //                `bucket === 'due'` (arrears through the end of the current month), so
+  //                not-yet-due future cycles (e.g. Oct–Mar tuition) don't block a
+  //                paid-up student.
+  //   priorDue   = academic outstanding across every OTHER year (prior years are fully
+  //                past due, so their whole balance counts).
+  // Transport is excluded from both (the school gates on tuition/academic dues only).
+  private async examDues(
+    schoolId: string,
+    studentId: string,
+    academicYearId: string,
+    cutoffDate?: string | null,
+  ): Promise<{ currentDue: number; priorDue: number }> {
+    const led = await feesLedgerService.studentLedger(schoolId, studentId, academicYearId);
+    // A charge counts toward currentDue when it's academic, still has a balance, and is
+    // due on/before the cutoff. With an explicit cutoff we compare each line's cycle
+    // due date (no-date one-time heads always count); without one we fall back to the
+    // ledger's "due now" bucket (arrears through the end of the current month).
+    const isDue = (l: any) =>
+      l.category !== "transport" && Number(l.remaining || 0) > 0 &&
+      (cutoffDate ? (!l.dueDate || l.dueDate <= cutoffDate) : l.bucket === "due");
+    const currentDue = Math.max(0, (led.lines || [])
+      .filter(isDue)
+      .reduce((s: number, l: any) => s + Number(l.remaining || 0), 0));
+    const prior = await DB.query(
+      singleLineString`select round(coalesce(sum(l.debit),0) - coalesce(sum(l.credit),0), 2) as bal
+        from student_ledger_entry l
+        where l.school_id = $1 and l.student_id = $2 and l.status = 'active'
+          and coalesce(l.category, 'fee') <> 'transport'
+          and l.academic_year_id is not null and l.academic_year_id <> $3`,
+      [schoolId, studentId, academicYearId],
+    );
+    const priorDue = Math.max(0, Number(prior[0]?.bal || 0));
+    return { currentDue, priorDue };
+  }
+
   // Roster of a section with the dues gate applied per student: academic dues split into
-  // current-year vs prior-years (transport excluded), compared to the exam's two
-  // thresholds, with any god override taken into account.
+  // current-year (due-now) vs prior-years (transport excluded), compared to the exam's
+  // two thresholds, with any god override taken into account.
   async roster(schoolId: string, examId: string, sectionClassId: string): Promise<any> {
     const exam = await this.getExam(schoolId, examId);
     if (!exam) throw new BusinessErrorResult(ErrorCode.BusinessError, "Examination not found");
@@ -431,12 +478,7 @@ class ExaminationService {
 
     const rows: any[] = [];
     for (const s of students) {
-      const dues = await feesReportService.academicDuesByYear(schoolId, s.studentId);
-      let currentDue = 0, priorDue = 0;
-      for (const d of dues) {
-        const bal = Number(d.balance || 0);
-        if (d.academicYearId === exam.academicYearId) currentDue += bal; else priorDue += bal;
-      }
+      const { currentDue, priorDue } = await this.examDues(schoolId, s.studentId, exam.academicYearId!, exam.duesCutoffDate);
       const blocked = currentDue > thrCurrent || priorDue > thrPrior;
       const overridden = overrideSet.has(s.studentId);
       rows.push({
@@ -446,8 +488,22 @@ class ExaminationService {
     }
     return {
       examId, section, thresholds: { current: thrCurrent, prior: thrPrior },
+      duesCutoffDate: exam.duesCutoffDate || null,
       students: rows,
     };
+  }
+
+  // The year's fee cycles (id, name, due date) — drives the exam's "clear dues till …"
+  // cutoff picker in the portal. Read-only view of the fees config; sorted chronologically.
+  async feeCycles(schoolId: string, examId: string): Promise<any[]> {
+    const exam = await this.getExam(schoolId, examId);
+    if (!exam) throw new BusinessErrorResult(ErrorCode.BusinessError, "Examination not found");
+    return DB.query(
+      singleLineString`select uuid, name, to_char(due_date, 'YYYY-MM-DD') as due_date, sort_order
+        from fee_cycle where school_id = $1 and academic_year_id = $2 and status = 'active'
+        order by sort_order nulls last, due_date nulls last, name`,
+      [schoolId, exam.academicYearId],
+    );
   }
 
   // Print-preview summary for a class: how many cards will print, how many are blocked,

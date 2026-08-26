@@ -241,6 +241,21 @@ class ExaminationHandler {
     }
   };
 
+  // GET /examinations/{id}/fee-cycles
+  public getFeeCycles = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const auth = await resolveSchool(event, callback);
+      if (!auth) return;
+      const id = requireParam(event, "id", callback);
+      if (!id) return;
+      const rows = await examinationService.feeCycles(auth.schoolId, id);
+      ResponseBuilder.ok(rows, callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
   // GET /examinations/{id}/print-log
   public getPrintLog = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
     ctx.callbackWaitsForEmptyEventLoop = false;
@@ -379,6 +394,7 @@ export const getRoster = guard(ACTIONS.EXAM_VIEW, h.getRoster);
 export const getPrintPreview = guard(ACTIONS.EXAM_VIEW, h.getPrintPreview);
 export const getAdmitCards = guard(ACTIONS.EXAM_MANAGE, h.getAdmitCards);
 export const recordPrint = guard(ACTIONS.EXAM_MANAGE, h.recordPrint);
+export const getFeeCycles = guard(ACTIONS.EXAM_VIEW, h.getFeeCycles);
 export const getPrintLog = guard(ACTIONS.EXAM_VIEW, h.getPrintLog);
 export const listOverrides = guard(ACTIONS.EXAM_VIEW, h.listOverrides);
 export const createOverrides = guard(ACTIONS.EXAM_MANAGE, h.createOverrides);

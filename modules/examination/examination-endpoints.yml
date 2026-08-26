@@ -130,6 +130,15 @@
           method: post
           cors: true
 
+  get-fee-cycles:
+    handler: examination-handler.getFeeCycles
+    name: ${self:service}-get-fee-cycles
+    events:
+      - http:
+          path: examinations/{id}/fee-cycles
+          method: get
+          cors: true
+
   get-print-log:
     handler: examination-handler.getPrintLog
     name: ${self:service}-get-print-log

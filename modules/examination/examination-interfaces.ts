@@ -10,6 +10,7 @@ export interface Examination {
   duesThresholdPrior?: number | null;
   cardsPerPage?: number | null;
   grades?: string[] | null; // grades this exam covers; null = all available
+  duesCutoffDate?: string | null; // dues checked on/before this date; null = due-now
   startDate?: string | null;
   endDate?: string | null;
   paperCount?: number;
@@ -28,6 +29,7 @@ export interface UpdateExamRequest {
   inchargeEmployeeId?: string | null;
   cardsPerPage?: number;
   grades?: string[]; // the grades this exam covers (empty/undefined = all available)
+  duesCutoffDate?: string | null; // YYYY-MM-DD; null clears it (back to due-now)
   // god-only (enforced in the handler): the two dues thresholds.
   duesThresholdCurrent?: number | null;
   duesThresholdPrior?: number | null;

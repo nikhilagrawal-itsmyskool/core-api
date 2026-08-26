@@ -462,24 +462,6 @@ class FeesReportService {
     );
   }
 
-  // Academic-only variant of duesByYear (excludes transport). Used by the examination
-  // module's admit-card dues gate, which blocks on tuition/academic dues but never on
-  // bus fees. `category` is 'transport' for transport heads and 'fee' (or null on older
-  // rows) for academic — so we exclude only explicit transport.
-  public async academicDuesByYear(schoolId: string, studentId: string) {
-    return DB.query(
-      singleLineString`select l.academic_year_id as academic_year_id, ay.name as year_name,
-          round(coalesce(sum(l.debit),0) - coalesce(sum(l.credit),0), 2) as balance
-        from student_ledger_entry l left join academic_year ay on ay.uuid = l.academic_year_id
-        where l.school_id = $1 and l.student_id = $2 and l.status = 'active'
-          and coalesce(l.category, 'fee') <> 'transport'
-        group by l.academic_year_id, ay.name
-        having round(coalesce(sum(l.debit),0) - coalesce(sum(l.credit),0), 2) > 0.5
-        order by ay.name`,
-      [schoolId, studentId]
-    );
-  }
-
   // Per-student concessions: the schemes offered this year (with the discount actually applied to
   // charges), plus the concession amount given in every prior year — one call for the assistant so
   // it never sums per-scheme or per-year itself. "applied" = concession credit posted on the ledger
