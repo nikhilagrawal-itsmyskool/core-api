@@ -1,6 +1,6 @@
 import {
   BASE_URL, headers, getContext, closePool, cleanupTestExams, TEST_MARKER,
-  getSampleSection, cleanupBranding,
+  getSampleSection, cleanupBranding, getPaperId, seedSignature, cleanupSignature,
 } from "./helpers";
 
 // 1x1 transparent PNG for branding upload tests.
@@ -166,7 +166,7 @@ describe("examination: phase 2 — dues, admit cards, printing, branding", () =>
     }
   });
 
-  afterAll(async () => { await cleanupBranding(); });
+  afterAll(async () => { await cleanupBranding(); await cleanupSignature("system"); });
 
   it("branding: uploads logo + stamp and reads them back as data URIs", async () => {
     const r1 = await put("/branding/logo", { imageBase64: TINY_PNG, mimeType: "image/png", fileName: "logo.png" });
@@ -254,6 +254,41 @@ describe("examination: phase 2 — dues, admit cards, printing, branding", () =>
     expect(roster.body.students.find((s: any) => s.studentId === section!.studentId).overridden).toBe(true);
     const d = await del(`/examinations/${examId}/dues-overrides/${section!.studentId}`);
     expect(d.body.revoked).toBe(true);
+  });
+
+  sectionIt("attendance: admin marks + signs a roster; the signature flows onto the admit card", async () => {
+    const paperId = await getPaperId(examId, section!.grade, "2099-11-02");
+    expect(paperId).toBeTruthy();
+
+    const r0 = await get(`/examinations/${examId}/rosters/${paperId}/${section!.sectionClassId}`);
+    expect(r0.status).toBe(200);
+    expect(r0.body.students.length).toBeGreaterThan(0);
+
+    // Signing before everyone is marked → rejected.
+    const badSign = await post(`/examinations/${examId}/rosters/${paperId}/${section!.sectionClassId}/sign`, {});
+    expect(badSign.status).toBeGreaterThanOrEqual(400);
+
+    // Mark all present.
+    const marks = r0.body.students.map((s: any) => ({ studentId: s.studentId, status: "present" }));
+    const rm = await post(`/examinations/${examId}/rosters/${paperId}/${section!.sectionClassId}/mark`, { marks });
+    expect(rm.body.markedCount).toBe(rm.body.total);
+
+    // Sign with no signature on file → rejected.
+    await cleanupSignature("system");
+    const noSig = await post(`/examinations/${examId}/rosters/${paperId}/${section!.sectionClassId}/sign`, {});
+    expect(noSig.status).toBeGreaterThanOrEqual(400);
+
+    // Seed a signature, then sign → ok.
+    await seedSignature("system");
+    const rs = await post(`/examinations/${examId}/rosters/${paperId}/${section!.sectionClassId}/sign`, {});
+    expect(rs.status).toBe(200);
+    expect(rs.body.signed).toBe(true);
+
+    // The admit card now carries the signature for the present student on that day.
+    const ac = await get(`/examinations/${examId}/classes/${section!.sectionClassId}/admit-cards?studentIds=${section!.studentId}`);
+    const card = ac.body.cards.find((c: any) => c.studentId === section!.studentId);
+    expect(card.signatures["2099-11-02"].signed).toBe(true);
+    expect(card.signatures["2099-11-02"].signatureDataUri).toContain("data:image");
   });
 
   sectionIt("print log + printed mark: records a print and flags the student as printed", async () => {

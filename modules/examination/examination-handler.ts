@@ -7,7 +7,7 @@ import { ResponseBuilder } from "../../shared/lib/response-builder";
 import { ErrorCode } from "../../shared/lib/error-codes";
 import { guard } from "../auth/authz";
 import { ACTIONS } from "../../shared/lib/authz-policy";
-import { resolveSchool, parseBody, requireParam, callerHasRole } from "./handler-util";
+import { resolveSchool, resolveEmployee, parseBody, requireParam, callerHasRole } from "./handler-util";
 import { getCurrentAcademicYearId } from "./examination-common";
 import { examinationService } from "./examination-service";
 import {
@@ -373,6 +373,152 @@ class ExaminationHandler {
       ResponseBuilder.handleError(err, callback);
     }
   };
+
+  // ── Phase 3: employee signature + invigilator PWA (/me) ────────────────────────
+
+  // GET /examination/me/signature
+  public getMySignature = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const emp = resolveEmployee(event, callback);
+      if (!emp) return;
+      ResponseBuilder.ok(await examinationService.employeeSignature(emp.schoolId, emp.employeeId), callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
+  // PUT /examination/me/signature { imageBase64, mimeType?, fileName? }
+  public saveMySignature = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const emp = resolveEmployee(event, callback);
+      if (!emp) return;
+      const body = parseBody<{ imageBase64: string; mimeType?: string; fileName?: string }>(event, callback);
+      if (!body) return;
+      const result = await examinationService.saveEmployeeSignature(emp.schoolId, emp.employeeId, body.imageBase64, body.mimeType || "image/png", body.fileName || "signature.png");
+      ResponseBuilder.ok(result, callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
+  // GET /examination/me/exam/invigilations
+  public getMyInvigilations = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const emp = resolveEmployee(event, callback);
+      if (!emp) return;
+      ResponseBuilder.ok(await examinationService.myInvigilations(emp.schoolId, emp.employeeId), callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
+  // Shared /me roster resolver: verifies the caller is the assigned invigilator.
+  private async meRosterParams(event: ApiEvent, callback: ApiCallback) {
+    const emp = resolveEmployee(event, callback);
+    if (!emp) return null;
+    const examId = requireParam(event, "examId", callback);
+    const paperId = requireParam(event, "paperId", callback);
+    const sectionId = requireParam(event, "sectionId", callback);
+    if (!examId || !paperId || !sectionId) return null;
+    if (!(await examinationService.isMyRoster(examId, paperId, sectionId, emp.employeeId))) {
+      ResponseBuilder.forbidden(ErrorCode.MissingPermission, "You are not the assigned invigilator for this roster", callback);
+      return null;
+    }
+    return { emp, examId, paperId, sectionId };
+  }
+
+  // GET /examination/me/exam/rosters/{examId}/{paperId}/{sectionId}
+  public getMyRoster = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const p = await this.meRosterParams(event, callback);
+      if (!p) return;
+      ResponseBuilder.ok(await examinationService.attendanceRoster(p.emp.schoolId, p.examId, p.paperId, p.sectionId), callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
+  // POST /examination/me/exam/rosters/{examId}/{paperId}/{sectionId}/mark { marks: [{studentId,status}] }
+  public markMyRoster = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const p = await this.meRosterParams(event, callback);
+      if (!p) return;
+      const body = parseBody<{ marks: any[] }>(event, callback);
+      if (!body) return;
+      ResponseBuilder.ok(await examinationService.markAttendance(p.emp.schoolId, p.examId, p.paperId, p.sectionId, body.marks || [], p.emp.employeeId), callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
+  // POST /examination/me/exam/rosters/{examId}/{paperId}/{sectionId}/sign
+  public signMyRoster = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const p = await this.meRosterParams(event, callback);
+      if (!p) return;
+      ResponseBuilder.ok(await examinationService.signRoster(p.emp.schoolId, p.examId, p.paperId, p.sectionId, p.emp.employeeId), callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
+  // ── Admin/incharge: view + sign ANY roster (guarded exam.manage) ───────────────
+
+  // GET /examinations/{id}/rosters/{paperId}/{sectionId}
+  public getRosterAdmin = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const auth = await resolveSchool(event, callback);
+      if (!auth) return;
+      const id = requireParam(event, "id", callback);
+      const paperId = requireParam(event, "paperId", callback);
+      const sectionId = requireParam(event, "sectionId", callback);
+      if (!id || !paperId || !sectionId) return;
+      ResponseBuilder.ok(await examinationService.attendanceRoster(auth.schoolId, id, paperId, sectionId), callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
+  // POST /examinations/{id}/rosters/{paperId}/{sectionId}/mark
+  public markRosterAdmin = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const auth = await resolveSchool(event, callback);
+      if (!auth) return;
+      const id = requireParam(event, "id", callback);
+      const paperId = requireParam(event, "paperId", callback);
+      const sectionId = requireParam(event, "sectionId", callback);
+      if (!id || !paperId || !sectionId) return;
+      const body = parseBody<{ marks: any[] }>(event, callback);
+      if (!body) return;
+      ResponseBuilder.ok(await examinationService.markAttendance(auth.schoolId, id, paperId, sectionId, body.marks || [], auth.userId), callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
+  // POST /examinations/{id}/rosters/{paperId}/{sectionId}/sign
+  public signRosterAdmin = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const auth = await resolveSchool(event, callback);
+      if (!auth) return;
+      const id = requireParam(event, "id", callback);
+      const paperId = requireParam(event, "paperId", callback);
+      const sectionId = requireParam(event, "sectionId", callback);
+      if (!id || !paperId || !sectionId) return;
+      ResponseBuilder.ok(await examinationService.signRoster(auth.schoolId, id, paperId, sectionId, auth.userId), callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
 }
 
 const h = new ExaminationHandler();
@@ -402,3 +548,15 @@ export const revokeOverride = guard(ACTIONS.EXAM_MANAGE, h.revokeOverride);
 export const getBranding = guard(ACTIONS.EXAM_VIEW, h.getBranding);
 export const setBranding = guard(ACTIONS.EXAM_MANAGE, h.setBranding);
 export const verifyAdmitCard = guard(ACTIONS.EXAM_VIEW, h.verifyAdmitCard);
+
+// Phase 3 — invigilator PWA (/me): employee-scoped, not role-guarded (JWT still required).
+export const getMySignature = h.getMySignature;
+export const saveMySignature = h.saveMySignature;
+export const getMyInvigilations = h.getMyInvigilations;
+export const getMyRoster = h.getMyRoster;
+export const markMyRoster = h.markMyRoster;
+export const signMyRoster = h.signMyRoster;
+// Phase 3 — admin/incharge sign-any (guarded exam.manage).
+export const getRosterAdmin = guard(ACTIONS.EXAM_MANAGE, h.getRosterAdmin);
+export const markRosterAdmin = guard(ACTIONS.EXAM_MANAGE, h.markRosterAdmin);
+export const signRosterAdmin = guard(ACTIONS.EXAM_MANAGE, h.signRosterAdmin);

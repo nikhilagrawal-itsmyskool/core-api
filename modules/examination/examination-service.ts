@@ -583,11 +583,31 @@ class ExaminationService {
     const academicYearName = ayRows.length ? ayRows[0].name : "";
 
     const paperRows = await DB.query(
-      singleLineString`select to_char(exam_date, 'YYYY-MM-DD') as exam_date, subject_label
+      singleLineString`select uuid, to_char(exam_date, 'YYYY-MM-DD') as exam_date, subject_label
         from exam_paper where exam_id = $1 and grade = $2 and status = 'active' order by exam_date`,
       [examId, section.grade],
     );
     const papers = paperRows.map((r: any) => ({ examDate: r.examDate, subjectLabel: r.subjectLabel }));
+    const paperIds = paperRows.map((r: any) => r.uuid);
+
+    // Captured invigilator signatures for this section (Phase 3): the printed/reprinted
+    // card shows the signature image for present students and "ABSENT" for absentees on
+    // days that were digitally signed; unsigned days stay blank for wet ink.
+    const attMap = new Map<string, any>(); // `${paperId}|${studentId}` -> row
+    const sigCache = new Map<string, string>(); // fileId -> dataUri
+    if (paperIds.length) {
+      const attRows = await DB.query(
+        singleLineString`select exam_paper_id, student_id, status, signed_at, signature_file_id
+          from exam_attendance where exam_id = $1 and section_class_id = $2 and exam_paper_id = any($3)`,
+        [examId, sectionClassId, paperIds],
+      );
+      for (const a of attRows) attMap.set(`${a.examPaperId}|${a.studentId}`, a);
+      const fileIds = [...new Set(attRows.filter((a: any) => a.signedAt && a.signatureFileId).map((a: any) => a.signatureFileId))];
+      for (const fid of fileIds) {
+        const f = await fileStorageService.getWithData(fid as string, schoolId);
+        if (f) sigCache.set(fid as string, `data:${f.mimeType};base64,${f.data}`);
+      }
+    }
 
     const roster = await this.roster(schoolId, examId, sectionClassId);
     let printable = roster.students.filter((s: any) => s.printable);
@@ -600,7 +620,14 @@ class ExaminationService {
     for (const s of printable) {
       const admitCardId = await this.ensureAdmitCard(schoolId, examId, s.studentId, sectionClassId, userId);
       const qrDataUri = await QRCode.toDataURL(`imsk:admit:${admitCardId}`, { margin: 1, width: 160 });
-      cards.push({ admitCardId, studentId: s.studentId, name: s.name, rollNo: "", qrDataUri });
+      const signatures: Record<string, any> = {};
+      for (const p of paperRows) {
+        const a: any = attMap.get(`${p.uuid}|${s.studentId}`);
+        signatures[p.examDate] = a && a.signedAt
+          ? { status: a.status, signed: true, signatureDataUri: a.status === "present" ? (sigCache.get(a.signatureFileId) || null) : null }
+          : { status: a ? a.status : null, signed: false, signatureDataUri: null };
+      }
+      cards.push({ admitCardId, studentId: s.studentId, name: s.name, rollNo: "", qrDataUri, signatures });
     }
 
     return {
@@ -778,16 +805,35 @@ class ExaminationService {
     const stu = await DB.query(singleLineString`select name, admission_number from student where uuid = $1 and school_id = $2`, [studentId, schoolId]);
     const ayRows = await DB.query(singleLineString`select name from academic_year where uuid = $1`, [exam?.academicYearId]);
     const paperRows = await DB.query(
-      singleLineString`select to_char(exam_date, 'YYYY-MM-DD') as exam_date, subject_label
+      singleLineString`select uuid, to_char(exam_date, 'YYYY-MM-DD') as exam_date, subject_label
         from exam_paper where exam_id = $1 and grade = $2 and status = 'active' order by exam_date`,
       [examId, section?.grade],
     );
-    // Per-day signature/attendance status is populated in Phase 3 (exam_attendance);
-    // for now every paper is "scheduled" with no signature captured yet.
-    const papers = paperRows.map((r: any) => ({
-      examDate: r.examDate, subjectLabel: r.subjectLabel, status: "scheduled",
-      signedByName: null, signedAt: null,
-    }));
+    const paperIds = paperRows.map((r: any) => r.uuid);
+    const attMap = new Map<string, any>();
+    const empNames = new Map<string, string | null>();
+    if (paperIds.length) {
+      const attRows = await DB.query(
+        singleLineString`select exam_paper_id, status, to_char(signed_at, 'YYYY-MM-DD HH24:MI') as signed_at, signed_by_employee_id
+          from exam_attendance where exam_id = $1 and student_id = $2 and exam_paper_id = any($3)`,
+        [examId, studentId, paperIds],
+      );
+      for (const a of attRows) attMap.set(a.examPaperId, a);
+      const empIds = [...new Set(attRows.filter((a: any) => a.signedByEmployeeId).map((a: any) => a.signedByEmployeeId))];
+      for (const eid of empIds) {
+        const e = await DB.query(singleLineString`select name from employee where uuid = $1`, [eid as string]);
+        empNames.set(eid as string, e.length ? e[0].name : null);
+      }
+    }
+    const papers = paperRows.map((r: any) => {
+      const a: any = attMap.get(r.uuid);
+      return {
+        examDate: r.examDate, subjectLabel: r.subjectLabel,
+        status: a && a.status ? a.status : "scheduled",
+        signedByName: a && a.signedAt ? (empNames.get(a.signedByEmployeeId) || null) : null,
+        signedAt: a && a.signedAt ? a.signedAt : null,
+      };
+    });
     return {
       admitCardId,
       examName: exam?.name,
@@ -796,6 +842,223 @@ class ExaminationService {
       section: section ? { name: section.name, grade: section.grade } : null,
       papers,
     };
+  }
+
+  // ════ Phase 3: employee signatures + exam attendance / invigilation ═════════════
+
+  private async attAudit(
+    schoolId: string, examId: string, examPaperId: string, sectionClassId: string,
+    studentId: string | null, action: string, oldStatus: string | null, newStatus: string | null,
+    employeeId: string, note: string | null,
+  ): Promise<void> {
+    await DB.query(
+      singleLineString`insert into exam_attendance_audit
+        (uuid, school_id, exam_id, exam_paper_id, section_class_id, student_id, action, old_status, new_status, employee_id, note, at)
+        values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+      [generateShortUuid(12), schoolId, examId, examPaperId, sectionClassId, studentId, action, oldStatus, newStatus, employeeId, note ? note.slice(0, 256) : null, new Date()],
+    );
+  }
+
+  private async signatureFileId(schoolId: string, employeeId: string): Promise<string | null> {
+    const rows = await DB.query(
+      singleLineString`select uuid from file_storage where school_id = $1 and entity_type = 'employee_signature' and entity_id = $2 order by created_at desc limit 1`,
+      [schoolId, employeeId],
+    );
+    return rows.length ? rows[0].uuid : null;
+  }
+
+  // ── Employee signature (draw-on-canvas PNG, one per employee) ─────────────────
+  async employeeSignature(schoolId: string, employeeId: string): Promise<{ fileId: string | null; dataUri: string | null }> {
+    const fileId = await this.signatureFileId(schoolId, employeeId);
+    if (!fileId) return { fileId: null, dataUri: null };
+    const f = await fileStorageService.getWithData(fileId, schoolId);
+    return { fileId, dataUri: f ? `data:${f.mimeType};base64,${f.data}` : null };
+  }
+
+  async saveEmployeeSignature(schoolId: string, employeeId: string, base64Data: string, mimeType: string, fileName: string): Promise<any> {
+    if (!base64Data) throw new BusinessErrorResult(ErrorCode.BusinessError, "signature image is required");
+    const old = await DB.query(
+      singleLineString`select uuid from file_storage where school_id = $1 and entity_type = 'employee_signature' and entity_id = $2`,
+      [schoolId, employeeId],
+    );
+    await fileStorageService.upload({
+      fileName: fileName || "signature.png", mimeType: mimeType || "image/png",
+      base64Data, entityType: "employee_signature", entityId: employeeId, schoolId, userId: employeeId,
+    });
+    for (const o of old) { try { await fileStorageService.delete(o.uuid, schoolId); } catch { /* best effort */ } }
+    return this.employeeSignature(schoolId, employeeId);
+  }
+
+  private async paperById(examId: string, examPaperId: string): Promise<any> {
+    const rows = await DB.query(
+      singleLineString`select to_char(exam_date, 'YYYY-MM-DD') as exam_date, grade, subject_label
+        from exam_paper where uuid = $1 and exam_id = $2 and status = 'active'`,
+      [examPaperId, examId],
+    );
+    if (!rows.length) throw new BusinessErrorResult(ErrorCode.BusinessError, "Exam paper not found");
+    return rows[0];
+  }
+
+  async isAssignedInvigilator(examId: string, examDate: string, sectionClassId: string, employeeId: string): Promise<boolean> {
+    const rows = await DB.query(
+      singleLineString`select 1 from exam_invigilator where exam_id = $1 and exam_date = $2 and section_class_id = $3 and employee_id = $4 and status = 'active' limit 1`,
+      [examId, examDate, sectionClassId, employeeId],
+    );
+    return rows.length > 0;
+  }
+
+  // Is this employee the assigned invigilator for (paper, section)? Gate for the PWA.
+  async isMyRoster(examId: string, examPaperId: string, sectionClassId: string, employeeId: string): Promise<boolean> {
+    const p = await DB.query(
+      singleLineString`select to_char(exam_date, 'YYYY-MM-DD') as exam_date from exam_paper where uuid = $1 and exam_id = $2 and status = 'active'`,
+      [examPaperId, examId],
+    );
+    if (!p.length) return false;
+    return this.isAssignedInvigilator(examId, p[0].examDate, sectionClassId, employeeId);
+  }
+
+  // The logged-in employee's invigilation duties (published exams), each with its paper
+  // and a marked/signed summary — the PWA "my duties" list.
+  async myInvigilations(schoolId: string, employeeId: string): Promise<any[]> {
+    const rows = await DB.query(
+      singleLineString`
+        select i.exam_id, to_char(i.exam_date, 'YYYY-MM-DD') as exam_date, i.section_class_id,
+          e.name as exam_name, e.academic_year_id, c.name as section_name
+        from exam_invigilator i
+        join examination e on e.uuid = i.exam_id and e.status = 'published'
+        join class c on c.uuid = i.section_class_id
+        where i.school_id = $1 and i.employee_id = $2 and i.status = 'active'
+        order by i.exam_date, c.name
+      `,
+      [schoolId, employeeId],
+    );
+    const out: any[] = [];
+    for (const r of rows) {
+      const grade = gradeOf(r.sectionName);
+      const paperRows = await DB.query(
+        singleLineString`select uuid, subject_label from exam_paper where exam_id = $1 and grade = $2 and exam_date = $3 and status = 'active'`,
+        [r.examId, grade, r.examDate],
+      );
+      if (!paperRows.length) continue; // no paper that grade sits this date
+      const paper = paperRows[0];
+      const att = await DB.query(
+        singleLineString`select status, signed_at from exam_attendance where exam_paper_id = $1 and section_class_id = $2`,
+        [paper.uuid, r.sectionClassId],
+      );
+      const totalRows = await DB.query(
+        singleLineString`select count(*) as c from student_class sc
+          join student s on s.uuid = sc.student_id and s.school_id = sc.school_id and s.status = 'active'
+          where sc.class_id = $1 and sc.academic_year_id = $2 and sc.school_id = $3 and (sc.status is null or sc.status <> 'deleted')`,
+        [r.sectionClassId, r.academicYearId, schoolId],
+      );
+      out.push({
+        examId: r.examId, examName: r.examName, examDate: r.examDate,
+        sectionClassId: r.sectionClassId, sectionName: r.sectionName,
+        paperId: paper.uuid, subjectLabel: paper.subjectLabel,
+        total: Number(totalRows[0].c || 0),
+        marked: att.filter((a: any) => a.status).length,
+        signed: att.some((a: any) => a.signedAt),
+      });
+    }
+    return out;
+  }
+
+  // Attendance roster for a (paper, section): students + current present/absent + whether
+  // the roster is signed (and by whom).
+  async attendanceRoster(schoolId: string, examId: string, examPaperId: string, sectionClassId: string): Promise<any> {
+    const exam = await this.getExam(schoolId, examId);
+    if (!exam) throw new BusinessErrorResult(ErrorCode.BusinessError, "Examination not found");
+    const paper = await this.paperById(examId, examPaperId);
+    const section = await this.classInfo(schoolId, sectionClassId);
+    const students = await this.sectionStudents(schoolId, exam.academicYearId!, sectionClassId);
+    const attRows = await DB.query(
+      singleLineString`select student_id, status, signed_by_employee_id,
+          to_char(signed_at, 'YYYY-MM-DD HH24:MI') as signed_at
+        from exam_attendance where exam_paper_id = $1 and section_class_id = $2`,
+      [examPaperId, sectionClassId],
+    );
+    const attMap = new Map(attRows.map((r: any) => [r.studentId, r]));
+    const signer = attRows.find((r: any) => r.signedAt);
+    let signedByName: string | null = null;
+    if (signer) {
+      const emp = await DB.query(singleLineString`select name from employee where uuid = $1`, [signer.signedByEmployeeId]);
+      signedByName = emp.length ? emp[0].name : null;
+    }
+    const rowsOut = students.map((s: any) => {
+      const a: any = attMap.get(s.studentId);
+      return { studentId: s.studentId, name: s.name, admissionNumber: s.admissionNumber, status: a ? a.status : null };
+    });
+    return {
+      paper: { examDate: paper.examDate, subjectLabel: paper.subjectLabel, grade: paper.grade },
+      section, signed: !!signer, signedByName, signedAt: signer ? signer.signedAt : null,
+      total: rowsOut.length, markedCount: rowsOut.filter((r: any) => r.status).length,
+      students: rowsOut,
+    };
+  }
+
+  // Mark present/absent for a set of students on a (paper, section). Append-only audit
+  // for every change. Signing is a separate step.
+  async markAttendance(schoolId: string, examId: string, examPaperId: string, sectionClassId: string, marks: any[], employeeId: string): Promise<any> {
+    const paper = await this.paperById(examId, examPaperId);
+    if (!Array.isArray(marks)) throw new BusinessErrorResult(ErrorCode.BusinessError, "marks must be an array");
+    const now = new Date();
+    for (const m of marks) {
+      const studentId = (m.studentId || "").trim();
+      const status = m.status === "present" ? "present" : m.status === "absent" ? "absent" : null;
+      if (!studentId || !status) continue;
+      const ex = await DB.query(
+        singleLineString`select uuid, status from exam_attendance where exam_paper_id = $1 and student_id = $2`,
+        [examPaperId, studentId],
+      );
+      if (ex.length) {
+        if (ex[0].status !== status) {
+          await DB.query(
+            singleLineString`update exam_attendance set status = $2, updatedby_userid = $3, updated_at = $4 where uuid = $1`,
+            [ex[0].uuid, status, employeeId, now],
+          );
+          await this.attAudit(schoolId, examId, examPaperId, sectionClassId, studentId, status === "present" ? "mark_present" : "mark_absent", ex[0].status, status, employeeId, null);
+        }
+      } else {
+        await DB.query(
+          singleLineString`insert into exam_attendance
+            (uuid, school_id, exam_id, exam_paper_id, exam_date, section_class_id, student_id, status, createdby_userid, created_at)
+            values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+          [generateShortUuid(12), schoolId, examId, examPaperId, paper.examDate, sectionClassId, studentId, status, employeeId, now],
+        );
+        await this.attAudit(schoolId, examId, examPaperId, sectionClassId, studentId, status === "present" ? "mark_present" : "mark_absent", null, status, employeeId, null);
+      }
+    }
+    return this.attendanceRoster(schoolId, examId, examPaperId, sectionClassId);
+  }
+
+  // Sign the roster: requires every student marked and the signer to have a stored
+  // signature. Stamps signed_by / signed_at / signature_file_id on all rows for that
+  // (paper, section). Re-signing is allowed (post-sign edit) and audited as 'resign'.
+  async signRoster(schoolId: string, examId: string, examPaperId: string, sectionClassId: string, employeeId: string): Promise<any> {
+    const exam = await this.getExam(schoolId, examId);
+    if (!exam) throw new BusinessErrorResult(ErrorCode.BusinessError, "Examination not found");
+    await this.paperById(examId, examPaperId);
+    const students = await this.sectionStudents(schoolId, exam.academicYearId!, sectionClassId);
+    const attRows = await DB.query(
+      singleLineString`select student_id, status, signed_at from exam_attendance where exam_paper_id = $1 and section_class_id = $2`,
+      [examPaperId, sectionClassId],
+    );
+    const statusMap = new Map(attRows.map((r: any) => [r.studentId, r.status]));
+    const unmarked = students.filter((s: any) => !statusMap.get(s.studentId));
+    if (unmarked.length) {
+      throw new BusinessErrorResult(ErrorCode.BusinessError, `Mark all ${students.length} students before signing (${unmarked.length} still unmarked)`);
+    }
+    const sigFileId = await this.signatureFileId(schoolId, employeeId);
+    if (!sigFileId) throw new BusinessErrorResult(ErrorCode.BusinessError, "Add your signature first (Profile → Signature), then sign the roster");
+    const already = attRows.some((r: any) => r.signedAt);
+    const now = new Date();
+    await DB.query(
+      singleLineString`update exam_attendance set signed_by_employee_id = $3, signed_at = $4, signature_file_id = $5, updatedby_userid = $3, updated_at = $4
+        where exam_paper_id = $1 and section_class_id = $2`,
+      [examPaperId, sectionClassId, employeeId, now, sigFileId],
+    );
+    await this.attAudit(schoolId, examId, examPaperId, sectionClassId, null, already ? "resign" : "sign", null, null, employeeId, `signed ${students.length} students`);
+    return this.attendanceRoster(schoolId, examId, examPaperId, sectionClassId);
   }
 }
 

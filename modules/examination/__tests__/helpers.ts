@@ -75,8 +75,37 @@ export async function cleanupTestExams(): Promise<void> {
   await p.query("delete from exam_admit_card where exam_id = any($1)", [ids]);
   await p.query("delete from exam_dues_override where exam_id = any($1)", [ids]);
   await p.query("delete from exam_print_log where exam_id = any($1)", [ids]);
+  await p.query("delete from exam_attendance where exam_id = any($1)", [ids]);
+  await p.query("delete from exam_attendance_audit where exam_id = any($1)", [ids]);
   await p.query("delete from exam_audit where exam_id = any($1)", [ids]);
   await p.query("delete from examination where uuid = any($1)", [ids]);
+}
+
+// A paper uuid for (exam, grade, date) — the admin/roster tests operate on a paper.
+export async function getPaperId(examId: string, grade: string, dateIso: string): Promise<string | null> {
+  const p = getPool();
+  const r = await p.query(
+    "select uuid from exam_paper where exam_id = $1 and grade = $2 and exam_date = $3 and status = 'active' limit 1",
+    [examId, grade, dateIso],
+  );
+  return r.rows.length ? r.rows[0].uuid : null;
+}
+
+// Seed / remove a stored signature for an employee id (so sign-roster has one to stamp).
+const TINY_SIG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
+export async function seedSignature(employeeId: string): Promise<void> {
+  const { schoolId } = await getContext();
+  const p = getPool();
+  await p.query("delete from file_storage where school_id = $1 and entity_type = 'employee_signature' and entity_id = $2", [schoolId, employeeId]);
+  await p.query(
+    "insert into file_storage (uuid, file_name, mime_type, size_bytes, data, entity_type, entity_id, variant, school_id, createdby_userid, created_at) values ($1,'sig.png','image/png',$2,$3,'employee_signature',$4,'original',$5,$4,now())",
+    [`sig${Date.now().toString(36).slice(-9)}`, TINY_SIG.length, TINY_SIG, employeeId, schoolId],
+  );
+}
+export async function cleanupSignature(employeeId: string): Promise<void> {
+  const { schoolId } = await getContext();
+  const p = getPool();
+  await p.query("delete from file_storage where school_id = $1 and entity_type = 'employee_signature' and entity_id = $2", [schoolId, employeeId]);
 }
 
 // A real section (class) that has active enrolment — plus the year it's enrolled in and

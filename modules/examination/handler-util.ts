@@ -1,7 +1,8 @@
 import { ApiCallback, ApiEvent } from "../../shared/lib/api.interfaces";
 import { ResponseBuilder } from "../../shared/lib/response-builder";
 import { ErrorCode } from "../../shared/lib/error-codes";
-import { validateSchoolCodeHeader } from "../auth/auth-utils";
+import { validateSchoolCodeHeader, getAuthorizationHeader } from "../auth/auth-utils";
+import { extractAndVerifyToken } from "../auth/token-utils";
 import { getCaller } from "../auth/authz";
 import { getSchoolIdByCode } from "./examination-common";
 
@@ -47,6 +48,21 @@ export function requireParam(
     return null;
   }
   return value;
+}
+
+// Resolve the logged-in employee (invigilator) from the bearer token — for the
+// teacher-PWA invigilation surface. Verifies the token in-handler; writes 401 on failure.
+export function resolveEmployee(
+  event: ApiEvent,
+  callback: ApiCallback,
+): { employeeId: string; schoolId: string } | null {
+  const token = extractAndVerifyToken(getAuthorizationHeader(event));
+  const employeeId = token?.employee_id || token?.id;
+  if (!token || token.type !== "employee" || !employeeId) {
+    ResponseBuilder.unauthorizedRequest(ErrorCode.GeneralError, "Employee login required", callback);
+    return null;
+  }
+  return { employeeId, schoolId: token.school_id };
 }
 
 // Roles off the verified caller (JWT, or the offline override which defaults to god).

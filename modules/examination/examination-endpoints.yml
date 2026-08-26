@@ -206,3 +206,88 @@
           path: verify/{admitCardId}
           method: get
           cors: true
+
+  # ── Phase 3: invigilator PWA (/me) ───────────────────────────────────────────
+  get-my-signature:
+    handler: examination-handler.getMySignature
+    name: ${self:service}-get-my-signature
+    events:
+      - http:
+          path: me/signature
+          method: get
+          cors: true
+
+  save-my-signature:
+    handler: examination-handler.saveMySignature
+    name: ${self:service}-save-my-signature
+    memorySize: 512
+    timeout: 20
+    events:
+      - http:
+          path: me/signature
+          method: put
+          cors: true
+
+  get-my-invigilations:
+    handler: examination-handler.getMyInvigilations
+    name: ${self:service}-get-my-invigilations
+    events:
+      - http:
+          path: me/exam/invigilations
+          method: get
+          cors: true
+
+  get-my-roster:
+    handler: examination-handler.getMyRoster
+    name: ${self:service}-get-my-roster
+    events:
+      - http:
+          path: me/exam/rosters/{examId}/{paperId}/{sectionId}
+          method: get
+          cors: true
+
+  mark-my-roster:
+    handler: examination-handler.markMyRoster
+    name: ${self:service}-mark-my-roster
+    events:
+      - http:
+          path: me/exam/rosters/{examId}/{paperId}/{sectionId}/mark
+          method: post
+          cors: true
+
+  sign-my-roster:
+    handler: examination-handler.signMyRoster
+    name: ${self:service}-sign-my-roster
+    events:
+      - http:
+          path: me/exam/rosters/{examId}/{paperId}/{sectionId}/sign
+          method: post
+          cors: true
+
+  # ── Phase 3: admin/incharge sign-any ─────────────────────────────────────────
+  get-roster-admin:
+    handler: examination-handler.getRosterAdmin
+    name: ${self:service}-get-roster-admin
+    events:
+      - http:
+          path: examinations/{id}/rosters/{paperId}/{sectionId}
+          method: get
+          cors: true
+
+  mark-roster-admin:
+    handler: examination-handler.markRosterAdmin
+    name: ${self:service}-mark-roster-admin
+    events:
+      - http:
+          path: examinations/{id}/rosters/{paperId}/{sectionId}/mark
+          method: post
+          cors: true
+
+  sign-roster-admin:
+    handler: examination-handler.signRosterAdmin
+    name: ${self:service}-sign-roster-admin
+    events:
+      - http:
+          path: examinations/{id}/rosters/{paperId}/{sectionId}/sign
+          method: post
+          cors: true

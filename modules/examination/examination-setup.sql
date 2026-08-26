@@ -184,3 +184,52 @@ create table if not exists school_branding (
     updatedby_userid varchar(12),
     updated_at timestamp(0)
 );
+
+-- ══ Phase 3: exam attendance + invigilator signatures ════════════════════════════
+
+-- exam_attendance: per (paper-day, section, student) present/absent + the invigilator's
+-- digital signature. A row exists once a student is marked. `signed_*` is stamped when
+-- the invigilator signs the roster (one signature applied to every row of that
+-- paper+section); the admit card then renders the signature image for present students
+-- and "ABSENT" for absent ones on that day. `signature_file_id` snapshots which
+-- signature image was used, so a later signature change doesn't rewrite history.
+-- Employee signatures themselves live in file_storage (entity_type='employee_signature').
+create table if not exists exam_attendance (
+    uuid varchar(12) primary key,
+    school_id varchar(12) not null,
+    exam_id varchar(12) not null,
+    exam_paper_id varchar(12) not null,
+    exam_date date not null,
+    section_class_id varchar(12) not null,
+    student_id varchar(12) not null,
+    status varchar(16) check (status in ('present', 'absent')),
+    signed_by_employee_id varchar(12),
+    signed_at timestamp(0),
+    signature_file_id varchar(12),
+    createdby_userid varchar(12),
+    created_at timestamp(0),
+    updatedby_userid varchar(12),
+    updated_at timestamp(0)
+);
+create unique index if not exists idx_exam_attendance_cell
+    on exam_attendance(exam_paper_id, student_id);
+create index if not exists idx_exam_attendance_section
+    on exam_attendance(school_id, exam_id, exam_paper_id, section_class_id);
+
+-- exam_attendance_audit: append-only log of marking / signing (who / what / when).
+create table if not exists exam_attendance_audit (
+    uuid varchar(12) primary key,
+    school_id varchar(12) not null,
+    exam_id varchar(12),
+    exam_paper_id varchar(12),
+    section_class_id varchar(12),
+    student_id varchar(12),
+    action varchar(24) check (action in ('mark_present', 'mark_absent', 'sign', 'resign', 'edit')),
+    old_status varchar(16),
+    new_status varchar(16),
+    employee_id varchar(12),
+    note varchar(256),
+    at timestamp(0)
+);
+create index if not exists idx_exam_attendance_audit
+    on exam_attendance_audit(school_id, exam_id, at);
