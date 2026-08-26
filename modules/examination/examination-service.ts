@@ -18,10 +18,17 @@ const { generateShortUuid } = require("../../shared/util/generate-uuid.js");
 
 const EXAM_COLS = singleLineString`
   uuid, academic_year_id, name, status, incharge_employee_id,
-  dues_threshold_current, dues_threshold_prior, cards_per_page,
+  dues_threshold_current, dues_threshold_prior, cards_per_page, grades,
   to_char(start_date, 'YYYY-MM-DD') as start_date,
   to_char(end_date, 'YYYY-MM-DD') as end_date
 `;
+
+// grades stored as a comma-separated string; expose as an array (null = all available).
+function parseGrades(csv: any): string[] | null {
+  if (!csv) return null;
+  const arr = String(csv).split(",").map((g) => g.trim()).filter(Boolean);
+  return arr.length ? arr : null;
+}
 
 const DEFAULT_CARDS_PER_PAGE = 4;
 const EXAM_STATUSES = ["draft", "published", "archived"];
@@ -59,7 +66,7 @@ class ExaminationService {
       `,
       [schoolId, academicYearId],
     );
-    return rows.map((r: any) => ({ ...r, paperCount: Number(r.paperCount || 0) }));
+    return rows.map((r: any) => ({ ...r, grades: parseGrades(r.grades), paperCount: Number(r.paperCount || 0) }));
   }
 
   async getExam(schoolId: string, examId: string): Promise<Examination | null> {
@@ -74,7 +81,7 @@ class ExaminationService {
       [schoolId, examId],
     );
     if (!rows.length) return null;
-    return { ...rows[0], paperCount: Number(rows[0].paperCount || 0) };
+    return { ...rows[0], grades: parseGrades(rows[0].grades), paperCount: Number(rows[0].paperCount || 0) };
   }
 
   // Internal: fetch the exam row (status/ay) or throw a 404-style business error.
@@ -128,6 +135,12 @@ class ExaminationService {
       const n = req.cardsPerPage === 3 ? 3 : req.cardsPerPage === 4 ? 4 : null;
       if (n === null) throw new BusinessErrorResult(ErrorCode.BusinessError, "cardsPerPage must be 3 or 4");
       push("cards_per_page", n);
+    }
+    if (req.grades !== undefined) {
+      const csv = Array.isArray(req.grades) && req.grades.length
+        ? [...new Set(req.grades.map((g) => String(g).trim()).filter(Boolean))].join(",")
+        : null;
+      push("grades", csv);
     }
     if (req.status !== undefined) {
       if (!EXAM_STATUSES.includes(req.status)) {
@@ -216,9 +229,14 @@ class ExaminationService {
 
   // ── Datesheet grid ───────────────────────────────────────────────────────────
   async getGrid(schoolId: string, examId: string): Promise<GridView> {
-    const exam = await this.requireExam(schoolId, examId);
-    const sections = await this.sectionsForExam(schoolId, exam.academicYearId);
-    const grades = this.gradesFromSections(sections);
+    const exam = await this.getExam(schoolId, examId);
+    if (!exam) throw new BusinessErrorResult(ErrorCode.BusinessError, "Examination not found");
+    const sections = await this.sectionsForExam(schoolId, exam.academicYearId!);
+    const availableGrades = this.gradesFromSections(sections);
+    // Columns actually shown = the exam's chosen grades (default = all available).
+    const grades = exam.grades && exam.grades.length
+      ? availableGrades.filter((g) => exam.grades!.includes(g.grade))
+      : availableGrades;
     const paperRows = await DB.query(
       singleLineString`
         select grade, to_char(exam_date, 'YYYY-MM-DD') as exam_date, subject_label
@@ -231,7 +249,7 @@ class ExaminationService {
       grade: r.grade, examDate: r.examDate, subjectLabel: r.subjectLabel,
     }));
     const dates = [...new Set(papers.map((p) => p.examDate))].sort();
-    return { examId, status: exam.status, grades, dates, papers };
+    return { examId, status: exam.status, grades, availableGrades, dates, papers };
   }
 
   // Replace the full set of filled cells. Empty/whitespace subjects are dropped (a

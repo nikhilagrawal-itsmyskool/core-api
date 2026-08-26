@@ -180,6 +180,19 @@ describe("examination: phase 2 — dues, admit cards, printing, branding", () =>
     expect(g.body.stampDataUri).toContain("data:image");
   });
 
+  sectionIt("grades: the exam can be narrowed to a subset of available grades", async () => {
+    const grid0 = await get(`/examinations/${examId}/grid`);
+    expect(grid0.body.availableGrades.length).toBeGreaterThan(0);
+    const p = await patch(`/examinations/${examId}`, { grades: [section!.grade] });
+    expect(p.status).toBe(200);
+    const grid = await get(`/examinations/${examId}/grid`);
+    expect(grid.body.grades.length).toBe(1);
+    expect(grid.body.grades[0].grade).toBe(section!.grade);
+    expect(grid.body.availableGrades.length).toBeGreaterThanOrEqual(grid.body.grades.length);
+    // Reset to all grades so later tests see the default.
+    await patch(`/examinations/${examId}`, { grades: [] });
+  });
+
   sectionIt("roster: lists section students with a per-student dues gate", async () => {
     const r = await get(`/examinations/${examId}/classes/${section!.sectionClassId}/roster`);
     expect(r.status).toBe(200);

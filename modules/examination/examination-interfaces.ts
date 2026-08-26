@@ -9,6 +9,7 @@ export interface Examination {
   duesThresholdCurrent?: number | null;
   duesThresholdPrior?: number | null;
   cardsPerPage?: number | null;
+  grades?: string[] | null; // grades this exam covers; null = all available
   startDate?: string | null;
   endDate?: string | null;
   paperCount?: number;
@@ -26,6 +27,7 @@ export interface UpdateExamRequest {
   status?: string; // publish/unpublish/archive transitions
   inchargeEmployeeId?: string | null;
   cardsPerPage?: number;
+  grades?: string[]; // the grades this exam covers (empty/undefined = all available)
   // god-only (enforced in the handler): the two dues thresholds.
   duesThresholdCurrent?: number | null;
   duesThresholdPrior?: number | null;
@@ -46,7 +48,8 @@ export interface GridGrade {
 export interface GridView {
   examId: string;
   status: string;
-  grades: GridGrade[]; // columns (derived from the year's sections)
+  grades: GridGrade[]; // columns actually shown (the exam's included grades)
+  availableGrades: GridGrade[]; // every grade that has sections in the year (pick list)
   dates: string[]; // rows (distinct paper dates, sorted)
   papers: ExamPaperCell[]; // filled cells
 }

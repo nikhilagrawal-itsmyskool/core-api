@@ -37,6 +37,11 @@ create table if not exists examination (
 create index if not exists idx_examination_school_year
     on examination(school_id, academic_year_id, status);
 
+-- Which grades this exam covers (comma-separated grade labels, e.g. 'I,II,...,IX').
+-- Null = all grades that have sections in the year (backward-compatible default). The
+-- datesheet grid shows only these columns.
+alter table examination add column if not exists grades varchar(256);
+
 -- ── exam_paper: one cell of the grade × date datesheet ───────────────────────────
 -- `grade` is the grade-label prefix of the class name (I-A -> I). One active paper per
 -- (exam, grade, exam_date). `subject_label` is free text (e.g. "G.K., Value Edu.,
