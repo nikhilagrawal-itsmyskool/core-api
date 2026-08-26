@@ -90,3 +90,110 @@
           path: examinations/{id}/invigilators
           method: put
           cors: true
+
+  # ── Roster + dues gate ───────────────────────────────────────────────────────
+  get-roster:
+    handler: examination-handler.getRoster
+    name: ${self:service}-get-roster
+    events:
+      - http:
+          path: examinations/{id}/classes/{sectionId}/roster
+          method: get
+          cors: true
+
+  get-print-preview:
+    handler: examination-handler.getPrintPreview
+    name: ${self:service}-get-print-preview
+    events:
+      - http:
+          path: examinations/{id}/classes/{sectionId}/print-preview
+          method: get
+          cors: true
+
+  get-admit-cards:
+    handler: examination-handler.getAdmitCards
+    name: ${self:service}-get-admit-cards
+    memorySize: 512
+    timeout: 29
+    events:
+      - http:
+          path: examinations/{id}/classes/{sectionId}/admit-cards
+          method: get
+          cors: true
+
+  record-print:
+    handler: examination-handler.recordPrint
+    name: ${self:service}-record-print
+    events:
+      - http:
+          path: examinations/{id}/classes/{sectionId}/print
+          method: post
+          cors: true
+
+  get-print-log:
+    handler: examination-handler.getPrintLog
+    name: ${self:service}-get-print-log
+    events:
+      - http:
+          path: examinations/{id}/print-log
+          method: get
+          cors: true
+
+  # ── Dues overrides (god only) ────────────────────────────────────────────────
+  list-overrides:
+    handler: examination-handler.listOverrides
+    name: ${self:service}-list-overrides
+    events:
+      - http:
+          path: examinations/{id}/dues-overrides
+          method: get
+          cors: true
+
+  create-overrides:
+    handler: examination-handler.createOverrides
+    name: ${self:service}-create-overrides
+    events:
+      - http:
+          path: examinations/{id}/dues-overrides
+          method: post
+          cors: true
+
+  revoke-override:
+    handler: examination-handler.revokeOverride
+    name: ${self:service}-revoke-override
+    events:
+      - http:
+          path: examinations/{id}/dues-overrides/{studentId}
+          method: delete
+          cors: true
+
+  # ── Branding (central logo + office stamp) ───────────────────────────────────
+  get-branding:
+    handler: examination-handler.getBranding
+    name: ${self:service}-get-branding
+    events:
+      - http:
+          path: branding
+          method: get
+          cors: true
+
+  set-branding:
+    handler: examination-handler.setBranding
+    name: ${self:service}-set-branding
+    memorySize: 512
+    timeout: 20
+    events:
+      - http:
+          path: branding/{kind}
+          method: put
+          cors: true
+
+  # ── Staff QR verify (live admit-card view) ───────────────────────────────────
+  verify-admit-card:
+    handler: examination-handler.verifyAdmitCard
+    name: ${self:service}-verify-admit-card
+    events:
+      - http:
+          path: verify/{admitCardId}
+          method: get
+          cors: true

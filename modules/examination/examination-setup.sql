@@ -86,7 +86,7 @@ create table if not exists exam_audit (
     uuid varchar(12) primary key,
     school_id varchar(12) not null,
     exam_id varchar(12),
-    entity varchar(16) check (entity in ('exam', 'paper', 'invigilator')),
+    entity varchar(16) check (entity in ('exam', 'paper', 'invigilator', 'override', 'print')),
     action varchar(24),
     detail varchar(512),
     changedby_userid varchar(12),
@@ -94,3 +94,79 @@ create table if not exists exam_audit (
 );
 create index if not exists idx_exam_audit_exam
     on exam_audit(school_id, exam_id, changed_at);
+
+-- `create table if not exists` does NOT widen an existing table's CHECK, so the entity
+-- enum is (re)applied explicitly and idempotently — Phase 1 created exam_audit with only
+-- ('exam','paper','invigilator'); Phase 2 adds 'override'/'print'.
+alter table exam_audit drop constraint if exists exam_audit_entity_check;
+alter table exam_audit add constraint exam_audit_entity_check
+    check (entity in ('exam', 'paper', 'invigilator', 'override', 'print'));
+
+-- ══ Phase 2: admit cards, dues overrides, print log, branding ════════════════════
+
+-- exam_admit_card: the STABLE identity for a student's admit card in one exam. Created
+-- lazily on first generation/print and reused thereafter; its `uuid` is what the staff
+-- QR encodes, so regeneration/reprints resolve to the same live card.
+create table if not exists exam_admit_card (
+    uuid varchar(12) primary key,
+    school_id varchar(12) not null,
+    exam_id varchar(12) not null,
+    student_id varchar(12) not null,
+    section_class_id varchar(12),
+    createdby_userid varchar(12),
+    created_at timestamp(0)
+);
+create unique index if not exists idx_exam_admit_card_student
+    on exam_admit_card(exam_id, student_id);
+create index if not exists idx_exam_admit_card_exam
+    on exam_admit_card(school_id, exam_id);
+
+-- exam_dues_override: a god decision to allow printing a dues-blocked student's card.
+-- Persisted (who/when/reason) so later prints/reprints go through without re-approval.
+create table if not exists exam_dues_override (
+    uuid varchar(12) primary key,
+    school_id varchar(12) not null,
+    exam_id varchar(12) not null,
+    student_id varchar(12) not null,
+    approved_by_userid varchar(12),
+    reason varchar(512),
+    status varchar(16) not null check (status in ('active', 'revoked')),
+    created_at timestamp(0),
+    updatedby_userid varchar(12),
+    updated_at timestamp(0)
+);
+create unique index if not exists idx_exam_dues_override_student
+    on exam_dues_override(exam_id, student_id) where status = 'active';
+create index if not exists idx_exam_dues_override_exam
+    on exam_dues_override(school_id, exam_id, status);
+
+-- exam_print_log: append-only print audit (who printed which class, when, how many
+-- pages) so a "regenerated because lost" reprint is visible.
+create table if not exists exam_print_log (
+    uuid varchar(12) primary key,
+    school_id varchar(12) not null,
+    exam_id varchar(12) not null,
+    section_class_id varchar(12),
+    printedby_userid varchar(12),
+    cards_per_page integer,
+    student_count integer,
+    page_count integer,
+    reason varchar(24),
+    note varchar(512),
+    created_at timestamp(0)
+);
+create index if not exists idx_exam_print_log_exam
+    on exam_print_log(school_id, exam_id, created_at);
+
+-- school_branding: CENTRAL / shared per-school branding (school logo + office stamp),
+-- NOT examination-specific. Examination is the first consumer; receipts/report-cards
+-- can migrate onto it later (and the write endpoints can move to a dedicated config
+-- module). Images live in file_storage (entity_type 'school_logo' / 'school_stamp');
+-- these columns point at the active file uuids.
+create table if not exists school_branding (
+    school_id varchar(12) primary key,
+    logo_file_id varchar(12),
+    stamp_file_id varchar(12),
+    updatedby_userid varchar(12),
+    updated_at timestamp(0)
+);

@@ -1,4 +1,10 @@
-import { BASE_URL, headers, getContext, closePool, cleanupTestExams, TEST_MARKER } from "./helpers";
+import {
+  BASE_URL, headers, getContext, closePool, cleanupTestExams, TEST_MARKER,
+  getSampleSection, cleanupBranding,
+} from "./helpers";
+
+// 1x1 transparent PNG for branding upload tests.
+const TINY_PNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
 
 const AY = () => getContext().then((c) => c.academicYearId);
 
@@ -130,5 +136,105 @@ describe("examination: exam lifecycle", () => {
     expect(res.body.deleted).toBe(true);
     const after = await get(`/examinations/${examId}`);
     expect(after.status).toBe(404);
+  });
+});
+
+describe("examination: phase 2 — dues, admit cards, printing, branding", () => {
+  let examId = "";
+  let section: { sectionClassId: string; grade: string; studentId: string; academicYearId: string } | null = null;
+  // Register a real test but no-op it when the sample school has no enrolment (section
+  // is populated in beforeAll, which runs before the test body — unlike the describe
+  // body, where it's still null).
+  const sectionIt = (name: string, fn: any) =>
+    it(name, async () => {
+      if (!section) { console.warn(`[skip: no enrolment] ${name}`); return; }
+      return fn();
+    });
+
+  beforeAll(async () => {
+    section = await getSampleSection();
+    const ay = section ? section.academicYearId : await AY();
+    const created = await post("/examinations", { name: `Annual ${TEST_MARKER}`, academicYearId: ay });
+    examId = created.body.uuid;
+    if (section) {
+      await put(`/examinations/${examId}/papers`, {
+        papers: [
+          { grade: section.grade, examDate: "2099-11-02", subjectLabel: "English" },
+          { grade: section.grade, examDate: "2099-11-04", subjectLabel: "Maths" },
+        ],
+      });
+    }
+  });
+
+  afterAll(async () => { await cleanupBranding(); });
+
+  it("branding: uploads logo + stamp and reads them back as data URIs", async () => {
+    const r1 = await put("/branding/logo", { imageBase64: TINY_PNG, mimeType: "image/png", fileName: "logo.png" });
+    expect(r1.status).toBe(200);
+    expect(r1.body.logoFileId).toBeTruthy();
+    expect(r1.body.logoDataUri).toContain("data:image/png;base64,");
+    const r2 = await put("/branding/stamp", { imageBase64: TINY_PNG });
+    expect(r2.body.stampFileId).toBeTruthy();
+    const g = await get("/branding");
+    expect(g.body.logoDataUri).toContain("data:image");
+    expect(g.body.stampDataUri).toContain("data:image");
+  });
+
+  sectionIt("roster: lists section students with a per-student dues gate", async () => {
+    const r = await get(`/examinations/${examId}/classes/${section!.sectionClassId}/roster`);
+    expect(r.status).toBe(200);
+    expect(r.body.students.length).toBeGreaterThan(0);
+    for (const s of r.body.students) {
+      expect(typeof s.currentDue).toBe("number");
+      expect(typeof s.priorDue).toBe("number");
+      expect(typeof s.printable).toBe("boolean");
+    }
+  });
+
+  sectionIt("print-preview: page count = ceil(printable / cardsPerPage)", async () => {
+    const r = await get(`/examinations/${examId}/classes/${section!.sectionClassId}/print-preview?cardsPerPage=4`);
+    expect(r.status).toBe(200);
+    expect(r.body.cardsPerPage).toBe(4);
+    expect(r.body.pageCount).toBe(Math.ceil(r.body.printableCount / 4));
+  });
+
+  sectionIt("admit-cards: stable id + QR per card, papers for the grade, resolvable via verify", async () => {
+    const r = await get(`/examinations/${examId}/classes/${section!.sectionClassId}/admit-cards`);
+    expect(r.status).toBe(200);
+    expect(r.body.papers.length).toBe(2);
+    expect(r.body.cards.length).toBeGreaterThan(0);
+    const card = r.body.cards[0];
+    expect(card.admitCardId).toBeTruthy();
+    expect(card.qrDataUri).toContain("data:image");
+
+    // Stable identity: a second fetch returns the same admit-card id for the student.
+    const r2 = await get(`/examinations/${examId}/classes/${section!.sectionClassId}/admit-cards`);
+    const same = r2.body.cards.find((c: any) => c.studentId === card.studentId);
+    expect(same.admitCardId).toBe(card.admitCardId);
+
+    // Staff QR verify resolves the live card.
+    const v = await get(`/verify/${card.admitCardId}`);
+    expect(v.status).toBe(200);
+    expect(v.body.papers.length).toBe(2);
+    expect(v.body.student.name).toBeTruthy();
+  });
+
+  sectionIt("dues override: god creates then revokes (roster reflects it)", async () => {
+    const r = await post(`/examinations/${examId}/dues-overrides`, { studentIds: [section!.studentId], reason: "test waiver" });
+    expect(r.status).toBe(200);
+    expect(r.body.some((o: any) => o.studentId === section!.studentId)).toBe(true);
+    const roster = await get(`/examinations/${examId}/classes/${section!.sectionClassId}/roster`);
+    expect(roster.body.students.find((s: any) => s.studentId === section!.studentId).overridden).toBe(true);
+    const d = await del(`/examinations/${examId}/dues-overrides/${section!.studentId}`);
+    expect(d.body.revoked).toBe(true);
+  });
+
+  sectionIt("print log: records a print and lists it", async () => {
+    const r = await post(`/examinations/${examId}/classes/${section!.sectionClassId}/print`,
+      { cardsPerPage: 4, studentCount: 3, pageCount: 1, reason: "normal" });
+    expect(r.status).toBe(200);
+    const log = await get(`/examinations/${examId}/print-log`);
+    expect(log.body.length).toBeGreaterThan(0);
+    expect(log.body[0].pageCount).toBe(1);
   });
 });
