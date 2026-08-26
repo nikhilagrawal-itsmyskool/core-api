@@ -293,8 +293,14 @@ class ExaminationService {
 
   // ── Invigilator assignment ─────────────────────────────────────────────────────
   async getInvigilators(schoolId: string, examId: string): Promise<InvigilatorView> {
-    const exam = await this.requireExam(schoolId, examId);
-    const sections = await this.sectionsForExam(schoolId, exam.academicYearId);
+    const exam = await this.getExam(schoolId, examId);
+    if (!exam) throw new BusinessErrorResult(ErrorCode.BusinessError, "Examination not found");
+    let sections = await this.sectionsForExam(schoolId, exam.academicYearId!);
+    // Only sections whose grade is part of this exam (default = all available).
+    if (exam.grades && exam.grades.length) {
+      const set = new Set(exam.grades);
+      sections = sections.filter((s) => set.has(s.grade));
+    }
 
     const paperRows = await DB.query(
       singleLineString`select distinct grade, to_char(exam_date, 'YYYY-MM-DD') as exam_date
