@@ -476,14 +476,26 @@ class ExaminationService {
     );
     const overrideSet = new Set(overrideRows.map((r: any) => r.studentId));
 
+    const printedRows = await DB.query(
+      singleLineString`select student_id, to_char(printed_at, 'YYYY-MM-DD') as printed_on, print_count
+        from exam_admit_card where exam_id = $1 and printed_at is not null`,
+      [examId],
+    );
+    const printedMap = new Map<string, { printedOn: string; printCount: number }>(
+      printedRows.map((r: any) => [r.studentId, { printedOn: r.printedOn, printCount: Number(r.printCount || 0) }]),
+    );
+
     const rows: any[] = [];
     for (const s of students) {
       const { currentDue, priorDue } = await this.examDues(schoolId, s.studentId, exam.academicYearId!, exam.duesCutoffDate);
       const blocked = currentDue > thrCurrent || priorDue > thrPrior;
       const overridden = overrideSet.has(s.studentId);
+      const printed = printedMap.get(s.studentId) || null;
       rows.push({
         studentId: s.studentId, name: s.name, admissionNumber: s.admissionNumber,
         currentDue, priorDue, blocked, overridden, printable: !blocked || overridden,
+        printedOn: printed ? printed.printedOn : null,
+        printCount: printed ? printed.printCount : 0,
       });
     }
     return {
@@ -658,13 +670,24 @@ class ExaminationService {
   // ── Print log ──────────────────────────────────────────────────────────────────
   async recordPrint(schoolId: string, examId: string, sectionClassId: string, info: any, userId: string): Promise<any> {
     const uuid = generateShortUuid(12);
+    const now = new Date();
     await DB.query(
       singleLineString`insert into exam_print_log
         (uuid, school_id, exam_id, section_class_id, printedby_userid, cards_per_page, student_count, page_count, reason, note, created_at)
         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
       [uuid, schoolId, examId, sectionClassId, userId, info.cardsPerPage || null,
-        info.studentCount || 0, info.pageCount || 0, info.reason || "normal", (info.note || "").slice(0, 512), new Date()],
+        info.studentCount || 0, info.pageCount || 0, info.reason || "normal", (info.note || "").slice(0, 512), now],
     );
+    // Stamp the printed students' cards so the roster shows "printed" and they aren't
+    // auto-reselected next time (a lost-card reprint just bumps print_count).
+    const printedIds: string[] = Array.isArray(info.studentIds) ? info.studentIds.filter(Boolean) : [];
+    for (const studentId of printedIds) {
+      const cardId = await this.ensureAdmitCard(schoolId, examId, studentId, sectionClassId, userId);
+      await DB.query(
+        singleLineString`update exam_admit_card set printed_at = $2, print_count = coalesce(print_count, 0) + 1 where uuid = $1`,
+        [cardId, now],
+      );
+    }
     await this.audit(schoolId, examId, "print", info.reason === "reprint" ? "reprint" : "print",
       `${info.studentCount || 0} card(s), ${info.pageCount || 0} page(s)`, userId);
     return { uuid };

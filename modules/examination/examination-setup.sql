@@ -130,6 +130,10 @@ create unique index if not exists idx_exam_admit_card_student
     on exam_admit_card(exam_id, student_id);
 create index if not exists idx_exam_admit_card_exam
     on exam_admit_card(school_id, exam_id);
+-- Track whether/when a student's card was last printed (so the roster can show "printed"
+-- and the office doesn't reselect it) and how many times (lost-card reprints).
+alter table exam_admit_card add column if not exists printed_at timestamp(0);
+alter table exam_admit_card add column if not exists print_count integer;
 
 -- exam_dues_override: a god decision to allow printing a dues-blocked student's card.
 -- Persisted (who/when/reason) so later prints/reprints go through without re-approval.

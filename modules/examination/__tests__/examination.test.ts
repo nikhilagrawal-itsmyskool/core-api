@@ -256,12 +256,16 @@ describe("examination: phase 2 — dues, admit cards, printing, branding", () =>
     expect(d.body.revoked).toBe(true);
   });
 
-  sectionIt("print log: records a print and lists it", async () => {
+  sectionIt("print log + printed mark: records a print and flags the student as printed", async () => {
     const r = await post(`/examinations/${examId}/classes/${section!.sectionClassId}/print`,
-      { cardsPerPage: 4, studentCount: 3, pageCount: 1, reason: "normal" });
+      { cardsPerPage: 4, studentCount: 1, pageCount: 1, reason: "normal", studentIds: [section!.studentId] });
     expect(r.status).toBe(200);
     const log = await get(`/examinations/${examId}/print-log`);
     expect(log.body.length).toBeGreaterThan(0);
     expect(log.body[0].pageCount).toBe(1);
+    const roster = await get(`/examinations/${examId}/classes/${section!.sectionClassId}/roster`);
+    const stu = roster.body.students.find((s: any) => s.studentId === section!.studentId);
+    expect(stu.printedOn).toBeTruthy();
+    expect(stu.printCount).toBeGreaterThan(0);
   });
 });
