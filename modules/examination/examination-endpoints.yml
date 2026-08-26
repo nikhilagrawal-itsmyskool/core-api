@@ -1,0 +1,92 @@
+  # Health check
+  health:
+    handler: health-handler.health
+    events:
+      - http:
+          path: health
+          method: get
+          cors: true
+
+  # ── Examinations (header + config) ───────────────────────────────────────────
+  list-exams:
+    handler: examination-handler.listExams
+    name: ${self:service}-list-exams
+    events:
+      - http:
+          path: examinations
+          method: get
+          cors: true
+
+  create-exam:
+    handler: examination-handler.createExam
+    name: ${self:service}-create-exam
+    events:
+      - http:
+          path: examinations
+          method: post
+          cors: true
+
+  get-exam:
+    handler: examination-handler.getExam
+    name: ${self:service}-get-exam
+    events:
+      - http:
+          path: examinations/{id}
+          method: get
+          cors: true
+
+  update-exam:
+    handler: examination-handler.updateExam
+    name: ${self:service}-update-exam
+    events:
+      - http:
+          path: examinations/{id}
+          method: patch
+          cors: true
+
+  delete-exam:
+    handler: examination-handler.deleteExam
+    name: ${self:service}-delete-exam
+    events:
+      - http:
+          path: examinations/{id}
+          method: delete
+          cors: true
+
+  # ── Datesheet grid (grade × date) ────────────────────────────────────────────
+  get-grid:
+    handler: examination-handler.getGrid
+    name: ${self:service}-get-grid
+    events:
+      - http:
+          path: examinations/{id}/grid
+          method: get
+          cors: true
+
+  save-papers:
+    handler: examination-handler.savePapers
+    name: ${self:service}-save-papers
+    events:
+      - http:
+          path: examinations/{id}/papers
+          method: put
+          cors: true
+
+  # ── Invigilator assignment (date × section) ──────────────────────────────────
+  get-invigilators:
+    handler: examination-handler.getInvigilators
+    name: ${self:service}-get-invigilators
+    events:
+      - http:
+          path: examinations/{id}/invigilators
+          method: get
+          cors: true
+
+  save-invigilators:
+    handler: examination-handler.saveInvigilators
+    name: ${self:service}-save-invigilators
+    events:
+      - http:
+          path: examinations/{id}/invigilators
+          method: put
+          cors: true

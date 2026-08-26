@@ -70,6 +70,10 @@ export const ACTIONS = {
   ASSEMBLY_MANAGE: 'assembly.manage',
   HOMEWORK_POST: 'homework.post',
   HOMEWORK_MANAGE: 'homework.manage',
+  ACADEMIC_CALENDAR_VIEW: 'academic-calendar.view',
+  ACADEMIC_CALENDAR_MANAGE: 'academic-calendar.manage',
+  EXAM_VIEW: 'exam.view',
+  EXAM_MANAGE: 'exam.manage',
   ASSISTANT_USE: 'assistant.use',
 } as const;
 
@@ -113,6 +117,9 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
     'assembly.manage',
     'homework.post',
     'homework.manage',
+    'academic-calendar.view',
+    'academic-calendar.manage',
+    'exam.*',
     'receipt.verify', // Scan & Verify (admin + god only; NOT fee incharges)
   ],
   // Standard teaching staff: view-only across the modules they can reach.
@@ -126,6 +133,7 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
     'syllabus.view',
     'syllabus.progress.mark',
     'assembly.view',
+    'academic-calendar.view',
   ],
   // Class teacher: additive to `teacher` — may MARK attendance and POST homework.
   'class-teacher': ['attendance.mark', 'homework.post'],
@@ -141,6 +149,8 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
   'transport-incharge': ['transport.*'],
   'syllabus-incharge': ['syllabus.*'],
   'assembly-incharge': ['assembly.*'],
+  // Exam incharge === admin, but scoped to the examination module.
+  'exam-incharge': ['exam.*'],
   // Route-scoped teacher: reach bus-attendance screens + mark, but only on routes
   // they staff (route filtering enforced in the transport handlers); finalize stays
   // admin/god/transport-incharge only.
