@@ -91,6 +91,24 @@
           method: put
           cors: true
 
+  save-papers-for-grade:
+    handler: examination-handler.savePapersForGrade
+    name: ${self:service}-save-papers-for-grade
+    events:
+      - http:
+          path: examinations/{id}/papers/{grade}
+          method: put
+          cors: true
+
+  save-invigilators-for-date:
+    handler: examination-handler.saveInvigilatorsForDate
+    name: ${self:service}-save-invigilators-for-date
+    events:
+      - http:
+          path: examinations/{id}/invigilators/date/{date}
+          method: put
+          cors: true
+
   # ── Roster + dues gate ───────────────────────────────────────────────────────
   get-roster:
     handler: examination-handler.getRoster

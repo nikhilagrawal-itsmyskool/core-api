@@ -88,6 +88,16 @@ describe("examination: exam lifecycle", () => {
     expect(ix09.subjectLabel).toBe("English - I");
   });
 
+  it("saves ONE grade's papers without touching the other grades", async () => {
+    // state from the previous test: IX has 2 papers, VIII has 1.
+    const saved = await put(`/examinations/${examId}/papers/IX`, { papers: [{ examDate: "2099-09-14", subjectLabel: "Maths" }] });
+    expect(saved.status).toBe(200);
+    const ix = saved.body.papers.filter((p: any) => p.grade === "IX");
+    expect(ix.length).toBe(1);
+    expect(ix[0].examDate).toBe("2099-09-14");
+    expect(saved.body.papers.filter((p: any) => p.grade === "VIII").length).toBe(1); // untouched
+  });
+
   it("re-saving the grid replaces the previous set (idempotent upsert)", async () => {
     const papers = [{ grade: "IX", examDate: "2099-09-09", subjectLabel: "English - I (revised)" }];
     const saved = await put(`/examinations/${examId}/papers`, { papers });
@@ -120,6 +130,16 @@ describe("examination: exam lifecycle", () => {
     expect(res.status).toBe(200);
     expect(res.body.dates).toContain("2099-09-09");
     expect(res.body.gradesByDate["2099-09-09"]).toContain("IX");
+  });
+
+  it("saves ONE day's invigilators (per-date) and reads them back", async () => {
+    const r = await put(`/examinations/${examId}/invigilators/date/2099-09-09`, {
+      assignments: [{ sectionClassId: "sectionZ0009", employeeId: "empPerDate01" }],
+    });
+    expect(r.status).toBe(200);
+    const onDay = r.body.assignments.filter((a: any) => a.examDate === "2099-09-09");
+    expect(onDay.length).toBe(1);
+    expect(onDay[0].sectionClassId).toBe("sectionZ0009");
   });
 
   it("rejects a dues-threshold change when not god (handled by role check)", async () => {

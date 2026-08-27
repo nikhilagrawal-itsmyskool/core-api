@@ -170,6 +170,40 @@ class ExaminationHandler {
     }
   };
 
+  // PUT /examinations/{id}/papers/{grade} — save one grade's papers (PWA)
+  public savePapersForGrade = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const auth = await resolveSchool(event, callback);
+      if (!auth) return;
+      const id = requireParam(event, "id", callback);
+      const grade = requireParam(event, "grade", callback);
+      if (!id || !grade) return;
+      const body = parseBody<{ papers: any[] }>(event, callback);
+      if (!body) return;
+      ResponseBuilder.ok(await examinationService.savePapersForGrade(auth.schoolId, id, grade, body.papers || [], auth.userId), callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
+  // PUT /examinations/{id}/invigilators/date/{date} — save one day's assignments (PWA)
+  public saveInvigilatorsForDate = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const auth = await resolveSchool(event, callback);
+      if (!auth) return;
+      const id = requireParam(event, "id", callback);
+      const date = requireParam(event, "date", callback);
+      if (!id || !date) return;
+      const body = parseBody<{ assignments: any[] }>(event, callback);
+      if (!body) return;
+      ResponseBuilder.ok(await examinationService.saveInvigilatorsForDate(auth.schoolId, id, date, body.assignments || [], auth.userId), callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
   // ── Phase 2: roster/dues, admit cards, printing, overrides, branding, verify ────
 
   // GET /examinations/{id}/classes/{sectionId}/roster
@@ -577,6 +611,8 @@ export const getGrid = guard(ACTIONS.EXAM_VIEW, h.getGrid);
 export const savePapers = guard(ACTIONS.EXAM_MANAGE, h.savePapers);
 export const getInvigilators = guard(ACTIONS.EXAM_VIEW, h.getInvigilators);
 export const saveInvigilators = guard(ACTIONS.EXAM_MANAGE, h.saveInvigilators);
+export const savePapersForGrade = guard(ACTIONS.EXAM_MANAGE, h.savePapersForGrade);
+export const saveInvigilatorsForDate = guard(ACTIONS.EXAM_MANAGE, h.saveInvigilatorsForDate);
 
 // Phase 2
 export const getRoster = guard(ACTIONS.EXAM_VIEW, h.getRoster);

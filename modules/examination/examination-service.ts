@@ -844,6 +844,77 @@ class ExaminationService {
     };
   }
 
+  // ── Targeted saves for the phone (one grade / one day at a time) ──────────────
+
+  // Replace only ONE grade's papers (the PWA edits a grade at a time, so a full-grid
+  // replace would wipe the other grades).
+  async savePapersForGrade(schoolId: string, examId: string, grade: string, cells: any[], userId: string): Promise<GridView> {
+    const exam = await this.requireExam(schoolId, examId);
+    if (exam.status === "archived") throw new BusinessErrorResult(ErrorCode.BusinessError, "Cannot edit an archived exam");
+    const g = (grade || "").trim();
+    if (!g) throw new BusinessErrorResult(ErrorCode.BusinessError, "grade is required");
+    if (!Array.isArray(cells)) throw new BusinessErrorResult(ErrorCode.BusinessError, "papers must be an array");
+    const seen = new Map<string, string>();
+    for (const c of cells) {
+      const subject = (c.subjectLabel || "").trim();
+      if (!isValidDate(c.examDate) || !subject) continue;
+      seen.set(c.examDate, subject.slice(0, 256));
+    }
+    const queries: string[] = [];
+    const params: any[][] = [];
+    const now = new Date();
+    queries.push(
+      singleLineString`update exam_paper set status = 'deleted', updatedby_userid = $3, updated_at = $4
+        where exam_id = $1 and grade = $2 and status = 'active'`,
+    );
+    params.push([examId, g, userId, now]);
+    for (const [date, subject] of seen) {
+      queries.push(
+        singleLineString`insert into exam_paper
+          (uuid, school_id, exam_id, grade, exam_date, subject_label, status, createdby_userid, created_at)
+          values ($1, $2, $3, $4, $5, $6, 'active', $7, $8)`,
+      );
+      params.push([generateShortUuid(12), schoolId, examId, g, date, subject, userId, now]);
+    }
+    await DB.queriesInTransaction(queries, params);
+    await this.audit(schoolId, examId, "paper", "save", `grade ${g}: ${seen.size} paper(s)`, userId);
+    return this.getGrid(schoolId, examId);
+  }
+
+  // Replace only ONE date's invigilator assignments (the PWA assigns a day at a time).
+  async saveInvigilatorsForDate(schoolId: string, examId: string, examDate: string, assignments: any[], userId: string): Promise<InvigilatorView> {
+    const exam = await this.requireExam(schoolId, examId);
+    if (exam.status === "archived") throw new BusinessErrorResult(ErrorCode.BusinessError, "Cannot edit an archived exam");
+    if (!isValidDate(examDate)) throw new BusinessErrorResult(ErrorCode.BusinessError, "date must be YYYY-MM-DD");
+    if (!Array.isArray(assignments)) throw new BusinessErrorResult(ErrorCode.BusinessError, "assignments must be an array");
+    const seen = new Map<string, string>();
+    for (const a of assignments) {
+      const employeeId = (a.employeeId || "").trim();
+      const sectionClassId = (a.sectionClassId || "").trim();
+      if (!sectionClassId || !employeeId) continue;
+      seen.set(sectionClassId, employeeId);
+    }
+    const queries: string[] = [];
+    const params: any[][] = [];
+    const now = new Date();
+    queries.push(
+      singleLineString`update exam_invigilator set status = 'deleted', updatedby_userid = $3, updated_at = $4
+        where exam_id = $1 and exam_date = $2 and status = 'active'`,
+    );
+    params.push([examId, examDate, userId, now]);
+    for (const [sectionClassId, employeeId] of seen) {
+      queries.push(
+        singleLineString`insert into exam_invigilator
+          (uuid, school_id, exam_id, exam_date, section_class_id, employee_id, status, createdby_userid, created_at)
+          values ($1, $2, $3, $4, $5, $6, 'active', $7, $8)`,
+      );
+      params.push([generateShortUuid(12), schoolId, examId, examDate, sectionClassId, employeeId, userId, now]);
+    }
+    await DB.queriesInTransaction(queries, params);
+    await this.audit(schoolId, examId, "invigilator", "save", `${examDate}: ${seen.size} assignment(s)`, userId);
+    return this.getInvigilators(schoolId, examId);
+  }
+
   // ── Read surfaces open to all staff / Student 360 ─────────────────────────────
 
   // Published exams for a year — the read-only "Exam Schedule" list (any staff member).
