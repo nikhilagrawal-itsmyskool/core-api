@@ -303,4 +303,15 @@ describe("examination: phase 2 — dues, admit cards, printing, branding", () =>
     expect(stu.printedOn).toBeTruthy();
     expect(stu.printCount).toBeGreaterThan(0);
   });
+
+  sectionIt("student 360 exam status: a published exam appears with dues + printable flag", async () => {
+    await patch(`/examinations/${examId}`, { status: "published" });
+    const r = await get(`/examinations/student/${section!.studentId}/status`);
+    expect(r.status).toBe(200);
+    const row = r.body.find((x: any) => x.examId === examId);
+    expect(row).toBeTruthy();
+    expect(row.className).toBeTruthy();
+    expect(typeof row.currentDue).toBe("number");
+    expect(typeof row.printable).toBe("boolean");
+  });
 });

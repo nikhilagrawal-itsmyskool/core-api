@@ -415,6 +415,49 @@ class ExaminationHandler {
     }
   };
 
+  // GET /examination/me/exam/schedule?academicYearId=  — published exams (any staff)
+  public getMySchedule = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const emp = resolveEmployee(event, callback);
+      if (!emp) return;
+      const q = event.queryStringParameters || {};
+      const ay = q.academicYearId || (await getCurrentAcademicYearId(emp.schoolId));
+      if (!ay) return ResponseBuilder.ok([], callback);
+      ResponseBuilder.ok(await examinationService.publishedExams(emp.schoolId, ay), callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
+  // GET /examination/me/exam/schedule/{examId} — read-only datesheet grid (any staff)
+  public getMyScheduleGrid = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const emp = resolveEmployee(event, callback);
+      if (!emp) return;
+      const examId = requireParam(event, "examId", callback);
+      if (!examId) return;
+      ResponseBuilder.ok(await examinationService.scheduleGrid(emp.schoolId, examId), callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
+  // GET /examination/examinations/student/{studentId}/status — Student 360 exam block
+  public getStudentExamStatus = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const auth = await resolveSchool(event, callback);
+      if (!auth) return;
+      const studentId = requireParam(event, "studentId", callback);
+      if (!studentId) return;
+      ResponseBuilder.ok(await examinationService.studentExamStatus(auth.schoolId, studentId), callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
   // Shared /me roster resolver: verifies the caller is the assigned invigilator.
   private async meRosterParams(event: ApiEvent, callback: ApiCallback) {
     const emp = resolveEmployee(event, callback);
@@ -553,6 +596,9 @@ export const verifyAdmitCard = guard(ACTIONS.EXAM_VIEW, h.verifyAdmitCard);
 export const getMySignature = h.getMySignature;
 export const saveMySignature = h.saveMySignature;
 export const getMyInvigilations = h.getMyInvigilations;
+export const getMySchedule = h.getMySchedule;
+export const getMyScheduleGrid = h.getMyScheduleGrid;
+export const getStudentExamStatus = guard(ACTIONS.EXAM_VIEW, h.getStudentExamStatus);
 export const getMyRoster = h.getMyRoster;
 export const markMyRoster = h.markMyRoster;
 export const signMyRoster = h.signMyRoster;

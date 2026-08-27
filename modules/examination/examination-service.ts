@@ -844,6 +844,72 @@ class ExaminationService {
     };
   }
 
+  // ── Read surfaces open to all staff / Student 360 ─────────────────────────────
+
+  // Published exams for a year — the read-only "Exam Schedule" list (any staff member).
+  async publishedExams(schoolId: string, academicYearId: string): Promise<any[]> {
+    return DB.query(
+      singleLineString`select uuid, name from examination
+        where school_id = $1 and academic_year_id = $2 and status = 'published'
+        order by created_at desc nulls last, name`,
+      [schoolId, academicYearId],
+    );
+  }
+
+  // Read-only datesheet grid for a PUBLISHED exam (open to all staff).
+  async scheduleGrid(schoolId: string, examId: string): Promise<GridView> {
+    const exam = await this.getExam(schoolId, examId);
+    if (!exam || exam.status !== "published") {
+      throw new BusinessErrorResult(ErrorCode.BusinessError, "Exam schedule not available");
+    }
+    return this.getGrid(schoolId, examId);
+  }
+
+  // A student's admit-card / dues status across published exams — powers the
+  // Examinations block on Student 360 (reached via the Ctrl+K name search).
+  async studentExamStatus(schoolId: string, studentId: string): Promise<any[]> {
+    const exams = await DB.query(
+      singleLineString`select uuid, name, academic_year_id, grades, dues_threshold_current, dues_threshold_prior,
+          to_char(dues_cutoff_date, 'YYYY-MM-DD') as dues_cutoff_date
+        from examination where school_id = $1 and status = 'published'
+        order by created_at desc nulls last`,
+      [schoolId],
+    );
+    const out: any[] = [];
+    for (const e of exams) {
+      const cls = await DB.query(
+        singleLineString`select c.uuid, c.name from student_class sc
+          join class c on c.uuid = sc.class_id and c.school_id = sc.school_id
+          where sc.student_id = $1 and sc.academic_year_id = $2 and sc.school_id = $3
+            and (sc.status is null or sc.status <> 'deleted') limit 1`,
+        [studentId, e.academicYearId, schoolId],
+      );
+      if (!cls.length) continue;
+      const grade = gradeOf(cls[0].name);
+      const grades = e.grades ? String(e.grades).split(",").map((g: string) => g.trim()) : null;
+      if (grades && grades.length && !grades.includes(grade)) continue;
+      const thrCurrent = Number(e.duesThresholdCurrent || 0), thrPrior = Number(e.duesThresholdPrior || 0);
+      const { currentDue, priorDue } = await this.examDues(schoolId, studentId, e.academicYearId, e.duesCutoffDate);
+      const blocked = currentDue > thrCurrent || priorDue > thrPrior;
+      const ov = await DB.query(
+        singleLineString`select 1 from exam_dues_override where exam_id = $1 and student_id = $2 and status = 'active' limit 1`,
+        [e.uuid, studentId],
+      );
+      const ac = await DB.query(
+        singleLineString`select uuid, to_char(printed_at, 'YYYY-MM-DD') as printed_on from exam_admit_card where exam_id = $1 and student_id = $2`,
+        [e.uuid, studentId],
+      );
+      const ayName = await DB.query(singleLineString`select name from academic_year where uuid = $1`, [e.academicYearId]);
+      out.push({
+        examId: e.uuid, examName: e.name, academicYearName: ayName.length ? ayName[0].name : "",
+        className: cls[0].name, currentDue, priorDue, blocked, overridden: ov.length > 0,
+        printable: !blocked || ov.length > 0,
+        printedOn: ac.length ? ac[0].printedOn : null, admitCardId: ac.length ? ac[0].uuid : null,
+      });
+    }
+    return out;
+  }
+
   // ════ Phase 3: employee signatures + exam attendance / invigilation ═════════════
 
   private async attAudit(

@@ -237,6 +237,33 @@
           method: get
           cors: true
 
+  get-my-schedule:
+    handler: examination-handler.getMySchedule
+    name: ${self:service}-get-my-schedule
+    events:
+      - http:
+          path: me/exam/schedule
+          method: get
+          cors: true
+
+  get-my-schedule-grid:
+    handler: examination-handler.getMyScheduleGrid
+    name: ${self:service}-get-my-schedule-grid
+    events:
+      - http:
+          path: me/exam/schedule/{examId}
+          method: get
+          cors: true
+
+  get-student-exam-status:
+    handler: examination-handler.getStudentExamStatus
+    name: ${self:service}-get-student-exam-status
+    events:
+      - http:
+          path: examinations/student/{studentId}/status
+          method: get
+          cors: true
+
   get-my-roster:
     handler: examination-handler.getMyRoster
     name: ${self:service}-get-my-roster
