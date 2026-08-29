@@ -56,11 +56,22 @@ describe("examination: exam lifecycle", () => {
     expect(created.status).toBe(200);
     expect(created.body.status).toBe("draft");
     expect(created.body.cardsPerPage).toBe(4);
+    expect(created.body.hasInvigilation).toBe(true); // default full exam
+    expect(created.body.hasAdmitCards).toBe(true);
     examId = created.body.uuid;
 
     const list = await get(`/examinations?academicYearId=${ay}`);
     expect(list.status).toBe(200);
     expect(list.body.some((e: any) => e.uuid === examId)).toBe(true);
+  });
+
+  it("creates a datesheet-only exam (no invigilation, no admit cards)", async () => {
+    const ay = await AY();
+    const c = await post("/examinations", { name: `Oral ${TEST_MARKER}`, academicYearId: ay, hasInvigilation: false, hasAdmitCards: false });
+    expect(c.status).toBe(200);
+    expect(c.body.hasInvigilation).toBe(false);
+    expect(c.body.hasAdmitCards).toBe(false);
+    await del(`/examinations/${c.body.uuid}`);
   });
 
   it("refuses to publish an exam with no papers", async () => {

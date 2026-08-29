@@ -11,6 +11,8 @@ export interface Examination {
   cardsPerPage?: number | null;
   grades?: string[] | null; // grades this exam covers; null = all available
   duesCutoffDate?: string | null; // dues checked on/before this date; null = due-now
+  hasInvigilation?: boolean; // false = datesheet-only exam (no invigilator assignment)
+  hasAdmitCards?: boolean; // false = no admit cards issued
   startDate?: string | null;
   endDate?: string | null;
   paperCount?: number;
@@ -21,6 +23,8 @@ export interface CreateExamRequest {
   academicYearId?: string;
   inchargeEmployeeId?: string | null;
   cardsPerPage?: number;
+  hasInvigilation?: boolean; // default true
+  hasAdmitCards?: boolean; // default true
 }
 
 export interface UpdateExamRequest {
@@ -30,6 +34,8 @@ export interface UpdateExamRequest {
   cardsPerPage?: number;
   grades?: string[]; // the grades this exam covers (empty/undefined = all available)
   duesCutoffDate?: string | null; // YYYY-MM-DD; null clears it (back to due-now)
+  hasInvigilation?: boolean;
+  hasAdmitCards?: boolean;
   // god-only (enforced in the handler): the two dues thresholds.
   duesThresholdCurrent?: number | null;
   duesThresholdPrior?: number | null;

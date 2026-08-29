@@ -47,6 +47,12 @@ alter table examination add column if not exists grades varchar(256);
 -- fall back to "due now" (arrears through the end of the current month).
 alter table examination add column if not exists dues_cutoff_date date;
 
+-- Exam type = which features it uses. Some exams (e.g. an oral test) are just a
+-- datesheet: no invigilator assignment, no admit cards. Null is treated as TRUE in code
+-- so existing exams keep both.
+alter table examination add column if not exists has_invigilation boolean;
+alter table examination add column if not exists has_admit_cards boolean;
+
 -- ── exam_paper: one cell of the grade × date datesheet ───────────────────────────
 -- `grade` is the grade-label prefix of the class name (I-A -> I). One active paper per
 -- (exam, grade, exam_date). `subject_label` is free text (e.g. "G.K., Value Edu.,

@@ -19,10 +19,14 @@ const { generateShortUuid } = require("../../shared/util/generate-uuid.js");
 const EXAM_COLS = singleLineString`
   uuid, academic_year_id, name, status, incharge_employee_id,
   dues_threshold_current, dues_threshold_prior, cards_per_page, grades,
+  has_invigilation, has_admit_cards,
   to_char(dues_cutoff_date, 'YYYY-MM-DD') as dues_cutoff_date,
   to_char(start_date, 'YYYY-MM-DD') as start_date,
   to_char(end_date, 'YYYY-MM-DD') as end_date
 `;
+
+// null flag = feature ON (so existing exams keep invigilation + admit cards).
+const flagOn = (v: any): boolean => v !== false;
 
 // grades stored as a comma-separated string; expose as an array (null = all available).
 function parseGrades(csv: any): string[] | null {
@@ -67,7 +71,10 @@ class ExaminationService {
       `,
       [schoolId, academicYearId],
     );
-    return rows.map((r: any) => ({ ...r, grades: parseGrades(r.grades), paperCount: Number(r.paperCount || 0) }));
+    return rows.map((r: any) => ({
+      ...r, grades: parseGrades(r.grades), paperCount: Number(r.paperCount || 0),
+      hasInvigilation: flagOn(r.hasInvigilation), hasAdmitCards: flagOn(r.hasAdmitCards),
+    }));
   }
 
   async getExam(schoolId: string, examId: string): Promise<Examination | null> {
@@ -82,7 +89,10 @@ class ExaminationService {
       [schoolId, examId],
     );
     if (!rows.length) return null;
-    return { ...rows[0], grades: parseGrades(rows[0].grades), paperCount: Number(rows[0].paperCount || 0) };
+    return {
+      ...rows[0], grades: parseGrades(rows[0].grades), paperCount: Number(rows[0].paperCount || 0),
+      hasInvigilation: flagOn(rows[0].hasInvigilation), hasAdmitCards: flagOn(rows[0].hasAdmitCards),
+    };
   }
 
   // Internal: fetch the exam row (status/ay) or throw a 404-style business error.
@@ -100,15 +110,17 @@ class ExaminationService {
     const name = (req.name || "").trim();
     if (!name) throw new BusinessErrorResult(ErrorCode.BusinessError, "name is required");
     const cardsPerPage = req.cardsPerPage === 3 ? 3 : DEFAULT_CARDS_PER_PAGE;
+    const hasInvigilation = req.hasInvigilation !== false;
+    const hasAdmitCards = req.hasAdmitCards !== false;
     const uuid = generateShortUuid(12);
     const now = new Date();
     await DB.query(
       singleLineString`
         insert into examination
-        (uuid, school_id, academic_year_id, name, status, incharge_employee_id, cards_per_page, createdby_userid, created_at)
-        values ($1, $2, $3, $4, 'draft', $5, $6, $7, $8)
+        (uuid, school_id, academic_year_id, name, status, incharge_employee_id, cards_per_page, has_invigilation, has_admit_cards, createdby_userid, created_at)
+        values ($1, $2, $3, $4, 'draft', $5, $6, $7, $8, $9, $10)
       `,
-      [uuid, schoolId, academicYearId, name, req.inchargeEmployeeId || null, cardsPerPage, userId, now],
+      [uuid, schoolId, academicYearId, name, req.inchargeEmployeeId || null, cardsPerPage, hasInvigilation, hasAdmitCards, userId, now],
     );
     await this.audit(schoolId, uuid, "exam", "create", `exam "${name}"`, userId);
     return (await this.getExam(schoolId, uuid))!;
@@ -150,6 +162,8 @@ class ExaminationService {
       }
       push("dues_cutoff_date", d || null);
     }
+    if (req.hasInvigilation !== undefined) push("has_invigilation", !!req.hasInvigilation);
+    if (req.hasAdmitCards !== undefined) push("has_admit_cards", !!req.hasAdmitCards);
     if (req.status !== undefined) {
       if (!EXAM_STATUSES.includes(req.status)) {
         throw new BusinessErrorResult(ErrorCode.BusinessError, `status must be one of ${EXAM_STATUSES.join(", ")}`);
