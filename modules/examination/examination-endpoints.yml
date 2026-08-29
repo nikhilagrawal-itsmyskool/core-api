@@ -215,6 +215,15 @@
           method: put
           cors: true
 
+  set-branding-text:
+    handler: examination-handler.setBrandingText
+    name: ${self:service}-set-branding-text
+    events:
+      - http:
+          path: branding
+          method: put
+          cors: true
+
   # ── Staff QR verify (live admit-card view) ───────────────────────────────────
   verify-admit-card:
     handler: examination-handler.verifyAdmitCard

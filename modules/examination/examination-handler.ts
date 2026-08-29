@@ -392,6 +392,20 @@ class ExaminationHandler {
     }
   };
 
+  // PUT /branding  { schoolName?, motto?, address? } — printed-header text
+  public setBrandingText = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const auth = await resolveSchool(event, callback);
+      if (!auth) return;
+      const body = parseBody<{ schoolName?: string; motto?: string; address?: string }>(event, callback);
+      if (!body) return;
+      ResponseBuilder.ok(await examinationService.setBrandingText(auth.schoolId, body, auth.userId), callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
   // GET /verify/{admitCardId} — staff-authed live admit-card view
   public verifyAdmitCard = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
     ctx.callbackWaitsForEmptyEventLoop = false;
@@ -626,6 +640,7 @@ export const createOverrides = guard(ACTIONS.EXAM_MANAGE, h.createOverrides);
 export const revokeOverride = guard(ACTIONS.EXAM_MANAGE, h.revokeOverride);
 export const getBranding = guard(ACTIONS.EXAM_VIEW, h.getBranding);
 export const setBranding = guard(ACTIONS.EXAM_MANAGE, h.setBranding);
+export const setBrandingText = guard(ACTIONS.EXAM_MANAGE, h.setBrandingText);
 export const verifyAdmitCard = guard(ACTIONS.EXAM_VIEW, h.verifyAdmitCard);
 
 // Phase 3 — invigilator PWA (/me): employee-scoped, not role-guarded (JWT still required).

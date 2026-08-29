@@ -193,6 +193,11 @@ create table if not exists school_branding (
     updatedby_userid varchar(12),
     updated_at timestamp(0)
 );
+-- Printed header text (used on the datesheet / admit-card PDFs). Central, so any module
+-- can read it; examination just happens to host the edit UI for now.
+alter table school_branding add column if not exists school_name varchar(256);
+alter table school_branding add column if not exists motto varchar(256);
+alter table school_branding add column if not exists address varchar(512);
 
 -- ══ Phase 3: exam attendance + invigilator signatures ════════════════════════════
 

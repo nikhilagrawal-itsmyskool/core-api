@@ -648,7 +648,7 @@ class ExaminationService {
     return {
       exam: { name: exam.name, academicYearName, cardsPerPage: exam.cardsPerPage || 4 },
       section: { name: section.name, grade: section.grade },
-      branding: await this.brandingDataUris(schoolId),
+      branding: await this.getBranding(schoolId),
       papers,
       cards,
     };
@@ -753,12 +753,39 @@ class ExaminationService {
   // ── Branding (central; logo + office stamp) ─────────────────────────────────────
   async getBranding(schoolId: string): Promise<any> {
     const rows = await DB.query(
-      singleLineString`select logo_file_id, stamp_file_id from school_branding where school_id = $1`,
+      singleLineString`select logo_file_id, stamp_file_id, school_name, motto, address from school_branding where school_id = $1`,
       [schoolId],
     );
-    const base = rows.length ? rows[0] : { logoFileId: null, stampFileId: null };
+    const base = rows.length ? rows[0] : {};
     const uris = await this.brandingDataUris(schoolId);
-    return { logoFileId: base.logoFileId || null, stampFileId: base.stampFileId || null, ...uris };
+    return {
+      logoFileId: base.logoFileId || null, stampFileId: base.stampFileId || null,
+      schoolName: base.schoolName || null, motto: base.motto || null, address: base.address || null,
+      ...uris,
+    };
+  }
+
+  // Save the printed-header text (school name / motto / address).
+  async setBrandingText(schoolId: string, text: { schoolName?: string; motto?: string; address?: string }, userId: string): Promise<any> {
+    const now = new Date();
+    const exists = await DB.query(singleLineString`select 1 from school_branding where school_id = $1`, [schoolId]);
+    const vals = [
+      (text.schoolName || "").trim().slice(0, 256) || null,
+      (text.motto || "").trim().slice(0, 256) || null,
+      (text.address || "").trim().slice(0, 512) || null,
+    ];
+    if (exists.length) {
+      await DB.query(
+        singleLineString`update school_branding set school_name = $2, motto = $3, address = $4, updatedby_userid = $5, updated_at = $6 where school_id = $1`,
+        [schoolId, ...vals, userId, now],
+      );
+    } else {
+      await DB.query(
+        singleLineString`insert into school_branding (school_id, school_name, motto, address, updatedby_userid, updated_at) values ($1, $2, $3, $4, $5, $6)`,
+        [schoolId, ...vals, userId, now],
+      );
+    }
+    return this.getBranding(schoolId);
   }
 
   async setBrandingImage(

@@ -209,6 +209,11 @@ describe("examination: phase 2 — dues, admit cards, printing, branding", () =>
     const g = await get("/branding");
     expect(g.body.logoDataUri).toContain("data:image");
     expect(g.body.stampDataUri).toContain("data:image");
+
+    const t = await put("/branding", { schoolName: "Test School", motto: "Test Motto", address: "Test Address" });
+    expect(t.status).toBe(200);
+    expect(t.body.schoolName).toBe("Test School");
+    expect(t.body.motto).toBe("Test Motto");
   });
 
   sectionIt("grades: the exam can be narrowed to a subset of available grades", async () => {
