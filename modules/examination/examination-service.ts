@@ -19,7 +19,7 @@ const { generateShortUuid } = require("../../shared/util/generate-uuid.js");
 const EXAM_COLS = singleLineString`
   uuid, academic_year_id, name, status, incharge_employee_id,
   dues_threshold_current, dues_threshold_prior, cards_per_page, grades,
-  has_invigilation, has_admit_cards,
+  has_invigilation, has_admit_cards, datesheet_notes,
   to_char(dues_cutoff_date, 'YYYY-MM-DD') as dues_cutoff_date,
   to_char(start_date, 'YYYY-MM-DD') as start_date,
   to_char(end_date, 'YYYY-MM-DD') as end_date
@@ -164,6 +164,7 @@ class ExaminationService {
     }
     if (req.hasInvigilation !== undefined) push("has_invigilation", !!req.hasInvigilation);
     if (req.hasAdmitCards !== undefined) push("has_admit_cards", !!req.hasAdmitCards);
+    if (req.datesheetNotes !== undefined) push("datesheet_notes", req.datesheetNotes || null);
     if (req.status !== undefined) {
       if (!EXAM_STATUSES.includes(req.status)) {
         throw new BusinessErrorResult(ErrorCode.BusinessError, `status must be one of ${EXAM_STATUSES.join(", ")}`);

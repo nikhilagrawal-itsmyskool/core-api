@@ -53,6 +53,9 @@ alter table examination add column if not exists dues_cutoff_date date;
 alter table examination add column if not exists has_invigilation boolean;
 alter table examination add column if not exists has_admit_cards boolean;
 
+-- Free-text notes printed under the datesheet PDF (one per line). Null = a standard set.
+alter table examination add column if not exists datesheet_notes text;
+
 -- ── exam_paper: one cell of the grade × date datesheet ───────────────────────────
 -- `grade` is the grade-label prefix of the class name (I-A -> I). One active paper per
 -- (exam, grade, exam_date). `subject_label` is free text (e.g. "G.K., Value Edu.,
