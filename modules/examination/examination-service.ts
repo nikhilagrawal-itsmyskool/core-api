@@ -634,7 +634,9 @@ class ExaminationService {
     const cards = [];
     for (const s of printable) {
       const admitCardId = await this.ensureAdmitCard(schoolId, examId, s.studentId, sectionClassId, userId);
-      const qrDataUri = await QRCode.toDataURL(`imsk:admit:${admitCardId}`, { margin: 1, width: 160 });
+      // width/margin matched to the (proven-scannable) fee-receipt QR — 160px/margin-1 was too
+      // low-res + tight a quiet zone for a phone camera to decode off the printed card.
+      const qrDataUri = await QRCode.toDataURL(`imsk:admit:${admitCardId}`, { margin: 2, width: 256 });
       const signatures: Record<string, any> = {};
       for (const p of paperRows) {
         const a: any = attMap.get(`${p.uuid}|${s.studentId}`);
