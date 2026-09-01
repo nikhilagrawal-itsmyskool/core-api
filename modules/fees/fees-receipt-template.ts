@@ -130,7 +130,7 @@ function copy(d: ReceiptData, label: string): string {
       <tbody>${rows}</tbody>
     </table>
 
-    ${d.qrDataUri ? `<div class="qrtot"><div class="qrbox"><img src="${d.qrDataUri}" width="68" height="68" alt="verify"/><div class="qrcap">${esc(d.qrCaption || 'Scan to verify')}</div></div><div class="totcol">${totals}</div></div>` : totals}
+    ${d.qrDataUri ? `<div class="qrtot"><div class="qrbox"><img src="${d.qrDataUri}" width="100" height="100" alt="verify"/><div class="qrcap">${esc(d.qrCaption || 'Scan to verify')}</div></div><div class="totcol">${totals}</div></div>` : totals}
     <div class="words"><b>In words:</b> Rupees ${esc(inWords(d.totalPaid))} Only</div>
     <div class="rem"><b>Remarks:</b> ${d.remarks ? esc(d.remarks) : '—'}</div>
 
