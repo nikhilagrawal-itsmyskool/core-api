@@ -145,10 +145,21 @@ class SyllabusModelPaperService {
       throw new BusinessErrorResult(ErrorCode.BusinessError, `Unknown stream "${streamCode}"`);
     }
     const subject = await DB.query(
-      singleLineString`select 1 from syllabus_subject where uuid = $1 and school_id = $2 and status = 'active'`,
+      singleLineString`select grade from syllabus_subject where uuid = $1 and school_id = $2 and status = 'active'`,
       [data.subjectId, schoolId],
     );
     if (subject.length === 0) throw new BusinessErrorResult(ErrorCode.BusinessError, "Invalid subjectId");
+    // Subjects are per-grade. Reject a subject from a different grade than the
+    // paper — otherwise the paper is filed under the wrong grade's subject row
+    // and never matches the assigned teacher's plan. (Legacy null-grade
+    // subjects are allowed through.)
+    const subjectGrade = (subject[0].grade || "").trim();
+    if (subjectGrade && subjectGrade.toLowerCase() !== data.grade.trim().toLowerCase()) {
+      throw new BusinessErrorResult(
+        ErrorCode.BusinessError,
+        `Subject belongs to grade ${subjectGrade}, but this paper is for grade ${data.grade.trim()}. Pick the grade-${data.grade.trim()} subject.`,
+      );
+    }
 
     const paper = await this.ensurePaper(schoolId, userId, {
       academicYearId: data.academicYearId,
