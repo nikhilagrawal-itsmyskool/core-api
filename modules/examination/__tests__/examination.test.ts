@@ -1,6 +1,7 @@
 import {
   BASE_URL, headers, getContext, closePool, cleanupTestExams, TEST_MARKER,
   getSampleSection, cleanupBranding, getPaperId, seedSignature, cleanupSignature,
+  getSectionRolls, setRoll, restoreRolls,
 } from "./helpers";
 
 // 1x1 transparent PNG for branding upload tests.
@@ -442,6 +443,42 @@ describe("examination: phase 4 — seating rooms", () => {
     const del2 = await del(`/examinations/${examId}/rooms/${roomId}/image`);
     expect(del2.status).toBe(200);
     expect(del2.body.dataUri).toBeNull();
+  });
+
+  sectionIt("roll split: a section splits by range ONLY once fully numbered", async () => {
+    const snapshot = await getSectionRolls(section!.sectionClassId, section!.academicYearId);
+    const N = snapshot.length;
+    if (N < 1) { console.warn("[skip: empty sample section]"); return; }
+    const cls = section!.sectionClassId, ay = section!.academicYearId;
+    const out = N + 1; // a roll window that excludes EVERY student when fully numbered
+    try {
+      // Number the whole section 1..N (name order).
+      for (let i = 0; i < N; i++) await setRoll(cls, ay, snapshot[i].studentId, i + 1);
+
+      const r = await post(`/examinations/${examId}/rooms`, { name: "RollSplit", sortOrder: 9 });
+      const rid = r.body.rooms.find((x: any) => x.name === "RollSplit").uuid;
+
+      // Fully numbered + an out-of-range window → nobody sits here.
+      await put(`/examinations/${examId}/rooms/${rid}/allocations`, { allocations: [{ sectionClassId: cls, rollFrom: out, rollTo: out }] });
+      const outRoster = await get(`/examinations/${examId}/room-rosters/${rid}/${D1}`);
+      expect(outRoster.body.total).toBe(0);
+
+      // Fully numbered + the full range → all N sit here.
+      await put(`/examinations/${examId}/rooms/${rid}/allocations`, { allocations: [{ sectionClassId: cls, rollFrom: 1, rollTo: N }] });
+      const inRoster = await get(`/examinations/${examId}/room-rosters/${rid}/${D1}`);
+      expect(inRoster.body.total).toBe(N);
+
+      // Blank ONE roll → section no longer fully numbered → the WHOLE section shows even for
+      // the out-of-range window (fallback; nobody is hidden mid-entry).
+      await setRoll(cls, ay, snapshot[N - 1].studentId, null);
+      await put(`/examinations/${examId}/rooms/${rid}/allocations`, { allocations: [{ sectionClassId: cls, rollFrom: out, rollTo: out }] });
+      const partial = await get(`/examinations/${examId}/room-rosters/${rid}/${D1}`);
+      expect(partial.body.total).toBe(N);
+
+      await del(`/examinations/${examId}/rooms/${rid}`);
+    } finally {
+      await restoreRolls(cls, ay, snapshot);
+    }
   });
 
   sectionIt("deletes the room (scheme is emptied)", async () => {

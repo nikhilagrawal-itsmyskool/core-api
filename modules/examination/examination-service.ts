@@ -1248,8 +1248,9 @@ class ExaminationService {
   // ════ Phase 4: seating rooms ═══════════════════════════════════════════════════
   // A seating scheme layers physical ROOMS onto an exam. Each room seats a mix of sections
   // by roll-range; invigilators are assigned per (room, date) and attendance/signing pivot
-  // to the room. Roll numbers aren't captured yet, so roll-range → student resolution
-  // degrades to "show the whole section" (labelled with the plan's range).
+  // to the room. A section splits by roll-range only once EVERY student in it has a roll
+  // number; until then (e.g. roll numbers not captured) the whole section shows, labelled
+  // with the plan's range — so no student is ever hidden mid-entry.
 
   private async roomById(schoolId: string, examId: string, roomId: string): Promise<{ uuid: string; name: string } | null> {
     const rows = await DB.query(
@@ -1486,9 +1487,12 @@ class ExaminationService {
         order by sc.roll_number asc nulls last, st.name`,
       [classId, academicYearId, schoolId],
     );
-    const haveRolls = rows.some((r: any) => r.rollNumber != null);
-    if (haveRolls && rollFrom != null && rollTo != null) {
-      return rows.filter((r: any) => r.rollNumber != null && Number(r.rollNumber) >= rollFrom && Number(r.rollNumber) <= rollTo);
+    // Split by roll-range ONLY once the section is FULLY numbered — otherwise a student
+    // still missing a roll would vanish from every room mid-entry. Until then, the whole
+    // section shows (labelled with the plan's range); it splits cleanly once complete.
+    const allRolled = rows.length > 0 && rows.every((r: any) => r.rollNumber != null);
+    if (allRolled && rollFrom != null && rollTo != null) {
+      return rows.filter((r: any) => Number(r.rollNumber) >= rollFrom && Number(r.rollNumber) <= rollTo);
     }
     return rows;
   }

@@ -77,6 +77,14 @@ export async function cleanupTestExams(): Promise<void> {
   await p.query("delete from exam_print_log where exam_id = any($1)", [ids]);
   await p.query("delete from exam_attendance where exam_id = any($1)", [ids]);
   await p.query("delete from exam_attendance_audit where exam_id = any($1)", [ids]);
+  // Seating rooms (Phase 4) + their uploaded plan images.
+  const roomRows = await p.query("select uuid from exam_room where exam_id = any($1)", [ids]);
+  const roomIds = roomRows.rows.map((r: any) => r.uuid);
+  if (roomIds.length) await p.query("delete from file_storage where entity_type = 'exam_room_plan' and entity_id = any($1)", [roomIds]);
+  await p.query("delete from file_storage where entity_type = 'exam_seating_plan' and entity_id = any($1)", [ids]);
+  await p.query("delete from exam_room_allocation where exam_id = any($1)", [ids]);
+  await p.query("delete from exam_room_invigilator where exam_id = any($1)", [ids]);
+  await p.query("delete from exam_room where exam_id = any($1)", [ids]);
   await p.query("delete from exam_audit where exam_id = any($1)", [ids]);
   await p.query("delete from examination where uuid = any($1)", [ids]);
 }
@@ -134,6 +142,32 @@ export async function getSampleSection(): Promise<{ sectionClassId: string; grad
     [sectionClassId, academicYearId, schoolId],
   );
   return { sectionClassId, grade, studentId: stuRows.rows[0].uuid, academicYearId };
+}
+
+// Roll-number helpers for the seating full/partial-split test. Snapshot before mutating and
+// restore after, so the shared sample section is left exactly as it was.
+export async function getSectionRolls(classId: string, academicYearId: string): Promise<Array<{ studentId: string; rollNumber: number | null }>> {
+  const { schoolId } = await getContext();
+  const p = getPool();
+  const r = await p.query(
+    `select sc.student_id, sc.roll_number from student_class sc
+     join student s on s.uuid = sc.student_id and s.school_id = sc.school_id and s.status = 'active'
+     where sc.class_id = $1 and sc.academic_year_id = $2 and sc.school_id = $3
+       and (sc.status is null or sc.status <> 'deleted') order by s.name`,
+    [classId, academicYearId, schoolId],
+  );
+  return r.rows.map((x: any) => ({ studentId: x.student_id, rollNumber: x.roll_number }));
+}
+export async function setRoll(classId: string, academicYearId: string, studentId: string, roll: number | null): Promise<void> {
+  const { schoolId } = await getContext();
+  const p = getPool();
+  await p.query(
+    `update student_class set roll_number = $1 where class_id = $2 and academic_year_id = $3 and school_id = $4 and student_id = $5`,
+    [roll, classId, academicYearId, schoolId, studentId],
+  );
+}
+export async function restoreRolls(classId: string, academicYearId: string, snapshot: Array<{ studentId: string; rollNumber: number | null }>): Promise<void> {
+  for (const s of snapshot) await setRoll(classId, academicYearId, s.studentId, s.rollNumber);
 }
 
 // Remove test branding (school-scoped) so the suite never leaves logo/stamp behind.
