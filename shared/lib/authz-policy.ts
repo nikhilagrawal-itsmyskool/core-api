@@ -25,6 +25,9 @@ export const ACTIONS = {
   FEE_VIEW: 'fee.view',
   FEE_MANAGE: 'fee.manage',
   FEE_COLLECT: 'fee.collect',
+  // Read-only "Collection Desk" (simplified manager view). Under fee.* so admin/god/fees-incharge
+  // inherit it; the locked `manager` role gets ONLY this.
+  FEE_MANAGER_VIEW: 'fee.manager.view',
   // Outside the fee.* namespace on purpose -> fee incharges/clerks DON'T inherit it;
   // only the admin role (explicit grant) + god ('*'). Powers the Scan & Verify tile.
   RECEIPT_VERIFY: 'receipt.verify',
@@ -155,6 +158,8 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
   // they staff (route filtering enforced in the transport handlers); finalize stays
   // admin/god/transport-incharge only.
   'transport-attendance': ['transport.attendance.mark'],
+  // Collection-desk manager: a locked, read-only fee-collection view and nothing else.
+  manager: ['fee.manager.view'],
 };
 
 // True if any of `roles` grants `action`. Supports '*' and 'module.*' wildcards.

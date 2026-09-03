@@ -164,6 +164,19 @@
     events:
       - schedule: cron(30 20 * * ? *)   # ~02:00 IST daily; no-op unless a rule is enabled
 
+  # ---- Manager "Collection Desk" (read-only, locked role) ----
+  manager-summary:
+    handler: fees-manager-handler.summary
+    name: ${self:service}-manager-summary
+    events:
+      - http: { path: 'manager/summary', method: get, cors: true }
+  manager-due-students:
+    handler: fees-manager-handler.dueStudents
+    name: ${self:service}-manager-due-students
+    timeout: 60
+    events:
+      - http: { path: 'manager/due-students', method: get, cors: true }
+
   # ---- Concessions ----
   create-concession:
     handler: fees-concession-handler.create
