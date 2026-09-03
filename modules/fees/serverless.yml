@@ -14,6 +14,12 @@ custom:
    basePath: 'fees'
   authorizerExtraExempt:
     - 'verify/receipt/{uuid}'   # public receipt verification (QR scan) — no JWT
+  # The fees service crossed CloudFormation's 500-resource/stack limit; split each function into
+  # its own nested stack (same fix the assembly module uses).
+  splitStacks:
+    perFunction: true
+    perType: false
+    perGroupFunction: false
   $<<: ${file(../global-config-${self:provider.stage}.yml):custom}
 
 service: ${self:provider.stage}-${self:custom.fullServiceName}
@@ -26,6 +32,7 @@ plugins:
   - serverless-domain-manager
   - ../../plugins/serverless-cors-defaults.js
   - ../../plugins/serverless-authorizer.js
+  - serverless-plugin-split-stacks
 
 functions: ${file(fees-endpoints.yml)}
 
