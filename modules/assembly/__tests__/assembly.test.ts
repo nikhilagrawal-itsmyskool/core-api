@@ -12,10 +12,24 @@ const createdThemes: string[] = [];
 const createdChecklistItems: string[] = [];
 const SUF = Date.now().toString(36);
 
-// Dates in Sep 2026 for deterministic weekday behaviour.
-const MON = dateForWeekday(2026, 9, 1);
-const TUE = dateForWeekday(2026, 9, 2);
-const WED = dateForWeekday(2026, 9, 3);
+// Fixture dates are RELATIVE to today. The roster edit deadline is weekStart − 5
+// days (deadlineFor in assembly-week-service), so hardcoded calendar dates age past
+// it and the house-mode week stops being editable. Anchor on a Monday ~2 weeks out
+// (comfortably future/editable) and derive the weekday exemplars from it — weekday
+// behaviour stays deterministic, only the absolute dates float. TUE/WED sit in the
+// week before MON, and REF_MON is a distinct later Monday, so TUE is never an
+// assembly day of REF_MON's week (the references test's "wrong day" case).
+const isoUTC = (d: Date) => d.toISOString().slice(0, 10);
+const shiftIso = (s: string, n: number) => { const d = new Date(`${s}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return isoUTC(d); };
+function mondayAtLeastDaysAhead(daysAhead: number): string {
+  const d = new Date(); d.setUTCHours(0, 0, 0, 0); d.setUTCDate(d.getUTCDate() + daysAhead);
+  d.setUTCDate(d.getUTCDate() + ((8 - d.getUTCDay()) % 7)); // roll forward to the next Monday
+  return isoUTC(d);
+}
+const MON = mondayAtLeastDaysAhead(14);
+const TUE = shiftIso(MON, -6);     // the Tuesday of the week before MON
+const WED = shiftIso(MON, -5);     // the Wednesday of the week before MON
+const REF_MON = shiftIso(MON, 28); // a distinct later Monday (own week for the references plan)
 
 async function newPlan(name: string, days?: string[]): Promise<any> {
   const r = await api('POST', '/plans', { academicYearId: seed.academicYearId, name: `${name}-${SUF}`, days });
@@ -363,7 +377,6 @@ describe('house mode: weekly roster', () => {
   it('adds day-level references (max 5, description+image), embeds them in getWeek, and surfaces them on staff resolve', async () => {
     // 1x1 png; references require both a description and an image.
     const PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
-    const REF_MON = dateForWeekday(2026, 10, 1); // an independent Monday for this plan
     const refWeek = (await api('POST', `/plans/${planId}/weeks`, { weekStart: REF_MON })).body.uuid;
 
     // Add one; both fields are required, and the date must be an assembly day.
