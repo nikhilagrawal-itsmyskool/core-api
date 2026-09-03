@@ -139,6 +139,11 @@ class AssemblyGradingService {
     if (!(await this.evaluatorAssignedFor(schoolId, data.evaluatorId, data.gradeDate))) {
       throw new BusinessErrorResult(ErrorCode.BusinessError, 'This evaluator is not assigned to grade on that date');
     }
+    // Reject an empty submission: with no scores entered the total would be just the
+    // scaling adjustment (e.g. -5), which is meaningless and skews the leaderboard.
+    if (!data.metrics || data.metrics.length === 0) {
+      throw new BusinessErrorResult(ErrorCode.BusinessError, 'Enter at least one score before saving the grade');
+    }
     const evaluator = await findEmployee(schoolId, data.evaluatorId);
 
     // Validate metric scores against the rubric.

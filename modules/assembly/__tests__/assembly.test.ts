@@ -484,9 +484,11 @@ describe('house mode: weekly roster', () => {
     const ev = await api('POST', '/evaluators', { employeeId: evalEmp, startDate: MON, endDate: MON });
     expect(ev.status).toBe(200);
 
-    // An unassigned evaluator and an over-max score are both rejected.
+    // An unassigned evaluator, an over-max score, and an EMPTY submission (no scores)
+    // are all rejected — an empty grade would just be the scaling adjustment.
     expect((await api('POST', `/weeks/${weekId}/grades`, { gradeDate: MON, evaluatorId: 'nobody', metrics: [] })).status).toBe(400);
     expect((await api('POST', `/weeks/${weekId}/grades`, { gradeDate: MON, evaluatorId: evalEmp, metrics: [{ metricId: m1.body.uuid, score: 9 }] })).status).toBe(400);
+    expect((await api('POST', `/weeks/${weekId}/grades`, { gradeDate: MON, evaluatorId: evalEmp, metrics: [] })).status).toBe(400);
 
     // Valid grade: 5 + 4 - 2 (penalty) + 0 (scaling) = 7.
     const g = await api('POST', `/weeks/${weekId}/grades`, {
