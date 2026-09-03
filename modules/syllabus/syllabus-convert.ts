@@ -45,6 +45,22 @@ function ensureFontConfig(): void {
   <dir>${FONT_DIR}</dir>
   <dir>/tmp/instdir/share/fonts/truetype</dir>
   <cachedir>/tmp/fontconfig-cache</cachedir>
+  <!-- Hindi/Vyakaran model papers are authored in Nirmala UI (a proprietary
+       Windows font not present on Lambda). Map it — and Mangal — to the bundled
+       Noto Sans Devanagari (shipped in the LibreOffice layer v1.1.0), and append
+       it as a universal weak fallback so Devanagari glyphs resolve instead of
+       rendering blank. -->
+  <match target="pattern">
+    <test name="family"><string>Nirmala UI</string></test>
+    <edit name="family" mode="assign" binding="strong"><string>Noto Sans Devanagari</string></edit>
+  </match>
+  <match target="pattern">
+    <test name="family"><string>Mangal</string></test>
+    <edit name="family" mode="assign" binding="strong"><string>Noto Sans Devanagari</string></edit>
+  </match>
+  <match target="pattern">
+    <edit name="family" mode="append" binding="weak"><string>Noto Sans Devanagari</string></edit>
+  </match>
   <config></config>
 </fontconfig>
 `,
