@@ -792,6 +792,47 @@ class ExaminationHandler {
     } catch (err: any) { ResponseBuilder.handleError(err, callback); }
   };
 
+  // GET /examinations/{id}/rooms/{roomId}/image
+  public getRoomImage = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const auth = await resolveSchool(event, callback);
+      if (!auth) return;
+      const id = requireParam(event, "id", callback);
+      const roomId = requireParam(event, "roomId", callback);
+      if (!id || !roomId) return;
+      ResponseBuilder.ok(await examinationService.getRoomImage(auth.schoolId, id, roomId), callback);
+    } catch (err: any) { ResponseBuilder.handleError(err, callback); }
+  };
+
+  // PUT /examinations/{id}/rooms/{roomId}/image { imageBase64, mimeType?, fileName? }
+  public setRoomImage = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const auth = await resolveSchool(event, callback);
+      if (!auth) return;
+      const id = requireParam(event, "id", callback);
+      const roomId = requireParam(event, "roomId", callback);
+      if (!id || !roomId) return;
+      const body = parseBody<{ imageBase64: string; mimeType?: string; fileName?: string }>(event, callback);
+      if (!body) return;
+      ResponseBuilder.ok(await examinationService.setRoomImage(auth.schoolId, id, roomId, body.imageBase64, body.mimeType || "image/jpeg", body.fileName || "room.jpg", auth.userId), callback);
+    } catch (err: any) { ResponseBuilder.handleError(err, callback); }
+  };
+
+  // DELETE /examinations/{id}/rooms/{roomId}/image
+  public deleteRoomImage = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const auth = await resolveSchool(event, callback);
+      if (!auth) return;
+      const id = requireParam(event, "id", callback);
+      const roomId = requireParam(event, "roomId", callback);
+      if (!id || !roomId) return;
+      ResponseBuilder.ok(await examinationService.deleteRoomImage(auth.schoolId, id, roomId, auth.userId), callback);
+    } catch (err: any) { ResponseBuilder.handleError(err, callback); }
+  };
+
   // ── /me room duties (PWA) ──────────────────────────────────────────────────────
 
   // Shared resolver: verify the caller is the assigned invigilator for this (room, date).
@@ -912,6 +953,9 @@ export const signRoomRosterAdmin = guard(ACTIONS.EXAM_MANAGE, h.signRoomRosterAd
 export const getSeatingImage = guard(ACTIONS.EXAM_VIEW, h.getSeatingImage);
 export const setSeatingImage = guard(ACTIONS.EXAM_MANAGE, h.setSeatingImage);
 export const deleteSeatingImage = guard(ACTIONS.EXAM_MANAGE, h.deleteSeatingImage);
+export const getRoomImage = guard(ACTIONS.EXAM_VIEW, h.getRoomImage);
+export const setRoomImage = guard(ACTIONS.EXAM_MANAGE, h.setRoomImage);
+export const deleteRoomImage = guard(ACTIONS.EXAM_MANAGE, h.deleteRoomImage);
 // Phase 4 — /me room duties (employee-scoped, JWT required).
 export const getMyRooms = h.getMyRooms;
 export const getMyRoomRoster = h.getMyRoomRoster;

@@ -431,6 +431,19 @@ describe("examination: phase 4 — seating rooms", () => {
     expect(card.signatures[D1].signatureDataUri).toContain("data:image");
   });
 
+  sectionIt("room image: upload, read back, and it appears on the room roster", async () => {
+    const up = await put(`/examinations/${examId}/rooms/${roomId}/image`, { imageBase64: TINY_PNG, mimeType: "image/png", fileName: "room.png" });
+    expect(up.status).toBe(200);
+    expect(up.body.dataUri).toContain("data:image/png;base64,");
+    const rooms = await get(`/examinations/${examId}/rooms`);
+    expect(rooms.body.rooms.find((r: any) => r.uuid === roomId).hasImage).toBe(true);
+    const roster = await get(`/examinations/${examId}/room-rosters/${roomId}/${D1}`);
+    expect(roster.body.roomImageDataUri).toContain("data:image");
+    const del2 = await del(`/examinations/${examId}/rooms/${roomId}/image`);
+    expect(del2.status).toBe(200);
+    expect(del2.body.dataUri).toBeNull();
+  });
+
   sectionIt("deletes the room (scheme is emptied)", async () => {
     const d = await del(`/examinations/${examId}/rooms/${roomId}`);
     expect(d.status).toBe(200);

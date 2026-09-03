@@ -1290,9 +1290,18 @@ class ExaminationService {
         grade: gradeOf(a.sectionName), rollFrom: a.rollFrom, rollTo: a.rollTo,
       });
     }
+    // Which rooms have an uploaded plan image (cheap existence check, no blobs loaded).
+    const withImage = new Set<string>();
+    if (rooms.length) {
+      const imgRows = await DB.query(
+        singleLineString`select distinct entity_id from file_storage where school_id = $1 and entity_type = 'exam_room_plan' and entity_id = any($2)`,
+        [schoolId, rooms.map((r: any) => r.uuid)],
+      );
+      for (const r of imgRows) withImage.add(r.entityId);
+    }
     return {
       examId,
-      rooms: rooms.map((r: any) => ({ uuid: r.uuid, name: r.name, sortOrder: r.sortOrder, allocations: byRoom[r.uuid] || [] })),
+      rooms: rooms.map((r: any) => ({ uuid: r.uuid, name: r.name, sortOrder: r.sortOrder, hasImage: withImage.has(r.uuid), allocations: byRoom[r.uuid] || [] })),
     };
   }
 
@@ -1557,6 +1566,7 @@ class ExaminationService {
     const total = occ.length;
     return {
       room, examDate, rollNumbersAvailable: occ.some((o) => o.rollNumber != null),
+      roomImageDataUri: await this.roomImageDataUri(schoolId, roomId),
       sections: [...bySection.values()],
       total, marked, signed: total > 0 && signedCount === total, signedByName, signedAt,
     };
@@ -1673,6 +1683,58 @@ class ExaminationService {
     );
     for (const o of old) { try { await fileStorageService.delete(o.uuid, schoolId); } catch { /* best effort */ } }
     await this.audit(schoolId, examId, "room", "image-remove", "seating image removed", userId);
+    return { fileId: null, dataUri: null };
+  }
+
+  // ── Per-room plan image (an uploaded layout/photo for ONE room) ────────────────
+  // Stored in file_storage (entity_type 'exam_room_plan', entity_id = roomId). Shown in
+  // the room card and to the invigilator when they open the room roster.
+  private async roomImageFileId(schoolId: string, roomId: string): Promise<string | null> {
+    const rows = await DB.query(
+      singleLineString`select uuid from file_storage where school_id = $1 and entity_type = 'exam_room_plan' and entity_id = $2 order by created_at desc limit 1`,
+      [schoolId, roomId],
+    );
+    return rows.length ? rows[0].uuid : null;
+  }
+
+  private async roomImageDataUri(schoolId: string, roomId: string): Promise<string | null> {
+    const fileId = await this.roomImageFileId(schoolId, roomId);
+    if (!fileId) return null;
+    const f = await fileStorageService.getWithData(fileId, schoolId);
+    return f ? `data:${f.mimeType};base64,${f.data}` : null;
+  }
+
+  async getRoomImage(schoolId: string, examId: string, roomId: string): Promise<{ fileId: string | null; dataUri: string | null }> {
+    const fileId = await this.roomImageFileId(schoolId, roomId);
+    if (!fileId) return { fileId: null, dataUri: null };
+    const f = await fileStorageService.getWithData(fileId, schoolId);
+    return { fileId, dataUri: f ? `data:${f.mimeType};base64,${f.data}` : null };
+  }
+
+  async setRoomImage(schoolId: string, examId: string, roomId: string, base64Data: string, mimeType: string, fileName: string, userId: string): Promise<any> {
+    const room = await this.roomById(schoolId, examId, roomId);
+    if (!room) throw new BusinessErrorResult(ErrorCode.BusinessError, "Room not found");
+    if (!base64Data) throw new BusinessErrorResult(ErrorCode.BusinessError, "image data is required");
+    const old = await DB.query(
+      singleLineString`select uuid from file_storage where school_id = $1 and entity_type = 'exam_room_plan' and entity_id = $2`,
+      [schoolId, roomId],
+    );
+    await fileStorageService.upload({
+      fileName: fileName || "room.jpg", mimeType: mimeType || "image/jpeg",
+      base64Data, entityType: "exam_room_plan", entityId: roomId, schoolId, userId,
+    });
+    for (const o of old) { try { await fileStorageService.delete(o.uuid, schoolId); } catch { /* best effort */ } }
+    await this.audit(schoolId, examId, "room", "room-image", `${room.name}: image uploaded`, userId);
+    return this.getRoomImage(schoolId, examId, roomId);
+  }
+
+  async deleteRoomImage(schoolId: string, examId: string, roomId: string, userId: string): Promise<any> {
+    const old = await DB.query(
+      singleLineString`select uuid from file_storage where school_id = $1 and entity_type = 'exam_room_plan' and entity_id = $2`,
+      [schoolId, roomId],
+    );
+    for (const o of old) { try { await fileStorageService.delete(o.uuid, schoolId); } catch { /* best effort */ } }
+    await this.audit(schoolId, examId, "room", "room-image-remove", roomId, userId);
     return { fileId: null, dataUri: null };
   }
 

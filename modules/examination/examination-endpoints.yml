@@ -437,6 +437,35 @@
           method: post
           cors: true
 
+  get-room-image:
+    handler: examination-handler.getRoomImage
+    name: ${self:service}-get-room-image
+    events:
+      - http:
+          path: examinations/{id}/rooms/{roomId}/image
+          method: get
+          cors: true
+
+  set-room-image:
+    handler: examination-handler.setRoomImage
+    name: ${self:service}-set-room-image
+    memorySize: 512
+    timeout: 20
+    events:
+      - http:
+          path: examinations/{id}/rooms/{roomId}/image
+          method: put
+          cors: true
+
+  delete-room-image:
+    handler: examination-handler.deleteRoomImage
+    name: ${self:service}-delete-room-image
+    events:
+      - http:
+          path: examinations/{id}/rooms/{roomId}/image
+          method: delete
+          cors: true
+
   get-seating-image:
     handler: examination-handler.getSeatingImage
     name: ${self:service}-get-seating-image
