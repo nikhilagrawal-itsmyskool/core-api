@@ -50,6 +50,8 @@ export const FEE_ACTIONS: Record<string, string> = {
   'fees-manager-handler.summary': FEE_MANAGER_VIEW,
   'fees-manager-handler.dueStudents': FEE_MANAGER_VIEW,
   'fees-manager-handler.dayCollection': FEE_MANAGER_VIEW,
+  'fees-manager-handler.search': FEE_MANAGER_VIEW,
+  'fees-manager-handler.studentDues': FEE_MANAGER_VIEW,
   'fees-late-fee-rule-handler.create': FEE_MANAGE,
   'fees-late-fee-rule-handler.update': FEE_MANAGE,
   'fees-late-fee-rule-handler.remove': FEE_MANAGE,

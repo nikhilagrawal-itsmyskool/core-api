@@ -19,6 +19,32 @@ class FeesManagerHandler {
     }
   };
 
+  // GET /fees/manager/search?q=... — name/admission student search for the "find a student" box
+  public search = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
+    _context.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const ctx = await resolveSchool(event, callback);
+      if (!ctx) return;
+      ResponseBuilder.ok(await feesManagerService.searchStudents(ctx.schoolId, event.queryStringParameters?.q), callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
+  // GET /fees/manager/student-dues?studentId=... — one student's year-wise dues (due now + full year)
+  public studentDues = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
+    _context.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const ctx = await resolveSchool(event, callback);
+      if (!ctx) return;
+      const studentId = event.queryStringParameters?.studentId;
+      if (!studentId) { ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'studentId is required', callback); return; }
+      ResponseBuilder.ok(await feesManagerService.studentDues(ctx.schoolId, studentId), callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
   // GET /fees/manager/day?date=YYYY-MM-DD — a day's collection split + its receipt list
   public dayCollection = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
     _context.callbackWaitsForEmptyEventLoop = false;
@@ -50,3 +76,5 @@ const handler = new FeesManagerHandler();
 export const summary = guard(FEE_ACTIONS['fees-manager-handler.summary'], handler.summary);
 export const dueStudents = guard(FEE_ACTIONS['fees-manager-handler.dueStudents'], handler.dueStudents);
 export const dayCollection = guard(FEE_ACTIONS['fees-manager-handler.dayCollection'], handler.dayCollection);
+export const search = guard(FEE_ACTIONS['fees-manager-handler.search'], handler.search);
+export const studentDues = guard(FEE_ACTIONS['fees-manager-handler.studentDues'], handler.studentDues);

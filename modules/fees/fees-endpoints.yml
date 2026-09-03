@@ -181,6 +181,16 @@
     name: ${self:service}-manager-day
     events:
       - http: { path: 'manager/day', method: get, cors: true }
+  manager-search:
+    handler: fees-manager-handler.search
+    name: ${self:service}-manager-search
+    events:
+      - http: { path: 'manager/search', method: get, cors: true }
+  manager-student-dues:
+    handler: fees-manager-handler.studentDues
+    name: ${self:service}-manager-student-dues
+    events:
+      - http: { path: 'manager/student-dues', method: get, cors: true }
 
   # ---- Concessions ----
   create-concession:

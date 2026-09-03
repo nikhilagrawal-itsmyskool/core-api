@@ -151,6 +151,116 @@ class FeesManagerService {
       photoUrl: r.photoKey ? await getSignedPhotoUrl(r.photoKey, 3600) : null,
     })));
   }
+
+  // Name/admission search for the "find a student" box. Simplified from student omniSearch:
+  // name-or-admission match, most-recent enrollment for class, father name + photo. Read-only.
+  public async searchStudents(schoolId: string, q?: string, limit = 15): Promise<any[]> {
+    const term = (q || '').trim();
+    if (term.length < 1) return [];
+    const like = `%${term}%`, prefix = `${term}%`;
+    const lim = Math.min(Math.max(Number(limit) || 15, 1), 30);
+    const rows: any[] = await DB.query(
+      singleLineString`
+        select s.uuid as student_id, s.name, s.admission_number,
+          cl.class_name, gf.father_name, ph.photo_key
+        from student s
+        left join lateral (
+          select c.name as class_name from student_class sc
+          left join class c on c.uuid = sc.class_id
+          left join academic_year ay on ay.uuid = sc.academic_year_id
+          where sc.student_id = s.uuid and sc.school_id = s.school_id and sc.status <> 'deleted'
+          order by ay.start_date desc nulls last limit 1
+        ) cl on true
+        left join lateral (
+          select g.name as father_name from student_guardian g
+          where g.student_id = s.uuid and g.school_id = s.school_id and g.relation = 'father' and g.status = 'active'
+          order by g.is_primary_contact desc nulls last limit 1
+        ) gf on true
+        left join lateral (
+          select fs.storage_key as photo_key from file_storage fs
+          where fs.entity_type = 'student' and fs.entity_id = s.uuid and fs.school_id = s.school_id
+            and (fs.variant = 'original' or fs.variant is null) and fs.storage_key is not null
+          order by fs.created_at desc limit 1
+        ) ph on true
+        where s.school_id = $1 and s.status <> 'deleted' and (s.name ilike $2 or s.admission_number ilike $2)
+        order by (s.admission_number ilike $3) desc, (s.name ilike $3) desc, s.name
+        limit $4`,
+      [schoolId, like, prefix, lim]
+    );
+    return Promise.all(rows.map(async (r) => ({
+      studentId: r.studentId,
+      name: r.name,
+      className: r.className || '—',
+      admissionNumber: r.admissionNumber || null,
+      fatherName: r.fatherName || null,
+      photoUrl: r.photoKey ? await getSignedPhotoUrl(r.photoKey, 3600) : null,
+    })));
+  }
+
+  // One student's dues, year by year: Due now (charges due by end of this month, matches the desk)
+  // and Full year (all remaining charges, incl. not-yet-due cycles). Read-only.
+  public async studentDues(schoolId: string, studentId: string): Promise<any> {
+    const eom = dueBuckets().endOfMonth;
+    const [header] = await DB.query(
+      singleLineString`
+        select s.uuid as student_id, s.name, s.admission_number,
+          (select c.name from student_class sc left join class c on c.uuid = sc.class_id
+             left join academic_year ay on ay.uuid = sc.academic_year_id
+             where sc.student_id = s.uuid and sc.school_id = s.school_id and sc.status <> 'deleted'
+             order by ay.start_date desc nulls last limit 1) as class_name,
+          (select g.name from student_guardian g
+             where g.student_id = s.uuid and g.school_id = s.school_id and g.relation = 'father' and g.status = 'active'
+             order by g.is_primary_contact desc nulls last limit 1) as father_name,
+          (select fs.storage_key from file_storage fs
+             where fs.entity_type = 'student' and fs.entity_id = s.uuid and fs.school_id = s.school_id
+               and (fs.variant = 'original' or fs.variant is null) and fs.storage_key is not null
+             order by fs.created_at desc limit 1) as photo_key
+        from student s where s.uuid = $2 and s.school_id = $1`,
+      [schoolId, studentId]
+    );
+
+    const years: any[] = await DB.query(
+      singleLineString`
+        select ch.academic_year_id, ay.name as year_name,
+          coalesce(sum(greatest(0, ch.debit - coalesce(pd.paid, 0))) filter (where ch.due_date is null or ch.due_date <= $3), 0) as due_now,
+          coalesce(sum(greatest(0, ch.debit - coalesce(pd.paid, 0))), 0) as full_year
+        from (
+          select e.uuid, e.academic_year_id, e.debit, fc.due_date
+          from student_ledger_entry e
+          left join fee_cycle fc on fc.uuid = e.cycle_id and fc.status = 'active'
+          where e.school_id = $1 and e.student_id = $2 and e.kind = 'charge' and e.status = 'active'
+        ) ch
+        left join (
+          select settles_entry_id, sum(credit) as paid from student_ledger_entry
+          where school_id = $1 and student_id = $2 and status = 'active' and settles_entry_id is not null group by settles_entry_id
+        ) pd on pd.settles_entry_id = ch.uuid
+        left join academic_year ay on ay.uuid = ch.academic_year_id
+        group by ch.academic_year_id, ay.name
+        having sum(greatest(0, ch.debit - coalesce(pd.paid, 0))) > 0.5
+        order by ay.name desc`,
+      [schoolId, studentId, eom]
+    );
+
+    const yearRows = years.map((y) => ({
+      academicYearId: y.academicYearId,
+      name: y.yearName,
+      dueNow: Number(y.dueNow || 0),
+      fullYear: Number(y.fullYear || 0),
+    }));
+    return {
+      student: header ? {
+        studentId: header.studentId,
+        name: header.name,
+        className: header.className || '—',
+        admissionNumber: header.admissionNumber || null,
+        fatherName: header.fatherName || null,
+        photoUrl: header.photoKey ? await getSignedPhotoUrl(header.photoKey, 3600) : null,
+      } : null,
+      years: yearRows,
+      owesNow: yearRows.reduce((a, y) => a + y.dueNow, 0),
+      totalRemaining: yearRows.reduce((a, y) => a + y.fullYear, 0),
+    };
+  }
 }
 
 export const feesManagerService = new FeesManagerService();
