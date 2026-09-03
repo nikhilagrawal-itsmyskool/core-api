@@ -68,6 +68,41 @@ class FeesManagerService {
     };
   }
 
+  // A single day's collection: split totals (Fees vs Transport) + the receipt list behind them.
+  // Powers "tap a number to see the receipts" and the any-day stepper. `date` defaults to today (IST).
+  public async dayCollection(schoolId: string, date?: string): Promise<any> {
+    const day = date || istToday();
+    const receipts: any[] = await DB.query(
+      singleLineString`
+        select receipt_no, legacy_receipt_no, payer_name, payer_class_snapshot, payment_mode,
+          coalesce(total_paid, 0) as total_paid, type,
+          to_char((created_at at time zone 'Asia/Kolkata'), 'HH24:MI') as time
+        from fee_receipt
+        where school_id = $1 and receipt_date = $2 and status = 'active'
+        order by created_at desc`,
+      [schoolId, day]
+    );
+    const rows = receipts.map((r) => ({
+      receiptNo: r.receiptNo || r.legacyReceiptNo || '—',
+      payerName: r.payerName || '—',
+      className: r.payerClassSnapshot || '—',
+      paymentMode: r.paymentMode || null,
+      amount: Number(r.totalPaid || 0),
+      type: r.type === 'transport' ? 'transport' : 'fees',
+      time: r.time || '',
+    }));
+    const sum = (t: string) => rows.filter((r) => r.type === t).reduce((a, r) => a + r.amount, 0);
+    const cnt = (t: string) => rows.filter((r) => r.type === t).length;
+    return {
+      date: day,
+      fees: { amount: sum('fees'), receipts: cnt('fees') },
+      transport: { amount: sum('transport'), receipts: cnt('transport') },
+      total: rows.reduce((a, r) => a + r.amount, 0),
+      receipts: rows.length,
+      rows,
+    };
+  }
+
   // Students who owe (due-now > 0) in a given year, with class, father's name and photo — for the
   // by-class drill-down. Ordered by class then name; grade ordering is refined on the client.
   public async dueStudents(schoolId: string, academicYearId: string): Promise<any[]> {

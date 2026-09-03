@@ -19,6 +19,18 @@ class FeesManagerHandler {
     }
   };
 
+  // GET /fees/manager/day?date=YYYY-MM-DD — a day's collection split + its receipt list
+  public dayCollection = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
+    _context.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const ctx = await resolveSchool(event, callback);
+      if (!ctx) return;
+      ResponseBuilder.ok(await feesManagerService.dayCollection(ctx.schoolId, event.queryStringParameters?.date), callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
   // GET /fees/manager/due-students?academicYearId=... — students who owe now, by class
   public dueStudents = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
     _context.callbackWaitsForEmptyEventLoop = false;
@@ -37,3 +49,4 @@ class FeesManagerHandler {
 const handler = new FeesManagerHandler();
 export const summary = guard(FEE_ACTIONS['fees-manager-handler.summary'], handler.summary);
 export const dueStudents = guard(FEE_ACTIONS['fees-manager-handler.dueStudents'], handler.dueStudents);
+export const dayCollection = guard(FEE_ACTIONS['fees-manager-handler.dayCollection'], handler.dayCollection);

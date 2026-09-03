@@ -176,6 +176,11 @@
     timeout: 60
     events:
       - http: { path: 'manager/due-students', method: get, cors: true }
+  manager-day:
+    handler: fees-manager-handler.dayCollection
+    name: ${self:service}-manager-day
+    events:
+      - http: { path: 'manager/day', method: get, cors: true }
 
   # ---- Concessions ----
   create-concession:
