@@ -813,6 +813,14 @@
           path: me/assembly/weeks/{id}/checklist/signoff
           method: post
           cors: true
+  my-assembly-get-grades:
+    handler: assembly-duties-handler.getGrades
+    name: ${self:service}-my-assembly-get-grades
+    events:
+      - http:
+          path: me/assembly/weeks/{id}/grades
+          method: get
+          cors: true
   my-assembly-save-grade:
     handler: assembly-duties-handler.saveGrade
     name: ${self:service}-my-assembly-save-grade

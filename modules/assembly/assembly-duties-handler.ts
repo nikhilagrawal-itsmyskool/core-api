@@ -118,6 +118,17 @@ class AssemblyDutiesHandler {
     } catch (err: any) { ResponseBuilder.handleError(err, callback); }
   };
 
+  // GET /me/assembly/weeks/{id}/grades — MY own grades for the week (one per graded day),
+  // so an evaluator can re-open and see/edit the marks they submitted. Own-only by design.
+  public getGrades = async (event: ApiEvent, _c: ApiContext, callback: ApiCallback) => {
+    _c.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const me = resolveEmployee(event, callback); if (!me) return;
+      const weekId = requireParam(event, 'id', callback); if (!weekId) return;
+      ResponseBuilder.ok(await assemblyGradingService.listMyGrades(weekId, me.employeeId, me.schoolId), callback);
+    } catch (err: any) { ResponseBuilder.handleError(err, callback); }
+  };
+
   // POST /me/assembly/weeks/{id}/grades — grade as MYSELF (evaluator=the caller).
   // Future-dated grades are rejected (today or earlier only); admins use the desktop.
   public saveGrade = async (event: ApiEvent, _c: ApiContext, callback: ApiCallback) => {
@@ -162,5 +173,6 @@ export const removeReference = handler.removeReference;
 export const getChecklist = handler.getChecklist;
 export const saveChecklist = handler.saveChecklist;
 export const signoff = handler.signoff;
+export const getGrades = handler.getGrades;
 export const saveGrade = handler.saveGrade;
 export const leaderboard = handler.leaderboard;

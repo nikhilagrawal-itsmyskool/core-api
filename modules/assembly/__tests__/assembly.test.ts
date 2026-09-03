@@ -1,4 +1,6 @@
 import { api, getSeed, cleanupPlan, deleteThemeById, deleteChecklistItemById, resetAssemblyConfig, resetGrading, seedEmployee, seedHouse, setWeekHouse, closePool, dateForWeekday, BASE_URL, headers } from './helpers';
+import { assemblyGradingService } from '../assembly-grading-service';
+import { DB } from '../../../shared/lib/db';
 
 // Integration tests against a running assembly module (or the gateway).
 // Covers plans, the node tree (day subset + inheritance), special assemblies
@@ -37,6 +39,7 @@ afterAll(async () => {
   await resetGrading(seed.schoolId, `AG-${SUF}`); // rubric/evaluators + seeded fixtures
   await resetAssemblyConfig(seed.schoolId); // restore default template mode
   await closePool();
+  await DB.end(); // service-layer calls (listMyGrades) use the shared pool
 });
 
 describe('lookups', () => {
@@ -489,6 +492,14 @@ describe('house mode: weekly roster', () => {
     const list = await api('GET', `/weeks/${weekId}/grades`);
     expect(list.body).toHaveLength(1);
     expect(list.body[0].total).toBe(10);
+
+    // Evaluator read-back (the /me twin's data source): sees only their own grade;
+    // a different employee sees none. This powers "view the marks I submitted".
+    const mine = await assemblyGradingService.listMyGrades(weekId, evalEmp, seed.schoolId);
+    expect(mine).toHaveLength(1);
+    expect(mine[0].total).toBe(10);
+    expect(mine[0].evaluatorEmployeeId).toBe(evalEmp);
+    expect(await assemblyGradingService.listMyGrades(weekId, 'nobody-else', seed.schoolId)).toHaveLength(0);
 
     // Leaderboard → house-of-the-month is our house at average 10.
     const lb = await api('GET', `/leaderboard?from=${MON}&to=${MON}`);

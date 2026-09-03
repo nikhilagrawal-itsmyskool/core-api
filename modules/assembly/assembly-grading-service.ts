@@ -195,6 +195,15 @@ class AssemblyGradingService {
     return out;
   }
 
+  // The caller's own grades for a week (one per graded day) — powers the evaluator PWA
+  // read-back so a teacher can see and keep editing the marks they submitted.
+  public async listMyGrades(weekId: string, evaluatorId: string, schoolId: string): Promise<GradeView[]> {
+    const grades = await DB.query(singleLineString`select uuid from assembly_grade where week_id = $1 and school_id = $2 and evaluator_employee_id = $3 and status = 'active' order by grade_date, created_at`, [weekId, schoolId, evaluatorId]);
+    const out: GradeView[] = [];
+    for (const g of grades) out.push((await this.getGrade(g.uuid, schoolId))!);
+    return out;
+  }
+
   public async getGrade(gradeId: string, schoolId: string): Promise<GradeView | null> {
     const rows = await DB.query(singleLineString`select uuid, week_id, grade_date::text as grade_date, house_id, house_name, evaluator_employee_id, evaluator_name, star_presenter, diction, feedback, total from assembly_grade where uuid = $1 and school_id = $2 and status = 'active'`, [gradeId, schoolId]);
     if (rows.length === 0) return null;
