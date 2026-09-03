@@ -610,6 +610,246 @@ class ExaminationHandler {
       ResponseBuilder.handleError(err, callback);
     }
   };
+
+  // ════ Phase 4: seating rooms ═══════════════════════════════════════════════════
+
+  // GET /examinations/{id}/rooms
+  public getRooms = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const auth = await resolveSchool(event, callback);
+      if (!auth) return;
+      const id = requireParam(event, "id", callback);
+      if (!id) return;
+      ResponseBuilder.ok(await examinationService.getRooms(auth.schoolId, id), callback);
+    } catch (err: any) { ResponseBuilder.handleError(err, callback); }
+  };
+
+  // POST /examinations/{id}/rooms { uuid?, name, sortOrder? }
+  public saveRoom = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const auth = await resolveSchool(event, callback);
+      if (!auth) return;
+      const id = requireParam(event, "id", callback);
+      if (!id) return;
+      const body = parseBody<{ uuid?: string; name: string; sortOrder?: number }>(event, callback);
+      if (!body) return;
+      ResponseBuilder.ok(await examinationService.saveRoom(auth.schoolId, id, body, auth.userId), callback);
+    } catch (err: any) { ResponseBuilder.handleError(err, callback); }
+  };
+
+  // DELETE /examinations/{id}/rooms/{roomId}
+  public deleteRoom = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const auth = await resolveSchool(event, callback);
+      if (!auth) return;
+      const id = requireParam(event, "id", callback);
+      const roomId = requireParam(event, "roomId", callback);
+      if (!id || !roomId) return;
+      ResponseBuilder.ok(await examinationService.deleteRoom(auth.schoolId, id, roomId, auth.userId), callback);
+    } catch (err: any) { ResponseBuilder.handleError(err, callback); }
+  };
+
+  // PUT /examinations/{id}/rooms/{roomId}/allocations { allocations: [{sectionClassId, rollFrom, rollTo}] }
+  public saveRoomAllocations = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const auth = await resolveSchool(event, callback);
+      if (!auth) return;
+      const id = requireParam(event, "id", callback);
+      const roomId = requireParam(event, "roomId", callback);
+      if (!id || !roomId) return;
+      const body = parseBody<{ allocations: any[] }>(event, callback);
+      if (!body) return;
+      ResponseBuilder.ok(await examinationService.saveRoomAllocations(auth.schoolId, id, roomId, body.allocations || [], auth.userId), callback);
+    } catch (err: any) { ResponseBuilder.handleError(err, callback); }
+  };
+
+  // POST /examinations/{id}/rooms/copy { sourceExamId }
+  public copyRooms = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const auth = await resolveSchool(event, callback);
+      if (!auth) return;
+      const id = requireParam(event, "id", callback);
+      if (!id) return;
+      const body = parseBody<{ sourceExamId: string }>(event, callback);
+      if (!body) return;
+      ResponseBuilder.ok(await examinationService.copyRoomsFromExam(auth.schoolId, id, (body.sourceExamId || "").trim(), auth.userId), callback);
+    } catch (err: any) { ResponseBuilder.handleError(err, callback); }
+  };
+
+  // GET /examinations/{id}/room-invigilators
+  public getRoomInvigilators = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const auth = await resolveSchool(event, callback);
+      if (!auth) return;
+      const id = requireParam(event, "id", callback);
+      if (!id) return;
+      ResponseBuilder.ok(await examinationService.roomInvigilators(auth.schoolId, id), callback);
+    } catch (err: any) { ResponseBuilder.handleError(err, callback); }
+  };
+
+  // PUT /examinations/{id}/room-invigilators/date/{date} { assignments: [{roomId, employeeId}] }
+  public saveRoomInvigilatorsForDate = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const auth = await resolveSchool(event, callback);
+      if (!auth) return;
+      const id = requireParam(event, "id", callback);
+      const date = requireParam(event, "date", callback);
+      if (!id || !date) return;
+      const body = parseBody<{ assignments: any[] }>(event, callback);
+      if (!body) return;
+      ResponseBuilder.ok(await examinationService.saveRoomInvigilatorsForDate(auth.schoolId, id, date, body.assignments || [], auth.userId), callback);
+    } catch (err: any) { ResponseBuilder.handleError(err, callback); }
+  };
+
+  // GET /examinations/{id}/room-rosters/{roomId}/{date} — admin/incharge view
+  public getRoomRosterAdmin = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const auth = await resolveSchool(event, callback);
+      if (!auth) return;
+      const id = requireParam(event, "id", callback);
+      const roomId = requireParam(event, "roomId", callback);
+      const date = requireParam(event, "date", callback);
+      if (!id || !roomId || !date) return;
+      ResponseBuilder.ok(await examinationService.roomRoster(auth.schoolId, id, roomId, date), callback);
+    } catch (err: any) { ResponseBuilder.handleError(err, callback); }
+  };
+
+  // POST /examinations/{id}/room-rosters/{roomId}/{date}/mark { marks: [{studentId, paperId, sectionClassId, status}] }
+  public markRoomRosterAdmin = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const auth = await resolveSchool(event, callback);
+      if (!auth) return;
+      const id = requireParam(event, "id", callback);
+      const roomId = requireParam(event, "roomId", callback);
+      const date = requireParam(event, "date", callback);
+      if (!id || !roomId || !date) return;
+      const body = parseBody<{ marks: any[] }>(event, callback);
+      if (!body) return;
+      ResponseBuilder.ok(await examinationService.markRoomAttendance(auth.schoolId, id, roomId, date, body.marks || [], auth.userId), callback);
+    } catch (err: any) { ResponseBuilder.handleError(err, callback); }
+  };
+
+  // POST /examinations/{id}/room-rosters/{roomId}/{date}/sign
+  public signRoomRosterAdmin = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const auth = await resolveSchool(event, callback);
+      if (!auth) return;
+      const id = requireParam(event, "id", callback);
+      const roomId = requireParam(event, "roomId", callback);
+      const date = requireParam(event, "date", callback);
+      if (!id || !roomId || !date) return;
+      ResponseBuilder.ok(await examinationService.signRoomRoster(auth.schoolId, id, roomId, date, auth.userId), callback);
+    } catch (err: any) { ResponseBuilder.handleError(err, callback); }
+  };
+
+  // ── Seating-plan image (upload a photo of the room plan) ───────────────────────
+
+  // GET /examinations/{id}/seating-image
+  public getSeatingImage = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const auth = await resolveSchool(event, callback);
+      if (!auth) return;
+      const id = requireParam(event, "id", callback);
+      if (!id) return;
+      ResponseBuilder.ok(await examinationService.getSeatingImage(auth.schoolId, id), callback);
+    } catch (err: any) { ResponseBuilder.handleError(err, callback); }
+  };
+
+  // PUT /examinations/{id}/seating-image { imageBase64, mimeType?, fileName? }
+  public setSeatingImage = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const auth = await resolveSchool(event, callback);
+      if (!auth) return;
+      const id = requireParam(event, "id", callback);
+      if (!id) return;
+      const body = parseBody<{ imageBase64: string; mimeType?: string; fileName?: string }>(event, callback);
+      if (!body) return;
+      ResponseBuilder.ok(await examinationService.setSeatingImage(auth.schoolId, id, body.imageBase64, body.mimeType || "image/jpeg", body.fileName || "seating.jpg", auth.userId), callback);
+    } catch (err: any) { ResponseBuilder.handleError(err, callback); }
+  };
+
+  // DELETE /examinations/{id}/seating-image
+  public deleteSeatingImage = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const auth = await resolveSchool(event, callback);
+      if (!auth) return;
+      const id = requireParam(event, "id", callback);
+      if (!id) return;
+      ResponseBuilder.ok(await examinationService.deleteSeatingImage(auth.schoolId, id, auth.userId), callback);
+    } catch (err: any) { ResponseBuilder.handleError(err, callback); }
+  };
+
+  // ── /me room duties (PWA) ──────────────────────────────────────────────────────
+
+  // Shared resolver: verify the caller is the assigned invigilator for this (room, date).
+  private async meRoomParams(event: ApiEvent, callback: ApiCallback) {
+    const emp = resolveEmployee(event, callback);
+    if (!emp) return null;
+    const examId = requireParam(event, "examId", callback);
+    const roomId = requireParam(event, "roomId", callback);
+    const date = requireParam(event, "date", callback);
+    if (!examId || !roomId || !date) return null;
+    if (!(await examinationService.canInvigilateRoom(examId, roomId, date, emp.employeeId))) {
+      ResponseBuilder.forbidden(ErrorCode.MissingPermission, "You are not the assigned invigilator for this room", callback);
+      return null;
+    }
+    return { emp, examId, roomId, date };
+  }
+
+  // GET /me/exam/rooms
+  public getMyRooms = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const emp = resolveEmployee(event, callback);
+      if (!emp) return;
+      ResponseBuilder.ok(await examinationService.myRoomInvigilations(emp.schoolId, emp.employeeId), callback);
+    } catch (err: any) { ResponseBuilder.handleError(err, callback); }
+  };
+
+  // GET /me/exam/rooms/{examId}/{roomId}/{date}
+  public getMyRoomRoster = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const p = await this.meRoomParams(event, callback);
+      if (!p) return;
+      ResponseBuilder.ok(await examinationService.roomRoster(p.emp.schoolId, p.examId, p.roomId, p.date), callback);
+    } catch (err: any) { ResponseBuilder.handleError(err, callback); }
+  };
+
+  // POST /me/exam/rooms/{examId}/{roomId}/{date}/mark
+  public markMyRoomRoster = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const p = await this.meRoomParams(event, callback);
+      if (!p) return;
+      const body = parseBody<{ marks: any[] }>(event, callback);
+      if (!body) return;
+      ResponseBuilder.ok(await examinationService.markRoomAttendance(p.emp.schoolId, p.examId, p.roomId, p.date, body.marks || [], p.emp.employeeId), callback);
+    } catch (err: any) { ResponseBuilder.handleError(err, callback); }
+  };
+
+  // POST /me/exam/rooms/{examId}/{roomId}/{date}/sign
+  public signMyRoomRoster = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const p = await this.meRoomParams(event, callback);
+      if (!p) return;
+      ResponseBuilder.ok(await examinationService.signRoomRoster(p.emp.schoolId, p.examId, p.roomId, p.date, p.emp.employeeId), callback);
+    } catch (err: any) { ResponseBuilder.handleError(err, callback); }
+  };
 }
 
 const h = new ExaminationHandler();
@@ -657,3 +897,23 @@ export const signMyRoster = h.signMyRoster;
 export const getRosterAdmin = guard(ACTIONS.EXAM_MANAGE, h.getRosterAdmin);
 export const markRosterAdmin = guard(ACTIONS.EXAM_MANAGE, h.markRosterAdmin);
 export const signRosterAdmin = guard(ACTIONS.EXAM_MANAGE, h.signRosterAdmin);
+
+// Phase 4 — seating rooms (admin CRUD + assignment + sign-any, guarded).
+export const getRooms = guard(ACTIONS.EXAM_VIEW, h.getRooms);
+export const saveRoom = guard(ACTIONS.EXAM_MANAGE, h.saveRoom);
+export const deleteRoom = guard(ACTIONS.EXAM_MANAGE, h.deleteRoom);
+export const saveRoomAllocations = guard(ACTIONS.EXAM_MANAGE, h.saveRoomAllocations);
+export const copyRooms = guard(ACTIONS.EXAM_MANAGE, h.copyRooms);
+export const getRoomInvigilators = guard(ACTIONS.EXAM_VIEW, h.getRoomInvigilators);
+export const saveRoomInvigilatorsForDate = guard(ACTIONS.EXAM_MANAGE, h.saveRoomInvigilatorsForDate);
+export const getRoomRosterAdmin = guard(ACTIONS.EXAM_MANAGE, h.getRoomRosterAdmin);
+export const markRoomRosterAdmin = guard(ACTIONS.EXAM_MANAGE, h.markRoomRosterAdmin);
+export const signRoomRosterAdmin = guard(ACTIONS.EXAM_MANAGE, h.signRoomRosterAdmin);
+export const getSeatingImage = guard(ACTIONS.EXAM_VIEW, h.getSeatingImage);
+export const setSeatingImage = guard(ACTIONS.EXAM_MANAGE, h.setSeatingImage);
+export const deleteSeatingImage = guard(ACTIONS.EXAM_MANAGE, h.deleteSeatingImage);
+// Phase 4 — /me room duties (employee-scoped, JWT required).
+export const getMyRooms = h.getMyRooms;
+export const getMyRoomRoster = h.getMyRoomRoster;
+export const markMyRoomRoster = h.markMyRoomRoster;
+export const signMyRoomRoster = h.signMyRoomRoster;

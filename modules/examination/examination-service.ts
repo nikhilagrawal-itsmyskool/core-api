@@ -19,7 +19,7 @@ const { generateShortUuid } = require("../../shared/util/generate-uuid.js");
 const EXAM_COLS = singleLineString`
   uuid, academic_year_id, name, status, incharge_employee_id,
   dues_threshold_current, dues_threshold_prior, cards_per_page, grades,
-  has_invigilation, has_admit_cards, datesheet_notes,
+  has_invigilation, has_admit_cards, has_seating, datesheet_notes,
   to_char(dues_cutoff_date, 'YYYY-MM-DD') as dues_cutoff_date,
   to_char(start_date, 'YYYY-MM-DD') as start_date,
   to_char(end_date, 'YYYY-MM-DD') as end_date
@@ -43,7 +43,7 @@ class ExaminationService {
   private async audit(
     schoolId: string,
     examId: string | null,
-    entity: "exam" | "paper" | "invigilator" | "override" | "print",
+    entity: "exam" | "paper" | "invigilator" | "override" | "print" | "room",
     action: string,
     detail: string,
     userId: string,
@@ -74,6 +74,7 @@ class ExaminationService {
     return rows.map((r: any) => ({
       ...r, grades: parseGrades(r.grades), paperCount: Number(r.paperCount || 0),
       hasInvigilation: flagOn(r.hasInvigilation), hasAdmitCards: flagOn(r.hasAdmitCards),
+      hasSeating: r.hasSeating === true,
     }));
   }
 
@@ -92,6 +93,7 @@ class ExaminationService {
     return {
       ...rows[0], grades: parseGrades(rows[0].grades), paperCount: Number(rows[0].paperCount || 0),
       hasInvigilation: flagOn(rows[0].hasInvigilation), hasAdmitCards: flagOn(rows[0].hasAdmitCards),
+      hasSeating: rows[0].hasSeating === true,
     };
   }
 
@@ -164,6 +166,7 @@ class ExaminationService {
     }
     if (req.hasInvigilation !== undefined) push("has_invigilation", !!req.hasInvigilation);
     if (req.hasAdmitCards !== undefined) push("has_admit_cards", !!req.hasAdmitCards);
+    if (req.hasSeating !== undefined) push("has_seating", !!req.hasSeating);
     if (req.datesheetNotes !== undefined) push("datesheet_notes", req.datesheetNotes || null);
     if (req.status !== undefined) {
       if (!EXAM_STATUSES.includes(req.status)) {
@@ -1240,6 +1243,480 @@ class ExaminationService {
     );
     await this.attAudit(schoolId, examId, examPaperId, sectionClassId, null, already ? "resign" : "sign", null, null, employeeId, `signed ${students.length} students`);
     return this.attendanceRoster(schoolId, examId, examPaperId, sectionClassId);
+  }
+
+  // ════ Phase 4: seating rooms ═══════════════════════════════════════════════════
+  // A seating scheme layers physical ROOMS onto an exam. Each room seats a mix of sections
+  // by roll-range; invigilators are assigned per (room, date) and attendance/signing pivot
+  // to the room. Roll numbers aren't captured yet, so roll-range → student resolution
+  // degrades to "show the whole section" (labelled with the plan's range).
+
+  private async roomById(schoolId: string, examId: string, roomId: string): Promise<{ uuid: string; name: string } | null> {
+    const rows = await DB.query(
+      singleLineString`select uuid, name from exam_room where uuid = $1 and exam_id = $2 and school_id = $3 and status = 'active'`,
+      [roomId, examId, schoolId],
+    );
+    return rows.length ? { uuid: rows[0].uuid, name: rows[0].name } : null;
+  }
+
+  // The active paper for a grade on a date (or null if that grade doesn't sit that day).
+  private async paperFor(examId: string, grade: string, examDate: string): Promise<{ uuid: string; subjectLabel: string } | null> {
+    const rows = await DB.query(
+      singleLineString`select uuid, subject_label from exam_paper where exam_id = $1 and grade = $2 and exam_date = $3 and status = 'active' limit 1`,
+      [examId, grade, examDate],
+    );
+    return rows.length ? { uuid: rows[0].uuid, subjectLabel: rows[0].subjectLabel } : null;
+  }
+
+  // Rooms + their allocations (the seating scheme) for an exam.
+  async getRooms(schoolId: string, examId: string): Promise<any> {
+    const exam = await this.getExam(schoolId, examId);
+    if (!exam) throw new BusinessErrorResult(ErrorCode.BusinessError, "Examination not found");
+    const rooms = await DB.query(
+      singleLineString`select uuid, name, sort_order from exam_room where school_id = $1 and exam_id = $2 and status = 'active' order by sort_order asc nulls last, name`,
+      [schoolId, examId],
+    );
+    const allocs = await DB.query(
+      singleLineString`select a.uuid, a.room_id, a.section_class_id, a.roll_from, a.roll_to, a.sort_order, c.name as section_name
+        from exam_room_allocation a join class c on c.uuid = a.section_class_id
+        where a.school_id = $1 and a.exam_id = $2 and a.status = 'active'
+        order by a.sort_order asc nulls last, c.name`,
+      [schoolId, examId],
+    );
+    const byRoom: Record<string, any[]> = {};
+    for (const a of allocs) {
+      (byRoom[a.roomId] ||= []).push({
+        uuid: a.uuid, sectionClassId: a.sectionClassId, sectionName: a.sectionName,
+        grade: gradeOf(a.sectionName), rollFrom: a.rollFrom, rollTo: a.rollTo,
+      });
+    }
+    return {
+      examId,
+      rooms: rooms.map((r: any) => ({ uuid: r.uuid, name: r.name, sortOrder: r.sortOrder, allocations: byRoom[r.uuid] || [] })),
+    };
+  }
+
+  async saveRoom(schoolId: string, examId: string, body: { uuid?: string; name: string; sortOrder?: number }, userId: string): Promise<any> {
+    await this.requireExam(schoolId, examId);
+    const name = (body.name || "").trim().slice(0, 64);
+    if (!name) throw new BusinessErrorResult(ErrorCode.BusinessError, "Room name is required");
+    const now = new Date();
+    if (body.uuid) {
+      await DB.query(
+        singleLineString`update exam_room set name = $3, sort_order = $4, updatedby_userid = $5, updated_at = $6 where uuid = $1 and exam_id = $2 and status = 'active'`,
+        [body.uuid, examId, name, body.sortOrder ?? null, userId, now],
+      );
+    } else {
+      await DB.query(
+        singleLineString`insert into exam_room (uuid, school_id, exam_id, name, sort_order, status, createdby_userid, created_at) values ($1,$2,$3,$4,$5,'active',$6,$7)`,
+        [generateShortUuid(12), schoolId, examId, name, body.sortOrder ?? null, userId, now],
+      );
+    }
+    await this.audit(schoolId, examId, "room", body.uuid ? "update" : "create", name, userId);
+    return this.getRooms(schoolId, examId);
+  }
+
+  async deleteRoom(schoolId: string, examId: string, roomId: string, userId: string): Promise<any> {
+    await this.requireExam(schoolId, examId);
+    const now = new Date();
+    const queries = [
+      singleLineString`update exam_room set status = 'deleted', updatedby_userid = $3, updated_at = $4 where uuid = $1 and exam_id = $2`,
+      singleLineString`update exam_room_allocation set status = 'deleted', updatedby_userid = $3, updated_at = $4 where room_id = $1 and exam_id = $2 and status = 'active'`,
+      singleLineString`update exam_room_invigilator set status = 'deleted', updatedby_userid = $3, updated_at = $4 where room_id = $1 and exam_id = $2 and status = 'active'`,
+    ];
+    const params = [[roomId, examId, userId, now], [roomId, examId, userId, now], [roomId, examId, userId, now]];
+    await DB.queriesInTransaction(queries, params);
+    await this.audit(schoolId, examId, "room", "delete", roomId, userId);
+    return this.getRooms(schoolId, examId);
+  }
+
+  // Replace-all the allocations of one room.
+  async saveRoomAllocations(schoolId: string, examId: string, roomId: string, allocations: any[], userId: string): Promise<any> {
+    await this.requireExam(schoolId, examId);
+    const room = await this.roomById(schoolId, examId, roomId);
+    if (!room) throw new BusinessErrorResult(ErrorCode.BusinessError, "Room not found");
+    if (!Array.isArray(allocations)) throw new BusinessErrorResult(ErrorCode.BusinessError, "allocations must be an array");
+    const clean = allocations
+      .map((a: any, i: number) => ({
+        sectionClassId: (a.sectionClassId || "").trim(),
+        rollFrom: a.rollFrom == null || a.rollFrom === "" ? null : Number(a.rollFrom),
+        rollTo: a.rollTo == null || a.rollTo === "" ? null : Number(a.rollTo),
+        sortOrder: i,
+      }))
+      .filter((a) => a.sectionClassId);
+    const now = new Date();
+    const queries: string[] = [
+      singleLineString`update exam_room_allocation set status = 'deleted', updatedby_userid = $3, updated_at = $4 where room_id = $1 and exam_id = $2 and status = 'active'`,
+    ];
+    const params: any[][] = [[roomId, examId, userId, now]];
+    for (const a of clean) {
+      queries.push(
+        singleLineString`insert into exam_room_allocation
+          (uuid, school_id, exam_id, room_id, section_class_id, roll_from, roll_to, sort_order, status, createdby_userid, created_at)
+          values ($1,$2,$3,$4,$5,$6,$7,$8,'active',$9,$10)`,
+      );
+      params.push([generateShortUuid(12), schoolId, examId, roomId, a.sectionClassId, a.rollFrom, a.rollTo, a.sortOrder, userId, now]);
+    }
+    await DB.queriesInTransaction(queries, params);
+    await this.audit(schoolId, examId, "room", "allocations", `${room.name}: ${clean.length} row(s)`, userId);
+    return this.getRooms(schoolId, examId);
+  }
+
+  // Clone another exam's rooms+allocations into this one (replaces any existing scheme).
+  // Section ids are carried verbatim, so this is meant for exams in the same academic year.
+  async copyRoomsFromExam(schoolId: string, targetExamId: string, sourceExamId: string, userId: string): Promise<any> {
+    await this.requireExam(schoolId, targetExamId);
+    const src = await this.getRooms(schoolId, sourceExamId);
+    if (!src.rooms.length) throw new BusinessErrorResult(ErrorCode.BusinessError, "That exam has no seating rooms to copy");
+    const now = new Date();
+    const queries: string[] = [
+      singleLineString`update exam_room set status = 'deleted', updatedby_userid = $2, updated_at = $3 where exam_id = $1 and status = 'active'`,
+      singleLineString`update exam_room_allocation set status = 'deleted', updatedby_userid = $2, updated_at = $3 where exam_id = $1 and status = 'active'`,
+    ];
+    const params: any[][] = [[targetExamId, userId, now], [targetExamId, userId, now]];
+    src.rooms.forEach((r: any, ri: number) => {
+      const newRoomId = generateShortUuid(12);
+      queries.push(
+        singleLineString`insert into exam_room (uuid, school_id, exam_id, name, sort_order, status, createdby_userid, created_at) values ($1,$2,$3,$4,$5,'active',$6,$7)`,
+      );
+      params.push([newRoomId, schoolId, targetExamId, r.name, r.sortOrder ?? ri, userId, now]);
+      (r.allocations || []).forEach((a: any, ai: number) => {
+        queries.push(
+          singleLineString`insert into exam_room_allocation
+            (uuid, school_id, exam_id, room_id, section_class_id, roll_from, roll_to, sort_order, status, createdby_userid, created_at)
+            values ($1,$2,$3,$4,$5,$6,$7,$8,'active',$9,$10)`,
+        );
+        params.push([generateShortUuid(12), schoolId, targetExamId, newRoomId, a.sectionClassId, a.rollFrom, a.rollTo, ai, userId, now]);
+      });
+    });
+    await DB.queriesInTransaction(queries, params);
+    await this.audit(schoolId, targetExamId, "room", "copy", `${src.rooms.length} room(s)`, userId);
+    return this.getRooms(schoolId, targetExamId);
+  }
+
+  // Admin view: rooms × dates, which rooms are active each date, and per-(room,date)
+  // invigilator assignments (with double-booking conflicts).
+  async roomInvigilators(schoolId: string, examId: string): Promise<any> {
+    const exam = await this.getExam(schoolId, examId);
+    if (!exam) throw new BusinessErrorResult(ErrorCode.BusinessError, "Examination not found");
+    const { rooms } = await this.getRooms(schoolId, examId);
+
+    const paperRows = await DB.query(
+      singleLineString`select distinct grade, to_char(exam_date, 'YYYY-MM-DD') as exam_date from exam_paper where exam_id = $1 and status = 'active'`,
+      [examId],
+    );
+    const gradesByDate: Record<string, string[]> = {};
+    for (const r of paperRows) (gradesByDate[r.examDate] ||= []).push(r.grade);
+    const dates = Object.keys(gradesByDate).sort();
+
+    // A room is active on a date if any of its allocated sections has a paper that day.
+    const activeByDate: Record<string, string[]> = {};
+    for (const d of dates) {
+      const gset = new Set(gradesByDate[d]);
+      activeByDate[d] = rooms.filter((rm: any) => (rm.allocations || []).some((a: any) => gset.has(a.grade))).map((rm: any) => rm.uuid);
+    }
+
+    const assignRows = await DB.query(
+      singleLineString`select to_char(ri.exam_date, 'YYYY-MM-DD') as exam_date, ri.room_id, ri.employee_id,
+          (select emp.name from employee emp where emp.uuid = ri.employee_id) as employee_name
+        from exam_room_invigilator ri where ri.exam_id = $1 and ri.status = 'active'`,
+      [examId],
+    );
+    const assignments = assignRows.map((r: any) => ({ examDate: r.examDate, roomId: r.roomId, employeeId: r.employeeId, employeeName: r.employeeName }));
+
+    const byDateEmp = new Map<string, Set<string>>();
+    for (const a of assignments) {
+      const k = `${a.examDate}|${a.employeeId}`;
+      (byDateEmp.get(k) || byDateEmp.set(k, new Set()).get(k)!).add(a.roomId);
+    }
+    const conflicts = [...byDateEmp.entries()].filter(([, s]) => s.size > 1).map(([k, s]) => {
+      const [examDate, employeeId] = k.split("|");
+      return { examDate, employeeId, roomIds: [...s] };
+    });
+
+    return { examId, rooms, dates, gradesByDate, activeByDate, assignments, conflicts };
+  }
+
+  async saveRoomInvigilatorsForDate(schoolId: string, examId: string, examDate: string, assignments: any[], userId: string): Promise<any> {
+    const exam = await this.requireExam(schoolId, examId);
+    if (exam.status === "archived") throw new BusinessErrorResult(ErrorCode.BusinessError, "Cannot edit an archived exam");
+    if (!isValidDate(examDate)) throw new BusinessErrorResult(ErrorCode.BusinessError, "Invalid date");
+    if (!Array.isArray(assignments)) throw new BusinessErrorResult(ErrorCode.BusinessError, "assignments must be an array");
+    const seen = new Map<string, { roomId: string; employeeId: string }>();
+    for (const a of assignments) {
+      const roomId = (a.roomId || "").trim();
+      const employeeId = (a.employeeId || "").trim();
+      if (!roomId || !employeeId) continue;
+      seen.set(roomId, { roomId, employeeId });
+    }
+    const now = new Date();
+    const queries: string[] = [
+      singleLineString`update exam_room_invigilator set status = 'deleted', updatedby_userid = $3, updated_at = $4 where exam_id = $1 and exam_date = $2 and status = 'active'`,
+    ];
+    const params: any[][] = [[examId, examDate, userId, now]];
+    for (const a of seen.values()) {
+      queries.push(
+        singleLineString`insert into exam_room_invigilator (uuid, school_id, exam_id, room_id, exam_date, employee_id, status, createdby_userid, created_at) values ($1,$2,$3,$4,$5,$6,'active',$7,$8)`,
+      );
+      params.push([generateShortUuid(12), schoolId, examId, a.roomId, examDate, a.employeeId, userId, now]);
+    }
+    await DB.queriesInTransaction(queries, params);
+    await this.audit(schoolId, examId, "room", "invigilator", `${examDate}: ${seen.size} room(s)`, userId);
+    return this.roomInvigilators(schoolId, examId);
+  }
+
+  // Active on-roll students of a section for the year, with roll_number. When roll numbers
+  // aren't captured, the range filter is skipped and the whole section is returned.
+  private async roomStudents(schoolId: string, academicYearId: string, classId: string, rollFrom: number | null, rollTo: number | null): Promise<any[]> {
+    const rows = await DB.query(
+      singleLineString`select st.uuid as student_id, st.name, st.admission_number, sc.roll_number
+        from student st
+        join student_class sc on sc.student_id = st.uuid and sc.school_id = st.school_id
+        where sc.class_id = $1 and sc.academic_year_id = $2 and st.school_id = $3 and st.status = 'active'
+          and (sc.status is null or sc.status <> 'deleted')
+        order by sc.roll_number asc nulls last, st.name`,
+      [classId, academicYearId, schoolId],
+    );
+    const haveRolls = rows.some((r: any) => r.rollNumber != null);
+    if (haveRolls && rollFrom != null && rollTo != null) {
+      return rows.filter((r: any) => r.rollNumber != null && Number(r.rollNumber) >= rollFrom && Number(r.rollNumber) <= rollTo);
+    }
+    return rows;
+  }
+
+  // Resolve who sits in a room on a date: for each allocated section that has a paper that
+  // day, the students in its roll-range (or the whole section as a fallback).
+  private async roomOccupants(schoolId: string, exam: any, roomId: string, examDate: string): Promise<any[]> {
+    const allocs = await DB.query(
+      singleLineString`select a.section_class_id, a.roll_from, a.roll_to, c.name as section_name
+        from exam_room_allocation a join class c on c.uuid = a.section_class_id
+        where a.room_id = $1 and a.status = 'active' order by a.sort_order asc nulls last, c.name`,
+      [roomId],
+    );
+    const occ: any[] = [];
+    for (const a of allocs) {
+      const grade = gradeOf(a.sectionName);
+      const paper = await this.paperFor(exam.uuid, grade, examDate);
+      if (!paper) continue;
+      const students = await this.roomStudents(schoolId, exam.academicYearId, a.sectionClassId, a.rollFrom, a.rollTo);
+      for (const s of students) {
+        occ.push({
+          studentId: s.studentId, name: s.name, admissionNumber: s.admissionNumber, rollNumber: s.rollNumber,
+          sectionClassId: a.sectionClassId, sectionName: a.sectionName, grade,
+          paperId: paper.uuid, subjectLabel: paper.subjectLabel, rollFrom: a.rollFrom, rollTo: a.rollTo,
+        });
+      }
+    }
+    return occ;
+  }
+
+  // Room roster for a date: occupants grouped by section, each with present/absent, plus
+  // the room-day sign state. Used by both the admin sign-any screen and the /me PWA.
+  async roomRoster(schoolId: string, examId: string, roomId: string, examDate: string): Promise<any> {
+    const exam = await this.getExam(schoolId, examId);
+    if (!exam) throw new BusinessErrorResult(ErrorCode.BusinessError, "Examination not found");
+    const room = await this.roomById(schoolId, examId, roomId);
+    if (!room) throw new BusinessErrorResult(ErrorCode.BusinessError, "Room not found");
+    const occ = await this.roomOccupants(schoolId, { uuid: examId, academicYearId: exam.academicYearId }, roomId, examDate);
+
+    const paperIds = [...new Set(occ.map((o) => o.paperId))];
+    const attMap = new Map<string, any>();
+    if (paperIds.length) {
+      const attRows = await DB.query(
+        singleLineString`select exam_paper_id, student_id, status, signed_by_employee_id,
+            to_char(signed_at, 'YYYY-MM-DD HH24:MI') as signed_at
+          from exam_attendance where exam_paper_id = any($1)`,
+        [paperIds],
+      );
+      for (const r of attRows) attMap.set(`${r.examPaperId}|${r.studentId}`, r);
+    }
+
+    const bySection = new Map<string, any>();
+    let marked = 0, signedCount = 0;
+    let signerEmpId: string | null = null, signedAt: string | null = null;
+    for (const o of occ) {
+      const a = attMap.get(`${o.paperId}|${o.studentId}`);
+      if (a?.status) marked++;
+      if (a?.signedAt) { signedCount++; signerEmpId = a.signedByEmployeeId; signedAt = a.signedAt; }
+      if (!bySection.has(o.sectionClassId)) {
+        bySection.set(o.sectionClassId, {
+          sectionClassId: o.sectionClassId, sectionName: o.sectionName, grade: o.grade,
+          subjectLabel: o.subjectLabel, rollFrom: o.rollFrom, rollTo: o.rollTo, students: [],
+        });
+      }
+      bySection.get(o.sectionClassId).students.push({
+        studentId: o.studentId, name: o.name, admissionNumber: o.admissionNumber, rollNumber: o.rollNumber,
+        paperId: o.paperId, status: a ? a.status : null,
+      });
+    }
+    let signedByName: string | null = null;
+    if (signerEmpId) {
+      const emp = await DB.query(singleLineString`select name from employee where uuid = $1`, [signerEmpId]);
+      signedByName = emp.length ? emp[0].name : null;
+    }
+    const total = occ.length;
+    return {
+      room, examDate, rollNumbersAvailable: occ.some((o) => o.rollNumber != null),
+      sections: [...bySection.values()],
+      total, marked, signed: total > 0 && signedCount === total, signedByName, signedAt,
+    };
+  }
+
+  // Mark present/absent for students in a room on a date. Each mark carries its paperId +
+  // sectionClassId (from the roster). Stamps room_id so signing can be room-scoped.
+  async markRoomAttendance(schoolId: string, examId: string, roomId: string, examDate: string, marks: any[], employeeId: string): Promise<any> {
+    if (!Array.isArray(marks)) throw new BusinessErrorResult(ErrorCode.BusinessError, "marks must be an array");
+    const now = new Date();
+    for (const m of marks) {
+      const studentId = (m.studentId || "").trim();
+      const paperId = (m.paperId || "").trim();
+      const sectionClassId = (m.sectionClassId || "").trim();
+      const status = m.status === "present" ? "present" : m.status === "absent" ? "absent" : null;
+      if (!studentId || !paperId || !status) continue;
+      const ex = await DB.query(
+        singleLineString`select uuid, status from exam_attendance where exam_paper_id = $1 and student_id = $2`,
+        [paperId, studentId],
+      );
+      if (ex.length) {
+        if (ex[0].status !== status) {
+          await DB.query(
+            singleLineString`update exam_attendance set status = $2, room_id = $3, updatedby_userid = $4, updated_at = $5 where uuid = $1`,
+            [ex[0].uuid, status, roomId, employeeId, now],
+          );
+          await this.attAudit(schoolId, examId, paperId, sectionClassId, studentId, status === "present" ? "mark_present" : "mark_absent", ex[0].status, status, employeeId, null);
+        } else {
+          await DB.query(singleLineString`update exam_attendance set room_id = $2 where uuid = $1`, [ex[0].uuid, roomId]);
+        }
+      } else {
+        await DB.query(
+          singleLineString`insert into exam_attendance
+            (uuid, school_id, exam_id, exam_paper_id, exam_date, section_class_id, student_id, status, room_id, createdby_userid, created_at)
+            values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+          [generateShortUuid(12), schoolId, examId, paperId, examDate, sectionClassId, studentId, status, roomId, employeeId, now],
+        );
+        await this.attAudit(schoolId, examId, paperId, sectionClassId, studentId, status === "present" ? "mark_present" : "mark_absent", null, status, employeeId, null);
+      }
+    }
+    return this.roomRoster(schoolId, examId, roomId, examDate);
+  }
+
+  // Sign a room-day roster: every occupant must be marked and the signer must have a stored
+  // signature. Stamps signed_* on each occupant's attendance row (so admit cards render it).
+  async signRoomRoster(schoolId: string, examId: string, roomId: string, examDate: string, employeeId: string): Promise<any> {
+    const exam = await this.getExam(schoolId, examId);
+    if (!exam) throw new BusinessErrorResult(ErrorCode.BusinessError, "Examination not found");
+    const occ = await this.roomOccupants(schoolId, { uuid: examId, academicYearId: exam.academicYearId }, roomId, examDate);
+    if (!occ.length) throw new BusinessErrorResult(ErrorCode.BusinessError, "No students sit in this room on this day");
+    const paperIds = [...new Set(occ.map((o) => o.paperId))];
+    const attRows = await DB.query(
+      singleLineString`select exam_paper_id, student_id, status, signed_at from exam_attendance where exam_paper_id = any($1)`,
+      [paperIds],
+    );
+    const statusMap = new Map(attRows.map((r: any) => [`${r.examPaperId}|${r.studentId}`, r.status]));
+    const unmarked = occ.filter((o) => !statusMap.get(`${o.paperId}|${o.studentId}`));
+    if (unmarked.length) {
+      throw new BusinessErrorResult(ErrorCode.BusinessError, `Mark all ${occ.length} students before signing (${unmarked.length} still unmarked)`);
+    }
+    const sigFileId = await this.signatureFileId(schoolId, employeeId);
+    if (!sigFileId) throw new BusinessErrorResult(ErrorCode.BusinessError, "Add your signature first (Profile → Signature), then sign the roster");
+    const already = attRows.some((r: any) => r.signedAt);
+    const now = new Date();
+    for (const o of occ) {
+      await DB.query(
+        singleLineString`update exam_attendance set signed_by_employee_id = $3, signed_at = $4, signature_file_id = $5, room_id = $6, updatedby_userid = $3, updated_at = $4
+          where exam_paper_id = $1 and student_id = $2`,
+        [o.paperId, o.studentId, employeeId, now, sigFileId, roomId],
+      );
+    }
+    await this.attAudit(schoolId, examId, "", roomId, null, already ? "resign" : "sign", null, null, employeeId, `room-signed ${occ.length} students`);
+    return this.roomRoster(schoolId, examId, roomId, examDate);
+  }
+
+  // ── Seating-plan image (an uploaded photo of the room plan; one per exam) ──────
+  // Stored in file_storage (entity_type 'exam_seating_plan', entity_id = examId); the
+  // latest active file is the current one. Lets a school upload their hand-made plan sheet.
+  private async seatingImageFileId(schoolId: string, examId: string): Promise<string | null> {
+    const rows = await DB.query(
+      singleLineString`select uuid from file_storage where school_id = $1 and entity_type = 'exam_seating_plan' and entity_id = $2 order by created_at desc limit 1`,
+      [schoolId, examId],
+    );
+    return rows.length ? rows[0].uuid : null;
+  }
+
+  async getSeatingImage(schoolId: string, examId: string): Promise<{ fileId: string | null; dataUri: string | null }> {
+    const fileId = await this.seatingImageFileId(schoolId, examId);
+    if (!fileId) return { fileId: null, dataUri: null };
+    const f = await fileStorageService.getWithData(fileId, schoolId);
+    return { fileId, dataUri: f ? `data:${f.mimeType};base64,${f.data}` : null };
+  }
+
+  async setSeatingImage(schoolId: string, examId: string, base64Data: string, mimeType: string, fileName: string, userId: string): Promise<any> {
+    await this.requireExam(schoolId, examId);
+    if (!base64Data) throw new BusinessErrorResult(ErrorCode.BusinessError, "image data is required");
+    const old = await DB.query(
+      singleLineString`select uuid from file_storage where school_id = $1 and entity_type = 'exam_seating_plan' and entity_id = $2`,
+      [schoolId, examId],
+    );
+    await fileStorageService.upload({
+      fileName: fileName || "seating.jpg", mimeType: mimeType || "image/jpeg",
+      base64Data, entityType: "exam_seating_plan", entityId: examId, schoolId, userId,
+    });
+    for (const o of old) { try { await fileStorageService.delete(o.uuid, schoolId); } catch { /* best effort */ } }
+    await this.audit(schoolId, examId, "room", "image", "seating image uploaded", userId);
+    return this.getSeatingImage(schoolId, examId);
+  }
+
+  async deleteSeatingImage(schoolId: string, examId: string, userId: string): Promise<any> {
+    const old = await DB.query(
+      singleLineString`select uuid from file_storage where school_id = $1 and entity_type = 'exam_seating_plan' and entity_id = $2`,
+      [schoolId, examId],
+    );
+    for (const o of old) { try { await fileStorageService.delete(o.uuid, schoolId); } catch { /* best effort */ } }
+    await this.audit(schoolId, examId, "room", "image-remove", "seating image removed", userId);
+    return { fileId: null, dataUri: null };
+  }
+
+  async canInvigilateRoom(examId: string, roomId: string, examDate: string, employeeId: string): Promise<boolean> {
+    const rows = await DB.query(
+      singleLineString`select 1 from exam_room_invigilator where exam_id = $1 and room_id = $2 and exam_date = $3 and employee_id = $4 and status = 'active' limit 1`,
+      [examId, roomId, examDate, employeeId],
+    );
+    return rows.length > 0;
+  }
+
+  // The logged-in employee's room duties across published exams (the PWA "my rooms" list),
+  // each with a marked/signed summary.
+  async myRoomInvigilations(schoolId: string, employeeId: string): Promise<any[]> {
+    const rows = await DB.query(
+      singleLineString`
+        select ri.exam_id, to_char(ri.exam_date, 'YYYY-MM-DD') as exam_date, ri.room_id,
+          r.name as room_name, e.name as exam_name, e.academic_year_id
+        from exam_room_invigilator ri
+        join examination e on e.uuid = ri.exam_id and e.status = 'published'
+        join exam_room r on r.uuid = ri.room_id and r.status = 'active'
+        where ri.school_id = $1 and ri.employee_id = $2 and ri.status = 'active'
+        order by ri.exam_date, r.sort_order asc nulls last, r.name
+      `,
+      [schoolId, employeeId],
+    );
+    const out: any[] = [];
+    for (const r of rows) {
+      const occ = await this.roomOccupants(schoolId, { uuid: r.examId, academicYearId: r.academicYearId }, r.roomId, r.examDate);
+      if (!occ.length) continue;
+      const paperIds = [...new Set(occ.map((o) => o.paperId))];
+      const attRows = paperIds.length ? await DB.query(
+        singleLineString`select exam_paper_id, student_id, status, signed_at from exam_attendance where exam_paper_id = any($1)`,
+        [paperIds],
+      ) : [];
+      const smap = new Map(attRows.map((a: any) => [`${a.examPaperId}|${a.studentId}`, a]));
+      const marked = occ.filter((o) => (smap.get(`${o.paperId}|${o.studentId}`) as any)?.status).length;
+      const signed = occ.length > 0 && occ.every((o) => (smap.get(`${o.paperId}|${o.studentId}`) as any)?.signedAt);
+      out.push({
+        examId: r.examId, examName: r.examName, examDate: r.examDate, roomId: r.roomId, roomName: r.roomName,
+        total: occ.length, marked, signed,
+      });
+    }
+    return out;
   }
 }
 

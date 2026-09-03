@@ -345,3 +345,160 @@
           path: examinations/{id}/rosters/{paperId}/{sectionId}/sign
           method: post
           cors: true
+
+  # ── Phase 4: seating rooms (admin) ───────────────────────────────────────────
+  get-rooms:
+    handler: examination-handler.getRooms
+    name: ${self:service}-get-rooms
+    events:
+      - http:
+          path: examinations/{id}/rooms
+          method: get
+          cors: true
+
+  save-room:
+    handler: examination-handler.saveRoom
+    name: ${self:service}-save-room
+    events:
+      - http:
+          path: examinations/{id}/rooms
+          method: post
+          cors: true
+
+  delete-room:
+    handler: examination-handler.deleteRoom
+    name: ${self:service}-delete-room
+    events:
+      - http:
+          path: examinations/{id}/rooms/{roomId}
+          method: delete
+          cors: true
+
+  save-room-allocations:
+    handler: examination-handler.saveRoomAllocations
+    name: ${self:service}-save-room-allocations
+    events:
+      - http:
+          path: examinations/{id}/rooms/{roomId}/allocations
+          method: put
+          cors: true
+
+  copy-rooms:
+    handler: examination-handler.copyRooms
+    name: ${self:service}-copy-rooms
+    events:
+      - http:
+          path: examinations/{id}/rooms/copy
+          method: post
+          cors: true
+
+  get-room-invigilators:
+    handler: examination-handler.getRoomInvigilators
+    name: ${self:service}-get-room-invigilators
+    events:
+      - http:
+          path: examinations/{id}/room-invigilators
+          method: get
+          cors: true
+
+  save-room-invigilators-for-date:
+    handler: examination-handler.saveRoomInvigilatorsForDate
+    name: ${self:service}-save-room-invig-date
+    events:
+      - http:
+          path: examinations/{id}/room-invigilators/date/{date}
+          method: put
+          cors: true
+
+  get-room-roster-admin:
+    handler: examination-handler.getRoomRosterAdmin
+    name: ${self:service}-get-room-roster-admin
+    events:
+      - http:
+          path: examinations/{id}/room-rosters/{roomId}/{date}
+          method: get
+          cors: true
+
+  mark-room-roster-admin:
+    handler: examination-handler.markRoomRosterAdmin
+    name: ${self:service}-mark-room-roster-admin
+    events:
+      - http:
+          path: examinations/{id}/room-rosters/{roomId}/{date}/mark
+          method: post
+          cors: true
+
+  sign-room-roster-admin:
+    handler: examination-handler.signRoomRosterAdmin
+    name: ${self:service}-sign-room-roster-admin
+    events:
+      - http:
+          path: examinations/{id}/room-rosters/{roomId}/{date}/sign
+          method: post
+          cors: true
+
+  get-seating-image:
+    handler: examination-handler.getSeatingImage
+    name: ${self:service}-get-seating-image
+    events:
+      - http:
+          path: examinations/{id}/seating-image
+          method: get
+          cors: true
+
+  set-seating-image:
+    handler: examination-handler.setSeatingImage
+    name: ${self:service}-set-seating-image
+    memorySize: 512
+    timeout: 20
+    events:
+      - http:
+          path: examinations/{id}/seating-image
+          method: put
+          cors: true
+
+  delete-seating-image:
+    handler: examination-handler.deleteSeatingImage
+    name: ${self:service}-delete-seating-image
+    events:
+      - http:
+          path: examinations/{id}/seating-image
+          method: delete
+          cors: true
+
+  # ── Phase 4: room duties (/me PWA) ───────────────────────────────────────────
+  get-my-rooms:
+    handler: examination-handler.getMyRooms
+    name: ${self:service}-get-my-rooms
+    events:
+      - http:
+          path: me/exam/rooms
+          method: get
+          cors: true
+
+  get-my-room-roster:
+    handler: examination-handler.getMyRoomRoster
+    name: ${self:service}-get-my-room-roster
+    events:
+      - http:
+          path: me/exam/rooms/{examId}/{roomId}/{date}
+          method: get
+          cors: true
+
+  mark-my-room-roster:
+    handler: examination-handler.markMyRoomRoster
+    name: ${self:service}-mark-my-room-roster
+    events:
+      - http:
+          path: me/exam/rooms/{examId}/{roomId}/{date}/mark
+          method: post
+          cors: true
+
+  sign-my-room-roster:
+    handler: examination-handler.signMyRoomRoster
+    name: ${self:service}-sign-my-room-roster
+    events:
+      - http:
+          path: me/exam/rooms/{examId}/{roomId}/{date}/sign
+          method: post
+          cors: true

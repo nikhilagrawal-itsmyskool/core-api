@@ -119,7 +119,7 @@ create index if not exists idx_exam_audit_exam
 -- ('exam','paper','invigilator'); Phase 2 adds 'override'/'print'.
 alter table exam_audit drop constraint if exists exam_audit_entity_check;
 alter table exam_audit add constraint exam_audit_entity_check
-    check (entity in ('exam', 'paper', 'invigilator', 'override', 'print'));
+    check (entity in ('exam', 'paper', 'invigilator', 'override', 'print', 'room'));
 
 -- ══ Phase 2: admit cards, dues overrides, print log, branding ════════════════════
 
@@ -247,3 +247,80 @@ create table if not exists exam_attendance_audit (
 );
 create index if not exists idx_exam_attendance_audit
     on exam_attendance_audit(school_id, exam_id, at);
+
+-- ══ Phase 4: seating rooms ═══════════════════════════════════════════════════════
+-- A seating scheme layers physical exam ROOMS onto an exam. Each room seats a MIX of
+-- sections by roll-range (the printed "Seating Plan"); a section may be split across
+-- rooms (disjoint ranges). For a room-based exam (has_seating), invigilators are assigned
+-- per ROOM per exam-day and attendance/signing pivot from section to room — the room's
+-- occupants on a date are the sections in it that have a paper that day. Non-seating exams
+-- keep the per-section invigilator flow. Rooms live inside one exam; a "copy from another
+-- exam" clones the scheme.
+
+-- Whether this exam uses the seating-room scheme. Null/true-or-false set in app; when off
+-- the section-based invigilator flow is used.
+alter table examination add column if not exists has_seating boolean;
+
+-- exam_room: one physical room within an exam (e.g. "1A", "III", "Library").
+create table if not exists exam_room (
+    uuid varchar(12) primary key,
+    school_id varchar(12) not null,
+    exam_id varchar(12) not null,
+    name varchar(64) not null,
+    sort_order integer,
+    status varchar(16) not null check (status in ('active', 'deleted')),
+    createdby_userid varchar(12),
+    created_at timestamp(0),
+    updatedby_userid varchar(12),
+    updated_at timestamp(0)
+);
+create index if not exists idx_exam_room_exam
+    on exam_room(school_id, exam_id, status);
+
+-- exam_room_allocation: a section's roll-range seated in a room. roll_from/roll_to are the
+-- plan's stated numbers; they resolve to students via student_class.roll_number when it is
+-- populated, otherwise they are shown as labels (roll numbers aren't captured yet).
+create table if not exists exam_room_allocation (
+    uuid varchar(12) primary key,
+    school_id varchar(12) not null,
+    exam_id varchar(12) not null,
+    room_id varchar(12) not null,
+    section_class_id varchar(12) not null,
+    grade varchar(16),
+    roll_from integer,
+    roll_to integer,
+    sort_order integer,
+    status varchar(16) not null check (status in ('active', 'deleted')),
+    createdby_userid varchar(12),
+    created_at timestamp(0),
+    updatedby_userid varchar(12),
+    updated_at timestamp(0)
+);
+create index if not exists idx_exam_room_alloc_room
+    on exam_room_allocation(school_id, room_id, status);
+create index if not exists idx_exam_room_alloc_exam
+    on exam_room_allocation(school_id, exam_id, status);
+
+-- exam_room_invigilator: invigilator assigned to a room for one exam day. One active
+-- invigilator per (room, date); one employee may cover several rooms a day (warned in UI).
+create table if not exists exam_room_invigilator (
+    uuid varchar(12) primary key,
+    school_id varchar(12) not null,
+    exam_id varchar(12) not null,
+    room_id varchar(12) not null,
+    exam_date date not null,
+    employee_id varchar(12) not null,
+    status varchar(16) not null check (status in ('active', 'deleted')),
+    createdby_userid varchar(12),
+    created_at timestamp(0),
+    updatedby_userid varchar(12),
+    updated_at timestamp(0)
+);
+create unique index if not exists idx_exam_room_invig_cell
+    on exam_room_invigilator(room_id, exam_date) where status = 'active';
+create index if not exists idx_exam_room_invig_exam
+    on exam_room_invigilator(school_id, exam_id, status);
+
+-- Room-based marking/signing reuses exam_attendance (keyed by exam_paper + student); the
+-- room the student was marked in is stamped here so signing can group by (room, date).
+alter table exam_attendance add column if not exists room_id varchar(12);

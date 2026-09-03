@@ -13,6 +13,7 @@ export interface Examination {
   duesCutoffDate?: string | null; // dues checked on/before this date; null = due-now
   hasInvigilation?: boolean; // false = datesheet-only exam (no invigilator assignment)
   hasAdmitCards?: boolean; // false = no admit cards issued
+  hasSeating?: boolean; // true = seating-room scheme (rooms replace sections); default off
   datesheetNotes?: string | null; // printed under the datesheet PDF (one note per line)
   startDate?: string | null;
   endDate?: string | null;
@@ -37,6 +38,7 @@ export interface UpdateExamRequest {
   duesCutoffDate?: string | null; // YYYY-MM-DD; null clears it (back to due-now)
   hasInvigilation?: boolean;
   hasAdmitCards?: boolean;
+  hasSeating?: boolean;
   datesheetNotes?: string | null;
   // god-only (enforced in the handler): the two dues thresholds.
   duesThresholdCurrent?: number | null;

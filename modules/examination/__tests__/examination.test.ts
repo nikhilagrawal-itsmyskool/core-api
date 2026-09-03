@@ -351,3 +351,89 @@ describe("examination: phase 2 — dues, admit cards, printing, branding", () =>
     expect(typeof row.printable).toBe("boolean");
   });
 });
+
+describe("examination: phase 4 — seating rooms", () => {
+  let examId = "";
+  let roomId = "";
+  let section: { sectionClassId: string; grade: string; studentId: string; academicYearId: string } | null = null;
+  const D1 = "2099-12-02";
+  const sectionIt = (name: string, fn: any) =>
+    it(name, async () => { if (!section) { console.warn(`[skip: no enrolment] ${name}`); return; } return fn(); });
+
+  beforeAll(async () => {
+    section = await getSampleSection();
+    const ay = section ? section.academicYearId : await AY();
+    const created = await post("/examinations", { name: `Seating ${TEST_MARKER}`, academicYearId: ay });
+    examId = created.body.uuid;
+    await patch(`/examinations/${examId}`, { hasSeating: true });
+    if (section) {
+      await put(`/examinations/${examId}/papers`, {
+        papers: [{ grade: section.grade, examDate: D1, subjectLabel: "English" }],
+      });
+    }
+  });
+
+  afterAll(async () => { await cleanupSignature("system"); });
+
+  it("hasSeating is persisted on the exam", async () => {
+    const g = await get(`/examinations/${examId}`);
+    expect(g.body.hasSeating).toBe(true);
+  });
+
+  sectionIt("creates a room and allocates a section, then reads the scheme back", async () => {
+    const r = await post(`/examinations/${examId}/rooms`, { name: "R1", sortOrder: 0 });
+    expect(r.status).toBe(200);
+    roomId = r.body.rooms[0].uuid;
+    const a = await put(`/examinations/${examId}/rooms/${roomId}/allocations`, {
+      allocations: [{ sectionClassId: section!.sectionClassId, rollFrom: 1, rollTo: 999 }],
+    });
+    expect(a.status).toBe(200);
+    expect(a.body.rooms[0].allocations.length).toBe(1);
+    expect(a.body.rooms[0].allocations[0].sectionClassId).toBe(section!.sectionClassId);
+  });
+
+  sectionIt("room-invigilators: the room is active on the paper date and takes an assignment", async () => {
+    const v = await get(`/examinations/${examId}/room-invigilators`);
+    expect(v.status).toBe(200);
+    expect(v.body.dates).toContain(D1);
+    expect((v.body.activeByDate?.[D1] || [])).toContain(roomId);
+    const save = await put(`/examinations/${examId}/room-invigilators/date/${D1}`, {
+      assignments: [{ roomId, employeeId: "system" }],
+    });
+    expect(save.status).toBe(200);
+    expect(save.body.assignments.some((x: any) => x.roomId === roomId && x.examDate === D1)).toBe(true);
+  });
+
+  sectionIt("room roster: admin marks + signs; the signature flows onto the admit card", async () => {
+    const r0 = await get(`/examinations/${examId}/room-rosters/${roomId}/${D1}`);
+    expect(r0.status).toBe(200);
+    expect(r0.body.sections.length).toBeGreaterThan(0);
+    const total = r0.body.sections.reduce((n: number, s: any) => n + s.students.length, 0);
+    expect(total).toBeGreaterThan(0);
+
+    // Sign before marking everyone → rejected.
+    const bad = await post(`/examinations/${examId}/room-rosters/${roomId}/${D1}/sign`, {});
+    expect(bad.status).toBeGreaterThanOrEqual(400);
+
+    const marks = r0.body.sections.flatMap((s: any) =>
+      s.students.map((st: any) => ({ studentId: st.studentId, paperId: st.paperId, sectionClassId: s.sectionClassId, status: "present" })));
+    const rm = await post(`/examinations/${examId}/room-rosters/${roomId}/${D1}/mark`, { marks });
+    expect(rm.body.marked).toBe(rm.body.total);
+
+    await seedSignature("system");
+    const rs = await post(`/examinations/${examId}/room-rosters/${roomId}/${D1}/sign`, {});
+    expect(rs.status).toBe(200);
+    expect(rs.body.signed).toBe(true);
+
+    const ac = await get(`/examinations/${examId}/classes/${section!.sectionClassId}/admit-cards?studentIds=${section!.studentId}`);
+    const card = ac.body.cards.find((c: any) => c.studentId === section!.studentId);
+    expect(card.signatures[D1].signed).toBe(true);
+    expect(card.signatures[D1].signatureDataUri).toContain("data:image");
+  });
+
+  sectionIt("deletes the room (scheme is emptied)", async () => {
+    const d = await del(`/examinations/${examId}/rooms/${roomId}`);
+    expect(d.status).toBe(200);
+    expect(d.body.rooms.length).toBe(0);
+  });
+});
