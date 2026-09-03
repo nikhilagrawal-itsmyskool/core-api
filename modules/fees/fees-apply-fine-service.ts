@@ -62,8 +62,11 @@ class ApplyFineService {
     let created = 0, grown = 0, unchanged = 0, total = 0, belowThresh = 0, paidFreeze = 0, exemptSkip = 0;
     const byCycle: Record<string, { n: number; amt: number }> = {};
 
+    // NOTE: DB.query() returns camelCase keys (studentId/cycleId/cycleLabel), so read them as such.
+    // Reading snake_case here made every cycle look "not fineable" (undefined label) and silently
+    // levied nothing. (`due`/`charged`/`settled` are single lowercase words, unchanged by the transform.)
     for (const b of base) {
-      if (!fineable(b.cycle_label) || !b.due) continue;
+      if (!fineable(b.cycleLabel) || !b.due) continue;
       const dueY = ymd(b.due) as string;
       const fineStart = effectiveFrom && effectiveFrom > dueY ? effectiveFrom : dueY;
       const days = daysBetween(asOf, fineStart);
@@ -73,16 +76,16 @@ class ApplyFineService {
       if (minAmt != null && unpaid < minAmt) { belowThresh++; continue; }
       if (minPct != null && charged > 0 && (unpaid / charged) * 100 <= minPct) { belowThresh++; continue; }
       const computed = Math.round(Math.min(days * rate, cap) * 100) / 100;
-      const ex = fineBy[`${b.student_id}|${b.cycle_id}`];
+      const ex = fineBy[`${b.studentId}|${b.cycleId}`];
       if (ex) {
         if (n(ex.waived) > 0.5) { exemptSkip++; continue; } // exempted -> never touch
         if (Math.abs(n(ex.debit) - computed) < 0.5) { unchanged++; continue; }
         grown++; if (!opts.dryRun) updates.push([computed, ex.uuid]);
       } else {
-        created++; if (!opts.dryRun) inserts.push([generateShortUuid(12), schoolId, b.student_id, academicYearId, head, b.cycle_id, b.cycle_label, computed]);
+        created++; if (!opts.dryRun) inserts.push([generateShortUuid(12), schoolId, b.studentId, academicYearId, head, b.cycleId, b.cycleLabel, computed]);
       }
       total += computed;
-      (byCycle[b.cycle_label] ||= { n: 0, amt: 0 }); byCycle[b.cycle_label].n++; byCycle[b.cycle_label].amt += computed;
+      (byCycle[b.cycleLabel] ||= { n: 0, amt: 0 }); byCycle[b.cycleLabel].n++; byCycle[b.cycleLabel].amt += computed;
     }
 
     if (!opts.dryRun) {
