@@ -58,7 +58,6 @@ validation), UUIDs via `generateShortUuid(12)`.
   | ML   | yes | no  | yes | yes | Director |
   | OD   | yes | no  | no  | yes | Director |
   | COMP | yes | no  | no  | —   | Director |
-  | MAT  | yes | no  | yes | —   | Director |
   | EMERG| discretionary | no | optional | yes | Director |
   | LWP  | no  | —   | —   | —   | — |
 

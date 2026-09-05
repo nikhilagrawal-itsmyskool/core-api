@@ -47,7 +47,7 @@ export const LEAVE_TYPE_SEED: LeaveTypeSeed[] = [
   { code: "ML", name: "Medical Leave", paid: "yes", countsVsQuota: false, requiresAttachment: true, waivable: true, approverRole: "god", sortOrder: 2 },
   { code: "OD", name: "On Duty (Exam / Official)", paid: "yes", countsVsQuota: false, requiresAttachment: false, waivable: true, approverRole: "god", sortOrder: 3 },
   { code: "COMP", name: "Compensatory Off", paid: "yes", countsVsQuota: false, requiresAttachment: false, waivable: false, approverRole: "god", sortOrder: 4 },
-  { code: "MAT", name: "Maternity Leave", paid: "yes", countsVsQuota: false, requiresAttachment: true, waivable: false, approverRole: "god", sortOrder: 5 },
+  // Maternity (MAT) intentionally omitted for now — add back when needed.
   { code: "EMERG", name: "Emergency / Family", paid: "discretionary", countsVsQuota: false, requiresAttachment: false, waivable: true, approverRole: "god", sortOrder: 6 },
   { code: "LWP", name: "Leave Without Pay", paid: "no", countsVsQuota: false, requiresAttachment: false, waivable: false, approverRole: "god", sortOrder: 7 },
 ];
