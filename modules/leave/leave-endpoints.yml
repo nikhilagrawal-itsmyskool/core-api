@@ -112,6 +112,17 @@
           method: post
           cors: true
 
+  attendance-import-timewatch:
+    handler: leave-attendance-handler.importTimewatch
+    name: ${self:service}-attendance-import-timewatch
+    memorySize: 1024
+    timeout: 120
+    events:
+      - http:
+          path: attendance/import-timewatch
+          method: post
+          cors: true
+
   attendance-map-list:
     handler: leave-attendance-handler.listMap
     name: ${self:service}-attendance-map-list

@@ -4,6 +4,7 @@ import { ErrorCode } from "../../shared/lib/error-codes";
 import { resolveSchool, requireApprover, parseBody, requireParam } from "./handler-util";
 import { leaveAttendanceService } from "./leave-attendance-service";
 import { importBiometric, ImportMapping } from "./leave-attendance-import";
+import { importTimewatchReport } from "./leave-timewatch-import";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const MONTH_RE = /^\d{4}-\d{2}$/;
@@ -57,6 +58,28 @@ class LeaveAttendanceHandler {
       const result = await importBiometric(auth.schoolId, buffer, {
         fileName: body.fileName, mapping, coverageFrom: body.coverageFrom, coverageTo: body.coverageTo,
         inferAbsent: body.inferAbsent, userId: auth.userId,
+      });
+      ResponseBuilder.ok(result, callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
+  // POST /leave/attendance/import-timewatch  { fileText, fileName?, autoMapByName? }
+  // The school's TimeWatch monthly text report — explicit per-day status, auto-maps
+  // codes to employees by name, no column mapping / inference needed.
+  public importTimewatch = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const auth = await requireApprover(event, callback);
+      if (!auth) return;
+      const body = parseBody<any>(event, callback);
+      if (!body) return;
+      if (!body.fileText || typeof body.fileText !== "string") {
+        return ResponseBuilder.badRequest(ErrorCode.InvalidInput, "fileText (the report contents) is required", callback);
+      }
+      const result = await importTimewatchReport(auth.schoolId, body.fileText, {
+        fileName: body.fileName, autoMapByName: body.autoMapByName, userId: auth.userId,
       });
       ResponseBuilder.ok(result, callback);
     } catch (err: any) {
@@ -128,6 +151,7 @@ class LeaveAttendanceHandler {
 const h = new LeaveAttendanceHandler();
 export const mark = h.mark;
 export const importFile = h.importFile;
+export const importTimewatch = h.importTimewatch;
 export const listMap = h.listMap;
 export const mapEnroll = h.mapEnroll;
 export const employeeAttendance = h.employeeAttendance;
