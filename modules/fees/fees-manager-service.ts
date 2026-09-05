@@ -8,6 +8,16 @@ import { getSignedPhotoUrl } from '../../shared/lib/file-storage';
 // split into Fees vs Transport, and the list of students who owe in a chosen year (by class).
 // "Due now" mirrors the Dues report / overview: remaining on charges due by end of THIS month.
 class FeesManagerService {
+  // Collapse the many payment_mode codes into the three buckets the manager reasons about:
+  // cash (he physically counts it), cheque (cheque / DD / draft — a paper instrument), and
+  // everything-else-is-online (neft/card/ecs/bank-deposit/online/rte).
+  private modeBucket(m?: string): 'cash' | 'cheque' | 'online' {
+    const x = String(m || '').toLowerCase();
+    if (x === 'cash') return 'cash';
+    if (x === 'cheque' || x === 'draft' || x === 'dd') return 'cheque';
+    return 'online';
+  }
+
   // Landing: per-year due-now totals (newest first), the grand total, and today's collection/receipts
   // broken into Fees vs Transport.
   public async summary(schoolId: string): Promise<any> {
@@ -41,18 +51,28 @@ class FeesManagerService {
       [schoolId, eom]
     );
 
-    // Today's collection + receipt count, split: transport vs everything-else (fees/adhoc).
+    // Today's collection broken down two ways off the same rows: by kind (Fees vs Transport) and by
+    // payment mode (Cash / Cheque / Online) — the manager counts the cash tally against the drawer.
     const todayRows: any[] = await DB.query(
       singleLineString`
         select case when type = 'transport' then 'transport' else 'fees' end as grp,
-          count(*) as receipts, coalesce(sum(total_paid), 0) as amount
+          payment_mode, count(*) as receipts, coalesce(sum(total_paid), 0) as amount
         from fee_receipt
         where school_id = $1 and receipt_date = $2 and status = 'active'
-        group by grp`,
+        group by grp, payment_mode`,
       [schoolId, today]
     );
-    const pick = (g: string) => todayRows.find((r) => r.grp === g) || { receipts: 0, amount: 0 };
-    const fees = pick('fees'), transport = pick('transport');
+    const roll = (pred: (r: any) => boolean) =>
+      todayRows.filter(pred).reduce(
+        (a, r) => ({ amount: a.amount + Number(r.amount || 0), receipts: a.receipts + Number(r.receipts || 0) }),
+        { amount: 0, receipts: 0 }
+      );
+    const fees = roll((r) => r.grp === 'fees'), transport = roll((r) => r.grp === 'transport');
+    const modes = {
+      cash: roll((r) => this.modeBucket(r.paymentMode) === 'cash'),
+      cheque: roll((r) => this.modeBucket(r.paymentMode) === 'cheque'),
+      online: roll((r) => this.modeBucket(r.paymentMode) === 'online'),
+    };
 
     const grandTotalDueNow = years.reduce((s, y) => s + Number(y.dueNow || 0), 0);
     return {
@@ -60,10 +80,9 @@ class FeesManagerService {
       grandTotalDueNow,
       today: {
         date: today,
-        fees: { amount: Number(fees.amount || 0), receipts: Number(fees.receipts || 0) },
-        transport: { amount: Number(transport.amount || 0), receipts: Number(transport.receipts || 0) },
-        total: Number(fees.amount || 0) + Number(transport.amount || 0),
-        receipts: Number(fees.receipts || 0) + Number(transport.receipts || 0),
+        fees, transport, modes,
+        total: fees.amount + transport.amount,
+        receipts: fees.receipts + transport.receipts,
       },
     };
   }
@@ -93,10 +112,15 @@ class FeesManagerService {
     }));
     const sum = (t: string) => rows.filter((r) => r.type === t).reduce((a, r) => a + r.amount, 0);
     const cnt = (t: string) => rows.filter((r) => r.type === t).length;
+    const mode = (b: string) => {
+      const hit = rows.filter((r) => this.modeBucket(r.paymentMode) === b);
+      return { amount: hit.reduce((a, r) => a + r.amount, 0), receipts: hit.length };
+    };
     return {
       date: day,
       fees: { amount: sum('fees'), receipts: cnt('fees') },
       transport: { amount: sum('transport'), receipts: cnt('transport') },
+      modes: { cash: mode('cash'), cheque: mode('cheque'), online: mode('online') },
       total: rows.reduce((a, r) => a + r.amount, 0),
       receipts: rows.length,
       rows,
@@ -109,7 +133,7 @@ class FeesManagerService {
     const eom = dueBuckets().endOfMonth;
     const rows: any[] = await DB.query(
       singleLineString`
-        select st.student_id, st.due_now, s.name, cls.name as class_name, s.admission_number,
+        select st.student_id, st.due_now, s.name, s.gender, cls.name as class_name, s.admission_number,
           (select g.name from student_guardian g
              where g.student_id = st.student_id and g.school_id = $1 and g.relation = 'father' and g.status = 'active'
              order by g.is_primary_contact desc nulls last limit 1) as father_name,
@@ -144,6 +168,7 @@ class FeesManagerService {
     return Promise.all(rows.map(async (r) => ({
       studentId: r.studentId,
       name: r.name,
+      gender: r.gender || null,
       className: r.className || '—',
       admissionNumber: r.admissionNumber || null,
       fatherName: r.fatherName || null,
@@ -161,7 +186,7 @@ class FeesManagerService {
     const lim = Math.min(Math.max(Number(limit) || 15, 1), 30);
     const rows: any[] = await DB.query(
       singleLineString`
-        select s.uuid as student_id, s.name, s.admission_number,
+        select s.uuid as student_id, s.name, s.gender, s.admission_number,
           cl.class_name, gf.father_name, ph.photo_key
         from student s
         left join lateral (
@@ -190,6 +215,7 @@ class FeesManagerService {
     return Promise.all(rows.map(async (r) => ({
       studentId: r.studentId,
       name: r.name,
+      gender: r.gender || null,
       className: r.className || '—',
       admissionNumber: r.admissionNumber || null,
       fatherName: r.fatherName || null,
@@ -203,7 +229,7 @@ class FeesManagerService {
     const eom = dueBuckets().endOfMonth;
     const [header] = await DB.query(
       singleLineString`
-        select s.uuid as student_id, s.name, s.admission_number,
+        select s.uuid as student_id, s.name, s.gender, s.admission_number,
           (select c.name from student_class sc left join class c on c.uuid = sc.class_id
              left join academic_year ay on ay.uuid = sc.academic_year_id
              where sc.student_id = s.uuid and sc.school_id = s.school_id and sc.status <> 'deleted'
@@ -251,6 +277,7 @@ class FeesManagerService {
       student: header ? {
         studentId: header.studentId,
         name: header.name,
+        gender: header.gender || null,
         className: header.className || '—',
         admissionNumber: header.admissionNumber || null,
         fatherName: header.fatherName || null,
