@@ -152,6 +152,23 @@ class ConcessionHandler {
     }
   };
 
+  // School-wide concession change log (audit trail). Query: academicYearId?, from?, to?, limit?
+  public auditLog = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
+    _context.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const ctx = await resolveSchool(event, callback);
+      if (!ctx) return;
+      const q = event.queryStringParameters || {};
+      const results = await concessionService.auditLog(ctx.schoolId, {
+        academicYearId: q.academicYearId, from: q.from, to: q.to,
+        limit: q.limit ? Number(q.limit) : undefined,
+      });
+      ResponseBuilder.ok(results, callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
   public removeStudent = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
     _context.callbackWaitsForEmptyEventLoop = false;
     try {
@@ -184,3 +201,4 @@ export const addStudents = guard(FEE_ACTIONS['fees-concession-handler.addStudent
 export const removeStudent = guard(FEE_ACTIONS['fees-concession-handler.removeStudent'], handler.removeStudent);
 export const changeConcession = guard(FEE_ACTIONS['fees-concession-handler.changeConcession'], handler.changeConcession);
 export const timeline = guard(FEE_ACTIONS['fees-concession-handler.timeline'], handler.timeline);
+export const auditLog = guard(FEE_ACTIONS['fees-concession-handler.auditLog'], handler.auditLog);

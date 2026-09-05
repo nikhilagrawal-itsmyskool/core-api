@@ -70,6 +70,7 @@ export const FEE_ACTIONS: Record<string, string> = {
   'fees-concession-handler.removeStudent': FEE_MANAGE,
   'fees-concession-handler.changeConcession': FEE_MANAGE,
   'fees-concession-handler.timeline': FEE_VIEW,
+  'fees-concession-handler.auditLog': FEE_VIEW,
 
   // Waivers
   'fees-waiver-handler.create': FEE_MANAGE,

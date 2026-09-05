@@ -218,6 +218,11 @@
     name: ${self:service}-multi-concession
     events:
       - http: { path: 'concessions/multi', method: get, cors: true }
+  concession-audit:
+    handler: fees-concession-handler.auditLog
+    name: ${self:service}-concession-audit
+    events:
+      - http: { path: 'concessions/audit', method: get, cors: true }
   list-concession-students:
     handler: fees-concession-handler.listStudents
     name: ${self:service}-list-concession-students

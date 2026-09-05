@@ -657,6 +657,32 @@ class ConcessionService {
     });
     return { studentId, academicYearId, cycles: rows, changes, currentSchemes: Object.values(schemeMap) };
   }
+
+  // School-wide concession change log (fee_concession_audit). Every scheme/assignment mutation with
+  // its before/after, enriched with student name + class (for the event's AY) + current scheme name +
+  // actor. Optional academicYearId / from / to (inclusive dates) / limit filters. Newest first.
+  public async auditLog(schoolId: string, opts: { academicYearId?: string; from?: string; to?: string; limit?: number } = {}): Promise<any[]> {
+    const params: any[] = [schoolId];
+    let sql = singleLineString`
+      select a.uuid, a.academic_year_id, a.entity, a.action, a.scheme_id, a.student_id, a.assignment_id,
+        a.before, a.after, a.change_reason, a.actor_userid,
+        coalesce(el.display_name, a.actor_name) as actor_name, a.created_at,
+        s.name as student_name, s.admission_number, cl.name as class_name,
+        coalesce(c.name, a.after->>'scheme', a.before->>'scheme') as scheme_name
+      from fee_concession_audit a
+      left join student s on s.uuid = a.student_id and s.school_id = a.school_id
+      left join student_class sc on sc.student_id = a.student_id and sc.school_id = a.school_id and sc.academic_year_id = a.academic_year_id
+      left join class cl on cl.uuid = sc.class_id
+      left join fee_concession c on c.uuid = a.scheme_id
+      left join employee_login el on el.uuid = a.actor_userid
+      where a.school_id = $1`;
+    if (opts.academicYearId) { params.push(opts.academicYearId); sql += ` and a.academic_year_id = $${params.length}`; }
+    if (opts.from) { params.push(opts.from); sql += ` and a.created_at >= $${params.length}::date`; }
+    if (opts.to) { params.push(opts.to); sql += ` and a.created_at < ($${params.length}::date + interval '1 day')`; }
+    const lim = Math.min(Math.max(Number(opts.limit) || 500, 1), 2000);
+    params.push(lim); sql += ` order by a.created_at desc limit $${params.length}`;
+    return DB.query(sql, params);
+  }
 }
 
 export const concessionService = new ConcessionService();
