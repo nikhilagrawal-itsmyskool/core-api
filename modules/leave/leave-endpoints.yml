@@ -1,0 +1,264 @@
+  # Health check
+  health:
+    handler: health-handler.health
+    events:
+      - http:
+          path: health
+          method: get
+          cors: true
+
+  # ── Admin / office (X-School-Code + JWT) ───────────────────────────────────
+  get-config:
+    handler: leave-handler.getConfig
+    name: ${self:service}-get-config
+    events:
+      - http:
+          path: config
+          method: get
+          cors: true
+
+  list-types:
+    handler: leave-handler.listTypes
+    name: ${self:service}-list-types
+    events:
+      - http:
+          path: types
+          method: get
+          cors: true
+
+  list-applications:
+    handler: leave-handler.listApplications
+    name: ${self:service}-list-applications
+    events:
+      - http:
+          path: applications
+          method: get
+          cors: true
+
+  get-application:
+    handler: leave-handler.getApplication
+    name: ${self:service}-get-application
+    events:
+      - http:
+          path: applications/{id}
+          method: get
+          cors: true
+
+  approve-application:
+    handler: leave-handler.approve
+    name: ${self:service}-approve-application
+    events:
+      - http:
+          path: applications/{id}/approve
+          method: post
+          cors: true
+
+  reject-application:
+    handler: leave-handler.reject
+    name: ${self:service}-reject-application
+    events:
+      - http:
+          path: applications/{id}/reject
+          method: post
+          cors: true
+
+  get-attachment:
+    handler: leave-handler.getAttachment
+    name: ${self:service}-get-attachment
+    memorySize: 512
+    timeout: 20
+    events:
+      - http:
+          path: applications/{id}/attachment
+          method: get
+          cors: true
+
+  get-audit:
+    handler: leave-handler.getAudit
+    name: ${self:service}-get-audit
+    events:
+      - http:
+          path: applications/{id}/audit
+          method: get
+          cors: true
+
+  balance:
+    handler: leave-handler.balance
+    name: ${self:service}-balance
+    events:
+      - http:
+          path: balance
+          method: get
+          cors: true
+
+  # ── Attendance (phase 2): reconciled views + manual mark + biometric import ──
+  attendance-mark:
+    handler: leave-attendance-handler.mark
+    name: ${self:service}-attendance-mark
+    events:
+      - http:
+          path: attendance/mark
+          method: post
+          cors: true
+
+  attendance-import:
+    handler: leave-attendance-handler.importFile
+    name: ${self:service}-attendance-import
+    memorySize: 1024
+    timeout: 60
+    events:
+      - http:
+          path: attendance/import
+          method: post
+          cors: true
+
+  attendance-map-list:
+    handler: leave-attendance-handler.listMap
+    name: ${self:service}-attendance-map-list
+    events:
+      - http:
+          path: attendance/map
+          method: get
+          cors: true
+
+  attendance-map-set:
+    handler: leave-attendance-handler.mapEnroll
+    name: ${self:service}-attendance-map-set
+    events:
+      - http:
+          path: attendance/map
+          method: post
+          cors: true
+
+  employee-attendance:
+    handler: leave-attendance-handler.employeeAttendance
+    name: ${self:service}-employee-attendance
+    events:
+      - http:
+          path: employees/{id}/attendance
+          method: get
+          cors: true
+
+  day-view:
+    handler: leave-attendance-handler.dayView
+    name: ${self:service}-day-view
+    events:
+      - http:
+          path: day
+          method: get
+          cors: true
+
+  # ── Deductions (phase 3): monthly ladder run + finalize + per-employee ───────
+  deductions-run:
+    handler: leave-deduction-handler.run
+    name: ${self:service}-deductions-run
+    timeout: 60
+    events:
+      - http:
+          path: deductions/run
+          method: post
+          cors: true
+
+  deductions-list:
+    handler: leave-deduction-handler.list
+    name: ${self:service}-deductions-list
+    events:
+      - http:
+          path: deductions
+          method: get
+          cors: true
+
+  deductions-finalize:
+    handler: leave-deduction-handler.finalize
+    name: ${self:service}-deductions-finalize
+    events:
+      - http:
+          path: deductions/{id}/finalize
+          method: post
+          cors: true
+
+  employee-deductions:
+    handler: leave-deduction-handler.employeeDeduction
+    name: ${self:service}-employee-deductions
+    events:
+      - http:
+          path: employees/{id}/deductions
+          method: get
+          cors: true
+
+  # ── Teacher / office-staff PWA (employee bearer token) ──────────────────────
+  me-types:
+    handler: leave-me-handler.listTypes
+    name: ${self:service}-me-types
+    events:
+      - http:
+          path: me/types
+          method: get
+          cors: true
+
+  me-summary:
+    handler: leave-me-handler.summary
+    name: ${self:service}-me-summary
+    events:
+      - http:
+          path: me/summary
+          method: get
+          cors: true
+
+  me-list-applications:
+    handler: leave-me-handler.listApplications
+    name: ${self:service}-me-list-applications
+    events:
+      - http:
+          path: me/applications
+          method: get
+          cors: true
+
+  me-attendance:
+    handler: leave-me-handler.attendance
+    name: ${self:service}-me-attendance
+    events:
+      - http:
+          path: me/attendance
+          method: get
+          cors: true
+
+  me-deductions:
+    handler: leave-me-handler.deductions
+    name: ${self:service}-me-deductions
+    events:
+      - http:
+          path: me/deductions
+          method: get
+          cors: true
+
+  me-apply:
+    handler: leave-me-handler.apply
+    name: ${self:service}-me-apply
+    memorySize: 512
+    timeout: 20
+    events:
+      - http:
+          path: me/applications
+          method: post
+          cors: true
+
+  me-cancel:
+    handler: leave-me-handler.cancel
+    name: ${self:service}-me-cancel
+    events:
+      - http:
+          path: me/applications/{id}/cancel
+          method: post
+          cors: true
+
+  me-get-attachment:
+    handler: leave-me-handler.getAttachment
+    name: ${self:service}-me-get-attachment
+    memorySize: 512
+    timeout: 20
+    events:
+      - http:
+          path: me/applications/{id}/attachment
+          method: get
+          cors: true

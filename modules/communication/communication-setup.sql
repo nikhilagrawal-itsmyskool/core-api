@@ -115,3 +115,46 @@ create index if not exists idx_message_recipient_provider_msg on message_recipie
 -- column does not exist on the base employee table, so add it here (forward-
 -- compatible). Students already have communication_preference.
 alter table employee add column if not exists communication_preference varchar(64);
+
+-- ── In-app notifications (free/instant; separate from the SMS/WhatsApp queue) ──
+-- A single polymorphic inbox for BOTH audiences (employee + student). Teacher PWA
+-- reads it (polled); the native student app also gets a real push (device_token).
+-- Written synchronously by notification-service (no message_job queue). See the
+-- leave module's DESIGN.md §8.
+create table if not exists notification (
+    uuid varchar(12) primary key,
+    school_id varchar(12) not null,
+    recipient_type varchar(16) not null check (recipient_type in ('employee', 'student')),
+    recipient_id varchar(12) not null,
+    key varchar(64),
+    title varchar(128),
+    body text,
+    entity_type varchar(32),
+    entity_id varchar(12),
+    read_at timestamp(0),
+    createdby_userid varchar(12),
+    created_at timestamp(0)
+);
+create index if not exists idx_notification_recipient
+    on notification(school_id, recipient_type, recipient_id, created_at);
+create index if not exists idx_notification_unread
+    on notification(school_id, recipient_type, recipient_id, read_at);
+
+-- device_token: a native app's push token (Expo/FCM/APNs). Teacher PWA registers
+-- none (inbox only); the student native app registers here for real push.
+create table if not exists device_token (
+    uuid varchar(12) primary key,
+    school_id varchar(12) not null,
+    recipient_type varchar(16) not null check (recipient_type in ('employee', 'student')),
+    recipient_id varchar(12) not null,
+    platform varchar(16) check (platform in ('ios', 'android', 'web')),
+    token varchar(255) not null,
+    status varchar(16) not null check (status in ('active', 'deleted')),
+    last_seen timestamp(0),
+    created_at timestamp(0),
+    updated_at timestamp(0)
+);
+create unique index if not exists idx_device_token_unique
+    on device_token(school_id, token) where status = 'active';
+create index if not exists idx_device_token_recipient
+    on device_token(school_id, recipient_type, recipient_id, status);

@@ -178,3 +178,61 @@
           path: webhooks/{provider}
           method: post
           cors: true
+
+  # ── In-app notifications (free/instant inbox; separate from the SMS queue) ──
+  # Machine-to-machine: other modules POST here (service token) to drop an in-app
+  # notification into a recipient's inbox.
+  create-notification:
+    handler: notification-handler.create
+    name: ${self:service}-create-notification
+    events:
+      - http:
+          path: notifications
+          method: post
+          cors: true
+
+  # App inbox (employee OR student JWT), scoped to the caller.
+  list-notifications:
+    handler: notification-handler.list
+    name: ${self:service}-list-notifications
+    events:
+      - http:
+          path: me/notifications
+          method: get
+          cors: true
+
+  read-notification:
+    handler: notification-handler.markRead
+    name: ${self:service}-read-notification
+    events:
+      - http:
+          path: me/notifications/{id}/read
+          method: post
+          cors: true
+
+  read-all-notifications:
+    handler: notification-handler.markAllRead
+    name: ${self:service}-read-all-notifications
+    events:
+      - http:
+          path: me/notifications/read-all
+          method: post
+          cors: true
+
+  register-device:
+    handler: notification-handler.registerDevice
+    name: ${self:service}-register-device
+    events:
+      - http:
+          path: me/devices
+          method: post
+          cors: true
+
+  unregister-device:
+    handler: notification-handler.unregisterDevice
+    name: ${self:service}-unregister-device
+    events:
+      - http:
+          path: me/devices
+          method: delete
+          cors: true
