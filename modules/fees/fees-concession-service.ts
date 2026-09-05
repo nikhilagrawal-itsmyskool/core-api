@@ -32,6 +32,33 @@ export interface AddConcessionStudentsRequest {
 }
 
 class ConcessionService {
+  // ---- Audit trail (fee_concession_audit) ----
+  // Every concession mutation logs an immutable event with before/after JSON. auditSql/auditParams
+  // build one insert so it can be appended to an existing DB.queriesInTransaction batch (atomic with
+  // the mutation); writeAudit runs it standalone for the single-statement paths.
+  private auditSql(): string {
+    return singleLineString`insert into fee_concession_audit
+      (uuid, school_id, academic_year_id, entity, action, scheme_id, student_id, assignment_id, before, after, change_reason, actor_userid, actor_name, created_at)
+      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`;
+  }
+  private auditParams(a: any): any[] {
+    return [
+      generateShortUuid(12), a.schoolId, a.academicYearId ?? null, a.entity, a.action,
+      a.schemeId ?? null, a.studentId ?? null, a.assignmentId ?? null,
+      a.before == null ? null : JSON.stringify(a.before),
+      a.after == null ? null : JSON.stringify(a.after),
+      a.changeReason ?? null, a.actorUserid ?? null, a.actorName ?? null, a.createdAt ?? new Date(),
+    ];
+  }
+  private async writeAudit(a: any): Promise<void> {
+    await DB.query(this.auditSql(), this.auditParams(a));
+  }
+  private async actorName(schoolId: string, userId: string): Promise<string | null> {
+    if (!userId) return null;
+    const r = await DB.query(singleLineString`select display_name from employee_login where uuid = $1 and school_id = $2`, [userId, schoolId]);
+    return r.length > 0 ? (r[0].displayName ?? null) : null;
+  }
+
   public async create(data: CreateConcessionRequest, schoolId: string, userId: string): Promise<any> {
     if (!data.academicYearId) { throw new BadRequestResult(ErrorCode.InvalidInput, 'academicYearId is required'); }
     if (!data.name || !data.name.trim()) { throw new BadRequestResult(ErrorCode.InvalidInput, 'name is required'); }
@@ -67,6 +94,12 @@ class ConcessionService {
     ];
 
     const results = await DB.query(query, params);
+    await this.writeAudit({
+      schoolId, academicYearId: data.academicYearId, entity: 'scheme', action: 'scheme_created',
+      schemeId: uuid,
+      after: { name: data.name, type: data.type, valueType: data.valueType, value: data.value, feeHeadId: data.feeHeadId ?? null },
+      actorUserid: userId, actorName: await this.actorName(schoolId, userId), createdAt: now,
+    });
     return results[0];
   }
 
@@ -92,6 +125,8 @@ class ConcessionService {
       return this.getById(id, schoolId);
     }
 
+    const before = await this.getById(id, schoolId); // snapshot for the audit before we overwrite
+
     updates.push(`updatedby_userid = $${i++}`); params.push(userId);
     updates.push(`updated_at = $${i++}`); params.push(new Date());
     params.push(id);
@@ -104,6 +139,22 @@ class ConcessionService {
     `;
 
     const results = await DB.query(query, params);
+    if (results.length > 0) {
+      const after = results[0];
+      const prev: any = {}; const next: any = {};
+      for (const f of ['name', 'type', 'valueType', 'value', 'feeHeadId']) {
+        if ((data as any)[f] !== undefined && String(before?.[f] ?? '') !== String(after[f] ?? '')) {
+          prev[f] = before?.[f] ?? null; next[f] = after[f] ?? null;
+        }
+      }
+      if (Object.keys(next).length > 0) {
+        await this.writeAudit({
+          schoolId, academicYearId: after.academicYearId, entity: 'scheme', action: 'scheme_updated',
+          schemeId: id, before: prev, after: next,
+          actorUserid: userId, actorName: await this.actorName(schoolId, userId),
+        });
+      }
+    }
     // value/type/head change alters the discount → reconcile everyone on this concession
     if (results.length > 0 && (data.value !== undefined || data.valueType !== undefined || data.feeHeadId !== undefined)) {
       await this.syncFor(schoolId, id, null, userId);
@@ -112,8 +163,9 @@ class ConcessionService {
   }
 
   public async remove(id: string, schoolId: string, userId: string): Promise<any | null> {
-    // capture roster before the concession is deleted, then reconcile (expected discount → 0)
+    // capture roster + scheme before the concession is deleted, then reconcile (expected discount → 0)
     const roster = await DB.query(singleLineString`select student_id from fee_concession_student where concession_id = $1 and school_id = $2 and status = 'active'`, [id, schoolId]);
+    const before = await this.getById(id, schoolId);
     const query = singleLineString`
       update fee_concession set status = 'deleted', updatedby_userid = $1, updated_at = $2
       where uuid = $3 and school_id = $4 and status = 'active'
@@ -123,6 +175,12 @@ class ConcessionService {
     if (results.length > 0) {
       const ay = results[0].academicYearId;
       const ids = roster.map((r: any) => r.studentId);
+      await this.writeAudit({
+        schoolId, academicYearId: ay, entity: 'scheme', action: 'scheme_deleted', schemeId: id,
+        before: before ? { name: before.name, type: before.type, valueType: before.valueType, value: before.value, feeHeadId: before.feeHeadId } : null,
+        after: { affectedStudents: ids.length },
+        actorUserid: userId, actorName: await this.actorName(schoolId, userId),
+      });
       if (ay && ids.length) { await this.syncConcessions(schoolId, ay, ids, userId); }
     }
     return results.length > 0 ? results[0] : null;
@@ -207,19 +265,25 @@ class ConcessionService {
     );
     const existingSet = new Set<string>(existing.map((r: any) => r.studentId));
 
+    // scheme (for the audit snapshot + academic year) + actor, resolved once
+    const scheme = await this.getById(concessionId, schoolId);
+    const actorName = await this.actorName(schoolId, userId);
+
     const queries: string[] = [];
     const params: any[][] = [];
     const now = new Date();
+    let added = 0;
 
     for (const studentId of data.studentIds) {
       if (existingSet.has(studentId)) { continue; }
+      const assignmentId = generateShortUuid(12);
       queries.push(singleLineString`
         insert into fee_concession_student
         (uuid, school_id, concession_id, student_id, cycle_scope, effective_from, effective_from_cycle, effective_to_cycle, remarks, attachment_file_id, status, createdby_userid, created_at)
         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'active', $11, $12)
       `);
       params.push([
-        generateShortUuid(12),
+        assignmentId,
         schoolId,
         concessionId,
         studentId,
@@ -232,6 +296,18 @@ class ConcessionService {
         userId,
         now,
       ]);
+      queries.push(this.auditSql());
+      params.push(this.auditParams({
+        schoolId, academicYearId: scheme?.academicYearId, entity: 'assignment', action: 'assignment_added',
+        schemeId: concessionId, studentId, assignmentId,
+        after: {
+          scheme: scheme?.name, valueType: scheme?.valueType, value: scheme?.value,
+          cycleScope: data.cycleScope ?? null, effectiveFrom: data.effectiveFrom ?? null,
+          effectiveFromCycle: data.effectiveFromCycle ?? null, effectiveToCycle: data.effectiveToCycle ?? null,
+        },
+        actorUserid: userId, actorName, createdAt: now,
+      }));
+      added++;
     }
 
     if (queries.length > 0) {
@@ -239,7 +315,7 @@ class ConcessionService {
     }
     // reflect the newly-eligible discount on the students' existing charges
     await this.syncFor(schoolId, concessionId, data.studentIds, userId);
-    return { added: queries.length };
+    return { added };
   }
 
   public async removeStudent(concessionId: string, studentId: string, schoolId: string, userId: string): Promise<any | null> {
@@ -249,7 +325,20 @@ class ConcessionService {
       returning *
     `;
     const results = await DB.query(query, [userId, new Date(), schoolId, concessionId, studentId]);
-    if (results.length > 0) { await this.syncFor(schoolId, concessionId, [studentId], userId); }
+    if (results.length > 0) {
+      const row = results[0];
+      const scheme = await this.getById(concessionId, schoolId);
+      await this.writeAudit({
+        schoolId, academicYearId: scheme?.academicYearId, entity: 'assignment', action: 'assignment_removed',
+        schemeId: concessionId, studentId, assignmentId: row.uuid,
+        before: {
+          scheme: scheme?.name, cycleScope: row.cycleScope, effectiveFrom: row.effectiveFrom,
+          effectiveFromCycle: row.effectiveFromCycle, effectiveToCycle: row.effectiveToCycle, remarks: row.remarks,
+        },
+        actorUserid: userId, actorName: await this.actorName(schoolId, userId),
+      });
+      await this.syncFor(schoolId, concessionId, [studentId], userId);
+    }
     return results.length > 0 ? results[0] : null;
   }
 
@@ -469,12 +558,27 @@ class ConcessionService {
     if (dryRun) return { dryRun: true, transition, fromCycle: fromName, remark, ...impact };
 
     // APPLY: write bound changes, then reconcile the ledger with the reason stamped onto each line.
+    // Each leg is also logged to fee_concession_audit in the same transaction (change_reason = the
+    // mandatory reason; a close+open pair reads as a mid-year switch).
+    const curByUuid: Record<string, any> = {}; cur.forEach((a) => { curByUuid[a.uuid] = a; });
+    const openById: Record<string, any> = {}; openDefs.forEach((o) => { openById[o.uuid] = o; });
+    const actorName = await this.actorName(schoolId, userId);
     const q: string[] = []; const p: any[][] = []; const now = new Date();
     for (const u of updates) {
-      if (u.del) { q.push(singleLineString`update fee_concession_student set status = 'deleted', change_reason = $1, updatedby_userid = $2, updated_at = $3 where uuid = $4 and school_id = $5 and status = 'active'`); p.push([reasonTxt, userId, now, u.uuid, schoolId]); }
-      else { q.push(singleLineString`update fee_concession_student set effective_to_cycle = $1, change_reason = $2, updatedby_userid = $3, updated_at = $4 where uuid = $5 and school_id = $6 and status = 'active'`); p.push([u.toCycle, reasonTxt, userId, now, u.uuid, schoolId]); }
+      const a = curByUuid[u.uuid] || {};
+      if (u.del) {
+        q.push(singleLineString`update fee_concession_student set status = 'deleted', change_reason = $1, updatedby_userid = $2, updated_at = $3 where uuid = $4 and school_id = $5 and status = 'active'`); p.push([reasonTxt, userId, now, u.uuid, schoolId]);
+        q.push(this.auditSql()); p.push(this.auditParams({ schoolId, academicYearId, entity: 'assignment', action: 'assignment_removed', schemeId: a.concessionId, studentId, assignmentId: u.uuid, before: { scheme: a.name }, after: { fromCycle: fromName }, changeReason: reasonTxt, actorUserid: userId, actorName, createdAt: now }));
+      } else {
+        q.push(singleLineString`update fee_concession_student set effective_to_cycle = $1, change_reason = $2, updatedby_userid = $3, updated_at = $4 where uuid = $5 and school_id = $6 and status = 'active'`); p.push([u.toCycle, reasonTxt, userId, now, u.uuid, schoolId]);
+        q.push(this.auditSql()); p.push(this.auditParams({ schoolId, academicYearId, entity: 'assignment', action: 'assignment_ended', schemeId: a.concessionId, studentId, assignmentId: u.uuid, before: { scheme: a.name }, after: { endedAtCycle: prev ? prev.name : null }, changeReason: reasonTxt, actorUserid: userId, actorName, createdAt: now }));
+      }
     }
-    for (const ins of inserts) { q.push(singleLineString`insert into fee_concession_student (uuid, school_id, concession_id, student_id, effective_from_cycle, effective_to_cycle, change_reason, status, createdby_userid, created_at) values ($1,$2,$3,$4,$5,null,$6,'active',$7,$8)`); p.push([generateShortUuid(12), schoolId, ins.concessionId, studentId, fromCycleId, reasonTxt, userId, now]); }
+    for (const ins of inserts) {
+      const assignmentId = generateShortUuid(12);
+      q.push(singleLineString`insert into fee_concession_student (uuid, school_id, concession_id, student_id, effective_from_cycle, effective_to_cycle, change_reason, status, createdby_userid, created_at) values ($1,$2,$3,$4,$5,null,$6,'active',$7,$8)`); p.push([assignmentId, schoolId, ins.concessionId, studentId, fromCycleId, reasonTxt, userId, now]);
+      q.push(this.auditSql()); p.push(this.auditParams({ schoolId, academicYearId, entity: 'assignment', action: 'assignment_added', schemeId: ins.concessionId, studentId, assignmentId, after: { scheme: openById[ins.concessionId]?.name, fromCycle: fromName }, changeReason: reasonTxt, actorUserid: userId, actorName, createdAt: now }));
+    }
     if (q.length) await DB.queriesInTransaction(q, p);
     const applied = await this.syncConcessions(schoolId, academicYearId, [studentId], userId, { remark });
     return { dryRun: false, transition, fromCycle: fromName, applied, ...impact };

@@ -165,6 +165,33 @@ create table if not exists fee_waiver (
 );
 create index if not exists idx_fee_waiver_student on fee_waiver (school_id, student_id, academic_year_id);
 
+-- Append-only audit of every concession change (scheme + per-student assignment). The row
+-- timestamps on fee_concession / fee_concession_student are last-write-only and destructive
+-- (an edit overwrites the prior value), so they can't answer "what changed, from what, by whom".
+-- This log records each mutation as an immutable event with before/after JSON snapshots. Written
+-- synchronously by fees-concession-service inside the same operation. Actions:
+--   scheme_created | scheme_updated | scheme_deleted
+--   assignment_added | assignment_removed | assignment_ended | assignment_changed
+create table if not exists fee_concession_audit (
+  uuid varchar(12) primary key,
+  school_id varchar(12) not null,
+  academic_year_id varchar(12),
+  entity varchar(12) not null check (entity in ('scheme', 'assignment')),
+  action varchar(24) not null check (action in ('scheme_created', 'scheme_updated', 'scheme_deleted', 'assignment_added', 'assignment_removed', 'assignment_ended', 'assignment_changed')),
+  scheme_id varchar(12),
+  student_id varchar(12),
+  assignment_id varchar(12),
+  before jsonb,
+  after jsonb,
+  change_reason varchar(200),
+  actor_userid varchar(12),
+  actor_name varchar(128),
+  created_at timestamp(0)
+);
+create index if not exists idx_fee_concession_audit on fee_concession_audit (school_id, academic_year_id, created_at desc);
+create index if not exists idx_fee_concession_audit_student on fee_concession_audit (school_id, student_id, created_at desc);
+create index if not exists idx_fee_concession_audit_scheme on fee_concession_audit (school_id, scheme_id, created_at desc);
+
 -- ============================================================ LEDGER (AR spine; v1 in fees)
 
 create table if not exists student_ledger_entry (
