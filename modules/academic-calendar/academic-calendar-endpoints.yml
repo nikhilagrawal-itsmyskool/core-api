@@ -103,6 +103,15 @@
           method: post
           cors: true
 
+  close-range:
+    handler: academic-calendar-handler.closeRange
+    name: ${self:service}-close-range
+    events:
+      - http:
+          path: holidays/close-range
+          method: post
+          cors: true
+
   delete-holiday:
     handler: academic-calendar-handler.deleteHoliday
     name: ${self:service}-delete-holiday

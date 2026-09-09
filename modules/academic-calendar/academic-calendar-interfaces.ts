@@ -68,6 +68,16 @@ export interface SetHolidayRequest {
   academicYearId?: string;
 }
 
+// Declare a closure across an inclusive date range (used by the "Declare closure"
+// quick-action). Writes one holiday per date, skipping weekly-off weekdays.
+export interface CloseRangeRequest {
+  from: string; // yyyy-mm-dd
+  to: string; // yyyy-mm-dd (>= from)
+  name?: string | null;
+  kind?: HolidayKind; // defaults to 'full'
+  academicYearId?: string;
+}
+
 // ── Grid read model ───────────────────────────────────────────────────────────
 export interface CalendarDay {
   date: string; // yyyy-mm-dd

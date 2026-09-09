@@ -12,6 +12,7 @@ import {
   AddEntryRequest,
   CreateTypeRequest,
   SetHolidayRequest,
+  CloseRangeRequest,
   UpdateEntryRequest,
   UpdateTypeRequest,
 } from "./academic-calendar-interfaces";
@@ -215,6 +216,30 @@ class AcademicCalendarHandler {
     }
   };
 
+  // POST /academic-calendar/holidays/close-range { from, to, name?, kind?, academicYearId? }
+  // Declare a closure across a date range (e.g. an unplanned/ad-hoc school closure).
+  public closeRange = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const auth = await resolveSchool(event, callback);
+      if (!auth) return;
+      const body = parseBody<CloseRangeRequest>(event, callback);
+      if (!body) return;
+      if (!isValidDate(body.from)) return badDate(callback, "from");
+      if (!isValidDate(body.to)) return badDate(callback, "to");
+      if (body.to < body.from) return ResponseBuilder.badRequest(ErrorCode.InvalidInput, "'to' must be on or after 'from'", callback);
+      // Guard against an accidental multi-year span.
+      const spanDays = Math.round((Date.parse(`${body.to}T00:00:00Z`) - Date.parse(`${body.from}T00:00:00Z`)) / 86400000) + 1;
+      if (spanDays > 60) return ResponseBuilder.badRequest(ErrorCode.InvalidInput, "Range too large (max 60 days)", callback);
+      const ay = await resolveAy(auth.schoolId, body.academicYearId);
+      if (!ay) return ResponseBuilder.badRequest(ErrorCode.BusinessError, "No current academic year", callback);
+      const result = await academicCalendarService.closeRange(auth.schoolId, ay, body, auth.userId);
+      ResponseBuilder.ok(result, callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
   // ── Settings (weekly-off) + non-teaching resolver ─────────────────────────
 
   // GET /academic-calendar/settings?academicYearId=
@@ -382,6 +407,7 @@ export const updateEntry = h.updateEntry;
 export const deleteEntry = h.deleteEntry;
 export const listHolidays = h.listHolidays;
 export const setHoliday = h.setHoliday;
+export const closeRange = h.closeRange;
 export const deleteHoliday = h.deleteHoliday;
 export const importPreview = h.importPreview;
 export const importApply = h.importApply;

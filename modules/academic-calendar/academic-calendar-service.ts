@@ -17,6 +17,7 @@ import {
   CalendarView,
   CreateTypeRequest,
   SetHolidayRequest,
+  CloseRangeRequest,
   UpdateEntryRequest,
   UpdateTypeRequest,
 } from "./academic-calendar-interfaces";
@@ -318,6 +319,29 @@ class AcademicCalendarService {
     );
     await this.audit(schoolId, existing[0].academicYearId, "holiday", id, existing[0].holidayDate, "delete", "", userId);
     return true;
+  }
+
+  // Declare a closure across an inclusive date range. Writes one full/restricted
+  // holiday row per date, skipping weekly-off weekdays (already non-teaching, and not
+  // "declared" holidays). Idempotent per date via setHoliday's upsert. Returns the
+  // dates written and the weekly-off dates skipped, so the UI can summarise.
+  async closeRange(schoolId: string, ay: string, req: CloseRangeRequest, userId: string): Promise<{ written: string[]; skipped: string[] }> {
+    const kind: HolidayKind = req.kind === "restricted" ? "restricted" : "full";
+    const name = (req.name || "").trim() || "Holiday";
+    const weeklyOff = await this.getWeeklyOff(schoolId, ay);
+    const written: string[] = [];
+    const skipped: string[] = [];
+    let cursor = new Date(`${req.from}T00:00:00Z`);
+    const end = new Date(`${req.to}T00:00:00Z`);
+    while (cursor.getTime() <= end.getTime()) {
+      const date = cursor.toISOString().slice(0, 10);
+      const dow = cursor.getUTCDay();
+      cursor.setUTCDate(cursor.getUTCDate() + 1);
+      if (weeklyOff.includes(dow)) { skipped.push(date); continue; }
+      await this.setHoliday(schoolId, ay, { holidayDate: date, name, kind }, userId);
+      written.push(date);
+    }
+    return { written, skipped };
   }
 
   // ── Weekly-off setting (stored as academic_year.weekly_off, per year) ───────
