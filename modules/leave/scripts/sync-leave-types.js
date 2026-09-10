@@ -13,13 +13,13 @@ const { generateShortUuid } = require('../../../shared/util/generate-uuid.js');
 
 // Mirror of LEAVE_TYPE_SEED in leave-constants.ts (kept inline — this is a plain JS script).
 const SEED = [
-  { code: 'CL', name: 'Casual Leave', paid: 'yes', countsVsQuota: true, requiresAttachment: false, waivable: false, sortOrder: 1, annualQuota: 8, attachmentOverDays: null },
-  { code: 'ML', name: 'Medical Leave', paid: 'yes', countsVsQuota: true, requiresAttachment: false, waivable: true, sortOrder: 2, annualQuota: 4, attachmentOverDays: 2 },
-  { code: 'BER', name: 'Bereavement Leave', paid: 'yes', countsVsQuota: false, requiresAttachment: false, waivable: true, sortOrder: 3, annualQuota: 3, attachmentOverDays: null },
-  { code: 'OD', name: 'On Duty (Exam / Official)', paid: 'yes', countsVsQuota: false, requiresAttachment: false, waivable: true, sortOrder: 4, annualQuota: null, attachmentOverDays: null },
-  { code: 'COMP', name: 'Compensatory Off', paid: 'yes', countsVsQuota: false, requiresAttachment: false, waivable: false, sortOrder: 5, annualQuota: null, attachmentOverDays: null },
-  { code: 'EMERG', name: 'Emergency / Family', paid: 'discretionary', countsVsQuota: false, requiresAttachment: false, waivable: true, sortOrder: 6, annualQuota: null, attachmentOverDays: null },
-  { code: 'LWP', name: 'Leave Without Pay', paid: 'no', countsVsQuota: false, requiresAttachment: false, waivable: false, sortOrder: 7, annualQuota: null, attachmentOverDays: null },
+  { code: 'CL', name: 'Casual Leave', paid: 'yes', countsVsQuota: true, requiresAttachment: false, waivable: false, sortOrder: 1, annualQuota: 8, attachmentOverDays: null, showInBalance: true },
+  { code: 'ML', name: 'Medical Leave', paid: 'yes', countsVsQuota: true, requiresAttachment: false, waivable: true, sortOrder: 2, annualQuota: 4, attachmentOverDays: 2, showInBalance: true },
+  { code: 'BER', name: 'Bereavement Leave', paid: 'yes', countsVsQuota: false, requiresAttachment: false, waivable: true, sortOrder: 3, annualQuota: 3, attachmentOverDays: null, showInBalance: false },
+  { code: 'OD', name: 'On Duty (Exam / Official)', paid: 'yes', countsVsQuota: false, requiresAttachment: false, waivable: true, sortOrder: 4, annualQuota: null, attachmentOverDays: null, showInBalance: true },
+  { code: 'COMP', name: 'Compensatory Off', paid: 'yes', countsVsQuota: false, requiresAttachment: false, waivable: false, sortOrder: 5, annualQuota: null, attachmentOverDays: null, showInBalance: true },
+  { code: 'EMERG', name: 'Emergency / Family', paid: 'discretionary', countsVsQuota: false, requiresAttachment: false, waivable: true, sortOrder: 6, annualQuota: null, attachmentOverDays: null, showInBalance: true },
+  { code: 'LWP', name: 'Leave Without Pay', paid: 'no', countsVsQuota: false, requiresAttachment: false, waivable: false, sortOrder: 7, annualQuota: null, attachmentOverDays: null, showInBalance: true },
 ];
 
 function arg(name, def) {
@@ -50,18 +50,19 @@ async function main() {
       if (!ex.rows.length) {
         await pool.query(
           `insert into leave_type
-            (uuid, school_id, code, name, paid, counts_vs_quota, requires_attachment, waivable, approver_role, sort_order, annual_quota, attachment_over_days, status, createdby_userid, created_at)
-           values ($1,$2,$3,$4,$5,$6,$7,$8,'god',$9,$10,$11,'active','sync',$12)`,
-          [generateShortUuid(12), schoolId, s.code, s.name, s.paid, s.countsVsQuota, s.requiresAttachment, s.waivable, s.sortOrder, s.annualQuota, s.attachmentOverDays, now],
+            (uuid, school_id, code, name, paid, counts_vs_quota, requires_attachment, waivable, approver_role, sort_order, annual_quota, attachment_over_days, show_in_balance, status, createdby_userid, created_at)
+           values ($1,$2,$3,$4,$5,$6,$7,$8,'god',$9,$10,$11,$12,'active','sync',$13)`,
+          [generateShortUuid(12), schoolId, s.code, s.name, s.paid, s.countsVsQuota, s.requiresAttachment, s.waivable, s.sortOrder, s.annualQuota, s.attachmentOverDays, s.showInBalance, now],
         );
         console.log(`  + inserted ${s.code} (quota ${s.annualQuota ?? '—'})`);
       } else {
         await pool.query(
-          `update leave_type set annual_quota = coalesce(annual_quota, $1), attachment_over_days = coalesce(attachment_over_days, $2), updated_at = $3
-             where uuid = $4`,
-          [s.annualQuota, s.attachmentOverDays, now, ex.rows[0].uuid],
+          `update leave_type set annual_quota = coalesce(annual_quota, $1), attachment_over_days = coalesce(attachment_over_days, $2),
+             show_in_balance = coalesce(show_in_balance, $3), updated_at = $4
+             where uuid = $5`,
+          [s.annualQuota, s.attachmentOverDays, s.showInBalance, now, ex.rows[0].uuid],
         );
-        console.log(`  ~ ${s.code}: backfilled quota/threshold where null`);
+        console.log(`  ~ ${s.code}: backfilled quota/threshold/balance where null`);
       }
     }
     console.log('Done.');

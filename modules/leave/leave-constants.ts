@@ -46,15 +46,17 @@ export interface LeaveTypeSeed {
   sortOrder: number;
   annualQuota: number | null;    // days/academic-year enforced at apply (null = unlimited)
   attachmentOverDays: number | null; // attachment required only when working days exceed this
+  showInBalance: boolean;        // show as a balance card on the staff /me summary
 }
 
 export const LEAVE_TYPE_SEED: LeaveTypeSeed[] = [
-  { code: "CL", name: "Casual Leave", paid: "yes", countsVsQuota: true, requiresAttachment: false, waivable: false, approverRole: "god", sortOrder: 1, annualQuota: DEFAULT_CL_PER_YEAR, attachmentOverDays: null },
-  { code: "ML", name: "Medical Leave", paid: "yes", countsVsQuota: true, requiresAttachment: false, waivable: true, approverRole: "god", sortOrder: 2, annualQuota: DEFAULT_ML_PER_YEAR, attachmentOverDays: 2 },
-  { code: "BER", name: "Bereavement Leave", paid: "yes", countsVsQuota: false, requiresAttachment: false, waivable: true, approverRole: "god", sortOrder: 3, annualQuota: 3, attachmentOverDays: null },
-  { code: "OD", name: "On Duty (Exam / Official)", paid: "yes", countsVsQuota: false, requiresAttachment: false, waivable: true, approverRole: "god", sortOrder: 4, annualQuota: null, attachmentOverDays: null },
-  { code: "COMP", name: "Compensatory Off", paid: "yes", countsVsQuota: false, requiresAttachment: false, waivable: false, approverRole: "god", sortOrder: 5, annualQuota: null, attachmentOverDays: null },
+  { code: "CL", name: "Casual Leave", paid: "yes", countsVsQuota: true, requiresAttachment: false, waivable: false, approverRole: "god", sortOrder: 1, annualQuota: DEFAULT_CL_PER_YEAR, attachmentOverDays: null, showInBalance: true },
+  { code: "ML", name: "Medical Leave", paid: "yes", countsVsQuota: true, requiresAttachment: false, waivable: true, approverRole: "god", sortOrder: 2, annualQuota: DEFAULT_ML_PER_YEAR, attachmentOverDays: 2, showInBalance: true },
+  // Bereavement stays selectable + quota-enforced, but is not advertised as a standing balance.
+  { code: "BER", name: "Bereavement Leave", paid: "yes", countsVsQuota: false, requiresAttachment: false, waivable: true, approverRole: "god", sortOrder: 3, annualQuota: 3, attachmentOverDays: null, showInBalance: false },
+  { code: "OD", name: "On Duty (Exam / Official)", paid: "yes", countsVsQuota: false, requiresAttachment: false, waivable: true, approverRole: "god", sortOrder: 4, annualQuota: null, attachmentOverDays: null, showInBalance: true },
+  { code: "COMP", name: "Compensatory Off", paid: "yes", countsVsQuota: false, requiresAttachment: false, waivable: false, approverRole: "god", sortOrder: 5, annualQuota: null, attachmentOverDays: null, showInBalance: true },
   // Maternity (MAT) intentionally omitted for now — add back when needed.
-  { code: "EMERG", name: "Emergency / Family", paid: "discretionary", countsVsQuota: false, requiresAttachment: false, waivable: true, approverRole: "god", sortOrder: 6, annualQuota: null, attachmentOverDays: null },
-  { code: "LWP", name: "Leave Without Pay", paid: "no", countsVsQuota: false, requiresAttachment: false, waivable: false, approverRole: "god", sortOrder: 7, annualQuota: null, attachmentOverDays: null },
+  { code: "EMERG", name: "Emergency / Family", paid: "discretionary", countsVsQuota: false, requiresAttachment: false, waivable: true, approverRole: "god", sortOrder: 6, annualQuota: null, attachmentOverDays: null, showInBalance: true },
+  { code: "LWP", name: "Leave Without Pay", paid: "no", countsVsQuota: false, requiresAttachment: false, waivable: false, approverRole: "god", sortOrder: 7, annualQuota: null, attachmentOverDays: null, showInBalance: true },
 ];

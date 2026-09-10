@@ -52,6 +52,10 @@ alter table leave_type add column if not exists annual_quota integer;
 -- Attachment required only when the leave spans MORE than this many working days (null =
 -- use requires_attachment as-is). e.g. ML=2 → medical certificate only when > 2 days.
 alter table leave_type add column if not exists attachment_over_days integer;
+-- Whether this type shows as a balance card on the staff /me leave summary. false = the
+-- type is still selectable in the apply picker and its quota still enforces, but it isn't
+-- advertised as a standing entitlement (e.g. Bereavement). null treated as true.
+alter table leave_type add column if not exists show_in_balance boolean;
 
 -- leave_application: one applied leave (a date range). Backdating allowed.
 create table if not exists leave_application (

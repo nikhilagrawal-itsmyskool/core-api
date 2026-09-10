@@ -27,6 +27,7 @@ export interface LeaveTypeView {
   status: string;
   annualQuota: number | null;         // days/academic-year (null = unlimited)
   attachmentOverDays: number | null;  // attachment required only when days exceed this
+  showInBalance: boolean;             // show as a balance card on the staff /me summary
 }
 
 // ---- Write requests ----

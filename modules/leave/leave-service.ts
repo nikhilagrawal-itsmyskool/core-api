@@ -76,9 +76,9 @@ class LeaveService {
       if (have.has(t.code.toLowerCase())) continue;
       await DB.query(
         singleLineString`insert into leave_type
-          (uuid, school_id, code, name, paid, counts_vs_quota, requires_attachment, waivable, approver_role, sort_order, annual_quota, attachment_over_days, status, createdby_userid, created_at)
-          values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'active', $13, $14)`,
-        [generateShortUuid(12), schoolId, t.code, t.name, t.paid, t.countsVsQuota, t.requiresAttachment, t.waivable, t.approverRole, t.sortOrder, t.annualQuota, t.attachmentOverDays, userId, now],
+          (uuid, school_id, code, name, paid, counts_vs_quota, requires_attachment, waivable, approver_role, sort_order, annual_quota, attachment_over_days, show_in_balance, status, createdby_userid, created_at)
+          values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'active', $14, $15)`,
+        [generateShortUuid(12), schoolId, t.code, t.name, t.paid, t.countsVsQuota, t.requiresAttachment, t.waivable, t.approverRole, t.sortOrder, t.annualQuota, t.attachmentOverDays, t.showInBalance, userId, now],
       );
     }
   }
@@ -86,7 +86,7 @@ class LeaveService {
   async listTypes(schoolId: string): Promise<LeaveTypeView[]> {
     await this.ensureTypes(schoolId);
     const rows = await DB.query(
-      singleLineString`select code, name, paid, counts_vs_quota, requires_attachment, waivable, approver_role, sort_order, status, annual_quota, attachment_over_days
+      singleLineString`select code, name, paid, counts_vs_quota, requires_attachment, waivable, approver_role, sort_order, status, annual_quota, attachment_over_days, show_in_balance
         from leave_type where school_id = $1 and status <> 'deleted' order by sort_order asc nulls last, code`,
       [schoolId],
     );
@@ -102,6 +102,7 @@ class LeaveService {
       status: r.status,
       annualQuota: r.annualQuota ?? null,
       attachmentOverDays: r.attachmentOverDays ?? null,
+      showInBalance: r.showInBalance !== false,
     }));
   }
 
@@ -116,6 +117,7 @@ class LeaveService {
     if ("annualQuota" in patch) { params.push(patch.annualQuota === null || patch.annualQuota === "" ? null : Math.max(0, Math.floor(Number(patch.annualQuota)))); sets.push(`annual_quota = $${i++}`); }
     if ("attachmentOverDays" in patch) { params.push(patch.attachmentOverDays === null || patch.attachmentOverDays === "" ? null : Math.max(0, Math.floor(Number(patch.attachmentOverDays)))); sets.push(`attachment_over_days = $${i++}`); }
     if ("requiresAttachment" in patch) { params.push(!!patch.requiresAttachment); sets.push(`requires_attachment = $${i++}`); }
+    if ("showInBalance" in patch) { params.push(!!patch.showInBalance); sets.push(`show_in_balance = $${i++}`); }
     if ("paid" in patch && ["yes", "no", "discretionary"].includes(patch.paid)) { params.push(patch.paid); sets.push(`paid = $${i++}`); }
     if (!sets.length) return this.listTypes(schoolId);
     params.push(userId); sets.push(`updatedby_userid = $${i++}`);
@@ -385,6 +387,7 @@ class LeaveService {
     const types = await DB.query(
       singleLineString`select code, name, annual_quota from leave_type
         where school_id = $1 and status = 'active' and annual_quota is not null
+          and (show_in_balance is null or show_in_balance = true)
         order by sort_order asc nulls last, code`,
       [schoolId],
     );
