@@ -78,6 +78,15 @@ export const ACTIONS = {
   EXAM_VIEW: 'exam.view',
   EXAM_MANAGE: 'exam.manage',
   ASSISTANT_USE: 'assistant.use',
+  // Home-visit feedback / complaints. view = read category lookup (teachers, to record);
+  // record = log + assign to a teacher (teachers); respond = the assigned teacher's reply
+  // (teachers, own items only); review = director dashboard + complete/reopen. `review` is
+  // deliberately OUTSIDE any namespace admin inherits, so it is god-only until a real
+  // `education-director` role is introduced (grant it feedback.review then).
+  FEEDBACK_VIEW: 'feedback.view',
+  FEEDBACK_RECORD: 'feedback.record',
+  FEEDBACK_RESPOND: 'feedback.respond',
+  FEEDBACK_REVIEW: 'feedback.review',
 } as const;
 
 // Role -> allowed actions. Mirror of policy.js ROLE_PERMISSIONS (order preserved).
@@ -137,6 +146,11 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
     'syllabus.progress.mark',
     'assembly.view',
     'academic-calendar.view',
+    // Feedback/complaints: any teacher may record + assign, and respond to items
+    // assigned to them. Reviewing/completing (feedback.review) is god-only.
+    'feedback.view',
+    'feedback.record',
+    'feedback.respond',
   ],
   // Class teacher: additive to `teacher` — may MARK attendance and POST homework.
   'class-teacher': ['attendance.mark', 'homework.post'],

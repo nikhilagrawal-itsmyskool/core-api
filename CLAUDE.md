@@ -44,7 +44,7 @@ Profile: `prod-itsmyskool-nikhil.agrawal` · Region: `ap-south-1`. No `reservedC
 | `npm run stop:<module>` | Stop module |
 | `npm run test:<module>:full` | Full cycle: stop → start → test → stop |
 
-Available modules: `auth`, `medical`, `lab`, `sample`, `student`, `employee`, `class`, `academic-year`, `fine`, `uniform`, `shop`, `sports`, `asset`, `library`, `supplies`, `timetable`, `attendance`, `communication`, `transport`, `assembly`, `syllabus`, `homework`, `assistant`, `academic-calendar`, `leave`
+Available modules: `auth`, `medical`, `lab`, `sample`, `student`, `employee`, `class`, `academic-year`, `fine`, `uniform`, `shop`, `sports`, `asset`, `library`, `supplies`, `timetable`, `attendance`, `communication`, `transport`, `assembly`, `syllabus`, `homework`, `assistant`, `academic-calendar`, `leave`, `feedback`
 
 > These always run on `local` stage (hardcoded in `start-module.js`). Stage cannot be changed for individual module commands.
 
@@ -88,6 +88,7 @@ Each module in `modules/` is an independent Lambda microservice with its own `se
 - **homework/**: Daily homework posted as photos by the class teacher for a **base class** (both streams share one set) - a per-(class, date) `homework_day` header (draft→published→unpublished, mirrors the attendance session key and the assembly roster submit/recall flow), many `homework_item` photos each with an optional subject label + note (images in the shared `file_storage`, `entity_type='homework'`), back-dating allowed, append-only `homework_audit`. Class-teacher resolved from the timetable `class_teacher` with a per-school admin `homework_class_teacher` override; teacher PWA `/me/*` writes scoped by `canPostForClass`; student-app `/me/today` shows only the published day. No notifications in v1; image cropping deferred.
 - **academic-calendar/**: Per-(school, academic-year) activity calendar keyed by date - a LIST of discrete entries per date, each under a per-school **configurable type** (the "columns": Festivals, Important Days, Type of Celebration, Remembrance [personality folded into `detail`], Theme, Academics; seeded on first use, schools add their own). **Holidays** tracked in a dedicated `calendar_holiday` table (kind full/restricted) so the **attendance** module reads one cheap table — attendance is *warn-but-allow* (Sundays + full holidays return a `dayInfo.warning`, never blocked; Sunday is the only weekly-off). The daily **Theme** entry is surfaced by the **assembly** module in the roster (`RosterDayView.dailyTheme`) and live/today view (`ResolvedAssembly.dailyTheme`), alongside the existing weekly `assembly_theme`. `end_date` is schema-ready for range/multi-day events. xlsx import (header-name-matched) + diff/sync and the grid UI are the next phase.
 - **leave/**: Staff leave (teachers + office staff) - per-school data-driven **leave types** (CL/ML/OD/COMP/MAT/EMERG/LWP, seeded on first use), leave **application** lifecycle (apply → approve/reject/cancel, backdating allowed), a monthly **casual-leave quota** (1/month, enforced at apply) and a **per-day approval cap** (2/day, global per-school — the employee table has no wing/department yet), append-only audit, and a `/me/leave` PWA surface. Approve/reject gated on `god`/`admin` (no Director/Principal role exists yet). Phase 2 (biometric attendance Excel import → `employee_attendance_*` + `employee_biometric_map` reconciliation) and phase 3 (escalating-deduction ladder + monthly payroll report) are schema-ready but not built. Notifications go via the new in-app channel (see communication). See `modules/leave/DESIGN.md`.
+- **feedback/**: Home-visit feedback / complaints - a team member (teacher) records feedback for a student on a home visit and assigns it to a teacher; the assigned teacher responds with a comment on their PWA; a reviewer (the "education director" — **god for now**) sees the dashboard (open count + per-status + teacher-wise breakup), opens items by filters (oldest-first / by-teacher), and marks them **completed** or **reopens** them. Lifecycle `assigned → responded → completed` (+ `reopened`); "open" is a filter (status ≠ completed). Per-school seeded categories, append-only `feedback_audit`, in-app notifications (assign/respond/complete/reopen). Actions: `feedback.view/record/respond` → teacher, `feedback.review` → god (guard() + feedback-actions.ts). Admin portal (Record page + Dashboard) + teacher PWA (`/feedback/me`).
 - **student/**: Student search by name, class, and academic year
 - **employee/**: Employee search by name
 - **class/**: Class search for dropdowns (uuid + name)
@@ -127,6 +128,7 @@ Each module runs on dedicated ports to allow simultaneous local development:
 | assistant     | 3047      | 3048        | /assistant/*      |
 | academic-calendar | 3049  | 3050        | /academic-calendar/* |
 | leave         | 3053      | 3054        | /leave/*          |
+| feedback      | 3055      | 3056        | /feedback/*       |
 | gateway       | 3000      | -           | (routes all)      |
 
 #### Prod Stage
@@ -158,6 +160,7 @@ Each module runs on dedicated ports to allow simultaneous local development:
 | assistant     | 6047      | 6048        |
 | academic-calendar | 6049  | 6050        |
 | leave         | 6053      | 6054        |
+| feedback      | 6055      | 6056        |
 | gateway       | 6000      | -           |
 
 ### Scripts Organization
@@ -430,7 +433,7 @@ node scripts/local/kill-ports.js --all
 node scripts/local/health-all.js
 set GATEWAY_PORT=3000 && node node_modules/jest/bin/jest.js
 
-# Single module lifecycle (module = auth, medical, lab, sample, student, employee, class, academic-year, supplies, timetable, attendance, communication, transport, assembly, syllabus, homework, academic-calendar, leave)
+# Single module lifecycle (module = auth, medical, lab, sample, student, employee, class, academic-year, supplies, timetable, attendance, communication, transport, assembly, syllabus, homework, academic-calendar, leave, feedback)
 node scripts/local/start-module.js <module> --kill
 node scripts/local/kill-ports.js --<module>
 node scripts/local/health-module.js <module>

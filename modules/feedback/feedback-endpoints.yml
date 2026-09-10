@@ -1,0 +1,103 @@
+  # Health check
+  health:
+    handler: health-handler.health
+    events:
+      - http:
+          path: health
+          method: get
+          cors: true
+
+  # ── Office / director surface (X-School-Code + JWT) ─────────────────────────
+  # Record + collection list at the module root.
+  record:
+    handler: feedback-handler.record
+    name: ${self:service}-record
+    events:
+      - http:
+          path: ''
+          method: post
+          cors: true
+
+  list:
+    handler: feedback-handler.list
+    name: ${self:service}-list
+    events:
+      - http:
+          path: ''
+          method: get
+          cors: true
+
+  # Literal GETs declared before {id} so the literal path wins over the matcher.
+  list-categories:
+    handler: feedback-handler.listCategories
+    name: ${self:service}-list-categories
+    events:
+      - http:
+          path: categories
+          method: get
+          cors: true
+
+  summary:
+    handler: feedback-handler.summary
+    name: ${self:service}-summary
+    events:
+      - http:
+          path: summary
+          method: get
+          cors: true
+
+  # ── Teacher PWA surface (employee bearer token) — declared before {id} ──────
+  me-list:
+    handler: feedback-me-handler.list
+    name: ${self:service}-me-list
+    events:
+      - http:
+          path: me
+          method: get
+          cors: true
+
+  me-get-by-id:
+    handler: feedback-me-handler.getById
+    name: ${self:service}-me-get-by-id
+    events:
+      - http:
+          path: me/{id}
+          method: get
+          cors: true
+
+  me-respond:
+    handler: feedback-me-handler.respond
+    name: ${self:service}-me-respond
+    events:
+      - http:
+          path: me/{id}/respond
+          method: post
+          cors: true
+
+  # ── {id} matchers (declared last) ───────────────────────────────────────────
+  get-by-id:
+    handler: feedback-handler.getById
+    name: ${self:service}-get-by-id
+    events:
+      - http:
+          path: '{id}'
+          method: get
+          cors: true
+
+  complete:
+    handler: feedback-handler.complete
+    name: ${self:service}-complete
+    events:
+      - http:
+          path: '{id}/complete'
+          method: post
+          cors: true
+
+  reopen:
+    handler: feedback-handler.reopen
+    name: ${self:service}-reopen
+    events:
+      - http:
+          path: '{id}/reopen'
+          method: post
+          cors: true

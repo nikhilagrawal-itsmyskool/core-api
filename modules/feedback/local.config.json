@@ -1,0 +1,5 @@
+{
+  "httpPort": 3055,
+  "lambdaPort": 3056,
+  "prefix": "feedback"
+}
