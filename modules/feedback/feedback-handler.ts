@@ -37,6 +37,22 @@ class FeedbackHandler {
     }
   };
 
+  // POST /feedback/notify-visit  { feedbackIds: string[] }
+  // Fires ONE in-app notification per assigned teacher for a whole visit. Called by the
+  // recorder's UI after it finishes recording all the cards.
+  public notifyVisit = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const auth = await resolveSchool(event, callback);
+      if (!auth) return;
+      const body = parseBody<{ feedbackIds: string[] }>(event, callback);
+      if (!body) return;
+      ResponseBuilder.ok(await feedbackService.notifyVisit(auth.schoolId, body.feedbackIds || []), callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
   // GET /feedback?status=&assignedTo=&categoryId=&academicYearId=&sort=oldest
   public list = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
     ctx.callbackWaitsForEmptyEventLoop = false;
@@ -127,6 +143,7 @@ class FeedbackHandler {
 const h = new FeedbackHandler();
 export const listCategories = guard(FEEDBACK_ACTIONS["feedback-handler.listCategories"], h.listCategories);
 export const record = guard(FEEDBACK_ACTIONS["feedback-handler.record"], h.record);
+export const notifyVisit = guard(FEEDBACK_ACTIONS["feedback-handler.notifyVisit"], h.notifyVisit);
 export const list = guard(FEEDBACK_ACTIONS["feedback-handler.list"], h.list);
 export const summary = guard(FEEDBACK_ACTIONS["feedback-handler.summary"], h.summary);
 export const getById = guard(FEEDBACK_ACTIONS["feedback-handler.getById"], h.getById);

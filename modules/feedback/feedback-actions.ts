@@ -12,6 +12,7 @@ export const FEEDBACK_ACTIONS: Record<string, string> = {
   // Office / director surface
   "feedback-handler.listCategories": FEEDBACK_VIEW,
   "feedback-handler.record": FEEDBACK_RECORD,
+  "feedback-handler.notifyVisit": FEEDBACK_RECORD,
   "feedback-handler.list": FEEDBACK_REVIEW,
   "feedback-handler.summary": FEEDBACK_REVIEW,
   "feedback-handler.getById": FEEDBACK_REVIEW,

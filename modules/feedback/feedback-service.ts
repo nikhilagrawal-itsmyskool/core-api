@@ -5,14 +5,12 @@ import {
   findEmployee,
   findStudent,
   getCurrentAcademicYearId,
-  reviewerEmployeeIds,
 } from "./feedback-common";
 import {
   CATEGORY_SEED,
   OPEN_STATUSES,
   TEACHER_ACTIONABLE,
   NOTIFY,
-  NOTIFY_ENTITY_TYPE,
 } from "./feedback-constants";
 import {
   FeedbackCategoryView,
@@ -95,7 +93,8 @@ class FeedbackService {
       [id, schoolId, academicYearId, req.studentId, req.classId || null, req.categoryId, req.feedbackText.trim(), visitDate, req.assignedTo, recordedBy, now],
     );
     await this.audit(schoolId, id, "record", `assigned to ${teacher.name}`, null, "assigned", recordedBy);
-    await this.notifyAssigned(schoolId, id, req.assignedTo, student.name, NOTIFY.ASSIGNED, "New feedback assigned");
+    // No per-feedback notification here — the recorder's UI batches a single
+    // per-visit notification per teacher via notifyVisit() after the whole visit.
     return (await this.getFeedback(schoolId, id))!;
   }
 
@@ -203,7 +202,6 @@ class FeedbackService {
       [comment.trim(), employeeId, now, id, schoolId],
     );
     await this.audit(schoolId, id, "respond", null, f.status, "responded", employeeId);
-    await this.notifyResponded(schoolId, id, f.student_id, employeeId, f.recorded_by);
     return this.getFeedback(schoolId, id);
   }
 
@@ -221,7 +219,6 @@ class FeedbackService {
       [note?.slice(0, 512) || null, userId, now, id, schoolId],
     );
     await this.audit(schoolId, id, "complete", note || null, f.status, "completed", userId);
-    await this.notifyReviewed(schoolId, id, f.assigned_to, NOTIFY.COMPLETED, "Feedback completed");
     return this.getFeedback(schoolId, id);
   }
 
@@ -239,7 +236,6 @@ class FeedbackService {
       [note?.slice(0, 512) || null, userId, now, id, schoolId],
     );
     await this.audit(schoolId, id, "reopen", note || null, f.status, "reopened", userId);
-    await this.notifyReviewed(schoolId, id, f.assigned_to, NOTIFY.REOPENED, "Feedback reopened");
     return this.getFeedback(schoolId, id);
   }
 
@@ -330,36 +326,42 @@ class FeedbackService {
     return rows.length ? rows[0].code : null;
   }
 
-  private async studentName(schoolId: string, studentId: string): Promise<string> {
-    const s = await findStudent(schoolId, studentId);
-    return s?.name || "a student";
-  }
-
-  private async notifyAssigned(schoolId: string, id: string, teacherId: string, studentName: string, key: string, title: string): Promise<void> {
+  // One in-app notification per teacher for a whole home visit (not per feedback).
+  // Called once by the recorder's UI after it finishes recording all the cards. The
+  // notification links to the student (entity_type='student') so a future inbox can
+  // show the student's photo. Best-effort — never throws.
+  async notifyVisit(schoolId: string, feedbackIds: string[]): Promise<{ notified: number }> {
+    const ids = (feedbackIds || []).filter(Boolean);
+    if (!ids.length) return { notified: 0 };
+    const rows = await DB.query(
+      singleLineString`select f.assigned_to, f.student_id, s.name as student_name, c.name as class_name
+        from feedback f
+        left join student s on s.uuid = f.student_id and s.school_id = f.school_id
+        left join class c on c.uuid = f.class_id and c.school_id = f.school_id
+        where f.school_id = $1 and f.uuid = any($2)`,
+      [schoolId, ids],
+    );
+    if (!rows.length) return { notified: 0 };
     const code = await this.schoolCode(schoolId);
-    if (!code) return;
-    await notifyInApp(code, "employee", [teacherId], key, title, `Feedback for ${studentName} was assigned to you`, {
-      entityType: NOTIFY_ENTITY_TYPE,
-      entityId: id,
-    });
-  }
+    if (!code) return { notified: 0 };
 
-  private async notifyResponded(schoolId: string, id: string, studentId: string, teacherId: string, recordedBy: string | null): Promise<void> {
-    const code = await this.schoolCode(schoolId);
-    if (!code) return;
-    const name = await this.studentName(schoolId, studentId);
-    const teacher = await findEmployee(schoolId, teacherId);
-    const reviewers = await reviewerEmployeeIds(schoolId);
-    const recipients = Array.from(new Set([...reviewers, ...(recordedBy ? [recordedBy] : [])])).filter((r) => r !== teacherId);
-    await notifyInApp(code, "employee", recipients, NOTIFY.RESPONDED, "Feedback responded",
-      `${teacher?.name || "A teacher"} responded on feedback for ${name}`, { entityType: NOTIFY_ENTITY_TYPE, entityId: id });
-  }
+    // Group by teacher; a visit is one student, so take the first student/class seen.
+    const byTeacher = new Map<string, { studentId: string; studentName: string; className: string | null }>();
+    for (const r of rows) {
+      if (!r.assignedTo || byTeacher.has(r.assignedTo)) continue;
+      byTeacher.set(r.assignedTo, {
+        studentId: r.studentId,
+        studentName: r.studentName || "a student",
+        className: r.className || null,
+      });
+    }
 
-  private async notifyReviewed(schoolId: string, id: string, teacherId: string, key: string, title: string): Promise<void> {
-    const code = await this.schoolCode(schoolId);
-    if (!code) return;
-    const body = key === NOTIFY.REOPENED ? "A feedback was reopened and needs your attention" : "Your feedback response was reviewed and completed";
-    await notifyInApp(code, "employee", [teacherId], key, title, body, { entityType: NOTIFY_ENTITY_TYPE, entityId: id });
+    for (const [teacherId, info] of byTeacher) {
+      const who = info.className ? `${info.studentName} · ${info.className}` : info.studentName;
+      await notifyInApp(code, "employee", [teacherId], NOTIFY.ASSIGNED, "New feedback",
+        `Feedback received for ${who}`, { entityType: "student", entityId: info.studentId });
+    }
+    return { notified: byTeacher.size };
   }
 }
 

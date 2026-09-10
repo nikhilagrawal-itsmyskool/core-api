@@ -108,9 +108,13 @@ describe("Feedback API", () => {
     const a = await feedbackService.record(schoolId, employeeIds[0], {
       studentId, categoryId: cats[0].uuid, feedbackText: "Item A", assignedTo: teacher,
     });
-    await feedbackService.record(schoolId, employeeIds[0], {
+    const b = await feedbackService.record(schoolId, employeeIds[0], {
       studentId, categoryId: cats[0].uuid, feedbackText: "Item B", assignedTo: teacher,
     });
+
+    // A whole visit (both cards to the same teacher) yields ONE notification, not two.
+    const notified = await feedbackService.notifyVisit(schoolId, [a.uuid, b.uuid]);
+    expect(notified.notified).toBe(1);
 
     const openBefore = await feedbackService.listFeedback(schoolId, { assignedTo: teacher, status: "open" });
     expect(openBefore.length).toBeGreaterThanOrEqual(2);

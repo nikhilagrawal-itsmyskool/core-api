@@ -27,6 +27,16 @@
           method: get
           cors: true
 
+  # One notification per teacher for a whole visit (called after the record loop).
+  notify-visit:
+    handler: feedback-handler.notifyVisit
+    name: ${self:service}-notify-visit
+    events:
+      - http:
+          path: notify-visit
+          method: post
+          cors: true
+
   # Literal GETs declared before {id} so the literal path wins over the matcher.
   list-categories:
     handler: feedback-handler.listCategories
