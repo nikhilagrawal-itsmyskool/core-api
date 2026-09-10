@@ -25,6 +25,8 @@ export interface LeaveTypeView {
   approverRole: string | null;
   sortOrder: number | null;
   status: string;
+  annualQuota: number | null;         // days/academic-year (null = unlimited)
+  attachmentOverDays: number | null;  // attachment required only when days exceed this
 }
 
 // ---- Write requests ----
@@ -62,13 +64,20 @@ export interface LeaveApplicationView {
   hasAttachment: boolean;
 }
 
-// Monthly balance for one employee.
+// Annual (academic-year) balance for one employee.
+export interface LeaveQuotaBalance {
+  code: string;
+  name: string;
+  quota: number;      // days allocated for the academic year
+  used: number;       // working days used (pending + approved)
+  remaining: number;
+}
 export interface LeaveBalanceView {
   employeeId: string;
-  month: string; // YYYY-MM
-  clPerMonth: number;
-  clUsed: number; // CL applications counted this month (pending + approved)
-  clRemaining: number;
+  month: string;              // YYYY-MM anchor
+  academicYearStart: string;  // YYYY-MM-DD
+  academicYearEnd: string;    // YYYY-MM-DD
+  quotas: LeaveQuotaBalance[];
   pending: number;
   approved: number;
   rejected: number;

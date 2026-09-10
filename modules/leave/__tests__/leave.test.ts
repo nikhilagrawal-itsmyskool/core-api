@@ -47,7 +47,7 @@ describe("Leave API", () => {
     expect(cfg.json.dailyCap).toBe(2);
   });
 
-  it("apply → monthly CL quota → approve → reject → cancel → balance", async () => {
+  it("apply → annual CL quota → conditional ML cert → approve → reject → balance", async () => {
     const { schoolId, employeeIds } = await getContext();
     const emp = employeeIds[0];
     await cleanupMonth(schoolId, employeeIds, FIRST, LAST);
@@ -60,22 +60,21 @@ describe("Leave API", () => {
     expect(cl.leaveTypeCode).toBe("CL");
     expect(cl.workingDays).toBeGreaterThanOrEqual(1);
 
-    // Second CL in the same month is blocked by the monthly quota.
-    await expect(
-      leaveService.apply(schoolId, emp, { leaveTypeCode: "CL", fromDate: "2016-03-20", toDate: "2016-03-20" }),
-    ).rejects.toThrow(/allowed in 2016-03/i);
+    // A second CL the same month is now allowed (quota is annual, not monthly). Cancel it
+    // so it doesn't skew the balance below.
+    const cl2 = await leaveService.apply(schoolId, emp, { leaveTypeCode: "CL", fromDate: "2016-03-20", toDate: "2016-03-20" });
+    expect(cl2.status).toBe("pending");
+    await leaveService.cancel(schoolId, cl2.uuid, emp, "2016-03-01");
 
-    // ML (does not count against the CL quota) is allowed.
+    // A short ML (≤ 2 working days) needs no certificate.
     const ml = await leaveService.apply(schoolId, emp, {
       leaveTypeCode: "ML", fromDate: "2016-03-21", toDate: "2016-03-22", reason: "fever",
-      attachment: { fileName: "cert.pdf", mimeType: "application/pdf", base64Data: Buffer.from("dummy-cert").toString("base64") },
     });
     expect(ml.status).toBe("pending");
-    expect(ml.hasAttachment).toBe(true);
 
-    // ML requires an attachment.
+    // A longer ML (> 2 working days) requires a medical certificate.
     await expect(
-      leaveService.apply(schoolId, emp, { leaveTypeCode: "ML", fromDate: "2016-03-25", toDate: "2016-03-25" }),
+      leaveService.apply(schoolId, emp, { leaveTypeCode: "ML", fromDate: "2016-03-24", toDate: "2016-03-29" }),
     ).rejects.toThrow(/requires a document/i);
 
     // Approve the CL.
@@ -91,10 +90,13 @@ describe("Leave API", () => {
     expect(rejected!.status).toBe("rejected");
     expect(rejected!.decisionNote).toContain("no certificate");
 
-    // Balance: 1 CL used (approved), quota 1 → 0 remaining. ML doesn't count.
+    // Balance (annual): 1 CL day used against the CL quota; the rejected ML and the
+    // cancelled 2nd CL don't count.
     const bal = await leaveService.balance(schoolId, emp, MONTH);
-    expect(bal.clUsed).toBe(1);
-    expect(bal.clRemaining).toBe(0);
+    const clBal = bal.quotas.find((q) => q.code.toUpperCase() === "CL");
+    expect(clBal).toBeTruthy();
+    expect(clBal!.used).toBe(1);
+    expect(clBal!.remaining).toBe(clBal!.quota - 1);
     expect(bal.approved).toBe(1);
     expect(bal.rejected).toBe(1);
 
@@ -161,21 +163,22 @@ describe("Leave API", () => {
     expect(dv.onLeave.find((r) => r.employeeId === emp && r.status === "approved")).toBeTruthy();
   });
 
-  it("deduction ladder: 2 counted absences → plain 2 / ladder 3, finalize applies ladder", async () => {
+  it("deduction penalty: 2 separate unauthorized absences → plain 2 / ladder 3, finalize applies ladder", async () => {
     const { schoolId, employeeIds } = await getContext();
     const emp = employeeIds[0];
     await cleanupMonth(schoolId, [emp], FIRST, LAST);
     await cleanupAttendance(schoolId, [emp], FIRST, LAST);
     await cleanupDeductions(schoolId, [emp], 2016, 3);
 
-    // Two unauthorized absences (working days, no leave).
+    // Two SEPARATE unauthorized absences (non-contiguous → two occurrences). The policy
+    // penalty adds +0 for the 1st occurrence and +1 for the 2nd, so plain 2 → ladder 3.
     await leaveAttendanceService.mark(schoolId, emp, "2016-03-02", "absent");
-    await leaveAttendanceService.mark(schoolId, emp, "2016-03-03", "absent");
+    await leaveAttendanceService.mark(schoolId, emp, "2016-03-09", "absent");
 
     const provisional = await leaveDeductionService.employeeSummary(schoolId, emp, MONTH);
     expect(provisional.countedAbsences).toBe(2);
     expect(provisional.plainLwpDays).toBe(2);
-    expect(provisional.ladderDeductionDays).toBe(3); // 1 + 2
+    expect(provisional.ladderDeductionDays).toBe(3); // actual 2 + penalty 1 (2nd occurrence)
     expect(provisional.status).toBe("provisional");
 
     const runRes = await leaveDeductionService.run(schoolId, MONTH, "tester");

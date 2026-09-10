@@ -17,6 +17,15 @@
           method: get
           cors: true
 
+  update-config:
+    handler: leave-handler.updateConfig
+    name: ${self:service}-update-config
+    events:
+      - http:
+          path: config
+          method: put
+          cors: true
+
   list-types:
     handler: leave-handler.listTypes
     name: ${self:service}-list-types
@@ -24,6 +33,15 @@
       - http:
           path: types
           method: get
+          cors: true
+
+  update-type:
+    handler: leave-handler.updateType
+    name: ${self:service}-update-type
+    events:
+      - http:
+          path: types/{code}
+          method: put
           cors: true
 
   list-applications:

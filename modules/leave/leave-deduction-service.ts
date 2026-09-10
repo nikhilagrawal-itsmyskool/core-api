@@ -6,13 +6,29 @@ const { generateShortUuid } = require("../../shared/util/generate-uuid.js");
 
 const MONTH_RE = /^\d{4}-\d{2}$/;
 
-// Phase 3: the escalating deduction ladder, in DAYS OF PAY (no salary in the system —
-// payroll converts to ₹ offline). The nth counted absence in a month costs n days:
-// ladder = k*(k+1)/2 for k counted days. Plain LWP (= k) is the automatic figure; the
-// ladder is the Director-confirmed figure chosen at finalize. See DESIGN §6/§7.
-
-function ladderDays(k: number): number {
-  return (k * (k + 1)) / 2;
+// Deductions are in DAYS OF PAY (no salary in the system — payroll converts to ₹ offline).
+// Two figures per month:
+//   plainLwpDays  = every counted absence day (authorized LWP + unauthorized) — the standard
+//                   Loss-of-Pay for actual days absent.
+//   ladderDeductionDays = plainLwpDays + the policy PENALTY on *unauthorized* absences:
+//                   the 1st unauthorized spell adds 0, the 2nd +1, the 3rd and beyond +2 days
+//                   each (per the Staff Leave Policy). Director-confirmed at finalize.
+// A "spell" is a run of consecutive working days marked unauthorized (weekly-offs / holidays
+// in between don't break it; any present/leave day does).
+function unauthorizedPenalty(days: Array<{ status: string }>): number {
+  let spells = 0;
+  let inSpell = false;
+  for (const d of days) {
+    if (d.status === "unauthorized") {
+      if (!inSpell) { spells++; inSpell = true; }
+    } else if (d.status === "off" || d.status === "holiday") {
+      // gap that doesn't break a spell
+    } else {
+      inSpell = false;
+    }
+  }
+  if (spells <= 1) return 0;
+  return 1 + 2 * (spells - 2); // 2nd spell +1, each further spell +2
 }
 function istToday(): string {
   return new Date(Date.now() + 5.5 * 60 * 60 * 1000).toISOString().slice(0, 10);
@@ -59,7 +75,7 @@ class LeaveDeductionService {
     const rec = await reconcileMonth(schoolId, employeeId, year, m, istToday());
     const k = rec.countedDates.length;
     const plain = k;
-    const ladder = ladderDays(k);
+    const ladder = plain + unauthorizedPenalty(rec.days);
     const cl = await this.clUsed(schoolId, employeeId, month);
     const paidDays = rec.counts.present + rec.counts.paidLeave;
 
@@ -107,7 +123,7 @@ class LeaveDeductionService {
       const cl = await this.clUsed(schoolId, e.uuid, month);
       const paidDays = rec.counts.present + rec.counts.paidLeave;
       const plain = k;
-      const ladder = ladderDays(k);
+      const ladder = plain + unauthorizedPenalty(rec.days);
       if (existing.length) {
         await DB.query(
           singleLineString`update leave_deduction_run set paid_days = $1, cl_used = $2, authorized_unpaid_absences = $3,

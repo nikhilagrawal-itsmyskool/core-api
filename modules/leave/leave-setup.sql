@@ -46,6 +46,12 @@ create table if not exists leave_type (
 );
 create unique index if not exists idx_leave_type_unique
     on leave_type(school_id, lower(code)) where status <> 'deleted';
+-- Per-type annual allocation (days) enforced at apply against the academic-year window
+-- (null = no quota). e.g. CL=8, ML=4. Configurable per school on the Types & Policy page.
+alter table leave_type add column if not exists annual_quota integer;
+-- Attachment required only when the leave spans MORE than this many working days (null =
+-- use requires_attachment as-is). e.g. ML=2 → medical certificate only when > 2 days.
+alter table leave_type add column if not exists attachment_over_days integer;
 
 -- leave_application: one applied leave (a date range). Backdating allowed.
 create table if not exists leave_application (

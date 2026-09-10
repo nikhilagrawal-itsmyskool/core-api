@@ -7,7 +7,7 @@ import {
   approverEmployeeIds,
   workingDaysBetween,
   datesInRange,
-  monthBounds,
+  academicYearRange,
 } from "./leave-common";
 import {
   DEFAULT_CL_PER_MONTH,
@@ -49,20 +49,36 @@ class LeaveService {
     return { clPerMonth: DEFAULT_CL_PER_MONTH, dailyCap: DEFAULT_DAILY_CAP, reset: "monthly" };
   }
 
+  // Update the per-school config knobs (currently the daily cap). god-gated in the handler.
+  async updateConfig(schoolId: string, patch: { dailyCap?: number }, userId: string): Promise<LeaveConfig> {
+    await this.ensureConfig(schoolId);
+    if (patch.dailyCap != null && Number.isFinite(patch.dailyCap) && patch.dailyCap >= 0) {
+      await DB.query(
+        singleLineString`update leave_config set daily_cap = $1, updatedby_userid = $2, updated_at = $3 where school_id = $4 and status = 'active'`,
+        [Math.floor(patch.dailyCap), userId, new Date(), schoolId],
+      );
+    }
+    return this.ensureConfig(schoolId);
+  }
+
   // ── Types (seeded on first use) ──────────────────────────────────────────────
   async ensureTypes(schoolId: string, userId = "system"): Promise<void> {
-    const existing = await DB.query(
-      singleLineString`select count(1)::int as n from leave_type where school_id = $1 and status <> 'deleted'`,
+    // Insert any seed type whose code is missing (idempotent per-code) so new types like
+    // Bereavement land on already-seeded schools too. Existing rows are never overwritten —
+    // admins may have edited quota/paid, and a one-time sync script backfills annual_quota.
+    const rows = await DB.query(
+      singleLineString`select lower(code) as code from leave_type where school_id = $1 and status <> 'deleted'`,
       [schoolId],
     );
-    if (existing[0].n > 0) return;
+    const have = new Set(rows.map((r: any) => r.code));
     const now = new Date();
     for (const t of LEAVE_TYPE_SEED) {
+      if (have.has(t.code.toLowerCase())) continue;
       await DB.query(
         singleLineString`insert into leave_type
-          (uuid, school_id, code, name, paid, counts_vs_quota, requires_attachment, waivable, approver_role, sort_order, status, createdby_userid, created_at)
-          values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'active', $11, $12)`,
-        [generateShortUuid(12), schoolId, t.code, t.name, t.paid, t.countsVsQuota, t.requiresAttachment, t.waivable, t.approverRole, t.sortOrder, userId, now],
+          (uuid, school_id, code, name, paid, counts_vs_quota, requires_attachment, waivable, approver_role, sort_order, annual_quota, attachment_over_days, status, createdby_userid, created_at)
+          values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'active', $13, $14)`,
+        [generateShortUuid(12), schoolId, t.code, t.name, t.paid, t.countsVsQuota, t.requiresAttachment, t.waivable, t.approverRole, t.sortOrder, t.annualQuota, t.attachmentOverDays, userId, now],
       );
     }
   }
@@ -70,7 +86,7 @@ class LeaveService {
   async listTypes(schoolId: string): Promise<LeaveTypeView[]> {
     await this.ensureTypes(schoolId);
     const rows = await DB.query(
-      singleLineString`select code, name, paid, counts_vs_quota, requires_attachment, waivable, approver_role, sort_order, status
+      singleLineString`select code, name, paid, counts_vs_quota, requires_attachment, waivable, approver_role, sort_order, status, annual_quota, attachment_over_days
         from leave_type where school_id = $1 and status <> 'deleted' order by sort_order asc nulls last, code`,
       [schoolId],
     );
@@ -84,12 +100,35 @@ class LeaveService {
       approverRole: r.approverRole || null,
       sortOrder: r.sortOrder,
       status: r.status,
+      annualQuota: r.annualQuota ?? null,
+      attachmentOverDays: r.attachmentOverDays ?? null,
     }));
+  }
+
+  // Edit a leave type's policy knobs (annual quota, conditional-attachment threshold, paid,
+  // always-attachment). god-gated in the handler. Returns the refreshed type list.
+  async updateType(schoolId: string, code: string, patch: any, userId: string): Promise<LeaveTypeView[]> {
+    const t = await this.getType(schoolId, code);
+    if (!t) throw new BusinessErrorResult(ErrorCode.BusinessError, "Unknown or inactive leave type");
+    const sets: string[] = [];
+    const params: any[] = [];
+    let i = 1;
+    if ("annualQuota" in patch) { params.push(patch.annualQuota === null || patch.annualQuota === "" ? null : Math.max(0, Math.floor(Number(patch.annualQuota)))); sets.push(`annual_quota = $${i++}`); }
+    if ("attachmentOverDays" in patch) { params.push(patch.attachmentOverDays === null || patch.attachmentOverDays === "" ? null : Math.max(0, Math.floor(Number(patch.attachmentOverDays)))); sets.push(`attachment_over_days = $${i++}`); }
+    if ("requiresAttachment" in patch) { params.push(!!patch.requiresAttachment); sets.push(`requires_attachment = $${i++}`); }
+    if ("paid" in patch && ["yes", "no", "discretionary"].includes(patch.paid)) { params.push(patch.paid); sets.push(`paid = $${i++}`); }
+    if (!sets.length) return this.listTypes(schoolId);
+    params.push(userId); sets.push(`updatedby_userid = $${i++}`);
+    params.push(new Date()); sets.push(`updated_at = $${i++}`);
+    params.push(schoolId); const sIdx = i++;
+    params.push(t.code); const cIdx = i++;
+    await DB.query(`update leave_type set ${sets.join(", ")} where school_id = $${sIdx} and lower(code) = lower($${cIdx})`, params);
+    return this.listTypes(schoolId);
   }
 
   private async getType(schoolId: string, code: string): Promise<any | null> {
     const rows = await DB.query(
-      singleLineString`select code, name, paid, counts_vs_quota, requires_attachment, waivable from leave_type
+      singleLineString`select code, name, paid, counts_vs_quota, requires_attachment, waivable, annual_quota, attachment_over_days from leave_type
         where school_id = $1 and lower(code) = lower($2) and status = 'active'`,
       [schoolId, code],
     );
@@ -108,29 +147,40 @@ class LeaveService {
     const type = await this.getType(schoolId, req.leaveTypeCode);
     if (!type) throw new BusinessErrorResult(ErrorCode.BusinessError, "Unknown or inactive leave type");
 
-    if (type.requiresAttachment && !req.attachment?.base64Data) {
-      throw new BusinessErrorResult(ErrorCode.BusinessError, `${type.name} requires a document (e.g. medical certificate)`);
+    const workingDays = await workingDaysBetween(schoolId, req.fromDate, req.toDate);
+
+    // Attachment: required when the type always needs one, or — when attachment_over_days
+    // is set — only once the leave exceeds that many working days (e.g. an ML medical
+    // certificate is required only for more than 2 consecutive days).
+    const attachmentNeeded = type.attachmentOverDays != null
+      ? workingDays > type.attachmentOverDays
+      : !!type.requiresAttachment;
+    if (attachmentNeeded && !req.attachment?.base64Data) {
+      const extra = type.attachmentOverDays != null ? ` of more than ${type.attachmentOverDays} day(s)` : "";
+      throw new BusinessErrorResult(ErrorCode.BusinessError, `${type.name}${extra} requires a document (e.g. medical certificate)`);
     }
 
-    // Monthly CL quota (enforced at apply): a teacher may apply only N CLs per month.
-    if (type.countsVsQuota) {
-      const config = await this.ensureConfig(schoolId);
-      const { first, last, month } = monthBounds(req.fromDate);
-      const used = await DB.query(
-        singleLineString`select count(1)::int as n from leave_application
+    // Annual allocation (per academic year, lapses 31 Mar): the requested working days plus
+    // any pending/approved of this type this year must not exceed the type's quota. Applies
+    // to any type carrying an annual_quota (CL=8, ML=4 by default).
+    if (type.annualQuota != null) {
+      const { start, end } = await academicYearRange(schoolId, req.fromDate);
+      const usedRows = await DB.query(
+        singleLineString`select coalesce(sum(working_days), 0)::int as n from leave_application
           where school_id = $1 and employee_id = $2 and lower(leave_type_code) = lower($3)
             and status in ('pending', 'approved') and from_date >= $4 and from_date <= $5`,
-        [schoolId, employeeId, type.code, first, last],
+        [schoolId, employeeId, type.code, start, end],
       );
-      if (used[0].n >= config.clPerMonth) {
+      const used = usedRows[0].n || 0;
+      if (used + workingDays > type.annualQuota) {
+        const left = Math.max(0, type.annualQuota - used);
         throw new BusinessErrorResult(
           ErrorCode.BusinessError,
-          `Only ${config.clPerMonth} ${type.name}(s) allowed in ${month}. Use another leave type for additional days.`,
+          `${type.name} allocation exceeded: ${type.annualQuota} day(s) a year — ${used} used, ${left} left, and this request is ${workingDays} day(s).`,
         );
       }
     }
 
-    const workingDays = await workingDaysBetween(schoolId, req.fromDate, req.toDate);
     const id = generateShortUuid(12);
     const now = new Date();
     await DB.query(
@@ -255,20 +305,23 @@ class LeaveService {
     const type = await this.getType(schoolId, app.leaveTypeCode);
     const config = await this.ensureConfig(schoolId);
 
-    // Per-day approval cap applies to quota-counting leave (CL): at most `dailyCap`
-    // approved on any single date, school-wide.
-    if (type?.countsVsQuota) {
+    // Per-day cap (policy: "not more than N teachers on any single working day"): at most
+    // `dailyCap` staff on approved Casual Leave on any date the request spans, school-wide.
+    // It applies to routine CL only — genuine medical / emergency / bereavement / on-duty
+    // leave is never blocked (the policy explicitly prioritises those).
+    const countsForCap = String(app.leaveTypeCode).toUpperCase() === "CL";
+    if (countsForCap) {
       for (const date of datesInRange(app.fromDate, app.toDate)) {
         const cnt = await DB.query(
-          singleLineString`select count(1)::int as n from leave_application
-            where school_id = $1 and lower(leave_type_code) = lower($2) and status = 'approved'
-              and uuid <> $3 and from_date <= $4 and to_date >= $4`,
-          [schoolId, app.leaveTypeCode, id, date],
+          singleLineString`select count(distinct employee_id)::int as n from leave_application
+            where school_id = $1 and upper(leave_type_code) = 'CL' and status = 'approved'
+              and uuid <> $2 and from_date <= $3 and to_date >= $3`,
+          [schoolId, id, date],
         );
         if (cnt[0].n >= config.dailyCap) {
           throw new BusinessErrorResult(
             ErrorCode.BusinessError,
-            `Daily cap reached: ${config.dailyCap} ${type.name}(s) already approved for ${date}`,
+            `Daily cap reached: ${config.dailyCap} staff already on Casual Leave for ${date}.`,
           );
         }
       }
@@ -322,35 +375,47 @@ class LeaveService {
   }
 
   // ── Balance ─────────────────────────────────────────────────────────────────
+  // Annual (academic-year) balance: remaining days for each quota type (CL, ML, …) plus
+  // this year's pending/approved/rejected application counts. `month` anchors the year.
   async balance(schoolId: string, employeeId: string, month: string): Promise<LeaveBalanceView> {
-    const config = await this.ensureConfig(schoolId);
-    const first = `${month}-01`;
-    const { last } = monthBounds(first);
-    const rows = await DB.query(
-      singleLineString`select t.counts_vs_quota, a.status, count(1)::int as n
-        from leave_application a
-        left join leave_type t on lower(t.code) = lower(a.leave_type_code) and t.school_id = a.school_id
-        where a.school_id = $1 and a.employee_id = $2 and a.from_date >= $3 and a.from_date <= $4
-        group by t.counts_vs_quota, a.status`,
-      [schoolId, employeeId, first, last],
+    await this.ensureTypes(schoolId);
+    const refDate = `${month}-01`;
+    const { start, end } = await academicYearRange(schoolId, refDate);
+
+    const types = await DB.query(
+      singleLineString`select code, name, annual_quota from leave_type
+        where school_id = $1 and status = 'active' and annual_quota is not null
+        order by sort_order asc nulls last, code`,
+      [schoolId],
     );
-    let clUsed = 0, pending = 0, approved = 0, rejected = 0;
-    for (const r of rows) {
+    const usage = await DB.query(
+      singleLineString`select lower(leave_type_code) as code, coalesce(sum(working_days), 0)::int as used
+        from leave_application
+        where school_id = $1 and employee_id = $2 and status in ('pending', 'approved')
+          and from_date >= $3 and from_date <= $4
+        group by lower(leave_type_code)`,
+      [schoolId, employeeId, start, end],
+    );
+    const usedByCode = new Map<string, number>(usage.map((r: any) => [r.code, r.used]));
+    const quotas = types.map((t: any) => {
+      const used = usedByCode.get(String(t.code).toLowerCase()) || 0;
+      return { code: t.code, name: t.name, quota: t.annualQuota, used, remaining: Math.max(0, t.annualQuota - used) };
+    });
+
+    const statusRows = await DB.query(
+      singleLineString`select status, count(1)::int as n from leave_application
+        where school_id = $1 and employee_id = $2 and from_date >= $3 and from_date <= $4
+        group by status`,
+      [schoolId, employeeId, start, end],
+    );
+    let pending = 0, approved = 0, rejected = 0;
+    for (const r of statusRows) {
       if (r.status === "pending") pending += r.n;
       else if (r.status === "approved") approved += r.n;
       else if (r.status === "rejected") rejected += r.n;
-      if (r.countsVsQuota && (r.status === "pending" || r.status === "approved")) clUsed += r.n;
     }
-    return {
-      employeeId,
-      month,
-      clPerMonth: config.clPerMonth,
-      clUsed,
-      clRemaining: Math.max(0, config.clPerMonth - clUsed),
-      pending,
-      approved,
-      rejected,
-    };
+
+    return { employeeId, month, academicYearStart: start, academicYearEnd: end, quotas, pending, approved, rejected };
   }
 
   // ── Attachment ────────────────────────────────────────────────────────────────

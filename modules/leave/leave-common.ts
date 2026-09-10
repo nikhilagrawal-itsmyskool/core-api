@@ -141,6 +141,30 @@ export function datesInRange(from: string, to: string): string[] {
   return out;
 }
 
+// The academic-year window (YYYY-MM-DD start..end) that contains `refDate`, for the annual
+// leave quota. Prefers the school's configured academic_year row; falls back to an Apr 1 –
+// Mar 31 session (the policy's "lapse at March 31"). Defensive against a missing table.
+export async function academicYearRange(schoolId: string, refDate: string): Promise<{ start: string; end: string }> {
+  try {
+    const rows = await DB.query(
+      singleLineString`select start_date::text as start_date, end_date::text as end_date from academic_year
+        where school_id = $1 and start_date is not null and end_date is not null
+          and $2::date between start_date and end_date
+        order by start_date desc limit 1`,
+      [schoolId, refDate],
+    );
+    if (rows.length && rows[0].startDate && rows[0].endDate) {
+      return { start: rows[0].startDate, end: rows[0].endDate };
+    }
+  } catch {
+    /* fall through to the Apr–Mar derivation */
+  }
+  const d = new Date(`${refDate}T00:00:00Z`);
+  const y = d.getUTCFullYear();
+  const startYear = d.getUTCMonth() >= 3 ? y : y - 1; // April (month index 3) starts the session
+  return { start: `${startYear}-04-01`, end: `${startYear + 1}-03-31` };
+}
+
 // First + last day of the calendar month a date falls in (YYYY-MM-DD).
 export function monthBounds(date: string): { first: string; last: string; month: string } {
   const d = new Date(`${date}T00:00:00Z`);

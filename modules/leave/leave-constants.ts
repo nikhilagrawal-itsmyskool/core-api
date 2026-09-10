@@ -6,9 +6,13 @@ export type ApplicationStatus = (typeof APPLICATION_STATUSES)[number];
 export const TYPE_STATUSES = ["active", "inactive", "deleted"] as const;
 export type TypeStatus = (typeof TYPE_STATUSES)[number];
 
-// Policy defaults (overridable per school via leave_config).
+// Policy defaults (overridable per school). Allocations are annual (per academic year,
+// lapse 31 Mar) and live per-type as leave_type.annual_quota — see LEAVE_TYPE_SEED.
+export const DEFAULT_CL_PER_YEAR = 8;
+export const DEFAULT_ML_PER_YEAR = 4;
+export const DEFAULT_DAILY_CAP = 2; // max staff on leave per working day (school-wide)
+// Legacy monthly-CL cap — no longer enforced (quota is annual). Kept for the config row.
 export const DEFAULT_CL_PER_MONTH = 1;
-export const DEFAULT_DAILY_CAP = 2;
 
 // File attachment (medical certificate etc.).
 export const FILE_ENTITY_TYPE = "leave";
@@ -35,19 +39,22 @@ export interface LeaveTypeSeed {
   code: string;
   name: string;
   paid: "yes" | "no" | "discretionary";
-  countsVsQuota: boolean;
+  countsVsQuota: boolean;        // legacy flag — quota is now driven by annualQuota
   requiresAttachment: boolean;
   waivable: boolean;
   approverRole: string;
   sortOrder: number;
+  annualQuota: number | null;    // days/academic-year enforced at apply (null = unlimited)
+  attachmentOverDays: number | null; // attachment required only when working days exceed this
 }
 
 export const LEAVE_TYPE_SEED: LeaveTypeSeed[] = [
-  { code: "CL", name: "Casual Leave", paid: "yes", countsVsQuota: true, requiresAttachment: false, waivable: false, approverRole: "god", sortOrder: 1 },
-  { code: "ML", name: "Medical Leave", paid: "yes", countsVsQuota: false, requiresAttachment: true, waivable: true, approverRole: "god", sortOrder: 2 },
-  { code: "OD", name: "On Duty (Exam / Official)", paid: "yes", countsVsQuota: false, requiresAttachment: false, waivable: true, approverRole: "god", sortOrder: 3 },
-  { code: "COMP", name: "Compensatory Off", paid: "yes", countsVsQuota: false, requiresAttachment: false, waivable: false, approverRole: "god", sortOrder: 4 },
+  { code: "CL", name: "Casual Leave", paid: "yes", countsVsQuota: true, requiresAttachment: false, waivable: false, approverRole: "god", sortOrder: 1, annualQuota: DEFAULT_CL_PER_YEAR, attachmentOverDays: null },
+  { code: "ML", name: "Medical Leave", paid: "yes", countsVsQuota: true, requiresAttachment: false, waivable: true, approverRole: "god", sortOrder: 2, annualQuota: DEFAULT_ML_PER_YEAR, attachmentOverDays: 2 },
+  { code: "BER", name: "Bereavement Leave", paid: "yes", countsVsQuota: false, requiresAttachment: false, waivable: true, approverRole: "god", sortOrder: 3, annualQuota: 3, attachmentOverDays: null },
+  { code: "OD", name: "On Duty (Exam / Official)", paid: "yes", countsVsQuota: false, requiresAttachment: false, waivable: true, approverRole: "god", sortOrder: 4, annualQuota: null, attachmentOverDays: null },
+  { code: "COMP", name: "Compensatory Off", paid: "yes", countsVsQuota: false, requiresAttachment: false, waivable: false, approverRole: "god", sortOrder: 5, annualQuota: null, attachmentOverDays: null },
   // Maternity (MAT) intentionally omitted for now — add back when needed.
-  { code: "EMERG", name: "Emergency / Family", paid: "discretionary", countsVsQuota: false, requiresAttachment: false, waivable: true, approverRole: "god", sortOrder: 6 },
-  { code: "LWP", name: "Leave Without Pay", paid: "no", countsVsQuota: false, requiresAttachment: false, waivable: false, approverRole: "god", sortOrder: 7 },
+  { code: "EMERG", name: "Emergency / Family", paid: "discretionary", countsVsQuota: false, requiresAttachment: false, waivable: true, approverRole: "god", sortOrder: 6, annualQuota: null, attachmentOverDays: null },
+  { code: "LWP", name: "Leave Without Pay", paid: "no", countsVsQuota: false, requiresAttachment: false, waivable: false, approverRole: "god", sortOrder: 7, annualQuota: null, attachmentOverDays: null },
 ];

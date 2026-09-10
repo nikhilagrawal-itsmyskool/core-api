@@ -22,6 +22,20 @@ class LeaveHandler {
     }
   };
 
+  // PUT /leave/config   { dailyCap } — god/admin
+  public updateConfig = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const auth = await requireApprover(event, callback);
+      if (!auth) return;
+      const body = parseBody<any>(event, callback);
+      if (!body) return;
+      ResponseBuilder.ok(await leaveService.updateConfig(auth.schoolId, { dailyCap: body.dailyCap }, auth.userId), callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
   // GET /leave/types
   public listTypes = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
     ctx.callbackWaitsForEmptyEventLoop = false;
@@ -29,6 +43,22 @@ class LeaveHandler {
       const auth = await resolveSchool(event, callback);
       if (!auth) return;
       ResponseBuilder.ok(await leaveService.listTypes(auth.schoolId), callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
+  // PUT /leave/types/{code}   { annualQuota?, attachmentOverDays?, requiresAttachment?, paid? } — god/admin
+  public updateType = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const auth = await requireApprover(event, callback);
+      if (!auth) return;
+      const code = requireParam(event, "code", callback);
+      if (!code) return;
+      const body = parseBody<any>(event, callback);
+      if (!body) return;
+      ResponseBuilder.ok(await leaveService.updateType(auth.schoolId, code, body, auth.userId), callback);
     } catch (err: any) {
       ResponseBuilder.handleError(err, callback);
     }
@@ -151,7 +181,9 @@ class LeaveHandler {
 
 const h = new LeaveHandler();
 export const getConfig = h.getConfig;
+export const updateConfig = h.updateConfig;
 export const listTypes = h.listTypes;
+export const updateType = h.updateType;
 export const listApplications = h.listApplications;
 export const getApplication = h.getApplication;
 export const approve = h.approve;
