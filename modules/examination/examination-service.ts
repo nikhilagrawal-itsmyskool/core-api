@@ -965,11 +965,17 @@ class ExaminationService {
   // ── Read surfaces open to all staff / Student 360 ─────────────────────────────
 
   // Published exams for a year — the read-only "Exam Schedule" list (any staff member).
+  // start_date/end_date span the exam's papers so the UI can default to the one running now.
   async publishedExams(schoolId: string, academicYearId: string): Promise<any[]> {
     return DB.query(
-      singleLineString`select uuid, name from examination
-        where school_id = $1 and academic_year_id = $2 and status = 'published'
-        order by created_at desc nulls last, name`,
+      singleLineString`select e.uuid, e.name,
+          to_char(pr.start_date, 'YYYY-MM-DD') as start_date,
+          to_char(pr.end_date, 'YYYY-MM-DD') as end_date
+        from examination e
+        left join (select exam_id, min(exam_date) as start_date, max(exam_date) as end_date
+          from exam_paper where school_id = $1 and status = 'active' group by exam_id) pr on pr.exam_id = e.uuid
+        where e.school_id = $1 and e.academic_year_id = $2 and e.status = 'published'
+        order by e.created_at desc nulls last, e.name`,
       [schoolId, academicYearId],
     );
   }
