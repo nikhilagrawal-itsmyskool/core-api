@@ -34,6 +34,161 @@
           method: post
           cors: true
 
+  # ── Staff document handbook (read & sign) ──────────────────────────────────
+  # Manager (god/admin) surface — static 'documents' resolves ahead of /{id}.
+  documents-list:
+    handler: document-handler.list
+    name: ${self:service}-documents-list
+    events:
+      - http:
+          path: documents
+          method: get
+          cors: true
+
+  documents-create:
+    handler: document-handler.create
+    name: ${self:service}-documents-create
+    memorySize: 1024
+    timeout: 30
+    events:
+      - http:
+          path: documents
+          method: post
+          cors: true
+
+  documents-ack-artifact:
+    handler: document-handler.ackArtifact
+    name: ${self:service}-documents-ack-artifact
+    memorySize: 512
+    timeout: 20
+    events:
+      - http:
+          path: documents/acks/{ackId}/artifact
+          method: get
+          cors: true
+
+  documents-get:
+    handler: document-handler.get
+    name: ${self:service}-documents-get
+    events:
+      - http:
+          path: documents/{id}
+          method: get
+          cors: true
+
+  documents-update:
+    handler: document-handler.update
+    name: ${self:service}-documents-update
+    memorySize: 1024
+    timeout: 30
+    events:
+      - http:
+          path: documents/{id}
+          method: put
+          cors: true
+
+  documents-archive:
+    handler: document-handler.archive
+    name: ${self:service}-documents-archive
+    events:
+      - http:
+          path: documents/{id}/archive
+          method: post
+          cors: true
+
+  documents-remind:
+    handler: document-handler.remind
+    name: ${self:service}-documents-remind
+    timeout: 30
+    events:
+      - http:
+          path: documents/{id}/remind
+          method: post
+          cors: true
+
+  documents-acks:
+    handler: document-handler.acks
+    name: ${self:service}-documents-acks
+    events:
+      - http:
+          path: documents/{id}/acks
+          method: get
+          cors: true
+
+  documents-pdf:
+    handler: document-handler.docPdf
+    name: ${self:service}-documents-pdf
+    memorySize: 512
+    timeout: 20
+    events:
+      - http:
+          path: documents/{id}/pdf
+          method: get
+          cors: true
+
+  # Employee /me surface (bearer token)
+  me-documents-list:
+    handler: document-handler.myList
+    name: ${self:service}-me-documents-list
+    events:
+      - http:
+          path: me/documents
+          method: get
+          cors: true
+
+  me-documents-get:
+    handler: document-handler.myGet
+    name: ${self:service}-me-documents-get
+    events:
+      - http:
+          path: me/documents/{id}
+          method: get
+          cors: true
+
+  me-documents-ack:
+    handler: document-handler.myAcknowledge
+    name: ${self:service}-me-documents-ack
+    memorySize: 512
+    timeout: 20
+    events:
+      - http:
+          path: me/documents/{id}/acknowledge
+          method: post
+          cors: true
+
+  me-documents-upload:
+    handler: document-handler.myUploadSigned
+    name: ${self:service}-me-documents-upload
+    memorySize: 1024
+    timeout: 30
+    events:
+      - http:
+          path: me/documents/{id}/upload-signed
+          method: post
+          cors: true
+
+  me-documents-pdf:
+    handler: document-handler.myDocPdf
+    name: ${self:service}-me-documents-pdf
+    memorySize: 512
+    timeout: 20
+    events:
+      - http:
+          path: me/documents/{id}/pdf
+          method: get
+          cors: true
+
+  me-documents-artifact:
+    handler: document-handler.myArtifact
+    name: ${self:service}-me-documents-artifact
+    memorySize: 512
+    timeout: 20
+    events:
+      - http:
+          path: me/documents/{id}/artifact
+          method: get
+          cors: true
+
   # Per-employee endpoints
   get-employee:
     handler: employee-handler.getById
