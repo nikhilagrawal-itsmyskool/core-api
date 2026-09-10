@@ -150,7 +150,7 @@ class DocumentHandler {
     try {
       const emp = resolveEmployee(event, callback);
       if (!emp) return;
-      ResponseBuilder.ok(await documentService.myDocuments(emp.schoolId, emp.employeeId), callback);
+      ResponseBuilder.ok(await documentService.myDocuments(emp.schoolId, emp.employeeId, emp.roles), callback);
     } catch (err: any) { ResponseBuilder.handleError(err, callback); }
   };
 
@@ -162,7 +162,7 @@ class DocumentHandler {
       if (!emp) return;
       const id = requireParam(event, "id", callback);
       if (!id) return;
-      ResponseBuilder.ok(await documentService.getMyDocument(emp.schoolId, emp.employeeId, id), callback);
+      ResponseBuilder.ok(await documentService.getMyDocument(emp.schoolId, emp.employeeId, id, emp.roles), callback);
     } catch (err: any) { ResponseBuilder.handleError(err, callback); }
   };
 

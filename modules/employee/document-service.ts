@@ -16,6 +16,15 @@ interface FileInput { fileName: string; mimeType: string; base64Data: string; }
 function stripPrefix(b64: string): string {
   return (b64 || "").replace(/^data:[^;]+;base64,/, "");
 }
+// Normalize an exempt-roles value (array or CSV) to a lowercased CSV for storage, or null.
+function rolesToCsv(v: any): string | null {
+  const arr = Array.isArray(v) ? v : typeof v === "string" ? v.split(",") : [];
+  const clean = arr.map((r: any) => String(r).trim().toLowerCase()).filter(Boolean);
+  return clean.length ? Array.from(new Set(clean)).join(",") : null;
+}
+function csvToRoles(v: any): string[] {
+  return v ? String(v).split(",").map((s) => s.trim()).filter(Boolean) : [];
+}
 function sizeOf(b64: string): number {
   return Buffer.byteLength(stripPrefix(b64), "base64");
 }
@@ -51,8 +60,27 @@ class DocumentService {
       code: d.code, title: d.title, category: d.category, version: d.version,
       summary: d.summary, bodyHtml: d.bodyHtml, hasPdf: !!d.pdfFileId, effectiveFrom: d.effectiveFrom,
       audience: d.audience, signModes: d.signModes, requiresAck: d.requiresAck, status: d.status,
+      exemptRoles: csvToRoles(d.exemptRoles),
       createdAt: d.createdAt, updatedAt: d.updatedAt,
     };
+  }
+
+  // Employee ids that hold any of the given role names (lowercased). Defensive — a missing
+  // role table never breaks the document flow. Used to exempt roles from signing.
+  private async employeeIdsWithAnyRole(schoolId: string, roleNames: string[]): Promise<Set<string>> {
+    const names = (roleNames || []).map((r) => String(r).toLowerCase()).filter(Boolean);
+    if (!names.length) return new Set();
+    try {
+      const rows = await DB.query(
+        singleLineString`select distinct er.employee_id from employee_role er
+          join role r on r.uuid = er.role_id
+          where er.school_id = $1 and lower(r.name) = any($2)`,
+        [schoolId, names],
+      );
+      return new Set(rows.map((r: any) => r.employeeId).filter(Boolean));
+    } catch {
+      return new Set();
+    }
   }
 
   // ── Manager: documents CRUD ────────────────────────────────────────────────
@@ -98,10 +126,10 @@ class DocumentService {
     await DB.query(
       singleLineString`insert into employee_document
         (uuid, school_id, code, title, category, version, summary, body_html, pdf_file_id, effective_from,
-         audience, sign_modes, requires_ack, status, createdby_userid, created_at, updatedby_userid, updated_at, employee_id)
-        values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$15,$16,$17)`,
+         audience, sign_modes, requires_ack, status, createdby_userid, created_at, updatedby_userid, updated_at, employee_id, exempt_roles)
+        values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$15,$16,$17,$18)`,
       [id, schoolId, data.code, data.title, data.category || "policy", 1, data.summary || null, data.bodyHtml || null,
-        pdfFileId, data.effectiveFrom || null, audience, signModes, requiresAck, status, userId, now, data.employeeId || null],
+        pdfFileId, data.effectiveFrom || null, audience, signModes, requiresAck, status, userId, now, data.employeeId || null, rolesToCsv(data.exemptRoles)],
     );
     return this.getDocument(schoolId, id);
   }
@@ -124,6 +152,7 @@ class DocumentService {
       signModes: data.signModes ?? row.signModes,
       requiresAck: data.requiresAck ?? row.requiresAck,
       status: data.status ?? row.status,
+      exemptRolesCsv: "exemptRoles" in data ? rolesToCsv(data.exemptRoles) : (row.exemptRoles || null),
     };
 
     if (data.bumpVersion) {
@@ -134,10 +163,10 @@ class DocumentService {
       await DB.query(
         singleLineString`insert into employee_document
           (uuid, school_id, code, title, category, version, summary, body_html, pdf_file_id, effective_from,
-           audience, sign_modes, requires_ack, status, createdby_userid, created_at, updatedby_userid, updated_at, employee_id)
-          values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'published',$14,$15,$14,$15,$16)`,
+           audience, sign_modes, requires_ack, status, createdby_userid, created_at, updatedby_userid, updated_at, employee_id, exempt_roles)
+          values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'published',$14,$15,$14,$15,$16,$17)`,
         [newId, schoolId, row.code, merged.title, merged.category, row.version + 1, merged.summary, merged.bodyHtml,
-          pdfFileId, merged.effectiveFrom, merged.audience, merged.signModes, merged.requiresAck, userId, now, row.employeeId || null],
+          pdfFileId, merged.effectiveFrom, merged.audience, merged.signModes, merged.requiresAck, userId, now, row.employeeId || null, merged.exemptRolesCsv],
       );
       await DB.query(`update employee_document set status = 'archived', updatedby_userid = $1, updated_at = $2 where school_id = $3 and uuid = $4`,
         [userId, now, schoolId, id]);
@@ -151,11 +180,11 @@ class DocumentService {
     await DB.query(
       singleLineString`update employee_document set
           title = $1, category = $2, summary = $3, body_html = $4, pdf_file_id = $5, effective_from = $6,
-          audience = $7, sign_modes = $8, requires_ack = $9, status = $10,
-          updatedby_userid = $11, updated_at = $12
-        where school_id = $13 and uuid = $14`,
+          audience = $7, sign_modes = $8, requires_ack = $9, status = $10, exempt_roles = $11,
+          updatedby_userid = $12, updated_at = $13
+        where school_id = $14 and uuid = $15`,
       [merged.title, merged.category, merged.summary, merged.bodyHtml, pdfFileId, merged.effectiveFrom,
-        merged.audience, merged.signModes, merged.requiresAck, merged.status, userId, now, schoolId, id],
+        merged.audience, merged.signModes, merged.requiresAck, merged.status, merged.exemptRolesCsv, userId, now, schoolId, id],
     );
     return this.getDocument(schoolId, id);
   }
@@ -181,12 +210,17 @@ class DocumentService {
         order by (a.uuid is null), e.name`,
       [schoolId, docId, doc.version],
     );
+    // Staff whose role is exempt still see the document but aren't part of the campaign —
+    // drop them from the pending/required set (they still appear if they chose to sign).
+    const exemptIds = await this.employeeIdsWithAnyRole(schoolId, csvToRoles(doc.exemptRoles));
     const signed = rows.filter((r: any) => r.ackId).map((r: any) => ({
       employeeId: r.employeeId, employeeName: r.employeeName, ackId: r.ackId, method: r.method,
       declaredName: r.declaredName, declaredDesignation: r.declaredDesignation, agreed: r.agreed,
       hasSignature: !!r.signatureFileId, hasSignedPage: !!r.signedPageFileId, acknowledgedAt: r.acknowledgedAt,
     }));
-    const pending = rows.filter((r: any) => !r.ackId).map((r: any) => ({ employeeId: r.employeeId, employeeName: r.employeeName }));
+    const pending = rows
+      .filter((r: any) => !r.ackId && !exemptIds.has(r.employeeId))
+      .map((r: any) => ({ employeeId: r.employeeId, employeeName: r.employeeName }));
     return { document: this.mapDoc(doc), version: doc.version, signed, pending, signedCount: signed.length, pendingCount: pending.length };
   }
 
@@ -214,6 +248,9 @@ class DocumentService {
       const rows = await DB.query(`select uuid from employee where school_id = $1 and status = 'active'`, [schoolId]);
       ids = rows.map((r: any) => r.uuid);
     }
+    // Don't nudge staff whose role is exempt from this document's campaign.
+    const exemptIds = await this.employeeIdsWithAnyRole(schoolId, csvToRoles(doc.exemptRoles));
+    if (exemptIds.size) ids = ids.filter((id) => !exemptIds.has(id));
     if (!onlyPending) return ids;
     const signed = await DB.query(
       `select employee_id from employee_document_ack where school_id = $1 and document_id = $2 and document_version = $3 and status = 'active'`,
@@ -249,7 +286,15 @@ class DocumentService {
     };
   }
 
-  async myDocuments(schoolId: string, employeeId: string): Promise<any[]> {
+  // A document's signature applies to me unless my role is in its exempt list.
+  private exemptForCaller(doc: any, callerRoles: string[]): boolean {
+    const exempt = csvToRoles(doc.exemptRoles).map((r) => r.toLowerCase());
+    if (!exempt.length) return false;
+    const mine = (callerRoles || []).map((r) => String(r).toLowerCase());
+    return mine.some((r) => exempt.includes(r));
+  }
+
+  async myDocuments(schoolId: string, employeeId: string, callerRoles: string[] = []): Promise<any[]> {
     const docs = await DB.query(
       singleLineString`select * from employee_document where school_id = $1 and status = 'published'
         and (employee_id is null or employee_id = $2)
@@ -258,13 +303,15 @@ class DocumentService {
     );
     const out: any[] = [];
     for (const d of docs) {
-      const ack = d.requiresAck ? await this.myAck(schoolId, employeeId, d.uuid, d.version) : null;
-      out.push({ ...this.mapDoc(d), bodyHtml: undefined, signed: !!ack, ack });
+      const exemptForMe = this.exemptForCaller(d, callerRoles);
+      const signatureRequiredForMe = !!d.requiresAck && !exemptForMe;
+      const ack = signatureRequiredForMe ? await this.myAck(schoolId, employeeId, d.uuid, d.version) : null;
+      out.push({ ...this.mapDoc(d), bodyHtml: undefined, signed: !!ack, ack, exemptForMe, signatureRequiredForMe });
     }
     return out;
   }
 
-  async getMyDocument(schoolId: string, employeeId: string, id: string): Promise<any> {
+  async getMyDocument(schoolId: string, employeeId: string, id: string, callerRoles: string[] = []): Promise<any> {
     const rows = await DB.query(
       singleLineString`select * from employee_document where school_id = $1 and uuid = $2 and status = 'published'
         and (employee_id is null or employee_id = $3)`,
@@ -272,9 +319,11 @@ class DocumentService {
     );
     if (!rows.length) throw new BusinessErrorResult(ErrorCode.BusinessError, "Document not found");
     const d = rows[0];
-    const ack = d.requiresAck ? await this.myAck(schoolId, employeeId, d.uuid, d.version) : null;
+    const exemptForMe = this.exemptForCaller(d, callerRoles);
+    const signatureRequiredForMe = !!d.requiresAck && !exemptForMe;
+    const ack = signatureRequiredForMe ? await this.myAck(schoolId, employeeId, d.uuid, d.version) : null;
     const emp = await DB.query(`select name from employee where school_id = $1 and uuid = $2`, [schoolId, employeeId]);
-    return { ...this.mapDoc(d), signed: !!ack, ack, prefill: { name: emp[0]?.name || "" } };
+    return { ...this.mapDoc(d), signed: !!ack, ack, exemptForMe, signatureRequiredForMe, prefill: { name: emp[0]?.name || "" } };
   }
 
   private assertMode(doc: any, method: "digital" | "upload") {

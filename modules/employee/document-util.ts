@@ -40,15 +40,17 @@ export async function requireManager(event: ApiEvent, callback: ApiCallback): Pr
   return ctx;
 }
 
-// Resolve the logged-in employee from the bearer token (staff /me surface).
-export function resolveEmployee(event: ApiEvent, callback: ApiCallback): { employeeId: string; schoolId: string } | null {
+// Resolve the logged-in employee from the bearer token (staff /me surface), including the
+// caller's role names (lowercased) — used to exempt certain roles from signing.
+export function resolveEmployee(event: ApiEvent, callback: ApiCallback): { employeeId: string; schoolId: string; roles: string[] } | null {
   const token = extractAndVerifyToken(getAuthorizationHeader(event));
   const employeeId = token?.employee_id || token?.id;
   if (!token || token.type !== "employee" || !employeeId) {
     ResponseBuilder.unauthorizedRequest(ErrorCode.GeneralError, "Employee login required", callback);
     return null;
   }
-  return { employeeId, schoolId: token.school_id };
+  const roles = Array.isArray(token.roles) ? token.roles.map((r: string) => String(r).toLowerCase()) : [];
+  return { employeeId, schoolId: token.school_id, roles };
 }
 
 export function parseBody<T>(event: ApiEvent, callback: ApiCallback): T | null {

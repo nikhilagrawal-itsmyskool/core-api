@@ -36,6 +36,7 @@ create table if not exists employee_document (
     audience varchar(16) not null check (audience in ('all', 'teaching', 'non_teaching')),
     sign_modes varchar(16) not null check (sign_modes in ('digital', 'upload', 'both')),
     requires_ack boolean not null,        -- false = read-only reference (no signature)
+    exempt_roles varchar(400),            -- CSV of role names exempt from signing (they still see it)
     status varchar(16) not null check (status in ('draft', 'published', 'archived')),
     createdby_userid varchar(12),
     created_at timestamp(0),
@@ -44,6 +45,8 @@ create table if not exists employee_document (
 );
 -- coalesce(employee_id,'') so shared docs (null owner) dedupe by code+version, while a
 -- personal doc is unique per (owner, code, version) rather than clashing across employees.
+-- Additive for already-created tables (the inline column above only applies to fresh installs).
+alter table employee_document add column if not exists exempt_roles varchar(400);
 create unique index if not exists idx_employee_document_code_version
     on employee_document(school_id, coalesce(employee_id, ''), lower(code), version) where status <> 'archived';
 create index if not exists idx_employee_document_school_status
