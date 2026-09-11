@@ -628,6 +628,7 @@ export interface ResolvedAssembly {
   date: string; // yyyy-mm-dd
   weekday: Weekday;
   held: boolean; // false when the plan holds no assembly that weekday and no special exists
+  holidayName?: string; // set when not held BECAUSE the date is a full holiday (school closed)
   source: 'special' | 'template';
   specialId?: string;
   title?: string; // special title, when source = 'special'

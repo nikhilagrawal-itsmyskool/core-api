@@ -65,6 +65,31 @@ export async function dailyThemesForRange(
   return map;
 }
 
+// The academic-calendar module's FULL holidays (school closed) for a date. Restricted
+// holidays are school-open, so excluded — matching attendance's "only full = non-teaching"
+// rule (attendance-util.resolveDayFlags). Read directly from calendar_holiday (same DB,
+// no FK) and wrapped defensively: assembly must never fail because the calendar module
+// is absent. Returns the holiday name (or '' if unnamed) when the date is a full holiday,
+// else null.
+export async function fullHolidayFor(
+  schoolId: string, academicYearId: string, date: string,
+): Promise<string | null> {
+  try {
+    const rows = await DB.query(
+      singleLineString`
+        select name from calendar_holiday
+        where school_id = $1 and academic_year_id = $2 and holiday_date = $3
+          and kind = 'full' and status = 'active'
+        limit 1
+      `,
+      [schoolId, academicYearId, date],
+    );
+    return rows.length > 0 ? (rows[0].name || '') : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function academicYearExists(schoolId: string, academicYearId: string): Promise<boolean> {
   const rows = await DB.query(
     singleLineString`select 1 from academic_year where uuid = $1 and school_id = $2`,

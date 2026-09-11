@@ -9,7 +9,7 @@ import { assemblyNodeService } from './assembly-node-service';
 import { assemblyThemeService } from './assembly-theme-service';
 import { assemblyHouseService } from './assembly-house-service';
 import { assemblyReferenceService } from './assembly-reference-service';
-import { isValidDate, dailyThemeFor } from './assembly-common';
+import { isValidDate, dailyThemeFor, fullHolidayFor } from './assembly-common';
 import { getSignedPhotoUrl } from '../../shared/lib/file-storage';
 
 function weekdayOf(dateStr: string): Weekday {
@@ -50,7 +50,7 @@ class AssemblyResolveService {
     const themes = await assemblyThemeService.coveringDate(schoolId, plan.academicYearId, planId, date);
     const dailyTheme = await dailyThemeFor(schoolId, date);
 
-    const notHeld = (): ResolvedAssembly => ({ planId, date, weekday, held: false, source: 'template', themes, dailyTheme, nodes: [] });
+    const notHeld = (holidayName?: string): ResolvedAssembly => ({ planId, date, weekday, held: false, source: 'template', themes, dailyTheme, holidayName, nodes: [] });
 
     if (opts.publishedPlanOnly && plan.publishStatus !== 'published') return notHeld();
 
@@ -71,6 +71,12 @@ class AssemblyResolveService {
         themes, dailyTheme, nodes: this.toResolved(nested, [], date),
       }, schoolId, opts);
     }
+
+    // A FULL holiday (school closed) suppresses the regular assembly — but a published
+    // special above wins (a deliberate override, e.g. a Republic Day special). Restricted
+    // holidays keep assembly (school open). Named so the UI can show "No assembly — <name>".
+    const holidayName = await fullHolidayFor(schoolId, plan.academicYearId, date);
+    if (holidayName !== null) return notHeld(holidayName || 'Holiday');
 
     // Otherwise the day-filtered template, but only if the plan runs that weekday.
     const dayRows = await DB.query(

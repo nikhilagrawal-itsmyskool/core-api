@@ -1,4 +1,4 @@
-import { api, getSeed, cleanupPlan, deleteThemeById, deleteChecklistItemById, resetAssemblyConfig, resetGrading, seedEmployee, seedHouse, setWeekHouse, closePool, dateForWeekday, BASE_URL, headers } from './helpers';
+import { api, getSeed, cleanupPlan, deleteThemeById, deleteChecklistItemById, resetAssemblyConfig, resetGrading, seedEmployee, seedHouse, setWeekHouse, closePool, dateForWeekday, getPool, BASE_URL, headers } from './helpers';
 import { assemblyGradingService } from '../assembly-grading-service';
 import { DB } from '../../../shared/lib/db';
 
@@ -261,6 +261,44 @@ describe('resolve', () => {
 
     expect((await api('GET', `/resolve?planId=${plan.uuid}&date=2026-13-40`)).status).toBe(400);
     expect((await api('GET', `/resolve?planId=nope&date=${MON}`)).status).toBe(404);
+  });
+
+  it('reflects full holidays as not held (restricted stays held; a special still overrides)', async () => {
+    const plan = await newPlan('Holidays'); // default mon-sat
+    await addNode(plan.uuid, 'Prayer');
+    await api('POST', `/plans/${plan.uuid}/publish`);
+    const pool = getPool();
+    const seedHoliday = async (date: string, kind: 'full' | 'restricted', name: string) => {
+      await pool.query(
+        `insert into calendar_holiday (uuid, school_id, academic_year_id, holiday_date, name, kind, status, created_at)
+         values (substr(md5(random()::text), 1, 12), $1, $2, $3, $4, $5, 'active', now())`,
+        [seed.schoolId, seed.academicYearId, date, name, kind],
+      );
+    };
+    try {
+      // Full holiday on a plan weekday -> not held, carries the holiday name.
+      await seedHoliday(MON, 'full', 'Republic Day');
+      const monR = await api('GET', `/resolve?planId=${plan.uuid}&date=${MON}`);
+      expect(monR.body.held).toBe(false);
+      expect(monR.body.holidayName).toBe('Republic Day');
+      expect(monR.body.nodes).toHaveLength(0);
+
+      // Restricted holiday -> school open, assembly still held.
+      await seedHoliday(TUE, 'restricted', 'Optional RH');
+      const tueR = await api('GET', `/resolve?planId=${plan.uuid}&date=${TUE}`);
+      expect(tueR.body.held).toBe(true);
+
+      // A published special on a full-holiday date still wins (deliberate override).
+      await seedHoliday(WED, 'full', 'Founder Day Holiday');
+      const sp = await api('POST', `/plans/${plan.uuid}/specials`, { specialDate: WED, title: 'Founders Special', source: 'blank' });
+      await api('POST', `/specials/${sp.body.uuid}/nodes`, { title: 'Tribute' });
+      await api('POST', `/specials/${sp.body.uuid}/publish`);
+      const wedR = await api('GET', `/resolve?planId=${plan.uuid}&date=${WED}`);
+      expect(wedR.body.held).toBe(true);
+      expect(wedR.body.source).toBe('special');
+    } finally {
+      await pool.query(`delete from calendar_holiday where school_id = $1 and holiday_date = any($2)`, [seed.schoolId, [MON, TUE, WED]]);
+    }
   });
 });
 
