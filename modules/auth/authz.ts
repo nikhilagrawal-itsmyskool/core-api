@@ -104,6 +104,14 @@ export function requireAction(event: ApiEvent, action: string, callback: ApiCall
     ResponseBuilder.forbidden(ErrorCode.MissingPermission, 'School mismatch', callback);
     return null;
   }
+  // First-party machine trust: a 'service' token is minted only by our own Lambdas
+  // holding JWT_SECRET and is short-lived, so it is authorized for any action. It
+  // carries no roles (least privilege for data-masking gates), which would otherwise
+  // fail every `can()` check. Without this, inter-module calls that post through a
+  // guarded endpoint (fees/attendance/leave/examination/feedback → communication.send)
+  // get 403 and silently stop, since producers fire-and-forget. Role-based masking
+  // still treats it as unprivileged (isAdminGod stays false).
+  if (caller.type === 'service') return caller;
   if (!can(caller.roles, action)) {
     ResponseBuilder.forbidden(ErrorCode.MissingPermission, `Missing permission: ${action}`, callback);
     return null;
