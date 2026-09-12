@@ -432,6 +432,21 @@ describe("examination: phase 4 — seating rooms", () => {
     expect(card.signatures[D1].signatureDataUri).toContain("data:image");
   });
 
+  sectionIt("phase 5: a submitted room shows on the completion board + exposes finalize fields", async () => {
+    // The prior test signed (roomId, D1). The grid's `submitted` set should list it.
+    const v = await get(`/examinations/${examId}/room-invigilators`);
+    expect(v.status).toBe(200);
+    expect((v.body.submitted || []).some((s: any) => s.roomId === roomId && s.examDate === D1)).toBe(true);
+
+    // The roster carries the finalize fields: submitted (signed), not locked (D1 is future),
+    // and no correction yet. (The non-god lock + god-correction paths are role-gated — offline
+    // defaults the caller to god, so they're covered by the authz layer, not this suite.)
+    const roster = await get(`/examinations/${examId}/room-rosters/${roomId}/${D1}`);
+    expect(roster.body.signed).toBe(true);
+    expect(roster.body.locked).toBe(false);
+    expect(roster.body.correctedByName ?? null).toBeNull();
+  });
+
   sectionIt("room image: upload, read back, and it appears on the room roster", async () => {
     const up = await put(`/examinations/${examId}/rooms/${roomId}/image`, { imageBase64: TINY_PNG, mimeType: "image/png", fileName: "room.png" });
     expect(up.status).toBe(200);

@@ -324,3 +324,9 @@ create index if not exists idx_exam_room_invig_exam
 -- Room-based marking/signing reuses exam_attendance (keyed by exam_paper + student); the
 -- room the student was marked in is stamped here so signing can group by (room, date).
 alter table exam_attendance add column if not exists room_id varchar(12);
+
+-- Phase 5: god/admin corrections to a SIGNED roster retain the invigilator's signature
+-- (rule b) — these columns record who altered it afterwards and when, so the card and the
+-- 360 view can show "corrected by <name> on <date>" alongside the original signature.
+alter table exam_attendance add column if not exists corrected_by_employee_id varchar(12);
+alter table exam_attendance add column if not exists corrected_at timestamp(0);

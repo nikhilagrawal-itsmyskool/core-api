@@ -395,4 +395,97 @@ back to god. `/me` invigilator writes are scoped to the caller's own assignments
 - **Rendering** — **DECIDED**: HTML + CSS `@page` print (house pattern), logo/stamp/QR
   inlined as `data:` URIs; office prints to PDF from the browser. See §4. ✔ resolved.
 ```
-```
+
+---
+
+## 10. Phase 5 — relievers · free teachers · AV room · roster finalization
+
+> Status: **DESIGN (frozen 2026-09-12)**, pre-build. Extends the Phase-4 seating-room model.
+> Every decision below was confirmed with the owner; the knock-on rules (E1–E3) are the ones
+> that most affect the schema and the printed card.
+
+### 10.1 Relievers (break-cover floaters)
+- A **day-level pool** per `(exam, exam_date)` — floaters that relieve room invigilators for
+  breaks; **not** tied to a room.
+- New table `exam_reliever(uuid, school_id, exam_id, exam_date, employee_id, status,
+  createdby_userid, created_at, updated_at)`. Idempotent per (exam, date): replace-on-save
+  like `exam_room_invigilator`.
+- UI starts at **2 rows**, "add" for more, **0 allowed**.
+- A person **cannot** be both a room invigilator and a reliever on the same date (validate at
+  save, both directions).
+- Relievers **never sign** anything and **never appear on the admit card** — purely on-duty log.
+
+### 10.2 Free teachers (that day)
+- Definition: **active employees NOT assigned to any room AND NOT a reliever** for this exam on
+  this date. (We cannot account for non-exam duties — the timetable load is a separate module
+  and exams suspend normal classes; out of scope.) Computed, not stored.
+- Surfaced **only in "Focus a day"** mode on the invigilator grid, as a picker to assign
+  relievers from.
+
+### 10.3 AV room
+- A **single special room auto-present on every exam date**. Modelled as an `exam_room` row with
+  **`kind = 'av'`** (seating rooms are `kind = 'seating'` / null); auto-created on first load of
+  a seating-enabled exam. **No roll-range allocations.**
+- Needs an assigned **supervisor** each day — reuses the room-invigilator mechanism
+  (`exam_room_invigilator`, `room_id` = the AV room).
+- **Ad-hoc roster**: the supervisor searches & adds the specific students present that day; then
+  marks + submits like any room. Occupants come from a new
+  `exam_av_occupant(uuid, school_id, exam_id, exam_date, student_id, status, added_by, ...)`
+  instead of section allocations. (`roomOccupants` gets an AV branch that reads this table.)
+- A student in the AV room is a **distinct status** in Student 360 (see 10.7), not "Absent".
+
+### 10.4 Roster: Save draft vs Submit & sign
+- Two actions, clearer semantics:
+  - **Save draft** — persist present/absent marks, **no signature**, stays editable, labelled
+    *Not submitted*. Nothing prints.
+  - **Submit & sign** — materialise unmarked→present, stamp the signer's signature onto every
+    occupant's `exam_attendance` row (prints on the card), and **finalise**.
+- After submit, the teacher/admin view is **read-only**: openable, shows a **"Submitted ✓ on
+  <date>"** banner, all controls disabled.
+- **Re-submit window**: teacher/admin may re-submit **until the end of that exam date (IST)**;
+  **hard-locked (god-only) after** the date passes. Lock boundary = `istToday() > exam_date`.
+
+### 10.5 God corrections — **option (b): retain the invigilator's signature**
+- God may edit a submitted roster at any time (never time-locked — **E3**).
+- When god edits a roster that **already carries an invigilator signature**, that signature is
+  **retained**; we record **"corrected by god on <date>"**.
+- **E1.** If god is the **first/only** signer (teacher never submitted), the card uses **god's**
+  signature (there is no invigilator signature to retain).
+- **E2.** The **"corrected by god on <date>"** marker is **visible** on the printed admit card
+  and in Student 360 — not audit-only. (New columns on `exam_attendance`:
+  `corrected_by_employee_id`, `corrected_at`; or a per-room correction stamp — decide at build.)
+
+### 10.6 Invigilator assignment: auto-save + post-submit lock
+- Selecting a teacher in a grid cell **auto-saves immediately** (per-cell PUT). **No Save
+  button** — this also removes the permanently-blue "unsaved" affordance bug.
+- Once a room-day roster is **submitted**, that cell's invigilator is **locked for
+  teacher/admin**; **god can still change it** (auto-saves).
+- Clarity: grid assignment = *who's rostered*; card signature = *who actually signed* (governed
+  by 10.5). A post-submit god reassignment does **not** rewrite the signature.
+
+### 10.7 Student 360 exam surface
+- **Per paper** — one row per subject/date: subject, date, **present/absent** (or **In AV
+  room**), and the **invigilator name + "signed ✓"** marker, plus **"corrected by god"** per E2.
+  No signature image.
+- Rows appear **only once the roster is submitted**; an unfinalised day shows **"—/pending"**; a
+  no-show shows **Absent**; an AV-room student shows **In AV room**.
+- One session per exam day; one invigilator per room (relievers cover extra load).
+
+### 10.8 Build phasing
+- **P5a** — roster finalization (draft vs submit + read-only view + end-of-day lock) · god
+  correction retaining invigilator signature (E1/E2) · grid auto-save + post-submit lock · fix
+  the always-blue button. *(Highest value, touches existing surfaces.)*
+- **P5b** — relievers pool + free-teacher picker.
+- **P5c** — AV room (auto room + ad-hoc occupant roster + supervisor).
+- **P5d** — Student 360 per-paper surface (incl. In-AV-room + corrected-by-god markers).
+
+### 10.9 Added requirements (folded into P5a)
+- **Completion board (for the incharge/god).** Not a check-in — purely a progress view over the
+  existing *submitted* (signed) state: per exam date show how many room-day rosters are **signed**
+  vs **attendance pending**, and flag the pending rooms. Surfaced on the invigilator grid: a per-cell
+  **signed ✓ / pending** marker and a per-day tally ("12/17 signed").
+- **Sudden duty change (reassign).** Done via the invigilator **grid cell** (auto-saves on select —
+  same surface, works on phone). On reassign, fire an **in-app notification** to the **new** invigilator
+  ("duty assigned") and, if someone was replaced, the **old** one ("duty changed") — via the
+  communication inbox (mirror `leave-notify.ts`; fire-and-forget, never fails the save). Reassignment
+  of a room whose roster is already **submitted** is **locked for teacher/admin, god-only**.

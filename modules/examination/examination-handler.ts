@@ -589,7 +589,7 @@ class ExaminationHandler {
       if (!id || !paperId || !sectionId) return;
       const body = parseBody<{ marks: any[] }>(event, callback);
       if (!body) return;
-      ResponseBuilder.ok(await examinationService.markAttendance(auth.schoolId, id, paperId, sectionId, body.marks || [], auth.userId), callback);
+      ResponseBuilder.ok(await examinationService.markAttendance(auth.schoolId, id, paperId, sectionId, body.marks || [], auth.userId, callerHasRole(event, "god")), callback);
     } catch (err: any) {
       ResponseBuilder.handleError(err, callback);
     }
@@ -605,7 +605,7 @@ class ExaminationHandler {
       const paperId = requireParam(event, "paperId", callback);
       const sectionId = requireParam(event, "sectionId", callback);
       if (!id || !paperId || !sectionId) return;
-      ResponseBuilder.ok(await examinationService.signRoster(auth.schoolId, id, paperId, sectionId, auth.userId), callback);
+      ResponseBuilder.ok(await examinationService.signRoster(auth.schoolId, id, paperId, sectionId, auth.userId, callerHasRole(event, "god")), callback);
     } catch (err: any) {
       ResponseBuilder.handleError(err, callback);
     }
@@ -704,7 +704,7 @@ class ExaminationHandler {
       if (!id || !date) return;
       const body = parseBody<{ assignments: any[] }>(event, callback);
       if (!body) return;
-      ResponseBuilder.ok(await examinationService.saveRoomInvigilatorsForDate(auth.schoolId, id, date, body.assignments || [], auth.userId), callback);
+      ResponseBuilder.ok(await examinationService.saveRoomInvigilatorsForDate(auth.schoolId, id, date, body.assignments || [], auth.userId, callerHasRole(event, "god")), callback);
     } catch (err: any) { ResponseBuilder.handleError(err, callback); }
   };
 
@@ -734,7 +734,7 @@ class ExaminationHandler {
       if (!id || !roomId || !date) return;
       const body = parseBody<{ marks: any[] }>(event, callback);
       if (!body) return;
-      ResponseBuilder.ok(await examinationService.markRoomAttendance(auth.schoolId, id, roomId, date, body.marks || [], auth.userId), callback);
+      ResponseBuilder.ok(await examinationService.markRoomAttendance(auth.schoolId, id, roomId, date, body.marks || [], auth.userId, callerHasRole(event, "god")), callback);
     } catch (err: any) { ResponseBuilder.handleError(err, callback); }
   };
 
@@ -748,7 +748,7 @@ class ExaminationHandler {
       const roomId = requireParam(event, "roomId", callback);
       const date = requireParam(event, "date", callback);
       if (!id || !roomId || !date) return;
-      ResponseBuilder.ok(await examinationService.signRoomRoster(auth.schoolId, id, roomId, date, auth.userId), callback);
+      ResponseBuilder.ok(await examinationService.signRoomRoster(auth.schoolId, id, roomId, date, auth.userId, callerHasRole(event, "god")), callback);
     } catch (err: any) { ResponseBuilder.handleError(err, callback); }
   };
 
