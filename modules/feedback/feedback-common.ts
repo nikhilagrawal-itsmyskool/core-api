@@ -37,6 +37,22 @@ export async function findEmployee(
   return rows.length > 0 ? rows[0] : null;
 }
 
+// The student's class for a given academic year (from the student_class enrolment), or
+// null. Used to snapshot the class at record time when the client didn't send one.
+export async function currentClassId(
+  schoolId: string,
+  studentId: string,
+  academicYearId: string | null,
+): Promise<string | null> {
+  if (!academicYearId) return null;
+  const rows = await DB.query(
+    singleLineString`select class_id from student_class
+      where student_id = $1 and academic_year_id = $2 and school_id = $3 limit 1`,
+    [studentId, academicYearId, schoolId],
+  );
+  return rows.length > 0 ? rows[0].classId : null;
+}
+
 // A student by uuid, or null.
 export async function findStudent(
   schoolId: string,

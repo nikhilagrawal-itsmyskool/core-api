@@ -6,6 +6,7 @@ import {
   findEmployee,
   findStudent,
   getCurrentAcademicYearId,
+  currentClassId,
   reviewerEmployeeIds,
   employeeNames,
 } from "./feedback-common";
@@ -97,6 +98,8 @@ class FeedbackService {
     if (!(await this.categoryExists(schoolId, req.categoryId))) throw new BusinessErrorResult(ErrorCode.BusinessError, "Invalid category");
 
     const academicYearId = req.academicYearId || (await getCurrentAcademicYearId(schoolId));
+    // Snapshot the class: trust the client's classId, else resolve from the enrolment.
+    const classId = req.classId || (await currentClassId(schoolId, req.studentId, academicYearId));
     const id = generateShortUuid(12);
     const now = new Date();
     const visitDate = req.visitDate || now.toISOString().slice(0, 10);
@@ -105,7 +108,7 @@ class FeedbackService {
         (uuid, school_id, academic_year_id, student_id, class_id, category_id, feedback_text, visit_date,
          assigned_to, recorded_by, status, last_activity_at, createdby_userid, created_at)
         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'open', $11, $10, $11)`,
-      [id, schoolId, academicYearId, req.studentId, req.classId || null, req.categoryId, req.feedbackText.trim(), visitDate, req.assignedTo, recordedBy, now],
+      [id, schoolId, academicYearId, req.studentId, classId || null, req.categoryId, req.feedbackText.trim(), visitDate, req.assignedTo, recordedBy, now],
     );
     const eventId = await this.insertEvent(schoolId, id, "record", recordedBy, null, { toStatus: "open", toAssignee: req.assignedTo }, now);
     await this.uploadAttachments(schoolId, eventId, recordedBy, req.attachments);
@@ -282,7 +285,11 @@ class FeedbackService {
     const unread = `(w.employee_id is not null and f.last_activity_at is not null
         and (w.last_seen_at is null or f.last_activity_at > w.last_seen_at)) as unread`;
     const sql = singleLineString`select f.uuid, f.academic_year_id, f.student_id, s.name as student_name, s.admission_number,
-        f.class_id, c.name as class_name, f.category_id, cat.name as category_name,
+        f.class_id,
+        coalesce(c.name, (select cl.name from student_class scc join class cl on cl.uuid = scc.class_id and cl.school_id = scc.school_id
+          where scc.student_id = f.student_id and scc.academic_year_id = f.academic_year_id and scc.school_id = f.school_id
+          order by cl.seq nulls last limit 1)) as class_name,
+        f.category_id, cat.name as category_name,
         f.feedback_text, f.visit_date::text as visit_date, f.assigned_to, ae.name as assigned_to_name,
         f.recorded_by, re.name as recorded_by_name, f.status, f.closed_by, ce.name as closed_by_name,
         f.closed_at::text as closed_at, f.last_activity_at::text as last_activity_at, f.created_at::text as created_at,
