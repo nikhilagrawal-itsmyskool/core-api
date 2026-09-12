@@ -370,10 +370,11 @@ class DocumentService {
     if (!body.agreed) throw new BusinessErrorResult(ErrorCode.BusinessError, "You must confirm you have read and agree");
     if (!body.declaredName || !String(body.declaredName).trim()) throw new BusinessErrorResult(ErrorCode.BusinessError, "Your name is required on the declaration");
     if (!body.signatureBase64) throw new BusinessErrorResult(ErrorCode.BusinessError, "A signature is required");
-    // Reuse an ack id space for the signature entityId — use the employee+doc as key.
+    // entityId must fit file_storage.entity_id (varchar 12) — use the doc id; the precise
+    // per-employee link is the ack row's signature_file_id.
     const sigId = await this.uploadFile(
       { fileName: `signature-${id}.png`, mimeType: body.signatureMimeType || "image/png", base64Data: body.signatureBase64 },
-      ENTITY_ACK_SIGNATURE, `${id}:${employeeId}`, schoolId, userId, SIGNATURE_MAX_BYTES, SIGNATURE_ALLOWED_MIME,
+      ENTITY_ACK_SIGNATURE, id, schoolId, userId, SIGNATURE_MAX_BYTES, SIGNATURE_ALLOWED_MIME,
     );
     return this.writeAck(schoolId, employeeId, doc, {
       method: "digital", declaredName: String(body.declaredName).trim(),
@@ -388,9 +389,11 @@ class DocumentService {
     if (doc.status !== "published") throw new BusinessErrorResult(ErrorCode.BusinessError, "Document is not published");
     this.assertMode(doc, "upload");
     if (!body.base64Data) throw new BusinessErrorResult(ErrorCode.BusinessError, "The signed page file is required");
+    // entityId must fit file_storage.entity_id (varchar 12) — use the doc id; the precise
+    // per-employee link is the ack row's signed_page_file_id.
     const pageId = await this.uploadFile(
       { fileName: body.fileName || `signed-${id}.pdf`, mimeType: body.mimeType || "application/pdf", base64Data: body.base64Data },
-      ENTITY_ACK_SIGNED_PAGE, `${id}:${employeeId}`, schoolId, userId, SIGNED_PAGE_MAX_BYTES, SIGNED_PAGE_ALLOWED_MIME,
+      ENTITY_ACK_SIGNED_PAGE, id, schoolId, userId, SIGNED_PAGE_MAX_BYTES, SIGNED_PAGE_ALLOWED_MIME,
     );
     return this.writeAck(schoolId, employeeId, doc, {
       method: "upload", declaredName: body.declaredName ? String(body.declaredName).trim() : null,
