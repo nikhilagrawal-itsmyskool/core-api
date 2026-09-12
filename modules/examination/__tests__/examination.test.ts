@@ -1,6 +1,6 @@
 import {
   BASE_URL, headers, getContext, closePool, cleanupTestExams, TEST_MARKER,
-  getSampleSection, cleanupBranding, getPaperId, seedSignature, cleanupSignature,
+  getSampleSection, cleanupBranding, getPaperId, cleanupSignature,
   getSectionRolls, setRoll, restoreRolls,
 } from "./helpers";
 
@@ -310,14 +310,12 @@ describe("examination: phase 2 — dues, admit cards, printing, branding", () =>
     const rm = await post(`/examinations/${examId}/rosters/${paperId}/${section!.sectionClassId}/mark`, { marks });
     expect(rm.body.markedCount).toBe(rm.body.total);
 
-    // Sign with no signature on file → rejected.
-    await cleanupSignature("system");
+    // Sign with no drawn signature → rejected (a fresh signature is required every time).
     const noSig = await post(`/examinations/${examId}/rosters/${paperId}/${section!.sectionClassId}/sign`, {});
     expect(noSig.status).toBeGreaterThanOrEqual(400);
 
-    // Seed a signature, then sign → ok.
-    await seedSignature("system");
-    const rs = await post(`/examinations/${examId}/rosters/${paperId}/${section!.sectionClassId}/sign`, {});
+    // Sign with a freshly-drawn signature → ok.
+    const rs = await post(`/examinations/${examId}/rosters/${paperId}/${section!.sectionClassId}/sign`, { signatureBase64: TINY_PNG });
     expect(rs.status).toBe(200);
     expect(rs.body.signed).toBe(true);
 
@@ -421,8 +419,7 @@ describe("examination: phase 4 — seating rooms", () => {
     const rm = await post(`/examinations/${examId}/room-rosters/${roomId}/${D1}/mark`, { marks });
     expect(rm.body.marked).toBe(rm.body.total);
 
-    await seedSignature("system");
-    const rs = await post(`/examinations/${examId}/room-rosters/${roomId}/${D1}/sign`, {});
+    const rs = await post(`/examinations/${examId}/room-rosters/${roomId}/${D1}/sign`, { signatureBase64: TINY_PNG });
     expect(rs.status).toBe(200);
     expect(rs.body.signed).toBe(true);
 

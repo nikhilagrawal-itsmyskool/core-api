@@ -553,7 +553,9 @@ class ExaminationHandler {
     try {
       const p = await this.meRosterParams(event, callback);
       if (!p) return;
-      ResponseBuilder.ok(await examinationService.signRoster(p.emp.schoolId, p.examId, p.paperId, p.sectionId, p.emp.employeeId), callback);
+      const body = parseBody<{ signatureBase64?: string }>(event, callback);
+      if (!body) return;
+      ResponseBuilder.ok(await examinationService.signRoster(p.emp.schoolId, p.examId, p.paperId, p.sectionId, p.emp.employeeId, false, body.signatureBase64), callback);
     } catch (err: any) {
       ResponseBuilder.handleError(err, callback);
     }
@@ -605,7 +607,9 @@ class ExaminationHandler {
       const paperId = requireParam(event, "paperId", callback);
       const sectionId = requireParam(event, "sectionId", callback);
       if (!id || !paperId || !sectionId) return;
-      ResponseBuilder.ok(await examinationService.signRoster(auth.schoolId, id, paperId, sectionId, auth.userId, callerHasRole(event, "god")), callback);
+      const body = parseBody<{ signatureBase64?: string }>(event, callback);
+      if (!body) return;
+      ResponseBuilder.ok(await examinationService.signRoster(auth.schoolId, id, paperId, sectionId, auth.userId, callerHasRole(event, "god"), body.signatureBase64), callback);
     } catch (err: any) {
       ResponseBuilder.handleError(err, callback);
     }
@@ -748,7 +752,9 @@ class ExaminationHandler {
       const roomId = requireParam(event, "roomId", callback);
       const date = requireParam(event, "date", callback);
       if (!id || !roomId || !date) return;
-      ResponseBuilder.ok(await examinationService.signRoomRoster(auth.schoolId, id, roomId, date, auth.userId, callerHasRole(event, "god")), callback);
+      const body = parseBody<{ signatureBase64?: string }>(event, callback);
+      if (!body) return;
+      ResponseBuilder.ok(await examinationService.signRoomRoster(auth.schoolId, id, roomId, date, auth.userId, callerHasRole(event, "god"), body.signatureBase64), callback);
     } catch (err: any) { ResponseBuilder.handleError(err, callback); }
   };
 
@@ -888,7 +894,9 @@ class ExaminationHandler {
     try {
       const p = await this.meRoomParams(event, callback);
       if (!p) return;
-      ResponseBuilder.ok(await examinationService.signRoomRoster(p.emp.schoolId, p.examId, p.roomId, p.date, p.emp.employeeId), callback);
+      const body = parseBody<{ signatureBase64?: string }>(event, callback);
+      if (!body) return;
+      ResponseBuilder.ok(await examinationService.signRoomRoster(p.emp.schoolId, p.examId, p.roomId, p.date, p.emp.employeeId, false, body.signatureBase64), callback);
     } catch (err: any) { ResponseBuilder.handleError(err, callback); }
   };
 }

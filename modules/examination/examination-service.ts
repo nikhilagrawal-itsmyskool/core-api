@@ -1059,6 +1059,17 @@ class ExaminationService {
     return rows.length ? rows[0].uuid : null;
   }
 
+  // Phase 5: rosters are signed with a FRESH signature drawn at submit time (a new signature
+  // every day — no reuse of a stored profile signature). Upload the drawn PNG and return its
+  // file id to stamp onto the attendance rows / admit card.
+  private async uploadRosterSignature(schoolId: string, entityId: string, base64Data: string, userId: string): Promise<string> {
+    const f = await fileStorageService.upload({
+      fileName: "roster-signature.png", mimeType: "image/png",
+      base64Data, entityType: "exam_roster_signature", entityId, schoolId, userId,
+    });
+    return f.uuid;
+  }
+
   // ── Employee signature (draw-on-canvas PNG, one per employee) ─────────────────
   async employeeSignature(schoolId: string, employeeId: string): Promise<{ fileId: string | null; dataUri: string | null }> {
     const fileId = await this.signatureFileId(schoolId, employeeId);
@@ -1174,7 +1185,7 @@ class ExaminationService {
   private ensureEditable(examDate: string, isGod: boolean): void {
     if (isGod) return;
     if (examDate && examDate < istToday()) {
-      throw new BusinessErrorResult(ErrorCode.BusinessError, "This exam day is locked. Ask an exam manager (god) to make changes.");
+      throw new BusinessErrorResult(ErrorCode.BusinessError, "This exam day has passed and is locked.");
     }
   }
 
@@ -1259,7 +1270,7 @@ class ExaminationService {
   // Sign the roster: requires every student marked and the signer to have a stored
   // signature. Stamps signed_by / signed_at / signature_file_id on all rows for that
   // (paper, section). Re-signing is allowed (post-sign edit) and audited as 'resign'.
-  async signRoster(schoolId: string, examId: string, examPaperId: string, sectionClassId: string, employeeId: string, isGod = false): Promise<any> {
+  async signRoster(schoolId: string, examId: string, examPaperId: string, sectionClassId: string, employeeId: string, isGod = false, signatureBase64?: string): Promise<any> {
     const exam = await this.getExam(schoolId, examId);
     if (!exam) throw new BusinessErrorResult(ErrorCode.BusinessError, "Examination not found");
     const paper = await this.paperById(examId, examPaperId);
@@ -1274,8 +1285,8 @@ class ExaminationService {
     if (unmarked.length) {
       throw new BusinessErrorResult(ErrorCode.BusinessError, `Mark all ${students.length} students before signing (${unmarked.length} still unmarked)`);
     }
-    const sigFileId = await this.signatureFileId(schoolId, employeeId);
-    if (!sigFileId) throw new BusinessErrorResult(ErrorCode.BusinessError, "Add your signature first (Profile → Signature), then sign the roster");
+    if (!signatureBase64) throw new BusinessErrorResult(ErrorCode.BusinessError, "Draw your signature to submit the roster");
+    const sigFileId = await this.uploadRosterSignature(schoolId, examPaperId, signatureBase64, employeeId);
     const already = attRows.some((r: any) => r.signedAt);
     const now = new Date();
     const { corrections } = await this.applySignatures(students.map((s: any) => ({ examPaperId, studentId: s.studentId })), rowMap, employeeId, sigFileId, now, null);
@@ -1564,10 +1575,12 @@ class ExaminationService {
       const after = seen.get(rid)?.employeeId || null;
       if (before !== after) changes.push({ roomId: rid, before, after });
     }
-    // Once a room's roster is submitted, its invigilator is locked for teacher/admin — god only.
-    if (!isGod) {
+    // Lock reassignment for teacher/admin (god bypasses) once the exam day has passed or the
+    // room's roster is submitted — changing who invigilated a finished/submitted exam is wrong.
+    if (!isGod && changes.length) {
+      if (examDate < istToday()) throw new BusinessErrorResult(ErrorCode.BusinessError, "This exam day has passed and is locked.");
       const locked = changes.find((c) => submitted.has(c.roomId));
-      if (locked) throw new BusinessErrorResult(ErrorCode.BusinessError, "That room's roster is already submitted — reassignment is locked. Ask an exam manager (god).");
+      if (locked) throw new BusinessErrorResult(ErrorCode.BusinessError, "That room's roster is already submitted — reassignment is locked.");
     }
 
     const now = new Date();
@@ -1768,7 +1781,7 @@ class ExaminationService {
 
   // Sign a room-day roster: every occupant must be marked and the signer must have a stored
   // signature. Stamps signed_* on each occupant's attendance row (so admit cards render it).
-  async signRoomRoster(schoolId: string, examId: string, roomId: string, examDate: string, employeeId: string, isGod = false): Promise<any> {
+  async signRoomRoster(schoolId: string, examId: string, roomId: string, examDate: string, employeeId: string, isGod = false, signatureBase64?: string): Promise<any> {
     this.ensureEditable(examDate, isGod);
     const exam = await this.getExam(schoolId, examId);
     if (!exam) throw new BusinessErrorResult(ErrorCode.BusinessError, "Examination not found");
@@ -1784,8 +1797,8 @@ class ExaminationService {
     if (unmarked.length) {
       throw new BusinessErrorResult(ErrorCode.BusinessError, `Mark all ${occ.length} students before signing (${unmarked.length} still unmarked)`);
     }
-    const sigFileId = await this.signatureFileId(schoolId, employeeId);
-    if (!sigFileId) throw new BusinessErrorResult(ErrorCode.BusinessError, "Add your signature first (Profile → Signature), then sign the roster");
+    if (!signatureBase64) throw new BusinessErrorResult(ErrorCode.BusinessError, "Draw your signature to submit the roster");
+    const sigFileId = await this.uploadRosterSignature(schoolId, roomId, signatureBase64, employeeId);
     const already = attRows.some((r: any) => r.signedAt);
     const rowMap = new Map<string, any>(attRows.map((r: any) => [r.studentId, r]));
     const now = new Date();
