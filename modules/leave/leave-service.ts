@@ -21,6 +21,7 @@ import {
 import {
   ApplyLeaveRequest,
   LeaveApplicationView,
+  ApproveResult,
   LeaveBalanceView,
   LeaveConfig,
   LeaveTypeView,
@@ -163,8 +164,11 @@ class LeaveService {
     }
 
     // Annual allocation (per academic year, lapses 31 Mar): the requested working days plus
-    // any pending/approved of this type this year must not exceed the type's quota. Applies
-    // to any type carrying an annual_quota (CL=8, ML=4 by default).
+    // any pending/approved of this type this year is compared to the type's quota (CL=8,
+    // ML=4 by default). This is a SOFT limit — an over-quota request is still submitted (so
+    // the Director can approve it as an exception) but the applicant is warned, and approval
+    // will require an explicit override. See approve().
+    const warnings: string[] = [];
     if (type.annualQuota != null) {
       const { start, end } = await academicYearRange(schoolId, req.fromDate);
       const usedRows = await DB.query(
@@ -176,9 +180,8 @@ class LeaveService {
       const used = usedRows[0].n || 0;
       if (used + workingDays > type.annualQuota) {
         const left = Math.max(0, type.annualQuota - used);
-        throw new BusinessErrorResult(
-          ErrorCode.BusinessError,
-          `${type.name} allocation exceeded: ${type.annualQuota} day(s) a year — ${used} used, ${left} left, and this request is ${workingDays} day(s).`,
+        warnings.push(
+          `${type.name} balance exceeded: ${type.annualQuota} day(s) a year — ${used} used, ${left} left, and this request is ${workingDays} day(s). It needs the Director's approval as an exception.`,
         );
       }
     }
@@ -214,7 +217,8 @@ class LeaveService {
 
     await this.audit(schoolId, id, "apply", `${type.code} ${req.fromDate}..${req.toDate}`, null, "pending", employeeId);
     await this.notifyApplied(schoolId, id, employeeId, type.name, req.fromDate, req.toDate);
-    return (await this.getApplication(schoolId, id))!;
+    const view = (await this.getApplication(schoolId, id))!;
+    return warnings.length ? { ...view, warnings } : view;
   }
 
   // ── Queries ─────────────────────────────────────────────────────────────────
@@ -232,7 +236,7 @@ class LeaveService {
       singleLineString`select a.uuid, a.employee_id, e.name as employee_name, a.leave_type_code, t.name as leave_type_name,
           a.from_date::text as from_date, a.to_date::text as to_date, a.working_days, a.reason, a.status,
           a.applied_at::text as applied_at, a.decided_by, d.name as decided_by_name, a.decided_at::text as decided_at,
-          a.decision_note, a.waived, a.waiver_reason,
+          a.decision_note, a.waived, a.waiver_reason, a.overridden, a.override_reason,
           exists(select 1 from file_storage f where f.entity_type = '${FILE_ENTITY_TYPE}' and f.entity_id = a.uuid and f.school_id = a.school_id) as has_attachment
         from leave_application a
         left join employee e on e.uuid = a.employee_id and e.school_id = a.school_id
@@ -255,7 +259,7 @@ class LeaveService {
       singleLineString`select a.uuid, a.employee_id, e.name as employee_name, a.leave_type_code, t.name as leave_type_name,
           a.from_date::text as from_date, a.to_date::text as to_date, a.working_days, a.reason, a.status,
           a.applied_at::text as applied_at, a.decided_by, d.name as decided_by_name, a.decided_at::text as decided_at,
-          a.decision_note, a.waived, a.waiver_reason,
+          a.decision_note, a.waived, a.waiver_reason, a.overridden, a.override_reason,
           exists(select 1 from file_storage f where f.entity_type = '${FILE_ENTITY_TYPE}' and f.entity_id = a.uuid and f.school_id = a.school_id) as has_attachment
         from leave_application a
         left join employee e on e.uuid = a.employee_id and e.school_id = a.school_id
@@ -286,33 +290,45 @@ class LeaveService {
       waived: !!r.waived,
       waiverReason: r.waiverReason || null,
       hasAttachment: !!r.hasAttachment,
+      overridden: !!r.overridden,
+      overrideReason: r.overrideReason || null,
     };
   }
 
   // ── Decisions ────────────────────────────────────────────────────────────────
   private async findRaw(schoolId: string, id: string): Promise<any | null> {
     const rows = await DB.query(
-      singleLineString`select uuid, employee_id, leave_type_code, from_date::text as from_date, to_date::text as to_date, status
+      singleLineString`select uuid, employee_id, leave_type_code, from_date::text as from_date, to_date::text as to_date, working_days, status
         from leave_application where school_id = $1 and uuid = $2`,
       [schoolId, id],
     );
     return rows[0] || null;
   }
 
-  async approve(schoolId: string, id: string, userId: string): Promise<LeaveApplicationView | null> {
+  // Approve a pending application. The daily CL cap and the annual quota are SOFT limits:
+  // if either would be breached and the approver has not confirmed an override, approval
+  // pauses and returns { needsConfirmation, warnings } so the UI can ask "approve anyway?".
+  // With opts.override the approval proceeds, the balance still goes down, and the override
+  // (+ reason) is recorded. Returns null if the application does not exist.
+  async approve(
+    schoolId: string,
+    id: string,
+    userId: string,
+    opts: { override?: boolean; overrideReason?: string } = {},
+  ): Promise<ApproveResult | null> {
     const app = await this.findRaw(schoolId, id);
     if (!app) return null;
     if (app.status !== "pending") throw new BusinessErrorResult(ErrorCode.BusinessError, `Cannot approve a ${app.status} application`);
 
     const type = await this.getType(schoolId, app.leaveTypeCode);
     const config = await this.ensureConfig(schoolId);
+    const warnings: string[] = [];
 
     // Per-day cap (policy: "not more than N teachers on any single working day"): at most
     // `dailyCap` staff on approved Casual Leave on any date the request spans, school-wide.
-    // It applies to routine CL only — genuine medical / emergency / bereavement / on-duty
-    // leave is never blocked (the policy explicitly prioritises those).
-    const countsForCap = String(app.leaveTypeCode).toUpperCase() === "CL";
-    if (countsForCap) {
+    // Applies to routine CL only — medical / emergency / bereavement / on-duty are never
+    // capped (the policy explicitly prioritises those).
+    if (String(app.leaveTypeCode).toUpperCase() === "CL") {
       for (const date of datesInRange(app.fromDate, app.toDate)) {
         const cnt = await DB.query(
           singleLineString`select count(distinct employee_id)::int as n from leave_application
@@ -321,23 +337,45 @@ class LeaveService {
           [schoolId, id, date],
         );
         if (cnt[0].n >= config.dailyCap) {
-          throw new BusinessErrorResult(
-            ErrorCode.BusinessError,
-            `Daily cap reached: ${config.dailyCap} staff already on Casual Leave for ${date}.`,
-          );
+          warnings.push(`Daily cap reached: ${config.dailyCap} staff already on Casual Leave for ${date}.`);
         }
       }
     }
 
+    // Annual quota: would approving this push the employee past the type's yearly allocation?
+    if (type?.annualQuota != null) {
+      const { start, end } = await academicYearRange(schoolId, app.fromDate);
+      const usedRows = await DB.query(
+        singleLineString`select coalesce(sum(working_days), 0)::int as n from leave_application
+          where school_id = $1 and employee_id = $2 and lower(leave_type_code) = lower($3)
+            and status = 'approved' and uuid <> $4 and from_date >= $5 and from_date <= $6`,
+        [schoolId, app.employeeId, app.leaveTypeCode, id, start, end],
+      );
+      const used = usedRows[0].n || 0;
+      const reqDays = app.workingDays || 0;
+      if (used + reqDays > type.annualQuota) {
+        warnings.push(`${type.name} balance exceeded: ${type.annualQuota} day(s) a year — ${used} already approved, and this is ${reqDays} day(s).`);
+      }
+    }
+
+    if (warnings.length && !opts.override) {
+      return { needsConfirmation: true, warnings };
+    }
+
+    const overridden = warnings.length > 0;
+    const overrideReason = overridden ? (opts.overrideReason?.trim() || null) : null;
     const now = new Date();
     await DB.query(
-      singleLineString`update leave_application set status = 'approved', decided_by = $1, decided_at = $2, updatedby_userid = $1, updated_at = $2
-        where uuid = $3 and school_id = $4 and status = 'pending'`,
-      [userId, now, id, schoolId],
+      singleLineString`update leave_application set status = 'approved', decided_by = $1, decided_at = $2,
+          overridden = $3, override_reason = $4, updatedby_userid = $1, updated_at = $2
+        where uuid = $5 and school_id = $6 and status = 'pending'`,
+      [userId, now, overridden, overrideReason, id, schoolId],
     );
-    await this.audit(schoolId, id, "approve", null, "pending", "approved", userId);
+    const auditDetail = overridden ? `OVERRIDE: ${warnings.join(" ")}${overrideReason ? ` — ${overrideReason}` : ""}`.slice(0, 256) : null;
+    await this.audit(schoolId, id, overridden ? "override" : "approve", auditDetail, "pending", "approved", userId);
     await this.notifyDecision(schoolId, id, app.employeeId, NOTIFY.APPROVED, "Leave approved", type?.name, app.fromDate, app.toDate);
-    return this.getApplication(schoolId, id);
+    const application = (await this.getApplication(schoolId, id))!;
+    return { needsConfirmation: false, application, overridden };
   }
 
   async reject(schoolId: string, id: string, note: string | undefined, userId: string): Promise<LeaveApplicationView | null> {

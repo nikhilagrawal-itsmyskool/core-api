@@ -107,9 +107,12 @@ class LeaveHandler {
       if (!auth) return;
       const id = requireParam(event, "id", callback);
       if (!id) return;
-      const app = await leaveService.approve(auth.schoolId, id, auth.userId);
-      if (!app) return ResponseBuilder.notFound(ErrorCode.InvalidId, "Leave application not found", callback);
-      ResponseBuilder.ok(app, callback);
+      const body = event.body ? JSON.parse(event.body) : {};
+      const result = await leaveService.approve(auth.schoolId, id, auth.userId, {
+        override: !!body.override, overrideReason: body.overrideReason,
+      });
+      if (!result) return ResponseBuilder.notFound(ErrorCode.InvalidId, "Leave application not found", callback);
+      ResponseBuilder.ok(result, callback);
     } catch (err: any) {
       ResponseBuilder.handleError(err, callback);
     }

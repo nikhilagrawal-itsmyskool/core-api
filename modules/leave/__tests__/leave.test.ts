@@ -78,9 +78,11 @@ describe("Leave API", () => {
     ).rejects.toThrow(/requires a document/i);
 
     // Approve the CL.
-    const approved = await leaveService.approve(schoolId, cl.uuid, emp);
-    expect(approved!.status).toBe("approved");
-    expect(approved!.decidedBy).toBe(emp);
+    const approved: any = await leaveService.approve(schoolId, cl.uuid, emp);
+    expect(approved.needsConfirmation).toBe(false);
+    expect(approved.application.status).toBe("approved");
+    expect(approved.application.decidedBy).toBe(emp);
+    expect(approved.overridden).toBe(false);
 
     // Cannot approve twice.
     await expect(leaveService.approve(schoolId, cl.uuid, emp)).rejects.toThrow(/cannot approve/i);
@@ -118,10 +120,17 @@ describe("Leave API", () => {
     const a1 = await leaveService.apply(schoolId, e1, { leaveTypeCode: "CL", fromDate: DATE, toDate: DATE });
     const a2 = await leaveService.apply(schoolId, e2, { leaveTypeCode: "CL", fromDate: DATE, toDate: DATE });
 
-    expect((await leaveService.approve(schoolId, a0.uuid, e0))!.status).toBe("approved");
-    expect((await leaveService.approve(schoolId, a1.uuid, e1))!.status).toBe("approved");
-    // Third approval on the same day exceeds dailyCap (2) → blocked.
-    await expect(leaveService.approve(schoolId, a2.uuid, e2)).rejects.toThrow(/daily cap/i);
+    expect((await leaveService.approve(schoolId, a0.uuid, e0))!.needsConfirmation).toBe(false);
+    expect((await leaveService.approve(schoolId, a1.uuid, e1))!.needsConfirmation).toBe(false);
+    // Third approval on the same day exceeds dailyCap (2) → needs confirmation (soft), not blocked.
+    const r2: any = await leaveService.approve(schoolId, a2.uuid, e2);
+    expect(r2.needsConfirmation).toBe(true);
+    expect(r2.warnings.join(" ")).toMatch(/daily cap/i);
+    // With an explicit override it is approved anyway and flagged as overridden.
+    const r2ov: any = await leaveService.approve(schoolId, a2.uuid, e2, { override: true, overrideReason: "exam duty swap" });
+    expect(r2ov.needsConfirmation).toBe(false);
+    expect(r2ov.application.status).toBe("approved");
+    expect(r2ov.overridden).toBe(true);
   });
 
   it("applicant can cancel a pending / not-yet-started leave", async () => {

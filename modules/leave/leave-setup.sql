@@ -83,6 +83,10 @@ create table if not exists leave_application (
 create index if not exists idx_leave_application_status on leave_application(school_id, status);
 create index if not exists idx_leave_application_employee on leave_application(school_id, employee_id, from_date);
 create index if not exists idx_leave_application_range on leave_application(school_id, from_date, to_date);
+-- Soft thresholds: the daily CL cap and the annual quota are overridable at approval — an
+-- approver (god) may approve past them in exceptional cases; the override + reason are kept.
+alter table leave_application add column if not exists overridden boolean;
+alter table leave_application add column if not exists override_reason varchar(256);
 
 -- leave_audit: append-only log of every application state change.
 create table if not exists leave_audit (

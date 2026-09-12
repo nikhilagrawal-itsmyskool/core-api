@@ -63,7 +63,16 @@ export interface LeaveApplicationView {
   waived: boolean;
   waiverReason: string | null;
   hasAttachment: boolean;
+  overridden?: boolean;        // approved past the daily cap / annual quota by an approver
+  overrideReason?: string | null;
+  warnings?: string[];         // soft-threshold warnings surfaced at apply time
 }
+
+// Result of an approve attempt. When a soft threshold (daily cap / annual quota) is hit and
+// the approver has not confirmed an override, approval pauses and asks for confirmation.
+export type ApproveResult =
+  | { needsConfirmation: true; warnings: string[] }
+  | { needsConfirmation: false; application: LeaveApplicationView; overridden: boolean };
 
 // Annual (academic-year) balance for one employee.
 export interface LeaveQuotaBalance {
