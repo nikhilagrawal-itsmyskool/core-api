@@ -444,6 +444,23 @@ describe("examination: phase 4 — seating rooms", () => {
     expect(roster.body.correctedByName ?? null).toBeNull();
   });
 
+  sectionIt("phase 5b: relievers save per day; a person can't be both invigilator and reliever", async () => {
+    // "system" invigilates roomId on D1 (earlier test) → can't also be a reliever that day.
+    const clash = await put(`/examinations/${examId}/relievers/date/${D1}`, { employeeIds: ["system"] });
+    expect(clash.status).toBeGreaterThanOrEqual(400);
+
+    // A free teacher can be a reliever, and shows on the grid's relieversByDate.
+    const ok = await put(`/examinations/${examId}/relievers/date/${D1}`, { employeeIds: ["relievertst1"] });
+    expect(ok.status).toBe(200);
+    expect((ok.body.relieversByDate?.[D1] || []).some((r: any) => r.employeeId === "relievertst1")).toBe(true);
+
+    // The reverse: assigning that reliever to a room the same day is rejected.
+    const back = await put(`/examinations/${examId}/room-invigilators/date/${D1}`, { assignments: [{ roomId, employeeId: "relievertst1" }] });
+    expect(back.status).toBeGreaterThanOrEqual(400);
+
+    await put(`/examinations/${examId}/relievers/date/${D1}`, { employeeIds: [] }); // cleanup
+  });
+
   sectionIt("room image: upload, read back, and it appears on the room roster", async () => {
     const up = await put(`/examinations/${examId}/rooms/${roomId}/image`, { imageBase64: TINY_PNG, mimeType: "image/png", fileName: "room.png" });
     expect(up.status).toBe(200);

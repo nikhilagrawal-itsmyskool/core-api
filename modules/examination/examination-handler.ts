@@ -712,6 +712,21 @@ class ExaminationHandler {
     } catch (err: any) { ResponseBuilder.handleError(err, callback); }
   };
 
+  // PUT /examinations/{id}/relievers/date/{date} { employeeIds: [...] }
+  public saveRelieversForDate = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const auth = await resolveSchool(event, callback);
+      if (!auth) return;
+      const id = requireParam(event, "id", callback);
+      const date = requireParam(event, "date", callback);
+      if (!id || !date) return;
+      const body = parseBody<{ employeeIds: any[] }>(event, callback);
+      if (!body) return;
+      ResponseBuilder.ok(await examinationService.saveRelieversForDate(auth.schoolId, id, date, body.employeeIds || [], auth.userId, callerHasRole(event, "god")), callback);
+    } catch (err: any) { ResponseBuilder.handleError(err, callback); }
+  };
+
   // GET /examinations/{id}/room-rosters/{roomId}/{date} — admin/incharge view
   public getRoomRosterAdmin = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
     ctx.callbackWaitsForEmptyEventLoop = false;
@@ -955,6 +970,7 @@ export const saveRoomAllocations = guard(ACTIONS.EXAM_MANAGE, h.saveRoomAllocati
 export const copyRooms = guard(ACTIONS.EXAM_MANAGE, h.copyRooms);
 export const getRoomInvigilators = guard(ACTIONS.EXAM_VIEW, h.getRoomInvigilators);
 export const saveRoomInvigilatorsForDate = guard(ACTIONS.EXAM_MANAGE, h.saveRoomInvigilatorsForDate);
+export const saveRelieversForDate = guard(ACTIONS.EXAM_MANAGE, h.saveRelieversForDate);
 export const getRoomRosterAdmin = guard(ACTIONS.EXAM_MANAGE, h.getRoomRosterAdmin);
 export const markRoomRosterAdmin = guard(ACTIONS.EXAM_MANAGE, h.markRoomRosterAdmin);
 export const signRoomRosterAdmin = guard(ACTIONS.EXAM_MANAGE, h.signRoomRosterAdmin);

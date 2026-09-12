@@ -1541,7 +1541,49 @@ class ExaminationService {
     );
     const submitted = signedRows.map((r: any) => ({ examDate: r.examDate, roomId: r.roomId }));
 
-    return { examId, rooms, dates, gradesByDate, activeByDate, assignments, conflicts, submitted };
+    // Relievers: the day-level break-cover pool per date (not tied to a room; never sign).
+    const relRows = await DB.query(
+      singleLineString`select to_char(r.exam_date, 'YYYY-MM-DD') as exam_date, r.employee_id,
+          (select name from employee emp where emp.uuid = r.employee_id) as employee_name
+        from exam_reliever r where r.exam_id = $1 and r.status = 'active' order by r.exam_date`,
+      [examId],
+    );
+    const relieversByDate: Record<string, { employeeId: string; employeeName: string }[]> = {};
+    for (const r of relRows) (relieversByDate[r.examDate] ||= []).push({ employeeId: r.employeeId, employeeName: r.employeeName });
+
+    return { examId, rooms, dates, gradesByDate, activeByDate, assignments, conflicts, submitted, relieversByDate };
+  }
+
+  // Save the day-level reliever pool for a date (replace-on-save). A reliever can't also be a
+  // room invigilator that day (both directions enforced). Relievers never sign anything.
+  async saveRelieversForDate(schoolId: string, examId: string, examDate: string, employeeIds: any[], userId: string, isGod = false): Promise<any> {
+    const exam = await this.requireExam(schoolId, examId);
+    if (exam.status === "archived") throw new BusinessErrorResult(ErrorCode.BusinessError, "Cannot edit an archived exam");
+    if (!isValidDate(examDate)) throw new BusinessErrorResult(ErrorCode.BusinessError, "Invalid date");
+    if (!Array.isArray(employeeIds)) throw new BusinessErrorResult(ErrorCode.BusinessError, "employeeIds must be an array");
+    this.ensureEditable(examDate, isGod);
+    const ids = [...new Set(employeeIds.map((e) => (e || "").trim()).filter(Boolean))];
+    if (ids.length) {
+      const invig = await DB.query(
+        singleLineString`select distinct employee_id from exam_room_invigilator where exam_id = $1 and exam_date = $2 and status = 'active' and employee_id = any($3)`,
+        [examId, examDate, ids],
+      );
+      if (invig.length) throw new BusinessErrorResult(ErrorCode.BusinessError, "A reliever can't also be invigilating a room that day — they must be free.");
+    }
+    const now = new Date();
+    const queries: string[] = [
+      singleLineString`update exam_reliever set status = 'deleted', updatedby_userid = $3, updated_at = $4 where exam_id = $1 and exam_date = $2 and status = 'active'`,
+    ];
+    const params: any[][] = [[examId, examDate, userId, now]];
+    for (const eid of ids) {
+      queries.push(
+        singleLineString`insert into exam_reliever (uuid, school_id, exam_id, exam_date, employee_id, status, createdby_userid, created_at) values ($1,$2,$3,$4,$5,'active',$6,$7)`,
+      );
+      params.push([generateShortUuid(12), schoolId, examId, examDate, eid, userId, now]);
+    }
+    await DB.queriesInTransaction(queries, params);
+    await this.audit(schoolId, examId, "invigilator", "reliever", `${examDate}: ${ids.length} reliever(s)`, userId);
+    return this.roomInvigilators(schoolId, examId);
   }
 
   async saveRoomInvigilatorsForDate(schoolId: string, examId: string, examDate: string, assignments: any[], userId: string, isGod = false): Promise<any> {
@@ -1575,6 +1617,16 @@ class ExaminationService {
       const after = seen.get(rid)?.employeeId || null;
       if (before !== after) changes.push({ roomId: rid, before, after });
     }
+    // A room invigilator can't also be in that day's reliever pool (relievers must be free).
+    const assignedIds = [...new Set([...seen.values()].map((a) => a.employeeId))];
+    if (assignedIds.length) {
+      const rel = await DB.query(
+        singleLineString`select distinct employee_id from exam_reliever where exam_id = $1 and exam_date = $2 and status = 'active' and employee_id = any($3)`,
+        [examId, examDate, assignedIds],
+      );
+      if (rel.length) throw new BusinessErrorResult(ErrorCode.BusinessError, "That teacher is a reliever that day — remove them from the reliever pool first.");
+    }
+
     // Lock reassignment for teacher/admin (god bypasses) once the exam day has passed or the
     // room's roster is submitted — changing who invigilated a finished/submitted exam is wrong.
     if (!isGod && changes.length) {

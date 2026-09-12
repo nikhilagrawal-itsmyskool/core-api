@@ -321,6 +321,26 @@ create unique index if not exists idx_exam_room_invig_cell
 create index if not exists idx_exam_room_invig_exam
     on exam_room_invigilator(school_id, exam_id, status);
 
+-- exam_reliever (Phase 5b): a day-level pool of break-cover floaters per (exam, date) — not
+-- tied to a room, and they never sign anything. A person can't be both a room invigilator and
+-- a reliever on the same date (enforced in app).
+create table if not exists exam_reliever (
+    uuid varchar(12) primary key,
+    school_id varchar(12) not null,
+    exam_id varchar(12) not null,
+    exam_date date not null,
+    employee_id varchar(12) not null,
+    status varchar(16) not null check (status in ('active', 'deleted')),
+    createdby_userid varchar(12),
+    created_at timestamp(0),
+    updatedby_userid varchar(12),
+    updated_at timestamp(0)
+);
+create index if not exists idx_exam_reliever_exam
+    on exam_reliever(school_id, exam_id, status);
+create unique index if not exists idx_exam_reliever_cell
+    on exam_reliever(exam_id, exam_date, employee_id) where status = 'active';
+
 -- Room-based marking/signing reuses exam_attendance (keyed by exam_paper + student); the
 -- room the student was marked in is stamped here so signing can group by (room, date).
 alter table exam_attendance add column if not exists room_id varchar(12);
@@ -330,3 +350,34 @@ alter table exam_attendance add column if not exists room_id varchar(12);
 -- 360 view can show "corrected by <name> on <date>" alongside the original signature.
 alter table exam_attendance add column if not exists corrected_by_employee_id varchar(12);
 alter table exam_attendance add column if not exists corrected_at timestamp(0);
+
+-- exam_roster_signature (Phase 5): the AUTHORITATIVE record of one daily signing event —
+-- one row per (room, date) for seating exams, or per (paper, section) for non-seating. The
+-- drawn signature PNG is anchored to THIS row's uuid in file_storage
+-- (entity_type='exam_roster_signature', entity_id=uuid — a clean 12-char owner, mirroring the
+-- document-ack pattern, instead of a composite key that overflowed entity_id varchar(12)).
+-- A fresh signature is drawn at each submit; god corrections to a signed roster retain the
+-- invigilator's signature and stamp corrected_by/at here. exam_attendance.signature_file_id is
+-- kept as a denormalised pointer so the admit card renders without a join.
+create table if not exists exam_roster_signature (
+    uuid varchar(12) primary key,
+    school_id varchar(12) not null,
+    exam_id varchar(12) not null,
+    -- 'r:<roomId>:<date>' (seating) | 'p:<paperId>:<sectionId>' (section) — the unique event key.
+    scope_key varchar(48) not null,
+    room_id varchar(12),          -- set for seating rosters (powers the completion board)
+    exam_date date,
+    signed_by_employee_id varchar(12),
+    signed_at timestamp(0),
+    signature_file_id varchar(12),
+    corrected_by_employee_id varchar(12),
+    corrected_at timestamp(0),
+    createdby_userid varchar(12),
+    created_at timestamp(0),
+    updatedby_userid varchar(12),
+    updated_at timestamp(0)
+);
+create unique index if not exists idx_exam_roster_sig_scope
+    on exam_roster_signature(exam_id, scope_key);
+create index if not exists idx_exam_roster_sig_room
+    on exam_roster_signature(school_id, exam_id, room_id);
