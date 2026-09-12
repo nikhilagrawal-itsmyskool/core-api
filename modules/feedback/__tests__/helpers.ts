@@ -61,13 +61,18 @@ export async function getContext(): Promise<Ctx> {
   return cached;
 }
 
-// Wipe feedback rows for the test student so repeated runs start clean.
+// Wipe feedback tickets for the test student so repeated runs start clean.
 export async function cleanupStudentFeedback(schoolId: string, studentId: string): Promise<void> {
   const p = getPool();
   const rows = await p.query(`select uuid from feedback where school_id = $1 and student_id = $2`, [schoolId, studentId]);
   const ids = rows.rows.map((r: any) => r.uuid);
-  if (ids.length) {
-    await p.query(`delete from feedback_audit where school_id = $1 and feedback_id = any($2)`, [schoolId, ids]);
-    await p.query(`delete from feedback where uuid = any($1)`, [ids]);
+  if (!ids.length) return;
+  const evRows = await p.query(`select uuid from feedback_event where school_id = $1 and feedback_id = any($2)`, [schoolId, ids]);
+  const eventIds = evRows.rows.map((r: any) => r.uuid);
+  if (eventIds.length) {
+    await p.query(`delete from file_storage where entity_type = 'feedback' and school_id = $1 and entity_id = any($2)`, [schoolId, eventIds]);
   }
+  await p.query(`delete from feedback_event where school_id = $1 and feedback_id = any($2)`, [schoolId, ids]);
+  await p.query(`delete from feedback_watcher where school_id = $1 and feedback_id = any($2)`, [schoolId, ids]);
+  await p.query(`delete from feedback where uuid = any($1)`, [ids]);
 }

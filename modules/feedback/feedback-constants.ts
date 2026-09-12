@@ -1,24 +1,28 @@
-// Feedback / complaint module constants.
+// Feedback / complaint module constants — open-routing ticketing model.
 
 // Lifecycle:
-//   assigned   -> recorded by a teacher (home visit) + assigned to a teacher; awaiting that teacher
-//   responded  -> the assigned teacher added their comment; awaiting director (god) review
-//   completed  -> director reviewed + finalized (terminal)
-//   reopened   -> director sent it back to the teacher; behaves like `assigned`
-// "Open" is a filter (status <> 'completed'), not a stored state.
-export const FEEDBACK_STATUSES = ["assigned", "responded", "completed", "reopened"] as const;
+//   open       -> live; being worked/routed among staff (teacher or director).
+//                 Current owner = feedback.assigned_to. "Awaiting the director" is derived
+//                 (open AND the owner holds a reviewer role) — not a stored status.
+//   completed  -> the director resolved & closed it (satisfied). Terminal.
+//   cancelled  -> recorded in error / duplicate / withdrawn. Terminal.
+// A completed/cancelled ticket can be reopened (-> open).
+export const FEEDBACK_STATUSES = ["open", "completed", "cancelled"] as const;
 export type FeedbackStatus = (typeof FEEDBACK_STATUSES)[number];
 
-// Statuses that count as "open" for the director dashboard.
-export const OPEN_STATUSES = ["assigned", "responded", "reopened"] as const;
-
-// The assigned teacher may still act on these (add / revise their comment).
-export const TEACHER_ACTIONABLE = ["assigned", "reopened"] as const;
+// Timeline event types (feedback_event.event_type).
+//   record   -> ticket created (carries evidence files)
+//   comment  -> status-neutral note (may carry @mentions + files)
+//   assign   -> owner changed (forward / send back); comment mandatory unless the actor is god
+//   complete -> director closed it (satisfied)
+//   cancel   -> director voided it
+//   reopen   -> director revived a terminal ticket (-> open)
+export const EVENT_TYPES = ["record", "comment", "assign", "complete", "reopen", "cancel"] as const;
+export type FeedbackEventType = (typeof EVENT_TYPES)[number];
 
 export const CATEGORY_STATUSES = ["active", "deleted"] as const;
 
-// Category taxonomy seeded on first use (per school; schools can add their own later
-// via direct rows — no category-admin UI in v1).
+// Category taxonomy seeded on first use (per school; schools can add their own later).
 export interface CategorySeed {
   name: string;
   sortOrder: number;
@@ -32,19 +36,32 @@ export const CATEGORY_SEED: CategorySeed[] = [
   { name: "Other", sortOrder: 9 },
 ];
 
-// Notification keys (consumed by the communication in-app inbox).
+// Evidence / comment attachments — bytes live in the shared file_storage table keyed by
+// entity_type='feedback' + entity_id = the owning feedback_event uuid.
+export const FILE_ENTITY_TYPE = "feedback";
+export const ATTACHMENT_MAX_BYTES = 8 * 1024 * 1024; // 8 MB per file
+export const ATTACHMENT_ALLOWED_MIME = [
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "application/pdf",
+] as const;
+
+// Notification keys (consumed by the communication in-app inbox). The admin-portal bell
+// deep-links any key starting with "feedback" (and prefers entityType/entityId when set).
 export const NOTIFY = {
-  ASSIGNED: "feedback_assigned",     // -> assigned teacher (on record / reassign)
-  RESPONDED: "feedback_responded",   // -> reviewers (god) + recorder
-  COMPLETED: "feedback_completed",   // -> assigned teacher
-  REOPENED: "feedback_reopened",     // -> assigned teacher
+  ASSIGNED: "feedback_assigned",     // -> new owner (+ watchers) on record / assign
+  COMMENTED: "feedback_commented",   // -> watchers on a new comment
+  MENTIONED: "feedback_mentioned",   // -> the @mentioned people (stronger ping)
+  COMPLETED: "feedback_completed",   // -> watchers on complete
+  CANCELLED: "feedback_cancelled",   // -> watchers on cancel
+  REOPENED: "feedback_reopened",     // -> new owner (+ watchers) on reopen
 } as const;
 
-// Entity type used when linking notifications back to a feedback item.
+// Entity type used when linking a notification back to a ticket (drives bell deep-link).
 export const NOTIFY_ENTITY_TYPE = "feedback";
 
-// Roles that review + complete feedback (the "education director"). GOD-ONLY for now
-// by decision. This is the single flip point: introduce a real `education-director`
-// role (grant it `feedback.review` in authz-policy) and add it here so it can be a
-// notification recipient on `respond`.
+// Roles that review + complete/cancel/reopen feedback (the "education director"). GOD-ONLY
+// for now by decision. Single flip point: introduce an `education-director` role, grant it
+// feedback.review in authz-policy, and add its code here so it becomes a reviewer.
 export const REVIEWER_ROLE_CODES = ["god"] as const;

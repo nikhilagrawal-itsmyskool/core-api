@@ -49,9 +49,9 @@ export async function findStudent(
   return rows.length > 0 ? rows[0] : null;
 }
 
-// Employee ids holding a reviewer role (the "education director" — god for now). Used
-// as the notification audience when a teacher responds. Best-effort: wrapped so a
-// missing role table never breaks the flow.
+// Employee ids holding a reviewer role (the "education director" — god for now). Used as
+// the notification audience for the director and to derive "awaiting director" on a ticket.
+// Best-effort: wrapped so a missing role table never breaks the flow.
 export async function reviewerEmployeeIds(schoolId: string): Promise<string[]> {
   try {
     const codes = REVIEWER_ROLE_CODES as readonly string[];
@@ -65,4 +65,21 @@ export async function reviewerEmployeeIds(schoolId: string): Promise<string[]> {
   } catch {
     return [];
   }
+}
+
+// Resolve a set of employee uuids to a { id -> name } map (for actor / mention / assignee
+// display). Missing ids are simply absent from the map.
+export async function employeeNames(
+  schoolId: string,
+  ids: string[],
+): Promise<Map<string, string>> {
+  const unique = Array.from(new Set((ids || []).filter(Boolean)));
+  const map = new Map<string, string>();
+  if (!unique.length) return map;
+  const rows = await DB.query(
+    singleLineString`select uuid, name from employee where school_id = $1 and uuid = any($2)`,
+    [schoolId, unique],
+  );
+  for (const r of rows) map.set(r.uuid, r.name);
+  return map;
 }

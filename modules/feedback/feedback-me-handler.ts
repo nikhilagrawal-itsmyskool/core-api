@@ -4,31 +4,29 @@ import { ErrorCode } from "../../shared/lib/error-codes";
 import { guard } from "../auth/authz";
 import { resolveEmployee, parseBody, requireParam } from "./handler-util";
 import { feedbackService } from "./feedback-service";
-import { RespondRequest } from "./feedback-interfaces";
+import { CommentRequest, AssignRequest } from "./feedback-interfaces";
 import { FEEDBACK_ACTIONS } from "./feedback-actions";
 
-// Teacher PWA surface (employee bearer token). Every action is scoped to the logged-in
-// teacher: they see only feedback assigned to them and can respond only on their own.
+// Teacher PWA surface (employee bearer token). A teacher sees tickets they participate in
+// (own / watch / recorded) and can comment or reassign (forward / send back). Reassign is
+// owner-only and comment-mandatory (enforced in the service, isReviewer=false). Completing /
+// cancelling / reopening is the director's (feedback.review) job, not exposed here.
 class FeedbackMeHandler {
-  // GET /feedback/me?status=  (feedback assigned to me; status defaults to "open")
+  // GET /feedback/me?tab=act|watching|recorded&status=
   public list = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
     ctx.callbackWaitsForEmptyEventLoop = false;
     try {
       const emp = resolveEmployee(event, callback);
       if (!emp) return;
       const q = event.queryStringParameters || {};
-      const rows = await feedbackService.listFeedback(emp.schoolId, {
-        assignedTo: emp.employeeId,
-        status: q.status || undefined,
-        sort: q.sort || undefined,
-      });
+      const rows = await feedbackService.listForEmployee(emp.schoolId, emp.employeeId, q.tab || "act", q.status || undefined);
       ResponseBuilder.ok(rows, callback);
     } catch (err: any) {
       ResponseBuilder.handleError(err, callback);
     }
   };
 
-  // GET /feedback/me/{id}  (one of my feedbacks + its audit trail)
+  // GET /feedback/me/{id}  (full ticket thread; participants only)
   public getById = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
     ctx.callbackWaitsForEmptyEventLoop = false;
     try {
@@ -36,30 +34,78 @@ class FeedbackMeHandler {
       if (!emp) return;
       const id = requireParam(event, "id", callback);
       if (!id) return;
-      const item = await feedbackService.getFeedback(emp.schoolId, id);
-      if (!item || item.assignedTo !== emp.employeeId) {
+      if (!(await feedbackService.isParticipant(emp.schoolId, id, emp.employeeId))) {
         return ResponseBuilder.notFound(ErrorCode.InvalidId, "Feedback not found", callback);
       }
-      const audit = await feedbackService.getAudit(emp.schoolId, id);
-      ResponseBuilder.ok({ ...item, audit }, callback);
+      const item = await feedbackService.getThread(emp.schoolId, id, emp.employeeId);
+      if (!item) return ResponseBuilder.notFound(ErrorCode.InvalidId, "Feedback not found", callback);
+      ResponseBuilder.ok(item, callback);
     } catch (err: any) {
       ResponseBuilder.handleError(err, callback);
     }
   };
 
-  // POST /feedback/me/{id}/respond   { comment }
-  public respond = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+  // POST /feedback/me/{id}/comment   { body, mentions?, attachments? }
+  public comment = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
     ctx.callbackWaitsForEmptyEventLoop = false;
     try {
       const emp = resolveEmployee(event, callback);
       if (!emp) return;
       const id = requireParam(event, "id", callback);
       if (!id) return;
-      const body = parseBody<RespondRequest>(event, callback);
+      const body = parseBody<CommentRequest>(event, callback);
       if (!body) return;
-      const item = await feedbackService.respond(emp.schoolId, id, emp.employeeId, body.comment);
+      const item = await feedbackService.addComment(emp.schoolId, id, emp.employeeId, body, { isReviewer: false });
       if (!item) return ResponseBuilder.notFound(ErrorCode.InvalidId, "Feedback not found", callback);
       ResponseBuilder.ok(item, callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
+  // POST /feedback/me/{id}/assign   { toEmployeeId, comment, mentions?, attachments? }
+  public assign = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const emp = resolveEmployee(event, callback);
+      if (!emp) return;
+      const id = requireParam(event, "id", callback);
+      if (!id) return;
+      const body = parseBody<AssignRequest>(event, callback);
+      if (!body) return;
+      const item = await feedbackService.assign(emp.schoolId, id, emp.employeeId, body, { isReviewer: false });
+      if (!item) return ResponseBuilder.notFound(ErrorCode.InvalidId, "Feedback not found", callback);
+      ResponseBuilder.ok(item, callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
+  // POST /feedback/me/{id}/seen
+  public seen = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const emp = resolveEmployee(event, callback);
+      if (!emp) return;
+      const id = requireParam(event, "id", callback);
+      if (!id) return;
+      ResponseBuilder.ok(await feedbackService.markSeen(emp.schoolId, id, emp.employeeId), callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
+  // GET /feedback/me/attachment/{fileId}
+  public getAttachment = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const emp = resolveEmployee(event, callback);
+      if (!emp) return;
+      const fileId = requireParam(event, "fileId", callback);
+      if (!fileId) return;
+      const doc = await feedbackService.getAttachmentForParticipant(emp.schoolId, fileId, emp.employeeId);
+      if (!doc) return ResponseBuilder.notFound(ErrorCode.InvalidId, "File not found", callback);
+      ResponseBuilder.ok({ mimeType: doc.mimeType, fileName: doc.fileName, dataUri: `data:${doc.mimeType};base64,${doc.data}` }, callback);
     } catch (err: any) {
       ResponseBuilder.handleError(err, callback);
     }
@@ -69,4 +115,7 @@ class FeedbackMeHandler {
 const h = new FeedbackMeHandler();
 export const list = guard(FEEDBACK_ACTIONS["feedback-me-handler.list"], h.list);
 export const getById = guard(FEEDBACK_ACTIONS["feedback-me-handler.getById"], h.getById);
-export const respond = guard(FEEDBACK_ACTIONS["feedback-me-handler.respond"], h.respond);
+export const comment = guard(FEEDBACK_ACTIONS["feedback-me-handler.comment"], h.comment);
+export const assign = guard(FEEDBACK_ACTIONS["feedback-me-handler.assign"], h.assign);
+export const seen = guard(FEEDBACK_ACTIONS["feedback-me-handler.seen"], h.seen);
+export const getAttachment = guard(FEEDBACK_ACTIONS["feedback-me-handler.getAttachment"], h.getAttachment);

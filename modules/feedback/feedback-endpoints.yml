@@ -8,10 +8,12 @@
           cors: true
 
   # ── Office / director surface (X-School-Code + JWT) ─────────────────────────
-  # Record + collection list at the module root.
+  # Record (+ evidence attachments) and the director list at the module root.
   record:
     handler: feedback-handler.record
     name: ${self:service}-record
+    memorySize: 512
+    timeout: 20
     events:
       - http:
           path: ''
@@ -25,16 +27,6 @@
       - http:
           path: ''
           method: get
-          cors: true
-
-  # One notification per teacher for a whole visit (called after the record loop).
-  notify-visit:
-    handler: feedback-handler.notifyVisit
-    name: ${self:service}-notify-visit
-    events:
-      - http:
-          path: notify-visit
-          method: post
           cors: true
 
   # Literal GETs declared before {id} so the literal path wins over the matcher.
@@ -66,6 +58,17 @@
           method: get
           cors: true
 
+  me-get-attachment:
+    handler: feedback-me-handler.getAttachment
+    name: ${self:service}-me-get-attachment
+    memorySize: 512
+    timeout: 20
+    events:
+      - http:
+          path: me/attachment/{fileId}
+          method: get
+          cors: true
+
   me-get-by-id:
     handler: feedback-me-handler.getById
     name: ${self:service}-me-get-by-id
@@ -75,16 +78,49 @@
           method: get
           cors: true
 
-  me-respond:
-    handler: feedback-me-handler.respond
-    name: ${self:service}-me-respond
+  me-comment:
+    handler: feedback-me-handler.comment
+    name: ${self:service}-me-comment
+    memorySize: 512
+    timeout: 20
     events:
       - http:
-          path: me/{id}/respond
+          path: me/{id}/comment
           method: post
           cors: true
 
-  # ── {id} matchers (declared last) ───────────────────────────────────────────
+  me-assign:
+    handler: feedback-me-handler.assign
+    name: ${self:service}-me-assign
+    memorySize: 512
+    timeout: 20
+    events:
+      - http:
+          path: me/{id}/assign
+          method: post
+          cors: true
+
+  me-seen:
+    handler: feedback-me-handler.seen
+    name: ${self:service}-me-seen
+    events:
+      - http:
+          path: me/{id}/seen
+          method: post
+          cors: true
+
+  # ── {id} matchers (declared last); attachment/{fileId} before {id} ──────────
+  get-attachment:
+    handler: feedback-handler.getAttachment
+    name: ${self:service}-get-attachment
+    memorySize: 512
+    timeout: 20
+    events:
+      - http:
+          path: attachment/{fileId}
+          method: get
+          cors: true
+
   get-by-id:
     handler: feedback-handler.getById
     name: ${self:service}-get-by-id
@@ -92,6 +128,28 @@
       - http:
           path: '{id}'
           method: get
+          cors: true
+
+  comment:
+    handler: feedback-handler.comment
+    name: ${self:service}-comment
+    memorySize: 512
+    timeout: 20
+    events:
+      - http:
+          path: '{id}/comment'
+          method: post
+          cors: true
+
+  assign:
+    handler: feedback-handler.assign
+    name: ${self:service}-assign
+    memorySize: 512
+    timeout: 20
+    events:
+      - http:
+          path: '{id}/assign'
+          method: post
           cors: true
 
   complete:
@@ -103,11 +161,29 @@
           method: post
           cors: true
 
+  cancel:
+    handler: feedback-handler.cancel
+    name: ${self:service}-cancel
+    events:
+      - http:
+          path: '{id}/cancel'
+          method: post
+          cors: true
+
   reopen:
     handler: feedback-handler.reopen
     name: ${self:service}-reopen
     events:
       - http:
           path: '{id}/reopen'
+          method: post
+          cors: true
+
+  seen:
+    handler: feedback-handler.seen
+    name: ${self:service}-seen
+    events:
+      - http:
+          path: '{id}/seen'
           method: post
           cors: true
