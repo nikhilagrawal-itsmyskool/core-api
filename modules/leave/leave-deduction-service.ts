@@ -73,14 +73,13 @@ class LeaveDeductionService {
   async employeeSummary(schoolId: string, employeeId: string, month: string): Promise<DeductionSummary> {
     const { year, m } = this.parseMonth(month);
     const rec = await reconcileMonth(schoolId, employeeId, year, m, istToday());
-    const k = rec.countedDates.length;
-    const plain = k;
+    const plain = rec.countedDayTotal; // fractional — a half-day absence costs 0.5
     const ladder = plain + unauthorizedPenalty(rec.days);
     const cl = await this.clUsed(schoolId, employeeId, month);
     const paidDays = rec.counts.present + rec.counts.paidLeave;
 
     const run = await DB.query(
-      singleLineString`select applied_deduction_days, plain_lwp_days, ladder_deduction_days, status
+      singleLineString`select applied_deduction_days::float8 as applied_deduction_days, plain_lwp_days::float8 as plain_lwp_days, ladder_deduction_days::float8 as ladder_deduction_days, status
         from leave_deduction_run where school_id = $1 and employee_id = $2 and run_year = $3 and run_month = $4`,
       [schoolId, employeeId, year, m],
     );
@@ -93,7 +92,7 @@ class LeaveDeductionService {
       clUsed: cl,
       authorizedUnpaidAbsences: rec.counts.countedAbsence - rec.counts.unauthorized,
       unauthorizedAbsences: rec.counts.unauthorized,
-      countedAbsences: k,
+      countedAbsences: plain,
       plainLwpDays: finalized ? run[0].plainLwpDays : plain,
       ladderDeductionDays: finalized ? run[0].ladderDeductionDays : ladder,
       appliedDeductionDays: finalized ? run[0].appliedDeductionDays : plain,
@@ -113,8 +112,7 @@ class LeaveDeductionService {
     let drafted = 0;
     for (const e of employees) {
       const rec = await reconcileMonth(schoolId, e.uuid, year, m, istToday());
-      const k = rec.countedDates.length;
-      if (k === 0) continue;
+      if (rec.countedDayTotal === 0) continue;
       const existing = await DB.query(
         singleLineString`select uuid, status from leave_deduction_run where school_id = $1 and employee_id = $2 and run_year = $3 and run_month = $4`,
         [schoolId, e.uuid, year, m],
@@ -122,7 +120,7 @@ class LeaveDeductionService {
       if (existing.length && existing[0].status === "finalized") continue; // don't clobber a finalized run
       const cl = await this.clUsed(schoolId, e.uuid, month);
       const paidDays = rec.counts.present + rec.counts.paidLeave;
-      const plain = k;
+      const plain = rec.countedDayTotal;
       const ladder = plain + unauthorizedPenalty(rec.days);
       if (existing.length) {
         await DB.query(
@@ -149,7 +147,7 @@ class LeaveDeductionService {
   // Finalize one run. applyLadder=true sets the escalated figure as applied; else plain LWP.
   async finalize(schoolId: string, runId: string, applyLadder: boolean, userId: string): Promise<boolean> {
     const rows = await DB.query(
-      singleLineString`select uuid, plain_lwp_days, ladder_deduction_days, status from leave_deduction_run where school_id = $1 and uuid = $2`,
+      singleLineString`select uuid, plain_lwp_days::float8 as plain_lwp_days, ladder_deduction_days::float8 as ladder_deduction_days, status from leave_deduction_run where school_id = $1 and uuid = $2`,
       [schoolId, runId],
     );
     if (!rows.length) return false;
@@ -165,9 +163,10 @@ class LeaveDeductionService {
   async listRuns(schoolId: string, month: string): Promise<any[]> {
     const { year, m } = this.parseMonth(month);
     const rows = await DB.query(
-      singleLineString`select r.uuid, r.employee_id, e.name as employee_name, r.paid_days, r.cl_used,
-          r.authorized_unpaid_absences, r.unauthorized_absences, r.plain_lwp_days, r.ladder_deduction_days,
-          r.applied_deduction_days, r.status
+      singleLineString`select r.uuid, r.employee_id, e.name as employee_name, r.paid_days::float8 as paid_days, r.cl_used,
+          r.authorized_unpaid_absences::float8 as authorized_unpaid_absences, r.unauthorized_absences::float8 as unauthorized_absences,
+          r.plain_lwp_days::float8 as plain_lwp_days, r.ladder_deduction_days::float8 as ladder_deduction_days,
+          r.applied_deduction_days::float8 as applied_deduction_days, r.status
         from leave_deduction_run r
         left join employee e on e.uuid = r.employee_id and e.school_id = r.school_id
         where r.school_id = $1 and r.run_year = $2 and r.run_month = $3

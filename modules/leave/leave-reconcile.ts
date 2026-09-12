@@ -55,7 +55,8 @@ export interface MonthReconciliation {
   monthLabel: string; // YYYY-MM
   days: ReconciledDay[];
   counts: MonthCounts;
-  countedDates: string[]; // ordered dates that feed the deduction ladder
+  countedDates: string[];   // ordered dates with a counted absence (for the spell logic)
+  countedDayTotal: number;  // fractional sum of counted-absence days (half-days count 0.5)
 }
 
 // `month` is 1-12. `today` (YYYY-MM-DD) marks the future boundary.
@@ -83,18 +84,20 @@ export async function reconcileMonth(
 
   // Approved leave overlapping the month, joined to its type's paid flag.
   const leaveRows = await DB.query(
-    singleLineString`select a.uuid, a.leave_type_code, a.from_date::text as from_date, a.to_date::text as to_date, t.paid
+    singleLineString`select a.uuid, a.leave_type_code, a.from_date::text as from_date, a.to_date::text as to_date, a.day_portion, t.paid
       from leave_application a
       left join leave_type t on lower(t.code) = lower(a.leave_type_code) and t.school_id = a.school_id
       where a.school_id = $1 and a.employee_id = $2 and a.status = 'approved'
         and a.from_date <= $4 and a.to_date >= $3`,
     [schoolId, employeeId, first, last],
   );
-  const leaveByDate = new Map<string, { code: string; paid: string; appId: string }>();
+  const leaveByDate = new Map<string, { code: string; paid: string; appId: string; portion: number }>();
   for (const lr of leaveRows) {
+    // A half-day leave contributes 0.5; full-day (or multi-day) contributes 1.
+    const portion = lr.dayPortion === "first_half" || lr.dayPortion === "second_half" ? 0.5 : 1;
     for (const d of datesInRange(lr.fromDate, lr.toDate)) {
       if (d >= first && d <= last && !leaveByDate.has(d)) {
-        leaveByDate.set(d, { code: lr.leaveTypeCode, paid: lr.paid || "no", appId: lr.uuid });
+        leaveByDate.set(d, { code: lr.leaveTypeCode, paid: lr.paid || "no", appId: lr.uuid, portion });
       }
     }
   }
@@ -102,6 +105,7 @@ export async function reconcileMonth(
   const days: ReconciledDay[] = [];
   const counts: MonthCounts = { present: 0, paidLeave: 0, countedAbsence: 0, unauthorized: 0, holidays: 0, off: 0, suspect: 0, unknown: 0 };
   const countedDates: string[] = [];
+  let countedDayTotal = 0;
 
   for (const date of datesInRange(first, last)) {
     const dow = new Date(`${date}T00:00:00Z`).getUTCDay();
@@ -124,17 +128,17 @@ export async function reconcileMonth(
       base.status = "suspect"; counts.suspect++;
     } else if (att?.status === "absent") {
       if (leave) {
-        if (leave.paid === "yes" || leave.paid === "discretionary") { base.status = "leave_paid"; counts.paidLeave++; }
-        else { base.status = "absence_counted"; counts.countedAbsence++; countedDates.push(date); }
+        if (leave.paid === "yes" || leave.paid === "discretionary") { base.status = "leave_paid"; counts.paidLeave += leave.portion; }
+        else { base.status = "absence_counted"; counts.countedAbsence += leave.portion; countedDayTotal += leave.portion; countedDates.push(date); }
       } else {
-        base.status = "unauthorized"; counts.unauthorized++; counts.countedAbsence++; countedDates.push(date);
+        base.status = "unauthorized"; counts.unauthorized++; counts.countedAbsence++; countedDayTotal += 1; countedDates.push(date);
       }
     } else {
       // No attendance row (or 'unknown'/'off' source). Trust an approved leave; else
       // it's future or not-yet-imported.
       if (leave) {
-        if (leave.paid === "yes" || leave.paid === "discretionary") { base.status = "leave_paid"; counts.paidLeave++; }
-        else { base.status = "absence_counted"; counts.countedAbsence++; countedDates.push(date); }
+        if (leave.paid === "yes" || leave.paid === "discretionary") { base.status = "leave_paid"; counts.paidLeave += leave.portion; }
+        else { base.status = "absence_counted"; counts.countedAbsence += leave.portion; countedDayTotal += leave.portion; countedDates.push(date); }
       } else if (date > today) {
         base.status = "future";
       } else {
@@ -144,5 +148,5 @@ export async function reconcileMonth(
     days.push(base);
   }
 
-  return { employeeId, year, month, monthLabel, days, counts, countedDates };
+  return { employeeId, year, month, monthLabel, days, counts, countedDates, countedDayTotal };
 }

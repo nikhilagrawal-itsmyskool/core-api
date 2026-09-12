@@ -37,6 +37,7 @@ export interface ApplyLeaveRequest {
   toDate: string; // YYYY-MM-DD
   reason?: string;
   attachment?: AttachmentInput;
+  dayPortion?: "full" | "first_half" | "second_half"; // half-day only valid on a single day
 }
 
 export interface DecisionRequest {
@@ -53,6 +54,7 @@ export interface LeaveApplicationView {
   fromDate: string;
   toDate: string;
   workingDays: number | null;
+  dayPortion?: string | null; // 'full' | 'first_half' | 'second_half'
   reason: string | null;
   status: ApplicationStatus;
   appliedAt: string | null;

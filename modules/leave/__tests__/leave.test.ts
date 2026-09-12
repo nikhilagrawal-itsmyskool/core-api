@@ -109,6 +109,30 @@ describe("Leave API", () => {
     expect(actions).toContain("approve");
   });
 
+  it("supports half-day leave (0.5 working day) on a single date only", async () => {
+    const { schoolId, employeeIds } = await getContext();
+    const emp = employeeIds[0];
+    await cleanupMonth(schoolId, [emp], FIRST, LAST);
+
+    // Half-day CL on one working day counts as 0.5.
+    const half = await leaveService.apply(schoolId, emp, {
+      leaveTypeCode: "CL", fromDate: "2016-03-14", toDate: "2016-03-14", dayPortion: "first_half",
+    });
+    expect(half.workingDays).toBe(0.5);
+    expect(half.dayPortion).toBe("first_half");
+
+    // A half day cannot span multiple dates.
+    await expect(
+      leaveService.apply(schoolId, emp, { leaveTypeCode: "CL", fromDate: "2016-03-15", toDate: "2016-03-16", dayPortion: "first_half" }),
+    ).rejects.toThrow(/single date/i);
+
+    // Balance shows 0.5 CL used (fractional maths).
+    const bal = await leaveService.balance(schoolId, emp, MONTH);
+    const cl = bal.quotas.find((q) => q.code.toUpperCase() === "CL");
+    expect(cl!.used).toBe(0.5);
+    expect(cl!.remaining).toBe(cl!.quota - 0.5);
+  });
+
   it("enforces the per-day approval cap for CL", async () => {
     const { schoolId, employeeIds } = await getContext();
     if (employeeIds.length < 3) return; // needs 3 distinct employees; sample-school dependent

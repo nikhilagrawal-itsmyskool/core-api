@@ -150,7 +150,17 @@ class LeaveService {
     const type = await this.getType(schoolId, req.leaveTypeCode);
     if (!type) throw new BusinessErrorResult(ErrorCode.BusinessError, "Unknown or inactive leave type");
 
-    const workingDays = await workingDaysBetween(schoolId, req.fromDate, req.toDate);
+    // Half-day (single date only). first_half / second_half both cost 0.5 working days.
+    const portion = req.dayPortion === "first_half" || req.dayPortion === "second_half" ? req.dayPortion : "full";
+    const isHalf = portion !== "full";
+    if (isHalf && req.fromDate !== req.toDate) {
+      throw new BusinessErrorResult(ErrorCode.BusinessError, "A half day can only be applied for a single date");
+    }
+    const fullWorkingDays = await workingDaysBetween(schoolId, req.fromDate, req.toDate);
+    if (isHalf && fullWorkingDays < 1) {
+      throw new BusinessErrorResult(ErrorCode.BusinessError, "That date is a holiday or weekly off — no half day to apply");
+    }
+    const workingDays = isHalf ? 0.5 : fullWorkingDays;
 
     // Attachment: required when the type always needs one, or — when attachment_over_days
     // is set — only once the leave exceeds that many working days (e.g. an ML medical
@@ -172,12 +182,12 @@ class LeaveService {
     if (type.annualQuota != null) {
       const { start, end } = await academicYearRange(schoolId, req.fromDate);
       const usedRows = await DB.query(
-        singleLineString`select coalesce(sum(working_days), 0)::int as n from leave_application
+        singleLineString`select coalesce(sum(working_days), 0)::float8 as n from leave_application
           where school_id = $1 and employee_id = $2 and lower(leave_type_code) = lower($3)
             and status in ('pending', 'approved') and from_date >= $4 and from_date <= $5`,
         [schoolId, employeeId, type.code, start, end],
       );
-      const used = usedRows[0].n || 0;
+      const used = Number(usedRows[0].n) || 0;
       if (used + workingDays > type.annualQuota) {
         const left = Math.max(0, type.annualQuota - used);
         warnings.push(
@@ -190,9 +200,9 @@ class LeaveService {
     const now = new Date();
     await DB.query(
       singleLineString`insert into leave_application
-        (uuid, school_id, employee_id, leave_type_code, from_date, to_date, working_days, reason, status, applied_at, createdby_userid, created_at)
-        values ($1, $2, $3, $4, $5, $6, $7, $8, 'pending', $9, $10, $9)`,
-      [id, schoolId, employeeId, type.code, req.fromDate, req.toDate, workingDays, req.reason?.trim() || null, now, employeeId],
+        (uuid, school_id, employee_id, leave_type_code, from_date, to_date, working_days, day_portion, reason, status, applied_at, createdby_userid, created_at)
+        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending', $10, $11, $10)`,
+      [id, schoolId, employeeId, type.code, req.fromDate, req.toDate, workingDays, portion, req.reason?.trim() || null, now, employeeId],
     );
 
     if (req.attachment?.base64Data && req.attachment?.mimeType) {
@@ -234,7 +244,7 @@ class LeaveService {
     if (filters.to) { params.push(filters.to); conds.push(`a.from_date <= $${params.length}`); }
     const rows = await DB.query(
       singleLineString`select a.uuid, a.employee_id, e.name as employee_name, a.leave_type_code, t.name as leave_type_name,
-          a.from_date::text as from_date, a.to_date::text as to_date, a.working_days, a.reason, a.status,
+          a.from_date::text as from_date, a.to_date::text as to_date, a.working_days::float8 as working_days, a.day_portion, a.reason, a.status,
           a.applied_at::text as applied_at, a.decided_by, d.name as decided_by_name, a.decided_at::text as decided_at,
           a.decision_note, a.waived, a.waiver_reason, a.overridden, a.override_reason,
           exists(select 1 from file_storage f where f.entity_type = '${FILE_ENTITY_TYPE}' and f.entity_id = a.uuid and f.school_id = a.school_id) as has_attachment
@@ -257,7 +267,7 @@ class LeaveService {
   private async listApplicationsRaw(schoolId: string, id: string): Promise<any[]> {
     return DB.query(
       singleLineString`select a.uuid, a.employee_id, e.name as employee_name, a.leave_type_code, t.name as leave_type_name,
-          a.from_date::text as from_date, a.to_date::text as to_date, a.working_days, a.reason, a.status,
+          a.from_date::text as from_date, a.to_date::text as to_date, a.working_days::float8 as working_days, a.day_portion, a.reason, a.status,
           a.applied_at::text as applied_at, a.decided_by, d.name as decided_by_name, a.decided_at::text as decided_at,
           a.decision_note, a.waived, a.waiver_reason, a.overridden, a.override_reason,
           exists(select 1 from file_storage f where f.entity_type = '${FILE_ENTITY_TYPE}' and f.entity_id = a.uuid and f.school_id = a.school_id) as has_attachment
@@ -279,7 +289,8 @@ class LeaveService {
       leaveTypeName: r.leaveTypeName || null,
       fromDate: r.fromDate,
       toDate: r.toDate,
-      workingDays: r.workingDays,
+      workingDays: r.workingDays == null ? null : Number(r.workingDays),
+      dayPortion: r.dayPortion || null,
       reason: r.reason || null,
       status: r.status,
       appliedAt: r.appliedAt || null,
@@ -346,13 +357,13 @@ class LeaveService {
     if (type?.annualQuota != null) {
       const { start, end } = await academicYearRange(schoolId, app.fromDate);
       const usedRows = await DB.query(
-        singleLineString`select coalesce(sum(working_days), 0)::int as n from leave_application
+        singleLineString`select coalesce(sum(working_days), 0)::float8 as n from leave_application
           where school_id = $1 and employee_id = $2 and lower(leave_type_code) = lower($3)
             and status = 'approved' and uuid <> $4 and from_date >= $5 and from_date <= $6`,
         [schoolId, app.employeeId, app.leaveTypeCode, id, start, end],
       );
-      const used = usedRows[0].n || 0;
-      const reqDays = app.workingDays || 0;
+      const used = Number(usedRows[0].n) || 0;
+      const reqDays = Number(app.workingDays) || 0;
       if (used + reqDays > type.annualQuota) {
         warnings.push(`${type.name} balance exceeded: ${type.annualQuota} day(s) a year — ${used} already approved, and this is ${reqDays} day(s).`);
       }
@@ -430,14 +441,14 @@ class LeaveService {
       [schoolId],
     );
     const usage = await DB.query(
-      singleLineString`select lower(leave_type_code) as code, coalesce(sum(working_days), 0)::int as used
+      singleLineString`select lower(leave_type_code) as code, coalesce(sum(working_days), 0)::float8 as used
         from leave_application
         where school_id = $1 and employee_id = $2 and status in ('pending', 'approved')
           and from_date >= $3 and from_date <= $4
         group by lower(leave_type_code)`,
       [schoolId, employeeId, start, end],
     );
-    const usedByCode = new Map<string, number>(usage.map((r: any) => [r.code, r.used]));
+    const usedByCode = new Map<string, number>(usage.map((r: any) => [r.code, Number(r.used) || 0]));
     const quotas = types.map((t: any) => {
       const used = usedByCode.get(String(t.code).toLowerCase()) || 0;
       return { code: t.code, name: t.name, quota: t.annualQuota, used, remaining: Math.max(0, t.annualQuota - used) };

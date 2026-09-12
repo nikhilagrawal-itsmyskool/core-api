@@ -87,6 +87,10 @@ create index if not exists idx_leave_application_range on leave_application(scho
 -- approver (god) may approve past them in exceptional cases; the override + reason are kept.
 alter table leave_application add column if not exists overridden boolean;
 alter table leave_application add column if not exists override_reason varchar(256);
+-- Half-day support: day_portion (null/'full' = full day; 'first_half'/'second_half' = a
+-- half day, only valid on a single-day leave). working_days becomes fractional (0.5 steps).
+alter table leave_application add column if not exists day_portion varchar(16);
+alter table leave_application alter column working_days type numeric(4,1);
 
 -- leave_audit: append-only log of every application state change.
 create table if not exists leave_audit (
@@ -174,3 +178,10 @@ create table if not exists leave_deduction_run (
 );
 create unique index if not exists idx_leave_deduction_run_unique
     on leave_deduction_run(school_id, employee_id, run_year, run_month);
+-- Day figures become fractional (0.5) so half-day leave/absence costs half a day of pay.
+alter table leave_deduction_run alter column paid_days type numeric(6,1);
+alter table leave_deduction_run alter column authorized_unpaid_absences type numeric(6,1);
+alter table leave_deduction_run alter column unauthorized_absences type numeric(6,1);
+alter table leave_deduction_run alter column ladder_deduction_days type numeric(6,1);
+alter table leave_deduction_run alter column plain_lwp_days type numeric(6,1);
+alter table leave_deduction_run alter column applied_deduction_days type numeric(6,1);
