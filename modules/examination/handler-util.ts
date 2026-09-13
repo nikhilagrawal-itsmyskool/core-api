@@ -72,3 +72,10 @@ export function callerHasRole(event: ApiEvent, role: string): boolean {
   const caller = getCaller(event);
   return !!caller && Array.isArray(caller.roles) && caller.roles.includes(role);
 }
+
+// Exam override authority: god OR the exam-incharge. Used for the roster lock/correction
+// bypass so the incharge can edit a locked/submitted roster (corrections) exactly like god.
+// (Financial gates — dues thresholds + dues overrides — stay god-only.)
+export function callerIsExamOverride(event: ApiEvent): boolean {
+  return callerHasRole(event, "god") || callerHasRole(event, "exam-incharge");
+}

@@ -7,7 +7,7 @@ import { ResponseBuilder } from "../../shared/lib/response-builder";
 import { ErrorCode } from "../../shared/lib/error-codes";
 import { guard } from "../auth/authz";
 import { ACTIONS } from "../../shared/lib/authz-policy";
-import { resolveSchool, resolveEmployee, parseBody, requireParam, callerHasRole } from "./handler-util";
+import { resolveSchool, resolveEmployee, parseBody, requireParam, callerHasRole, callerIsExamOverride } from "./handler-util";
 import { getCurrentAcademicYearId } from "./examination-common";
 import { examinationService } from "./examination-service";
 import {
@@ -591,7 +591,7 @@ class ExaminationHandler {
       if (!id || !paperId || !sectionId) return;
       const body = parseBody<{ marks: any[] }>(event, callback);
       if (!body) return;
-      ResponseBuilder.ok(await examinationService.markAttendance(auth.schoolId, id, paperId, sectionId, body.marks || [], auth.userId, callerHasRole(event, "god")), callback);
+      ResponseBuilder.ok(await examinationService.markAttendance(auth.schoolId, id, paperId, sectionId, body.marks || [], auth.userId, callerIsExamOverride(event)), callback);
     } catch (err: any) {
       ResponseBuilder.handleError(err, callback);
     }
@@ -609,7 +609,7 @@ class ExaminationHandler {
       if (!id || !paperId || !sectionId) return;
       const body = parseBody<{ signatureBase64?: string }>(event, callback);
       if (!body) return;
-      ResponseBuilder.ok(await examinationService.signRoster(auth.schoolId, id, paperId, sectionId, auth.userId, callerHasRole(event, "god"), body.signatureBase64), callback);
+      ResponseBuilder.ok(await examinationService.signRoster(auth.schoolId, id, paperId, sectionId, auth.userId, callerIsExamOverride(event), body.signatureBase64), callback);
     } catch (err: any) {
       ResponseBuilder.handleError(err, callback);
     }
@@ -708,7 +708,7 @@ class ExaminationHandler {
       if (!id || !date) return;
       const body = parseBody<{ assignments: any[] }>(event, callback);
       if (!body) return;
-      ResponseBuilder.ok(await examinationService.saveRoomInvigilatorsForDate(auth.schoolId, id, date, body.assignments || [], auth.userId, callerHasRole(event, "god")), callback);
+      ResponseBuilder.ok(await examinationService.saveRoomInvigilatorsForDate(auth.schoolId, id, date, body.assignments || [], auth.userId, callerIsExamOverride(event)), callback);
     } catch (err: any) { ResponseBuilder.handleError(err, callback); }
   };
 
@@ -723,7 +723,7 @@ class ExaminationHandler {
       if (!id || !date) return;
       const body = parseBody<{ employeeIds: any[] }>(event, callback);
       if (!body) return;
-      ResponseBuilder.ok(await examinationService.saveRelieversForDate(auth.schoolId, id, date, body.employeeIds || [], auth.userId, callerHasRole(event, "god")), callback);
+      ResponseBuilder.ok(await examinationService.saveRelieversForDate(auth.schoolId, id, date, body.employeeIds || [], auth.userId, callerIsExamOverride(event)), callback);
     } catch (err: any) { ResponseBuilder.handleError(err, callback); }
   };
 
@@ -753,7 +753,7 @@ class ExaminationHandler {
       if (!id || !roomId || !date) return;
       const body = parseBody<{ marks: any[] }>(event, callback);
       if (!body) return;
-      ResponseBuilder.ok(await examinationService.markRoomAttendance(auth.schoolId, id, roomId, date, body.marks || [], auth.userId, callerHasRole(event, "god")), callback);
+      ResponseBuilder.ok(await examinationService.markRoomAttendance(auth.schoolId, id, roomId, date, body.marks || [], auth.userId, callerIsExamOverride(event)), callback);
     } catch (err: any) { ResponseBuilder.handleError(err, callback); }
   };
 
@@ -769,7 +769,7 @@ class ExaminationHandler {
       if (!id || !roomId || !date) return;
       const body = parseBody<{ studentId: string; action?: string }>(event, callback);
       if (!body) return;
-      const god = callerHasRole(event, "god");
+      const god = callerIsExamOverride(event);
       const result = body.action === "remove"
         ? await examinationService.removeAvOccupant(auth.schoolId, id, roomId, date, body.studentId, auth.userId, god)
         : await examinationService.addAvOccupant(auth.schoolId, id, roomId, date, body.studentId, auth.userId, god);
@@ -789,7 +789,7 @@ class ExaminationHandler {
       if (!id || !roomId || !date) return;
       const body = parseBody<{ signatureBase64?: string }>(event, callback);
       if (!body) return;
-      ResponseBuilder.ok(await examinationService.signRoomRoster(auth.schoolId, id, roomId, date, auth.userId, callerHasRole(event, "god"), body.signatureBase64), callback);
+      ResponseBuilder.ok(await examinationService.signRoomRoster(auth.schoolId, id, roomId, date, auth.userId, callerIsExamOverride(event), body.signatureBase64), callback);
     } catch (err: any) { ResponseBuilder.handleError(err, callback); }
   };
 
