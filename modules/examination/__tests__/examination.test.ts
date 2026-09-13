@@ -348,6 +348,13 @@ describe("examination: phase 2 — dues, admit cards, printing, branding", () =>
     expect(row.className).toBeTruthy();
     expect(typeof row.currentDue).toBe("number");
     expect(typeof row.printable).toBe("boolean");
+    // P5d: per-paper attendance breakdown (subject/date + present/absent/pending + signer).
+    expect(Array.isArray(row.papers)).toBe(true);
+    if (row.papers.length) {
+      const p = row.papers[0];
+      expect(p.examDate).toBeTruthy();
+      expect(typeof p.finalized).toBe("boolean");
+    }
   });
 });
 
@@ -444,6 +451,32 @@ describe("examination: phase 4 — seating rooms", () => {
     expect(roster.body.correctedByName ?? null).toBeNull();
   });
 
+  sectionIt("phase 5c: AV room auto-exists, holds ad-hoc students, and signs", async () => {
+    const rooms = await get(`/examinations/${examId}/rooms`);
+    const av = rooms.body.rooms.find((r: any) => r.kind === "av");
+    expect(av).toBeTruthy();
+    expect(av.name).toBe("AV Room");
+
+    // Active on every exam date (holding room), so a supervisor + roster open each day.
+    const grid = await get(`/examinations/${examId}/room-invigilators`);
+    expect((grid.body.activeByDate?.[D1] || [])).toContain(av.uuid);
+
+    // Ad-hoc: add a student, mark present, submit with a fresh signature.
+    const add = await post(`/examinations/${examId}/room-rosters/${av.uuid}/${D1}/av-students`, { studentId: section!.studentId });
+    expect(add.status).toBe(200);
+    expect(add.body.isAv).toBe(true);
+    expect(add.body.sections[0].students.some((s: any) => s.studentId === section!.studentId)).toBe(true);
+
+    await post(`/examinations/${examId}/room-rosters/${av.uuid}/${D1}/mark`, { marks: [{ studentId: section!.studentId, status: "present" }] });
+    const rs = await post(`/examinations/${examId}/room-rosters/${av.uuid}/${D1}/sign`, { signatureBase64: TINY_PNG });
+    expect(rs.status).toBe(200);
+    expect(rs.body.signed).toBe(true);
+
+    // Remove clears the AV list for the day.
+    const rem = await post(`/examinations/${examId}/room-rosters/${av.uuid}/${D1}/av-students`, { studentId: section!.studentId, action: "remove" });
+    expect(rem.body.sections[0].students.length).toBe(0);
+  });
+
   sectionIt("phase 5b: relievers save per day; a person can't be both invigilator and reliever", async () => {
     // "system" invigilates roomId on D1 (earlier test) → can't also be a reliever that day.
     const clash = await put(`/examinations/${examId}/relievers/date/${D1}`, { employeeIds: ["system"] });
@@ -510,9 +543,37 @@ describe("examination: phase 4 — seating rooms", () => {
     }
   });
 
-  sectionIt("deletes the room (scheme is emptied)", async () => {
+  sectionIt("phase 5c: an AV room auto-exists, active every date, with an ad-hoc roster", async () => {
+    const rooms = await get(`/examinations/${examId}/rooms`);
+    const av = (rooms.body.rooms || []).find((r: any) => r.kind === "av");
+    expect(av).toBeTruthy(); // auto-created for a seating exam
+
+    // The AV room is active on the paper date (holding room — active every exam day).
+    const v = await get(`/examinations/${examId}/room-invigilators`);
+    expect((v.body.activeByDate?.[D1] || [])).toContain(av.uuid);
+
+    // Ad-hoc roster: empty until students are added; signing an empty AV roster is rejected.
+    const empty = await get(`/examinations/${examId}/room-rosters/${av.uuid}/${D1}`);
+    expect(empty.body.isAv).toBe(true);
+    expect(empty.body.total).toBe(0);
+
+    // Add the sample student, mark + submit with a fresh signature.
+    const add = await post(`/examinations/${examId}/room-rosters/${av.uuid}/${D1}/av-students`, { studentId: section!.studentId });
+    expect(add.status).toBe(200);
+    expect(add.body.total).toBe(1);
+    await post(`/examinations/${examId}/room-rosters/${av.uuid}/${D1}/mark`, { marks: [{ studentId: section!.studentId, status: "present" }] });
+    const signed = await post(`/examinations/${examId}/room-rosters/${av.uuid}/${D1}/sign`, { signatureBase64: TINY_PNG });
+    expect(signed.status).toBe(200);
+    expect(signed.body.signed).toBe(true);
+
+    // Remove the student again (ad-hoc).
+    const rem = await post(`/examinations/${examId}/room-rosters/${av.uuid}/${D1}/av-students`, { studentId: section!.studentId, action: "remove" });
+    expect(rem.body.total).toBe(0);
+  });
+
+  sectionIt("deletes the seating room (only the AV room remains)", async () => {
     const d = await del(`/examinations/${examId}/rooms/${roomId}`);
     expect(d.status).toBe(200);
-    expect(d.body.rooms.length).toBe(0);
+    expect(d.body.rooms.filter((r: any) => r.kind !== "av").length).toBe(0);
   });
 });

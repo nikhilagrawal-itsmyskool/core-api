@@ -446,6 +446,15 @@
           method: post
           cors: true
 
+  av-student-admin:
+    handler: examination-handler.avStudentAdmin
+    name: ${self:service}-av-student-admin
+    events:
+      - http:
+          path: examinations/{id}/room-rosters/{roomId}/{date}/av-students
+          method: post
+          cors: true
+
   get-room-image:
     handler: examination-handler.getRoomImage
     name: ${self:service}-get-room-image
@@ -538,5 +547,14 @@
     events:
       - http:
           path: me/exam/rooms/{examId}/{roomId}/{date}/sign
+          method: post
+          cors: true
+
+  av-student-me:
+    handler: examination-handler.avStudentMe
+    name: ${self:service}-av-student-me
+    events:
+      - http:
+          path: me/exam/rooms/{examId}/{roomId}/{date}/av-students
           method: post
           cors: true

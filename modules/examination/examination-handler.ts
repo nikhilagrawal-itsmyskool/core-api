@@ -757,6 +757,26 @@ class ExaminationHandler {
     } catch (err: any) { ResponseBuilder.handleError(err, callback); }
   };
 
+  // POST /examinations/{id}/room-rosters/{roomId}/{date}/av-students { studentId, action:'add'|'remove' }
+  public avStudentAdmin = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const auth = await resolveSchool(event, callback);
+      if (!auth) return;
+      const id = requireParam(event, "id", callback);
+      const roomId = requireParam(event, "roomId", callback);
+      const date = requireParam(event, "date", callback);
+      if (!id || !roomId || !date) return;
+      const body = parseBody<{ studentId: string; action?: string }>(event, callback);
+      if (!body) return;
+      const god = callerHasRole(event, "god");
+      const result = body.action === "remove"
+        ? await examinationService.removeAvOccupant(auth.schoolId, id, roomId, date, body.studentId, auth.userId, god)
+        : await examinationService.addAvOccupant(auth.schoolId, id, roomId, date, body.studentId, auth.userId, god);
+      ResponseBuilder.ok(result, callback);
+    } catch (err: any) { ResponseBuilder.handleError(err, callback); }
+  };
+
   // POST /examinations/{id}/room-rosters/{roomId}/{date}/sign
   public signRoomRosterAdmin = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
     ctx.callbackWaitsForEmptyEventLoop = false;
@@ -903,6 +923,21 @@ class ExaminationHandler {
     } catch (err: any) { ResponseBuilder.handleError(err, callback); }
   };
 
+  // POST /me/exam/rooms/{examId}/{roomId}/{date}/av-students { studentId, action:'add'|'remove' }
+  public avStudentMe = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const p = await this.meRoomParams(event, callback);
+      if (!p) return;
+      const body = parseBody<{ studentId: string; action?: string }>(event, callback);
+      if (!body) return;
+      const result = body.action === "remove"
+        ? await examinationService.removeAvOccupant(p.emp.schoolId, p.examId, p.roomId, p.date, body.studentId, p.emp.employeeId)
+        : await examinationService.addAvOccupant(p.emp.schoolId, p.examId, p.roomId, p.date, body.studentId, p.emp.employeeId);
+      ResponseBuilder.ok(result, callback);
+    } catch (err: any) { ResponseBuilder.handleError(err, callback); }
+  };
+
   // POST /me/exam/rooms/{examId}/{roomId}/{date}/sign
   public signMyRoomRoster = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
     ctx.callbackWaitsForEmptyEventLoop = false;
@@ -974,6 +1009,7 @@ export const saveRelieversForDate = guard(ACTIONS.EXAM_MANAGE, h.saveRelieversFo
 export const getRoomRosterAdmin = guard(ACTIONS.EXAM_MANAGE, h.getRoomRosterAdmin);
 export const markRoomRosterAdmin = guard(ACTIONS.EXAM_MANAGE, h.markRoomRosterAdmin);
 export const signRoomRosterAdmin = guard(ACTIONS.EXAM_MANAGE, h.signRoomRosterAdmin);
+export const avStudentAdmin = guard(ACTIONS.EXAM_MANAGE, h.avStudentAdmin);
 export const getSeatingImage = guard(ACTIONS.EXAM_VIEW, h.getSeatingImage);
 export const setSeatingImage = guard(ACTIONS.EXAM_MANAGE, h.setSeatingImage);
 export const deleteSeatingImage = guard(ACTIONS.EXAM_MANAGE, h.deleteSeatingImage);
@@ -985,3 +1021,4 @@ export const getMyRooms = h.getMyRooms;
 export const getMyRoomRoster = h.getMyRoomRoster;
 export const markMyRoomRoster = h.markMyRoomRoster;
 export const signMyRoomRoster = h.signMyRoomRoster;
+export const avStudentMe = h.avStudentMe;

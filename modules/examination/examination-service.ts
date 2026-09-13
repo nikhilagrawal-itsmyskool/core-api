@@ -1026,11 +1026,35 @@ class ExaminationService {
         [e.uuid, studentId],
       );
       const ayName = await DB.query(singleLineString`select name from academic_year where uuid = $1`, [e.academicYearId]);
+      // Per-paper attendance for this student: subject/date + present/absent + who signed
+      // (only shown once the roster is submitted; unfinalized = pending) + corrected-by-god.
+      const paperRows = await DB.query(
+        singleLineString`select to_char(p.exam_date, 'YYYY-MM-DD') as exam_date, p.subject_label,
+            a.status, to_char(a.signed_at, 'YYYY-MM-DD') as signed_at,
+            (select name from employee emp where emp.uuid = a.signed_by_employee_id) as invigilator_name,
+            to_char(a.corrected_at, 'YYYY-MM-DD') as corrected_at,
+            (select name from employee emp where emp.uuid = a.corrected_by_employee_id) as corrected_by_name
+          from exam_paper p
+          left join exam_attendance a on a.exam_paper_id = p.uuid and a.student_id = $2
+          where p.exam_id = $1 and p.grade = $3 and p.status = 'active'
+          order by p.exam_date`,
+        [e.uuid, studentId, grade],
+      );
+      const papers = paperRows.map((p: any) => {
+        const finalized = !!p.signedAt;
+        return {
+          examDate: p.examDate, subjectLabel: p.subjectLabel, finalized,
+          status: finalized ? p.status : null, // 'present' | 'absent' | null (pending)
+          invigilatorName: finalized ? p.invigilatorName : null,
+          correctedByName: p.correctedByName || null, correctedAt: p.correctedAt || null,
+        };
+      });
       out.push({
         examId: e.uuid, examName: e.name, academicYearName: ayName.length ? ayName[0].name : "",
         className: cls[0].name, currentDue, priorDue, blocked, overridden: ov.length > 0,
         printable: !blocked || ov.length > 0,
         printedOn: ac.length ? ac[0].printedOn : null, admitCardId: ac.length ? ac[0].uuid : null,
+        papers,
       });
     }
     return out;
@@ -1363,12 +1387,27 @@ class ExaminationService {
   // number; until then (e.g. roll numbers not captured) the whole section shows, labelled
   // with the plan's range — so no student is ever hidden mid-entry.
 
-  private async roomById(schoolId: string, examId: string, roomId: string): Promise<{ uuid: string; name: string } | null> {
+  private async roomById(schoolId: string, examId: string, roomId: string): Promise<{ uuid: string; name: string; kind: string | null } | null> {
     const rows = await DB.query(
-      singleLineString`select uuid, name from exam_room where uuid = $1 and exam_id = $2 and school_id = $3 and status = 'active'`,
+      singleLineString`select uuid, name, kind from exam_room where uuid = $1 and exam_id = $2 and school_id = $3 and status = 'active'`,
       [roomId, examId, schoolId],
     );
-    return rows.length ? { uuid: rows[0].uuid, name: rows[0].name } : null;
+    return rows.length ? { uuid: rows[0].uuid, name: rows[0].name, kind: rows[0].kind || null } : null;
+  }
+
+  // Ensure a seating exam has exactly one AV room (a holding room, active every exam date).
+  // Auto-created on first read so schools don't have to add it by hand.
+  private async ensureAvRoom(schoolId: string, examId: string): Promise<void> {
+    const existing = await DB.query(
+      singleLineString`select uuid from exam_room where exam_id = $1 and school_id = $2 and kind = 'av' and status = 'active' limit 1`,
+      [examId, schoolId],
+    );
+    if (existing.length) return;
+    const now = new Date();
+    await DB.query(
+      singleLineString`insert into exam_room (uuid, school_id, exam_id, name, sort_order, kind, status, createdby_userid, created_at) values ($1,$2,$3,'AV Room',9999,'av','active','system',$4)`,
+      [generateShortUuid(12), schoolId, examId, now],
+    );
   }
 
   // The active paper for a grade on a date (or null if that grade doesn't sit that day).
@@ -1384,8 +1423,9 @@ class ExaminationService {
   async getRooms(schoolId: string, examId: string): Promise<any> {
     const exam = await this.getExam(schoolId, examId);
     if (!exam) throw new BusinessErrorResult(ErrorCode.BusinessError, "Examination not found");
+    if (exam.hasSeating) await this.ensureAvRoom(schoolId, examId);
     const rooms = await DB.query(
-      singleLineString`select uuid, name, sort_order from exam_room where school_id = $1 and exam_id = $2 and status = 'active' order by sort_order asc nulls last, name`,
+      singleLineString`select uuid, name, sort_order, kind from exam_room where school_id = $1 and exam_id = $2 and status = 'active' order by sort_order asc nulls last, name`,
       [schoolId, examId],
     );
     const allocs = await DB.query(
@@ -1413,7 +1453,7 @@ class ExaminationService {
     }
     return {
       examId,
-      rooms: rooms.map((r: any) => ({ uuid: r.uuid, name: r.name, sortOrder: r.sortOrder, hasImage: withImage.has(r.uuid), allocations: byRoom[r.uuid] || [] })),
+      rooms: rooms.map((r: any) => ({ uuid: r.uuid, name: r.name, sortOrder: r.sortOrder, kind: r.kind || 'seating', hasImage: withImage.has(r.uuid), allocations: byRoom[r.uuid] || [] })),
     };
   }
 
@@ -1530,11 +1570,14 @@ class ExaminationService {
     for (const r of paperRows) (gradesByDate[r.examDate] ||= []).push(r.grade);
     const dates = Object.keys(gradesByDate).sort();
 
-    // A room is active on a date if any of its allocated sections has a paper that day.
+    // A seating room is active on a date if any of its allocated sections has a paper that day.
+    // The AV room (kind='av') is a holding room — active on EVERY exam date.
+    const avRoomIds = rooms.filter((rm: any) => rm.kind === 'av').map((rm: any) => rm.uuid);
     const activeByDate: Record<string, string[]> = {};
     for (const d of dates) {
       const gset = new Set(gradesByDate[d]);
-      activeByDate[d] = rooms.filter((rm: any) => (rm.allocations || []).some((a: any) => gset.has(a.grade))).map((rm: any) => rm.uuid);
+      const seatingActive = rooms.filter((rm: any) => rm.kind !== 'av' && (rm.allocations || []).some((a: any) => gset.has(a.grade))).map((rm: any) => rm.uuid);
+      activeByDate[d] = [...seatingActive, ...avRoomIds];
     }
 
     const assignRows = await DB.query(
@@ -1758,6 +1801,7 @@ class ExaminationService {
     if (!exam) throw new BusinessErrorResult(ErrorCode.BusinessError, "Examination not found");
     const room = await this.roomById(schoolId, examId, roomId);
     if (!room) throw new BusinessErrorResult(ErrorCode.BusinessError, "Room not found");
+    if (room.kind === "av") return this.avRoster(schoolId, examId, room, examDate);
     const occ = await this.roomOccupants(schoolId, { uuid: examId, academicYearId: exam.academicYearId }, roomId, examDate);
 
     const paperIds = [...new Set(occ.map((o) => o.paperId))];
@@ -1804,6 +1848,8 @@ class ExaminationService {
   // sectionClassId (from the roster). Stamps room_id so signing can be room-scoped.
   async markRoomAttendance(schoolId: string, examId: string, roomId: string, examDate: string, marks: any[], employeeId: string, isGod = false): Promise<any> {
     this.ensureEditable(examDate, isGod);
+    const room0 = await this.roomById(schoolId, examId, roomId);
+    if (room0?.kind === "av") return this.markAvAttendance(schoolId, examId, roomId, examDate, marks, employeeId);
     if (!Array.isArray(marks)) throw new BusinessErrorResult(ErrorCode.BusinessError, "marks must be an array");
     const now = new Date();
     let changed = false;
@@ -1850,6 +1896,8 @@ class ExaminationService {
     this.ensureEditable(examDate, isGod);
     const exam = await this.getExam(schoolId, examId);
     if (!exam) throw new BusinessErrorResult(ErrorCode.BusinessError, "Examination not found");
+    const room0 = await this.roomById(schoolId, examId, roomId);
+    if (room0?.kind === "av") return this.signAvRoster(schoolId, examId, roomId, examDate, employeeId, signatureBase64);
     const occ = await this.roomOccupants(schoolId, { uuid: examId, academicYearId: exam.academicYearId }, roomId, examDate);
     if (!occ.length) throw new BusinessErrorResult(ErrorCode.BusinessError, "No students sit in this room on this day");
     const paperIds = [...new Set(occ.map((o) => o.paperId))];
@@ -1878,6 +1926,93 @@ class ExaminationService {
     }
     await this.attAudit(schoolId, examId, "", roomId, null, prior?.signedAt ? "resign" : "sign", null, null, employeeId, corrected ? "room-corrected (signature retained)" : `room-signed ${occ.length} students`);
     return this.roomRoster(schoolId, examId, roomId, examDate);
+  }
+
+  // ── AV room (Phase 5c): an ad-hoc holding room. Occupants + present/absent live in
+  // exam_av_occupant (self-contained; no paper), signed via the owner-row model like any room. ──
+
+  // The AV roster for a date: the students added that day (flat, as a single "AV Room" section
+  // so the shared roster screen renders it) + the room-day sign state. isAv flags the UI to
+  // show the add-student control.
+  async avRoster(schoolId: string, examId: string, room: { uuid: string; name: string }, examDate: string): Promise<any> {
+    const occ = await DB.query(
+      singleLineString`select o.student_id, o.status, s.name, s.admission_number,
+          (select c.name from student_class sc join class c on c.uuid = sc.class_id and c.school_id = sc.school_id
+             where sc.student_id = o.student_id and sc.school_id = o.school_id and (sc.status is null or sc.status <> 'deleted') limit 1) as class_name
+        from exam_av_occupant o join student s on s.uuid = o.student_id and s.school_id = o.school_id
+        where o.exam_id = $1 and o.exam_date = $2 and o.school_id = $3 order by s.name`,
+      [examId, examDate, schoolId],
+    );
+    const students = occ.map((o: any) => ({ studentId: o.studentId, name: o.name, admissionNumber: o.admissionNumber, className: o.className, status: o.status || null }));
+    const sig = await this.rosterSignatureRow(examId, `r:${room.uuid}:${examDate}`);
+    const signedByName = sig?.signedAt ? await this.empName(schoolId, sig.signedByEmployeeId) : null;
+    const correctedByName = sig?.correctedAt ? await this.empName(schoolId, sig.correctedByEmployeeId) : null;
+    return {
+      room, examDate, isAv: true, rollNumbersAvailable: false, roomImageDataUri: null,
+      sections: [{ sectionClassId: "av", sectionName: "AV Room", subjectLabel: "holding room", students }],
+      total: students.length, marked: students.filter((s: any) => s.status).length,
+      signed: !!sig?.signedAt, signedByName, signedAt: sig?.signedAt || null,
+      correctedByName, correctedAt: sig?.correctedAt || null, locked: examDate < istToday(),
+    };
+  }
+
+  async addAvOccupant(schoolId: string, examId: string, roomId: string, examDate: string, studentId: string, userId: string, isGod = false): Promise<any> {
+    const room = await this.roomById(schoolId, examId, roomId);
+    if (!room || room.kind !== "av") throw new BusinessErrorResult(ErrorCode.BusinessError, "AV room not found");
+    this.ensureEditable(examDate, isGod);
+    const sid = (studentId || "").trim();
+    if (!sid) throw new BusinessErrorResult(ErrorCode.BusinessError, "studentId is required");
+    const exists = await DB.query(singleLineString`select uuid from exam_av_occupant where exam_id = $1 and exam_date = $2 and student_id = $3`, [examId, examDate, sid]);
+    if (!exists.length) {
+      const now = new Date();
+      await DB.query(
+        singleLineString`insert into exam_av_occupant (uuid, school_id, exam_id, exam_date, student_id, createdby_userid, created_at) values ($1,$2,$3,$4,$5,$6,$7)`,
+        [generateShortUuid(12), schoolId, examId, examDate, sid, userId, now],
+      );
+      await this.audit(schoolId, examId, "room", "av-add", `${examDate}: student ${sid}`, userId);
+    }
+    return this.avRoster(schoolId, examId, room, examDate);
+  }
+
+  async removeAvOccupant(schoolId: string, examId: string, roomId: string, examDate: string, studentId: string, userId: string, isGod = false): Promise<any> {
+    const room = await this.roomById(schoolId, examId, roomId);
+    if (!room || room.kind !== "av") throw new BusinessErrorResult(ErrorCode.BusinessError, "AV room not found");
+    this.ensureEditable(examDate, isGod);
+    await DB.query(singleLineString`delete from exam_av_occupant where exam_id = $1 and exam_date = $2 and student_id = $3`, [examId, examDate, (studentId || "").trim()]);
+    await this.audit(schoolId, examId, "room", "av-remove", `${examDate}: student ${studentId}`, userId);
+    return this.avRoster(schoolId, examId, room, examDate);
+  }
+
+  private async markAvAttendance(schoolId: string, examId: string, roomId: string, examDate: string, marks: any[], employeeId: string): Promise<any> {
+    if (!Array.isArray(marks)) throw new BusinessErrorResult(ErrorCode.BusinessError, "marks must be an array");
+    const now = new Date();
+    let changed = false;
+    for (const m of marks) {
+      const studentId = (m.studentId || "").trim();
+      const status = m.status === "present" ? "present" : m.status === "absent" ? "absent" : null;
+      if (!studentId || !status) continue;
+      await DB.query(
+        singleLineString`update exam_av_occupant set status = $4, updatedby_userid = $5, updated_at = $6 where exam_id = $1 and exam_date = $2 and student_id = $3`,
+        [examId, examDate, studentId, status, employeeId, now],
+      );
+      changed = true;
+    }
+    // A non-signer editing a signed AV roster ⇒ correction (rule b); harmless no-op otherwise.
+    if (changed) await this.recordRosterCorrection(examId, `r:${roomId}:${examDate}`, employeeId);
+    const room = await this.roomById(schoolId, examId, roomId);
+    return this.avRoster(schoolId, examId, room!, examDate);
+  }
+
+  private async signAvRoster(schoolId: string, examId: string, roomId: string, examDate: string, employeeId: string, signatureBase64?: string): Promise<any> {
+    const occ = await DB.query(singleLineString`select student_id, status from exam_av_occupant where exam_id = $1 and exam_date = $2`, [examId, examDate]);
+    if (!occ.length) throw new BusinessErrorResult(ErrorCode.BusinessError, "Add the students present in the AV room before submitting");
+    const unmarked = occ.filter((o: any) => !o.status);
+    if (unmarked.length) throw new BusinessErrorResult(ErrorCode.BusinessError, `Mark all ${occ.length} students before submitting (${unmarked.length} still unmarked)`);
+    if (!signatureBase64) throw new BusinessErrorResult(ErrorCode.BusinessError, "Draw your signature to submit the roster");
+    await this.recordRosterSignature(schoolId, examId, `r:${roomId}:${examDate}`, roomId, examDate, employeeId, signatureBase64);
+    await this.attAudit(schoolId, examId, "", roomId, null, "sign", null, null, employeeId, `av-signed ${occ.length} students`);
+    const room = await this.roomById(schoolId, examId, roomId);
+    return this.avRoster(schoolId, examId, room!, examDate);
   }
 
   // ── Seating-plan image (an uploaded photo of the room plan; one per exam) ──────

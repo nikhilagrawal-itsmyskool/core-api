@@ -381,3 +381,27 @@ create unique index if not exists idx_exam_roster_sig_scope
     on exam_roster_signature(exam_id, scope_key);
 create index if not exists idx_exam_roster_sig_room
     on exam_roster_signature(school_id, exam_id, room_id);
+
+-- Phase 5c: AV room. A single special room per seating exam (exam_room.kind = 'av'; seating
+-- rooms are 'seating'/null), auto-created and active on EVERY exam date. It holds students who
+-- aren't sitting a paper (or need assembling), so its roster is AD-HOC — the supervisor adds
+-- the specific students present that day into exam_av_occupant (self-contained present/absent,
+-- NOT exam_attendance since there's no paper) and signs it like any room (owner-row signature).
+alter table exam_room add column if not exists kind varchar(16);
+
+create table if not exists exam_av_occupant (
+    uuid varchar(12) primary key,
+    school_id varchar(12) not null,
+    exam_id varchar(12) not null,
+    exam_date date not null,
+    student_id varchar(12) not null,
+    status varchar(16) check (status in ('present', 'absent')),
+    createdby_userid varchar(12),
+    created_at timestamp(0),
+    updatedby_userid varchar(12),
+    updated_at timestamp(0)
+);
+create unique index if not exists idx_exam_av_occupant_cell
+    on exam_av_occupant(exam_id, exam_date, student_id);
+create index if not exists idx_exam_av_occupant_day
+    on exam_av_occupant(school_id, exam_id, exam_date);
