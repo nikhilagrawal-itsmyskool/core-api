@@ -1196,25 +1196,22 @@ class ExaminationService {
     const section = await this.classInfo(schoolId, sectionClassId);
     const students = await this.sectionStudents(schoolId, exam.academicYearId!, sectionClassId);
     const attRows = await DB.query(
-      singleLineString`select student_id, status, signed_by_employee_id,
-          to_char(signed_at, 'YYYY-MM-DD HH24:MI') as signed_at,
-          corrected_by_employee_id, to_char(corrected_at, 'YYYY-MM-DD HH24:MI') as corrected_at
-        from exam_attendance where exam_paper_id = $1 and section_class_id = $2`,
+      singleLineString`select student_id, status from exam_attendance where exam_paper_id = $1 and section_class_id = $2`,
       [examPaperId, sectionClassId],
     );
     const attMap = new Map(attRows.map((r: any) => [r.studentId, r]));
-    const signer = attRows.find((r: any) => r.signedAt);
-    const corrected = attRows.find((r: any) => r.correctedAt);
-    const signedByName = signer ? await this.empName(schoolId, signer.signedByEmployeeId) : null;
-    const correctedByName = corrected ? await this.empName(schoolId, corrected.correctedByEmployeeId) : null;
+    // Signed/corrected state is authoritative on the owner row (one signing event per roster).
+    const sig = await this.rosterSignatureRow(examId, `p:${examPaperId}:${sectionClassId}`);
+    const signedByName = sig?.signedAt ? await this.empName(schoolId, sig.signedByEmployeeId) : null;
+    const correctedByName = sig?.correctedAt ? await this.empName(schoolId, sig.correctedByEmployeeId) : null;
     const rowsOut = students.map((s: any) => {
       const a: any = attMap.get(s.studentId);
       return { studentId: s.studentId, name: s.name, admissionNumber: s.admissionNumber, status: a ? a.status : null };
     });
     return {
       paper: { examDate: paper.examDate, subjectLabel: paper.subjectLabel, grade: paper.grade },
-      section, signed: !!signer, signedByName, signedAt: signer ? signer.signedAt : null,
-      correctedByName, correctedAt: corrected ? corrected.correctedAt : null,
+      section, signed: !!sig?.signedAt, signedByName, signedAt: sig?.signedAt || null,
+      correctedByName, correctedAt: sig?.correctedAt || null,
       locked: paper.examDate < istToday(),
       total: rowsOut.length, markedCount: rowsOut.filter((r: any) => r.status).length,
       students: rowsOut,
@@ -1228,31 +1225,23 @@ class ExaminationService {
     this.ensureEditable(paper.examDate, isGod);
     if (!Array.isArray(marks)) throw new BusinessErrorResult(ErrorCode.BusinessError, "marks must be an array");
     const now = new Date();
+    let changed = false;
     for (const m of marks) {
       const studentId = (m.studentId || "").trim();
       const status = m.status === "present" ? "present" : m.status === "absent" ? "absent" : null;
       if (!studentId || !status) continue;
       const ex = await DB.query(
-        singleLineString`select uuid, status, signed_at, signed_by_employee_id from exam_attendance where exam_paper_id = $1 and student_id = $2`,
+        singleLineString`select uuid, status from exam_attendance where exam_paper_id = $1 and student_id = $2`,
         [examPaperId, studentId],
       );
       if (ex.length) {
         if (ex[0].status !== status) {
-          // Editing a student who was already signed, by someone other than the signer, is a
-          // post-submission correction (rule b): keep the signature, stamp who/when corrected.
-          const isCorrection = !!ex[0].signedAt && ex[0].signedByEmployeeId !== employeeId;
-          if (isCorrection) {
-            await DB.query(
-              singleLineString`update exam_attendance set status = $2, corrected_by_employee_id = $3, corrected_at = $4, updatedby_userid = $3, updated_at = $4 where uuid = $1`,
-              [ex[0].uuid, status, employeeId, now],
-            );
-          } else {
-            await DB.query(
-              singleLineString`update exam_attendance set status = $2, updatedby_userid = $3, updated_at = $4 where uuid = $1`,
-              [ex[0].uuid, status, employeeId, now],
-            );
-          }
+          await DB.query(
+            singleLineString`update exam_attendance set status = $2, updatedby_userid = $3, updated_at = $4 where uuid = $1`,
+            [ex[0].uuid, status, employeeId, now],
+          );
           await this.attAudit(schoolId, examId, examPaperId, sectionClassId, studentId, status === "present" ? "mark_present" : "mark_absent", ex[0].status, status, employeeId, null);
+          changed = true;
         }
       } else {
         await DB.query(
@@ -1262,8 +1251,12 @@ class ExaminationService {
           [generateShortUuid(12), schoolId, examId, examPaperId, paper.examDate, sectionClassId, studentId, status, employeeId, now],
         );
         await this.attAudit(schoolId, examId, examPaperId, sectionClassId, studentId, status === "present" ? "mark_present" : "mark_absent", null, status, employeeId, null);
+        changed = true;
       }
     }
+    // Editing an already-signed roster by someone other than its signer ⇒ a god/admin
+    // correction (rule b): the invigilator's signature is retained; stamp corrected on the owner row.
+    if (changed) await this.recordRosterCorrection(examId, `p:${examPaperId}:${sectionClassId}`, employeeId);
     return this.attendanceRoster(schoolId, examId, examPaperId, sectionClassId);
   }
 
@@ -1286,51 +1279,81 @@ class ExaminationService {
       throw new BusinessErrorResult(ErrorCode.BusinessError, `Mark all ${students.length} students before signing (${unmarked.length} still unmarked)`);
     }
     if (!signatureBase64) throw new BusinessErrorResult(ErrorCode.BusinessError, "Draw your signature to submit the roster");
-    const sigFileId = await this.uploadRosterSignature(schoolId, examPaperId, signatureBase64, employeeId);
-    const already = attRows.some((r: any) => r.signedAt);
+    const scopeKey = `p:${examPaperId}:${sectionClassId}`;
+    const prior = await this.rosterSignatureRow(examId, scopeKey);
+    const { signatureFileId, signedByEmployeeId } = await this.recordRosterSignature(schoolId, examId, scopeKey, null, paper.examDate, employeeId, signatureBase64);
+    const corrected = signedByEmployeeId !== employeeId; // a different signer ⇒ retained-signature correction
     const now = new Date();
-    const { corrections } = await this.applySignatures(students.map((s: any) => ({ examPaperId, studentId: s.studentId })), rowMap, employeeId, sigFileId, now, null);
-    await this.attAudit(schoolId, examId, examPaperId, sectionClassId, null, already ? "resign" : "sign", null, null, employeeId, corrections ? `corrected ${corrections} students (signature retained)` : `signed ${students.length} students`);
+    if (!corrected) {
+      // Denormalise the signature onto the attendance rows so the admit card renders without a join.
+      await DB.query(
+        singleLineString`update exam_attendance set signed_by_employee_id = $3, signed_at = $4, signature_file_id = $5, updatedby_userid = $3, updated_at = $4 where exam_paper_id = $1 and section_class_id = $2`,
+        [examPaperId, sectionClassId, signedByEmployeeId, now, signatureFileId],
+      );
+    }
+    await this.attAudit(schoolId, examId, examPaperId, sectionClassId, null, prior?.signedAt ? "resign" : "sign", null, null, employeeId, corrected ? "corrected (signature retained)" : `signed ${students.length} students`);
     return this.attendanceRoster(schoolId, examId, examPaperId, sectionClassId);
   }
 
-  // Stamp signatures row-by-row with rule-(b) retention. For each (paper, student):
-  //  • never signed  → this signer's signature + timestamp (first signer; god-first = god's).
-  //  • same signer   → refresh timestamp, keep their signature (same-day re-submit).
-  //  • other signer  → RETAIN the existing invigilator signature; record corrected_by/at.
-  // rowMap is keyed by studentId and holds { signedAt, signedByEmployeeId }. roomId is
-  // stamped when signing a room roster (null for section rosters).
-  private async applySignatures(
-    pairs: { examPaperId: string; studentId: string }[],
-    rowMap: Map<string, any>,
-    signerEmpId: string,
-    sigFileId: string,
-    now: Date,
-    roomId: string | null,
-  ): Promise<{ firstSigned: number; corrections: number }> {
-    let firstSigned = 0, corrections = 0;
-    for (const p of pairs) {
-      const existing: any = rowMap.get(p.studentId);
-      if (!existing || !existing.signedAt) {
-        await DB.query(
-          singleLineString`update exam_attendance set signed_by_employee_id = $3, signed_at = $4, signature_file_id = $5, room_id = coalesce($6, room_id), corrected_by_employee_id = null, corrected_at = null, updatedby_userid = $3, updated_at = $4 where exam_paper_id = $1 and student_id = $2`,
-          [p.examPaperId, p.studentId, signerEmpId, now, sigFileId, roomId],
-        );
-        firstSigned++;
-      } else if (existing.signedByEmployeeId === signerEmpId) {
-        await DB.query(
-          singleLineString`update exam_attendance set signed_at = $3, signature_file_id = $4, room_id = coalesce($5, room_id), updatedby_userid = $2, updated_at = $3 where exam_paper_id = $1 and student_id = $6`,
-          [p.examPaperId, signerEmpId, now, sigFileId, roomId, p.studentId],
-        );
-      } else {
-        await DB.query(
-          singleLineString`update exam_attendance set corrected_by_employee_id = $3, corrected_at = $4, room_id = coalesce($5, room_id), updatedby_userid = $3, updated_at = $4 where exam_paper_id = $1 and student_id = $2`,
-          [p.examPaperId, p.studentId, signerEmpId, now, roomId],
-        );
-        corrections++;
-      }
+  // The authoritative signing-event row for a roster scope ('r:<roomId>:<date>' seating, or
+  // 'p:<paperId>:<sectionId>' section). Null until first signed.
+  private async rosterSignatureRow(examId: string, scopeKey: string): Promise<any | null> {
+    const rows = await DB.query(
+      singleLineString`select uuid, signed_by_employee_id, to_char(signed_at, 'YYYY-MM-DD HH24:MI') as signed_at,
+          signature_file_id, corrected_by_employee_id, to_char(corrected_at, 'YYYY-MM-DD HH24:MI') as corrected_at
+        from exam_roster_signature where exam_id = $1 and scope_key = $2`,
+      [examId, scopeKey],
+    );
+    return rows.length ? rows[0] : null;
+  }
+
+  // Record a signing event (rule-b retention) on the owner row, anchoring the freshly-drawn
+  // signature PNG to that row's 12-char uuid (mirrors the document-ack pattern). Returns the
+  // EFFECTIVE signature to stamp onto attendance (denormalised pointer):
+  //  • first signer / same signer re-submitting → this signer's fresh signature.
+  //  • a different signer (god correcting) → RETAIN the invigilator's signature; record
+  //    corrected_by/at on the row and leave the signature untouched.
+  private async recordRosterSignature(
+    schoolId: string, examId: string, scopeKey: string, roomId: string | null, examDate: string,
+    signerEmpId: string, signatureBase64: string,
+  ): Promise<{ signatureFileId: string; signedByEmployeeId: string }> {
+    const now = new Date();
+    const row = await this.rosterSignatureRow(examId, scopeKey);
+    if (!row) {
+      const id = generateShortUuid(12);
+      const fileId = await this.uploadRosterSignature(schoolId, id, signatureBase64, signerEmpId);
+      await DB.query(
+        singleLineString`insert into exam_roster_signature
+          (uuid, school_id, exam_id, scope_key, room_id, exam_date, signed_by_employee_id, signed_at, signature_file_id, createdby_userid, created_at, updatedby_userid, updated_at)
+          values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$7,$8,$7,$8)`,
+        [id, schoolId, examId, scopeKey, roomId, examDate, signerEmpId, now, fileId],
+      );
+      return { signatureFileId: fileId, signedByEmployeeId: signerEmpId };
     }
-    return { firstSigned, corrections };
+    if (row.signedByEmployeeId && row.signedByEmployeeId !== signerEmpId) {
+      await DB.query(
+        singleLineString`update exam_roster_signature set corrected_by_employee_id = $2, corrected_at = $3, updatedby_userid = $2, updated_at = $3 where uuid = $1`,
+        [row.uuid, signerEmpId, now],
+      );
+      return { signatureFileId: row.signatureFileId, signedByEmployeeId: row.signedByEmployeeId };
+    }
+    const fileId = await this.uploadRosterSignature(schoolId, row.uuid, signatureBase64, signerEmpId);
+    await DB.query(
+      singleLineString`update exam_roster_signature set signed_by_employee_id = $2, signed_at = $3, signature_file_id = $4, corrected_by_employee_id = null, corrected_at = null, updatedby_userid = $2, updated_at = $3 where uuid = $1`,
+      [row.uuid, signerEmpId, now, fileId],
+    );
+    return { signatureFileId: fileId, signedByEmployeeId: signerEmpId };
+  }
+
+  // When a SIGNED roster is edited by someone other than its signer (a god/admin correction),
+  // stamp corrected_by/at on the owner row — the signature stays the original invigilator's.
+  private async recordRosterCorrection(examId: string, scopeKey: string, editorEmpId: string): Promise<void> {
+    const row = await this.rosterSignatureRow(examId, scopeKey);
+    if (!row || !row.signedAt || row.signedByEmployeeId === editorEmpId) return;
+    await DB.query(
+      singleLineString`update exam_roster_signature set corrected_by_employee_id = $2, corrected_at = $3, updatedby_userid = $2, updated_at = $3 where uuid = $1`,
+      [row.uuid, editorEmpId, new Date()],
+    );
   }
 
   // ════ Phase 4: seating rooms ═══════════════════════════════════════════════════
@@ -1536,7 +1559,7 @@ class ExaminationService {
     // ticks these and counts the per-day pending, so the incharge sees what's still open.
     const signedRows = await DB.query(
       singleLineString`select distinct to_char(exam_date, 'YYYY-MM-DD') as exam_date, room_id
-        from exam_attendance where exam_id = $1 and room_id is not null and signed_at is not null`,
+        from exam_roster_signature where exam_id = $1 and room_id is not null and signed_at is not null`,
       [examId],
     );
     const submitted = signedRows.map((r: any) => ({ examDate: r.examDate, roomId: r.roomId }));
@@ -1607,7 +1630,7 @@ class ExaminationService {
     );
     const prior = new Map<string, string>(priorRows.map((r: any) => [r.roomId, r.employeeId]));
     const signedRows = await DB.query(
-      singleLineString`select distinct room_id from exam_attendance where exam_id = $1 and exam_date = $2 and room_id is not null and signed_at is not null`,
+      singleLineString`select distinct room_id from exam_roster_signature where exam_id = $1 and exam_date = $2 and room_id is not null and signed_at is not null`,
       [examId, examDate],
     );
     const submitted = new Set<string>(signedRows.map((r: any) => r.roomId));
@@ -1741,24 +1764,17 @@ class ExaminationService {
     const attMap = new Map<string, any>();
     if (paperIds.length) {
       const attRows = await DB.query(
-        singleLineString`select exam_paper_id, student_id, status, signed_by_employee_id,
-            to_char(signed_at, 'YYYY-MM-DD HH24:MI') as signed_at,
-            corrected_by_employee_id, to_char(corrected_at, 'YYYY-MM-DD HH24:MI') as corrected_at
-          from exam_attendance where exam_paper_id = any($1)`,
+        singleLineString`select exam_paper_id, student_id, status from exam_attendance where exam_paper_id = any($1)`,
         [paperIds],
       );
       for (const r of attRows) attMap.set(`${r.examPaperId}|${r.studentId}`, r);
     }
 
     const bySection = new Map<string, any>();
-    let marked = 0, signedCount = 0;
-    let signerEmpId: string | null = null, signedAt: string | null = null;
-    let correctorEmpId: string | null = null, correctedAt: string | null = null;
+    let marked = 0;
     for (const o of occ) {
       const a = attMap.get(`${o.paperId}|${o.studentId}`);
       if (a?.status) marked++;
-      if (a?.signedAt) { signedCount++; signerEmpId = a.signedByEmployeeId; signedAt = a.signedAt; }
-      if (a?.correctedAt) { correctorEmpId = a.correctedByEmployeeId; correctedAt = a.correctedAt; }
       if (!bySection.has(o.sectionClassId)) {
         bySection.set(o.sectionClassId, {
           sectionClassId: o.sectionClassId, sectionName: o.sectionName, grade: o.grade,
@@ -1770,15 +1786,17 @@ class ExaminationService {
         paperId: o.paperId, status: a ? a.status : null,
       });
     }
-    const signedByName = await this.empName(schoolId, signerEmpId);
-    const correctedByName = await this.empName(schoolId, correctorEmpId);
+    // Signed/corrected state is authoritative on the owner row (one signing event per room-day).
+    const sig = await this.rosterSignatureRow(examId, `r:${roomId}:${examDate}`);
+    const signedByName = sig?.signedAt ? await this.empName(schoolId, sig.signedByEmployeeId) : null;
+    const correctedByName = sig?.correctedAt ? await this.empName(schoolId, sig.correctedByEmployeeId) : null;
     const total = occ.length;
     return {
       room, examDate, rollNumbersAvailable: occ.some((o) => o.rollNumber != null),
       roomImageDataUri: await this.roomImageDataUri(schoolId, roomId),
       sections: [...bySection.values()],
-      total, marked, signed: total > 0 && signedCount === total, signedByName, signedAt,
-      correctedByName, correctedAt, locked: examDate < istToday(),
+      total, marked, signed: !!sig?.signedAt, signedByName, signedAt: sig?.signedAt || null,
+      correctedByName, correctedAt: sig?.correctedAt || null, locked: examDate < istToday(),
     };
   }
 
@@ -1788,6 +1806,7 @@ class ExaminationService {
     this.ensureEditable(examDate, isGod);
     if (!Array.isArray(marks)) throw new BusinessErrorResult(ErrorCode.BusinessError, "marks must be an array");
     const now = new Date();
+    let changed = false;
     for (const m of marks) {
       const studentId = (m.studentId || "").trim();
       const paperId = (m.paperId || "").trim();
@@ -1795,26 +1814,17 @@ class ExaminationService {
       const status = m.status === "present" ? "present" : m.status === "absent" ? "absent" : null;
       if (!studentId || !paperId || !status) continue;
       const ex = await DB.query(
-        singleLineString`select uuid, status, signed_at, signed_by_employee_id from exam_attendance where exam_paper_id = $1 and student_id = $2`,
+        singleLineString`select uuid, status from exam_attendance where exam_paper_id = $1 and student_id = $2`,
         [paperId, studentId],
       );
       if (ex.length) {
         if (ex[0].status !== status) {
-          // Editing an already-signed student, by someone other than the signer, is a
-          // post-submission correction (rule b): keep the signature, stamp corrected_by/at.
-          const isCorrection = !!ex[0].signedAt && ex[0].signedByEmployeeId !== employeeId;
-          if (isCorrection) {
-            await DB.query(
-              singleLineString`update exam_attendance set status = $2, room_id = $3, corrected_by_employee_id = $4, corrected_at = $5, updatedby_userid = $4, updated_at = $5 where uuid = $1`,
-              [ex[0].uuid, status, roomId, employeeId, now],
-            );
-          } else {
-            await DB.query(
-              singleLineString`update exam_attendance set status = $2, room_id = $3, updatedby_userid = $4, updated_at = $5 where uuid = $1`,
-              [ex[0].uuid, status, roomId, employeeId, now],
-            );
-          }
+          await DB.query(
+            singleLineString`update exam_attendance set status = $2, room_id = $3, updatedby_userid = $4, updated_at = $5 where uuid = $1`,
+            [ex[0].uuid, status, roomId, employeeId, now],
+          );
           await this.attAudit(schoolId, examId, paperId, sectionClassId, studentId, status === "present" ? "mark_present" : "mark_absent", ex[0].status, status, employeeId, null);
+          changed = true;
         } else {
           await DB.query(singleLineString`update exam_attendance set room_id = $2 where uuid = $1`, [ex[0].uuid, roomId]);
         }
@@ -1826,8 +1836,11 @@ class ExaminationService {
           [generateShortUuid(12), schoolId, examId, paperId, examDate, sectionClassId, studentId, status, roomId, employeeId, now],
         );
         await this.attAudit(schoolId, examId, paperId, sectionClassId, studentId, status === "present" ? "mark_present" : "mark_absent", null, status, employeeId, null);
+        changed = true;
       }
     }
+    // A non-signer editing a signed room-day ⇒ god/admin correction (rule b): stamp the owner row.
+    if (changed) await this.recordRosterCorrection(examId, `r:${roomId}:${examDate}`, employeeId);
     return this.roomRoster(schoolId, examId, roomId, examDate);
   }
 
@@ -1841,7 +1854,7 @@ class ExaminationService {
     if (!occ.length) throw new BusinessErrorResult(ErrorCode.BusinessError, "No students sit in this room on this day");
     const paperIds = [...new Set(occ.map((o) => o.paperId))];
     const attRows = await DB.query(
-      singleLineString`select exam_paper_id, student_id, status, signed_at, signed_by_employee_id from exam_attendance where exam_paper_id = any($1)`,
+      singleLineString`select exam_paper_id, student_id, status from exam_attendance where exam_paper_id = any($1)`,
       [paperIds],
     );
     const statusMap = new Map(attRows.map((r: any) => [`${r.examPaperId}|${r.studentId}`, r.status]));
@@ -1850,12 +1863,20 @@ class ExaminationService {
       throw new BusinessErrorResult(ErrorCode.BusinessError, `Mark all ${occ.length} students before signing (${unmarked.length} still unmarked)`);
     }
     if (!signatureBase64) throw new BusinessErrorResult(ErrorCode.BusinessError, "Draw your signature to submit the roster");
-    const sigFileId = await this.uploadRosterSignature(schoolId, roomId, signatureBase64, employeeId);
-    const already = attRows.some((r: any) => r.signedAt);
-    const rowMap = new Map<string, any>(attRows.map((r: any) => [r.studentId, r]));
+    const scopeKey = `r:${roomId}:${examDate}`;
+    const prior = await this.rosterSignatureRow(examId, scopeKey);
+    const { signatureFileId, signedByEmployeeId } = await this.recordRosterSignature(schoolId, examId, scopeKey, roomId, examDate, employeeId, signatureBase64);
+    const corrected = signedByEmployeeId !== employeeId; // a different signer ⇒ retained-signature correction
     const now = new Date();
-    const { corrections } = await this.applySignatures(occ.map((o) => ({ examPaperId: o.paperId, studentId: o.studentId })), rowMap, employeeId, sigFileId, now, roomId);
-    await this.attAudit(schoolId, examId, "", roomId, null, already ? "resign" : "sign", null, null, employeeId, corrections ? `room-corrected ${corrections} students (signature retained)` : `room-signed ${occ.length} students`);
+    if (!corrected) {
+      // Denormalise the signature onto the occupants' attendance rows for the admit-card render.
+      const studentIds = occ.map((o) => o.studentId);
+      await DB.query(
+        singleLineString`update exam_attendance set signed_by_employee_id = $3, signed_at = $4, signature_file_id = $5, room_id = $6, updatedby_userid = $3, updated_at = $4 where exam_paper_id = any($1) and student_id = any($2)`,
+        [paperIds, studentIds, signedByEmployeeId, now, signatureFileId, roomId],
+      );
+    }
+    await this.attAudit(schoolId, examId, "", roomId, null, prior?.signedAt ? "resign" : "sign", null, null, employeeId, corrected ? "room-corrected (signature retained)" : `room-signed ${occ.length} students`);
     return this.roomRoster(schoolId, examId, roomId, examDate);
   }
 
