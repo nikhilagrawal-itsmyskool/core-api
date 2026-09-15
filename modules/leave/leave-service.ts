@@ -261,7 +261,12 @@ class LeaveService {
     const views = rows.map((r: any) => this.toView(r));
     if (withEvaluation) {
       for (const v of views) {
-        if (v.status === "pending") v.evaluation = await this.evaluateApplication(schoolId, v.uuid);
+        if (v.status === "pending") {
+          const ev = await this.evaluateApplication(schoolId, v.uuid);
+          v.evaluation = ev;
+          // Show the live (recomputed) working days so the queue matches the checklist.
+          if (ev.workingDays != null) v.workingDays = ev.workingDays;
+        }
       }
     }
     return views;
@@ -328,7 +333,7 @@ class LeaveService {
   // and whether it consumes any working day). Returns a per-check pass/fail list + an overall
   // `passes` flag. Powers the Approvals button colour + rule checklist, and is reused by
   // approve() to decide whether an exception confirmation is needed.
-  async evaluateApplication(schoolId: string, id: string): Promise<{ checks: LeaveCheck[]; passes: boolean }> {
+  async evaluateApplication(schoolId: string, id: string): Promise<{ checks: LeaveCheck[]; passes: boolean; workingDays?: number }> {
     const rows = await DB.query(
       singleLineString`select uuid, employee_id, leave_type_code, from_date::text as from_date, to_date::text as to_date,
           working_days::float8 as working_days, day_portion, status
@@ -339,7 +344,11 @@ class LeaveService {
     const app = rows[0];
     const type = await this.getType(schoolId, app.leaveTypeCode);
     const config = await this.ensureConfig(schoolId);
-    const reqDays = Number(app.workingDays) || 0;
+    // Recompute working days from the CURRENT calendar (staff-working-aware) rather than the
+    // value stored at apply time — a holiday added/removed since then must be reflected. Half
+    // days stay 0.5.
+    const isHalf = app.dayPortion === "first_half" || app.dayPortion === "second_half";
+    const reqDays = isHalf ? 0.5 : await workingDaysBetween(schoolId, app.fromDate, app.toDate);
     const checks: LeaveCheck[] = [];
 
     checks.push({
@@ -386,7 +395,7 @@ class LeaveService {
       checks.push({ key: "annual_balance", label: "Annual balance", passed: true, detail: "No annual limit for this type" });
     }
 
-    return { checks, passes: checks.every((c) => c.passed) };
+    return { checks, passes: checks.every((c) => c.passed), workingDays: reqDays };
   }
 
   // Approve a pending application. The daily CL cap and the annual quota are SOFT limits:
@@ -417,11 +426,14 @@ class LeaveService {
     const overridden = warnings.length > 0;
     const overrideReason = overridden ? (opts.overrideReason?.trim() || null) : null;
     const now = new Date();
+    // Persist working days as recomputed from the current calendar, so the balance/ledger is
+    // correct even if the calendar changed after the leave was applied.
+    const finalDays = evalRes.workingDays ?? (Number(app.workingDays) || 0);
     await DB.query(
       singleLineString`update leave_application set status = 'approved', decided_by = $1, decided_at = $2,
-          overridden = $3, override_reason = $4, updatedby_userid = $1, updated_at = $2
-        where uuid = $5 and school_id = $6 and status = 'pending'`,
-      [userId, now, overridden, overrideReason, id, schoolId],
+          overridden = $3, override_reason = $4, working_days = $5, updatedby_userid = $1, updated_at = $2
+        where uuid = $6 and school_id = $7 and status = 'pending'`,
+      [userId, now, overridden, overrideReason, finalDays, id, schoolId],
     );
     const auditDetail = overridden ? `OVERRIDE: ${warnings.join(" ")}${overrideReason ? ` — ${overrideReason}` : ""}`.slice(0, 256) : null;
     await this.audit(schoolId, id, overridden ? "override" : "approve", auditDetail, "pending", "approved", userId);
