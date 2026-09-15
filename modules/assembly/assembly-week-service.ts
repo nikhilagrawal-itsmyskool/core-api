@@ -4,7 +4,7 @@ import { ErrorCode } from '../../shared/lib/error-codes';
 import {
   AssemblyWeek, AssemblyWeekDetail, WeekSummary, RosterSlot, RosterDayView,
   RosterParticipantView, RosterParticipantInput, AssemblyNodeDetail,
-  SaveRosterRequest,
+  SaveRosterRequest, SaveRosterDayInput, SaveRosterEntryInput,
 } from './assembly-interfaces';
 import { WEEKDAY_VALUES, Weekday, WeekStatus, RESPONSIBLE_TARGET_TYPE_VALUES } from './assembly-constants';
 import { isValidDate, findEmployee, findClass, resolveStudentInfo, dailyThemesForRange } from './assembly-common';
@@ -122,6 +122,12 @@ class AssemblyWeekService {
       ? await dailyThemesForRange(schoolId, dates[0].date, dates[dates.length - 1].date)
       : new Map<string, string>();
 
+    // Per-day optimistic-concurrency version (absent row = 0).
+    const versionByDate = new Map<string, number>();
+    for (const r of await DB.query(singleLineString`select entry_date::text as entry_date, version from assembly_roster_day where week_id = $1`, [weekId])) {
+      versionByDate.set(r.entryDate, Number(r.version));
+    }
+
     const days: RosterDayView[] = [];
     for (const { wd, date } of dates) {
       const slots = (await this.fillableSlots(week.planId, schoolId, wd)).map(s => {
@@ -142,6 +148,7 @@ class AssemblyWeekService {
         drummers: dp.filter(r => r.role === 'drummer').map(view),
         references: refsByDate.get(date) || [],
         dailyTheme: themeByDate.get(date) || null,
+        version: versionByDate.get(date) || 0,
         slots,
       });
     }
@@ -178,6 +185,36 @@ class AssemblyWeekService {
     }
 
     const now = new Date();
+
+    // Group the payload by date (validating each date/slot up front).
+    const daysByDate = new Map<string, SaveRosterDayInput>();
+    for (const day of data.days || []) {
+      if (!validDates.has(day.date)) throw new BusinessErrorResult(ErrorCode.BusinessError, `Date ${day.date} is not an assembly day of this week`);
+      daysByDate.set(day.date, day);
+    }
+    const entriesByDate = new Map<string, SaveRosterEntryInput[]>();
+    for (const e of data.entries || []) {
+      if (!validDates.has(e.date)) throw new BusinessErrorResult(ErrorCode.BusinessError, `Date ${e.date} is not an assembly day of this week`);
+      if (!fillableByDate.get(e.date)!.has(e.nodeId)) throw new BusinessErrorResult(ErrorCode.BusinessError, `Node ${e.nodeId} is not a roster slot on ${e.date}`);
+      (entriesByDate.get(e.date) || entriesByDate.set(e.date, []).get(e.date)!).push(e);
+    }
+    const payloadDates = new Set<string>([...daysByDate.keys(), ...entriesByDate.keys()]);
+
+    // Per-day optimistic-concurrency guard: a save only rewrites a day whose version still
+    // matches what the caller loaded. A day changed by someone else meanwhile is SKIPPED
+    // (left as they saved it) — this is what stops one teacher's save wiping another's day.
+    const currentVersion = new Map<string, number>();
+    for (const r of await DB.query(singleLineString`select entry_date::text as entry_date, version from assembly_roster_day where week_id = $1`, [weekId])) {
+      currentVersion.set(r.entryDate, Number(r.version));
+    }
+    const conflictDates: string[] = [];
+    const writeDates: string[] = [];
+    for (const date of payloadDates) {
+      const cur = currentVersion.get(date) || 0;
+      const expected = data.dayVersions ? (data.dayVersions[date] ?? 0) : cur; // no versions sent -> legacy, no guard
+      if (expected !== cur) conflictDates.push(date); else writeDates.push(date);
+    }
+
     const queries: string[] = [];
     const params: any[][] = [];
     const insertParticipant = (scope: 'day' | 'entry', date: string, nodeId: string | null, role: string | undefined, p: ResolvedParticipant, idx: number) => {
@@ -185,34 +222,36 @@ class AssemblyWeekService {
       params.push([generateShortUuid(12), schoolId, weekId, date, scope, nodeId, role ?? null, p.targetType, p.targetId, p.targetName, p.targetClass, p.targetText, idx, userId, now]);
     };
 
-    if (Array.isArray(data.days)) {
-      queries.push(singleLineString`delete from assembly_roster_participant where week_id = $1 and scope = 'day'`); params.push([weekId]);
-      for (const day of data.days) {
-        if (!validDates.has(day.date)) throw new BusinessErrorResult(ErrorCode.BusinessError, `Date ${day.date} is not an assembly day of this week`);
+    for (const date of writeDates) {
+      // Day-scope participants (anchors/owners/commanders/drummers) — scoped to THIS date only.
+      if (daysByDate.has(date)) {
+        const day = daysByDate.get(date)!;
+        queries.push(singleLineString`delete from assembly_roster_participant where week_id = $1 and entry_date = $2 and scope = 'day'`); params.push([weekId, date]);
         let idx = 0;
-        for (const a of day.anchors || []) insertParticipant('day', day.date, null, a.role || 'anchor', await this.resolveParticipant(schoolId, a, week.academicYearId), idx++);
-        for (const o of day.owners || []) insertParticipant('day', day.date, null, o.role || 'day-owner', await this.resolveParticipant(schoolId, o, week.academicYearId), idx++);
-        for (const c of day.commanders || []) insertParticipant('day', day.date, null, c.role || 'commander', await this.resolveParticipant(schoolId, c, week.academicYearId), idx++);
-        for (const dr of day.drummers || []) insertParticipant('day', day.date, null, dr.role || 'drummer', await this.resolveParticipant(schoolId, dr, week.academicYearId), idx++);
+        for (const a of day.anchors || []) insertParticipant('day', date, null, a.role || 'anchor', await this.resolveParticipant(schoolId, a, week.academicYearId), idx++);
+        for (const o of day.owners || []) insertParticipant('day', date, null, o.role || 'day-owner', await this.resolveParticipant(schoolId, o, week.academicYearId), idx++);
+        for (const c of day.commanders || []) insertParticipant('day', date, null, c.role || 'commander', await this.resolveParticipant(schoolId, c, week.academicYearId), idx++);
+        for (const dr of day.drummers || []) insertParticipant('day', date, null, dr.role || 'drummer', await this.resolveParticipant(schoolId, dr, week.academicYearId), idx++);
       }
-    }
-
-    if (Array.isArray(data.entries)) {
-      queries.push(singleLineString`delete from assembly_roster_entry where week_id = $1`); params.push([weekId]);
-      queries.push(singleLineString`delete from assembly_roster_participant where week_id = $1 and scope = 'entry'`); params.push([weekId]);
-      for (const e of data.entries) {
-        if (!validDates.has(e.date)) throw new BusinessErrorResult(ErrorCode.BusinessError, `Date ${e.date} is not an assembly day of this week`);
-        if (!fillableByDate.get(e.date)!.has(e.nodeId)) throw new BusinessErrorResult(ErrorCode.BusinessError, `Node ${e.nodeId} is not a roster slot on ${e.date}`);
-        const content = (e.content ?? '').toString().trim() || null;
-        const opted = e.opted === undefined ? true : !!e.opted;
-        const parts = e.participants || [];
-        // Only persist a slot that carries signal: opted-out, content, or people.
-        if (opted && !content && parts.length === 0) continue;
-        queries.push(singleLineString`insert into assembly_roster_entry (uuid, school_id, week_id, entry_date, node_id, opted, content, createdby_userid, created_at) values ($1,$2,$3,$4,$5,$6,$7,$8,$9)`);
-        params.push([generateShortUuid(12), schoolId, weekId, e.date, e.nodeId, opted, content, userId, now]);
-        let idx = 0;
-        for (const p of parts) insertParticipant('entry', e.date, e.nodeId, p.role, await this.resolveParticipant(schoolId, p, week.academicYearId), idx++);
+      // Entry slots (content + speakers) — scoped to THIS date only.
+      if (entriesByDate.has(date)) {
+        queries.push(singleLineString`delete from assembly_roster_entry where week_id = $1 and entry_date = $2`); params.push([weekId, date]);
+        queries.push(singleLineString`delete from assembly_roster_participant where week_id = $1 and entry_date = $2 and scope = 'entry'`); params.push([weekId, date]);
+        for (const e of entriesByDate.get(date)!) {
+          const content = (e.content ?? '').toString().trim() || null;
+          const opted = e.opted === undefined ? true : !!e.opted;
+          const parts = e.participants || [];
+          // Only persist a slot that carries signal: opted-out, content, or people.
+          if (opted && !content && parts.length === 0) continue;
+          queries.push(singleLineString`insert into assembly_roster_entry (uuid, school_id, week_id, entry_date, node_id, opted, content, createdby_userid, created_at) values ($1,$2,$3,$4,$5,$6,$7,$8,$9)`);
+          params.push([generateShortUuid(12), schoolId, weekId, date, e.nodeId, opted, content, userId, now]);
+          let idx = 0;
+          for (const p of parts) insertParticipant('entry', date, e.nodeId, p.role, await this.resolveParticipant(schoolId, p, week.academicYearId), idx++);
+        }
       }
+      // Bump this day's version (insert = 1, else +1).
+      queries.push(singleLineString`insert into assembly_roster_day (uuid, school_id, week_id, entry_date, version, updatedby_userid, updated_at, created_at) values ($1,$2,$3,$4,1,$5,$6,$6) on conflict (week_id, entry_date) do update set version = assembly_roster_day.version + 1, updatedby_userid = $5, updated_at = $6`);
+      params.push([generateShortUuid(12), schoolId, weekId, date, userId, now]);
     }
 
     if (queries.length) {
@@ -220,7 +259,9 @@ class AssemblyWeekService {
       params.push([userId, now, weekId]);
       await DB.queriesInTransaction(queries, params);
     }
-    return this.getWeek(weekId, schoolId);
+    const detail = await this.getWeek(weekId, schoolId);
+    if (detail && conflictDates.length) detail.conflictDates = conflictDates.sort();
+    return detail;
   }
 
   // ── Workflow: submit / approve / unlock ──────────────────────────────────────

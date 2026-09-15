@@ -151,12 +151,14 @@ export interface RosterDayView {
   drummers: RosterParticipantView[];    // scope='day', role 'drummer' (student)
   references: RosterReferenceView[];    // day-level references (description + image)
   dailyTheme?: string | null;           // academic-calendar "thought of the day" (Theme entry)
+  version: number;                      // per-day optimistic-concurrency version (0 = never saved)
   slots: RosterSlot[];
 }
 
 // Full editor read model: the week + each assembly date's day header + fillable slots.
 export interface AssemblyWeekDetail extends AssemblyWeek {
   days: RosterDayView[];
+  conflictDates?: string[]; // set on a save response: days skipped because they changed since load
 }
 
 export interface WeekSummary {
@@ -189,6 +191,7 @@ export interface RosterParticipantInput {
 export interface SaveRosterRequest {
   days?: SaveRosterDayInput[];
   entries?: SaveRosterEntryInput[];
+  dayVersions?: Record<string, number>; // client's per-day version at load; guards against overwrite
 }
 export interface SaveRosterDayInput {
   date: string;

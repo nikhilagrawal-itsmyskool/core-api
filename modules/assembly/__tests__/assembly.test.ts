@@ -359,6 +359,50 @@ describe('house mode: weekly roster', () => {
     expect(list.body.map((w: any) => w.uuid)).toContain(weekId);
   });
 
+  it('saves per-day with a concurrency guard: a stale save cannot wipe another teacher\'s day', async () => {
+    // Own plan running Mon+Tue so we can exercise two days in one week.
+    const plan = await newPlan('ConcWing', ['mon', 'tue']);
+    await api('POST', `/plans/${plan.uuid}/publish`);
+    const cwMon = shiftIso(MON, 35);          // a distinct, editable future Monday
+    const cwTue = shiftIso(cwMon, 1);
+    const wk = (await api('POST', `/plans/${plan.uuid}/weeks`, { weekStart: cwMon })).body;
+    const wid = wk.uuid;
+    expect(wk.days.find((d: any) => d.date === cwMon).version).toBe(0); // never saved yet
+
+    // Teacher B fills TUESDAY (expected version 0) and saves.
+    const bSave = await api('PUT', `/weeks/${wid}/roster`, {
+      days: [{ date: cwTue, anchors: [{ targetType: 'text', targetText: 'B-anchor' }] }],
+      dayVersions: { [cwTue]: 0 },
+    });
+    expect(bSave.status).toBe(200);
+    expect(bSave.body.conflictDates || []).toHaveLength(0);
+    const tueAfterB = bSave.body.days.find((d: any) => d.date === cwTue);
+    expect(tueAfterB.anchors.map((a: any) => a.targetText)).toContain('B-anchor');
+    expect(tueAfterB.version).toBe(1);
+
+    // Teacher A (loaded when both were v0) saves MONDAY (fresh) + TUESDAY (STALE v0).
+    const aSave = await api('PUT', `/weeks/${wid}/roster`, {
+      days: [
+        { date: cwMon, anchors: [{ targetType: 'text', targetText: 'A-mon' }] },
+        { date: cwTue, anchors: [{ targetType: 'text', targetText: 'A-tue' }] },
+      ],
+      dayVersions: { [cwMon]: 0, [cwTue]: 0 }, // Tue is stale — server is already at 1
+    });
+    expect(aSave.status).toBe(200);
+    expect(aSave.body.conflictDates).toContain(cwTue);                         // Tuesday skipped
+    expect(aSave.body.days.find((d: any) => d.date === cwMon).anchors.map((a: any) => a.targetText)).toContain('A-mon'); // Monday saved
+    const tueFinal = aSave.body.days.find((d: any) => d.date === cwTue).anchors.map((a: any) => a.targetText);
+    expect(tueFinal).toContain('B-anchor');       // B's Tuesday PRESERVED (not wiped)
+    expect(tueFinal).not.toContain('A-tue');       // A's stale Tuesday did NOT overwrite
+
+    // Legacy: a save without dayVersions still works (no guard).
+    const legacy = await api('PUT', `/weeks/${wid}/roster`, {
+      days: [{ date: cwMon, anchors: [{ targetType: 'text', targetText: 'legacy' }] }],
+    });
+    expect(legacy.status).toBe(200);
+    expect(legacy.body.days.find((d: any) => d.date === cwMon).anchors.map((a: any) => a.targetText)).toContain('legacy');
+  });
+
   it('saves a roster, approves it, and overlays it onto resolve', async () => {
     const save = await api('PUT', `/weeks/${weekId}/roster`, {
       // Day anchors (polymorphic participants, incl. a free-text anchor + a group).

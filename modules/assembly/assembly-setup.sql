@@ -391,6 +391,21 @@ create table if not exists assembly_roster_participant (
 create index if not exists idx_assembly_roster_participant_day on assembly_roster_participant(week_id, entry_date);
 create index if not exists idx_assembly_roster_participant_node on assembly_roster_participant(week_id, entry_date, node_id);
 
+-- Table 18b: assembly_roster_day (per week+day meta: monotonic version for optimistic
+-- concurrency so one teacher's save can't overwrite another day changed since they loaded;
+-- also records the day's last editor/time). Absent row = version 0.
+create table if not exists assembly_roster_day (
+    uuid varchar(12) primary key,
+    school_id varchar(12) not null,
+    week_id varchar(12) not null,
+    entry_date date not null,
+    version integer not null,
+    updatedby_userid varchar(12),
+    updated_at timestamp(0),
+    created_at timestamp(0)
+);
+create unique index if not exists idx_assembly_roster_day_unique on assembly_roster_day(week_id, entry_date);
+
 -- Table 19: assembly_week_unlock (audit of late/locked-week unlocks)
 create table if not exists assembly_week_unlock (
     uuid varchar(12) primary key,
