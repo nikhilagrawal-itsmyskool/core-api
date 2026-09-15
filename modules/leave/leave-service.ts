@@ -26,6 +26,7 @@ import {
   LeaveConfig,
   LeaveTypeView,
   LeaveAuditRow,
+  LeaveCheck,
 } from "./leave-interfaces";
 import { notifyInApp } from "./leave-notify";
 const { generateShortUuid } = require("../../shared/util/generate-uuid.js");
@@ -235,6 +236,7 @@ class LeaveService {
   async listApplications(
     schoolId: string,
     filters: { status?: string; employeeId?: string; from?: string; to?: string },
+    withEvaluation = false,
   ): Promise<LeaveApplicationView[]> {
     const conds: string[] = ["a.school_id = $1"];
     const params: any[] = [schoolId];
@@ -256,7 +258,13 @@ class LeaveService {
         order by a.applied_at desc nulls last, a.created_at desc`,
       params,
     );
-    return rows.map((r: any) => this.toView(r));
+    const views = rows.map((r: any) => this.toView(r));
+    if (withEvaluation) {
+      for (const v of views) {
+        if (v.status === "pending") v.evaluation = await this.evaluateApplication(schoolId, v.uuid);
+      }
+    }
+    return views;
   }
 
   async getApplication(schoolId: string, id: string): Promise<LeaveApplicationView | null> {
@@ -316,6 +324,71 @@ class LeaveService {
     return rows[0] || null;
   }
 
+  // Evaluate a pending application against the approval rules (daily CL cap, annual balance,
+  // and whether it consumes any working day). Returns a per-check pass/fail list + an overall
+  // `passes` flag. Powers the Approvals button colour + rule checklist, and is reused by
+  // approve() to decide whether an exception confirmation is needed.
+  async evaluateApplication(schoolId: string, id: string): Promise<{ checks: LeaveCheck[]; passes: boolean }> {
+    const rows = await DB.query(
+      singleLineString`select uuid, employee_id, leave_type_code, from_date::text as from_date, to_date::text as to_date,
+          working_days::float8 as working_days, day_portion, status
+        from leave_application where school_id = $1 and uuid = $2`,
+      [schoolId, id],
+    );
+    if (!rows.length) return { checks: [], passes: true };
+    const app = rows[0];
+    const type = await this.getType(schoolId, app.leaveTypeCode);
+    const config = await this.ensureConfig(schoolId);
+    const reqDays = Number(app.workingDays) || 0;
+    const checks: LeaveCheck[] = [];
+
+    checks.push({
+      key: "working_days", label: "Consumes working days", passed: reqDays > 0,
+      detail: reqDays > 0 ? `${reqDays} working day(s)` : "Falls on a holiday or weekly-off — 0 working days will be consumed",
+    });
+
+    if (String(app.leaveTypeCode).toUpperCase() === "CL") {
+      let hit: { date: string; n: number } | null = null;
+      for (const date of datesInRange(app.fromDate, app.toDate)) {
+        const cnt = await DB.query(
+          singleLineString`select count(distinct employee_id)::int as n from leave_application
+            where school_id = $1 and upper(leave_type_code) = 'CL' and status = 'approved'
+              and uuid <> $2 and from_date <= $3 and to_date >= $3`,
+          [schoolId, id, date],
+        );
+        if (cnt[0].n >= config.dailyCap) { hit = { date: date, n: cnt[0].n }; break; }
+      }
+      checks.push({
+        key: "daily_cap", label: `Within the daily cap (${config.dailyCap}/day)`, passed: !hit,
+        detail: hit ? `Daily cap: ${hit.n} staff already on Casual Leave on ${hit.date} (max ${config.dailyCap})` : `At most ${config.dailyCap} staff on Casual Leave per day`,
+      });
+    } else {
+      checks.push({ key: "daily_cap", label: "Daily cap", passed: true, detail: "Applies to Casual Leave only" });
+    }
+
+    if (type?.annualQuota != null) {
+      const { start, end } = await academicYearRange(schoolId, app.fromDate);
+      const usedRows = await DB.query(
+        singleLineString`select coalesce(sum(working_days), 0)::float8 as n from leave_application
+          where school_id = $1 and employee_id = $2 and lower(leave_type_code) = lower($3)
+            and status = 'approved' and uuid <> $4 and from_date >= $5 and from_date <= $6`,
+        [schoolId, app.employeeId, app.leaveTypeCode, id, start, end],
+      );
+      const used = Number(usedRows[0].n) || 0;
+      const within = used + reqDays <= type.annualQuota;
+      checks.push({
+        key: "annual_balance", label: `Within ${type.name} balance`, passed: within,
+        detail: within
+          ? `${used + reqDays} of ${type.annualQuota} day(s) used this year (incl. this request)`
+          : `Over balance: ${type.annualQuota} day(s)/year — ${used} used + ${reqDays} = ${used + reqDays}`,
+      });
+    } else {
+      checks.push({ key: "annual_balance", label: "Annual balance", passed: true, detail: "No annual limit for this type" });
+    }
+
+    return { checks, passes: checks.every((c) => c.passed) };
+  }
+
   // Approve a pending application. The daily CL cap and the annual quota are SOFT limits:
   // if either would be breached and the approver has not confirmed an override, approval
   // pauses and returns { needsConfirmation, warnings } so the UI can ask "approve anyway?".
@@ -332,42 +405,10 @@ class LeaveService {
     if (app.status !== "pending") throw new BusinessErrorResult(ErrorCode.BusinessError, `Cannot approve a ${app.status} application`);
 
     const type = await this.getType(schoolId, app.leaveTypeCode);
-    const config = await this.ensureConfig(schoolId);
-    const warnings: string[] = [];
-
-    // Per-day cap (policy: "not more than N teachers on any single working day"): at most
-    // `dailyCap` staff on approved Casual Leave on any date the request spans, school-wide.
-    // Applies to routine CL only — medical / emergency / bereavement / on-duty are never
-    // capped (the policy explicitly prioritises those).
-    if (String(app.leaveTypeCode).toUpperCase() === "CL") {
-      for (const date of datesInRange(app.fromDate, app.toDate)) {
-        const cnt = await DB.query(
-          singleLineString`select count(distinct employee_id)::int as n from leave_application
-            where school_id = $1 and upper(leave_type_code) = 'CL' and status = 'approved'
-              and uuid <> $2 and from_date <= $3 and to_date >= $3`,
-          [schoolId, id, date],
-        );
-        if (cnt[0].n >= config.dailyCap) {
-          warnings.push(`Daily cap reached: ${config.dailyCap} staff already on Casual Leave for ${date}.`);
-        }
-      }
-    }
-
-    // Annual quota: would approving this push the employee past the type's yearly allocation?
-    if (type?.annualQuota != null) {
-      const { start, end } = await academicYearRange(schoolId, app.fromDate);
-      const usedRows = await DB.query(
-        singleLineString`select coalesce(sum(working_days), 0)::float8 as n from leave_application
-          where school_id = $1 and employee_id = $2 and lower(leave_type_code) = lower($3)
-            and status = 'approved' and uuid <> $4 and from_date >= $5 and from_date <= $6`,
-        [schoolId, app.employeeId, app.leaveTypeCode, id, start, end],
-      );
-      const used = Number(usedRows[0].n) || 0;
-      const reqDays = Number(app.workingDays) || 0;
-      if (used + reqDays > type.annualQuota) {
-        warnings.push(`${type.name} balance exceeded: ${type.annualQuota} day(s) a year — ${used} already approved, and this is ${reqDays} day(s).`);
-      }
-    }
+    // Rule evaluation (daily cap / annual balance / 0-working-days) — failed checks become
+    // the exception warnings.
+    const evalRes = await this.evaluateApplication(schoolId, id);
+    const warnings: string[] = evalRes.checks.filter((c) => !c.passed).map((c) => c.detail || c.label);
 
     if (warnings.length && !opts.override) {
       return { needsConfirmation: true, warnings };

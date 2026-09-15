@@ -68,6 +68,15 @@ export interface LeaveApplicationView {
   overridden?: boolean;        // approved past the daily cap / annual quota by an approver
   overrideReason?: string | null;
   warnings?: string[];         // soft-threshold warnings surfaced at apply time
+  evaluation?: { checks: LeaveCheck[]; passes: boolean }; // rule preflight (pending rows only)
+}
+
+// One approval-rule check (daily cap / annual balance / working-days).
+export interface LeaveCheck {
+  key: string;
+  label: string;
+  passed: boolean;
+  detail?: string;
 }
 
 // Result of an approve attempt. When a soft threshold (daily cap / annual quota) is hit and

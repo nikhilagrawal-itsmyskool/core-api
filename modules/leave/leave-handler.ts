@@ -76,7 +76,7 @@ class LeaveHandler {
         employeeId: q.employeeId || undefined,
         from: q.from || undefined,
         to: q.to || undefined,
-      });
+      }, q.withEvaluation === "1");
       ResponseBuilder.ok(rows, callback);
     } catch (err: any) {
       ResponseBuilder.handleError(err, callback);
