@@ -1380,6 +1380,53 @@ class ExaminationService {
     );
   }
 
+  // ── Class-wise attendance (exam-incharge cross-verify) ────────────────────────────
+  // A consolidated present/absent sheet for ONE section on ONE date, regardless of which
+  // room each student sat in. Reads/writes the same exam_attendance rows the room rosters use,
+  // so the incharge can fill/correct the overall record centrally (teachers only sign rooms).
+
+  async classAttendance(schoolId: string, examId: string, sectionClassId: string, examDate: string): Promise<any> {
+    const exam = await this.getExam(schoolId, examId);
+    if (!exam) throw new BusinessErrorResult(ErrorCode.BusinessError, "Examination not found");
+    const section = await this.classInfo(schoolId, sectionClassId);
+    if (!section) throw new BusinessErrorResult(ErrorCode.BusinessError, "Class not found");
+    const paper = await this.paperFor(examId, section.grade, examDate);
+    const students = await this.sectionStudents(schoolId, exam.academicYearId!, sectionClassId);
+    let rows: any[] = students.map((s: any) => ({ studentId: s.studentId, name: s.name, admissionNumber: s.admissionNumber, rollNumber: s.rollNumber, status: null, roomName: null }));
+    if (paper && students.length) {
+      const att = await DB.query(
+        singleLineString`select student_id, status, room_id from exam_attendance where exam_paper_id = $1 and student_id = any($2)`,
+        [paper.uuid, students.map((s: any) => s.studentId)],
+      );
+      const attMap = new Map(att.map((r: any) => [r.studentId, r]));
+      const roomIds = [...new Set(att.map((r: any) => r.roomId).filter(Boolean))];
+      const roomName = new Map<string, string>();
+      if (roomIds.length) {
+        const rr = await DB.query(singleLineString`select uuid, name from exam_room where uuid = any($1)`, [roomIds]);
+        for (const r of rr) roomName.set(r.uuid, r.name);
+      }
+      rows = students.map((s: any) => {
+        const a: any = attMap.get(s.studentId);
+        return { studentId: s.studentId, name: s.name, admissionNumber: s.admissionNumber, rollNumber: s.rollNumber, status: a ? a.status : null, roomName: a?.roomId ? (roomName.get(a.roomId) || null) : null };
+      });
+    }
+    return {
+      section, examDate,
+      paper: paper ? { uuid: paper.uuid, subjectLabel: paper.subjectLabel } : null,
+      locked: examDate < istToday(),
+      total: rows.length, marked: rows.filter((r) => r.status).length, students: rows,
+    };
+  }
+
+  async markClassAttendance(schoolId: string, examId: string, sectionClassId: string, examDate: string, marks: any[], employeeId: string, isGod = false): Promise<any> {
+    const section = await this.classInfo(schoolId, sectionClassId);
+    if (!section) throw new BusinessErrorResult(ErrorCode.BusinessError, "Class not found");
+    const paper = await this.paperFor(examId, section.grade, examDate);
+    if (!paper) throw new BusinessErrorResult(ErrorCode.BusinessError, "This class has no paper on this date");
+    await this.markAttendance(schoolId, examId, paper.uuid, sectionClassId, marks, employeeId, isGod);
+    return this.classAttendance(schoolId, examId, sectionClassId, examDate);
+  }
+
   // ════ Phase 4: seating rooms ═══════════════════════════════════════════════════
   // A seating scheme layers physical ROOMS onto an exam. Each room seats a mix of sections
   // by roll-range; invigilators are assigned per (room, date) and attendance/signing pivot
@@ -1582,11 +1629,13 @@ class ExaminationService {
 
     const assignRows = await DB.query(
       singleLineString`select to_char(ri.exam_date, 'YYYY-MM-DD') as exam_date, ri.room_id, ri.employee_id,
+          ri.shift_label, ri.from_time, ri.to_time,
           (select emp.name from employee emp where emp.uuid = ri.employee_id) as employee_name
-        from exam_room_invigilator ri where ri.exam_id = $1 and ri.status = 'active'`,
+        from exam_room_invigilator ri where ri.exam_id = $1 and ri.status = 'active'
+        order by ri.from_time asc nulls last, ri.created_at asc nulls last`,
       [examId],
     );
-    const assignments = assignRows.map((r: any) => ({ examDate: r.examDate, roomId: r.roomId, employeeId: r.employeeId, employeeName: r.employeeName }));
+    const assignments = assignRows.map((r: any) => ({ examDate: r.examDate, roomId: r.roomId, employeeId: r.employeeId, employeeName: r.employeeName, shiftLabel: r.shiftLabel, fromTime: r.fromTime, toTime: r.toTime }));
 
     const byDateEmp = new Map<string, Set<string>>();
     for (const a of assignments) {
@@ -1652,39 +1701,62 @@ class ExaminationService {
     return this.roomInvigilators(schoolId, examId);
   }
 
+  // A time as HH:MM (zero-padded) or null. Times are for the duty log/display, not computed.
+  private normTime(t: any): string | null {
+    const s = String(t || "").trim();
+    if (!/^\d{1,2}:\d{2}$/.test(s)) return null;
+    const [h, m] = s.split(":");
+    return `${h.padStart(2, "0")}:${m}`;
+  }
+
+  // Save the day's room invigilators. MULTIPLE invigilators per room are allowed, each with an
+  // optional shift label + from/to time (shift hand-offs). Replace-on-save for the whole date.
   async saveRoomInvigilatorsForDate(schoolId: string, examId: string, examDate: string, assignments: any[], userId: string, isGod = false): Promise<any> {
     const exam = await this.requireExam(schoolId, examId);
     if (exam.status === "archived") throw new BusinessErrorResult(ErrorCode.BusinessError, "Cannot edit an archived exam");
     if (!isValidDate(examDate)) throw new BusinessErrorResult(ErrorCode.BusinessError, "Invalid date");
     if (!Array.isArray(assignments)) throw new BusinessErrorResult(ErrorCode.BusinessError, "assignments must be an array");
-    const seen = new Map<string, { roomId: string; employeeId: string }>();
+
+    type Row = { roomId: string; employeeId: string; shiftLabel: string | null; fromTime: string | null; toTime: string | null };
+    const rows: Row[] = [];
+    const dedupe = new Set<string>();
     for (const a of assignments) {
       const roomId = (a.roomId || "").trim();
       const employeeId = (a.employeeId || "").trim();
       if (!roomId || !employeeId) continue;
-      seen.set(roomId, { roomId, employeeId });
+      const shiftLabel = (a.shiftLabel || "").trim().slice(0, 32) || null;
+      const fromTime = this.normTime(a.fromTime);
+      const toTime = this.normTime(a.toTime);
+      const k = `${roomId}|${employeeId}|${shiftLabel || ""}|${fromTime || ""}|${toTime || ""}`;
+      if (dedupe.has(k)) continue;
+      dedupe.add(k);
+      rows.push({ roomId, employeeId, shiftLabel, fromTime, toTime });
+    }
+    const serial = (empId: string, sl: string | null, ft: string | null, tt: string | null) => `${empId}|${sl || ""}|${ft || ""}|${tt || ""}`;
+
+    // Prior state → change detection (per room) + notify (per room, added/removed employees).
+    const priorRows = await DB.query(
+      singleLineString`select room_id, employee_id, shift_label, from_time, to_time from exam_room_invigilator where exam_id = $1 and exam_date = $2 and status = 'active'`,
+      [examId, examDate],
+    );
+    const priorSet = new Map<string, Set<string>>(), priorEmp = new Map<string, Set<string>>();
+    for (const r of priorRows as any[]) {
+      (priorSet.get(r.roomId) || priorSet.set(r.roomId, new Set()).get(r.roomId)!).add(serial(r.employeeId, r.shiftLabel, r.fromTime, r.toTime));
+      (priorEmp.get(r.roomId) || priorEmp.set(r.roomId, new Set()).get(r.roomId)!).add(r.employeeId);
+    }
+    const newSet = new Map<string, Set<string>>(), newEmp = new Map<string, Set<string>>();
+    for (const r of rows) {
+      (newSet.get(r.roomId) || newSet.set(r.roomId, new Set()).get(r.roomId)!).add(serial(r.employeeId, r.shiftLabel, r.fromTime, r.toTime));
+      (newEmp.get(r.roomId) || newEmp.set(r.roomId, new Set()).get(r.roomId)!).add(r.employeeId);
+    }
+    const changedRooms: string[] = [];
+    for (const rid of new Set<string>([...priorSet.keys(), ...newSet.keys()])) {
+      const p = priorSet.get(rid) || new Set<string>(), n = newSet.get(rid) || new Set<string>();
+      if (p.size !== n.size || [...n].some((x) => !p.has(x))) changedRooms.push(rid);
     }
 
-    // Diff against what's currently assigned for this date, so we only notify the rooms that
-    // actually changed and can enforce the post-submission lock per room.
-    const priorRows = await DB.query(
-      singleLineString`select room_id, employee_id from exam_room_invigilator where exam_id = $1 and exam_date = $2 and status = 'active'`,
-      [examId, examDate],
-    );
-    const prior = new Map<string, string>(priorRows.map((r: any) => [r.roomId, r.employeeId]));
-    const signedRows = await DB.query(
-      singleLineString`select distinct room_id from exam_roster_signature where exam_id = $1 and exam_date = $2 and room_id is not null and signed_at is not null`,
-      [examId, examDate],
-    );
-    const submitted = new Set<string>(signedRows.map((r: any) => r.roomId));
-    const changes: { roomId: string; before: string | null; after: string | null }[] = [];
-    for (const rid of new Set<string>([...prior.keys(), ...seen.keys()])) {
-      const before = prior.get(rid) || null;
-      const after = seen.get(rid)?.employeeId || null;
-      if (before !== after) changes.push({ roomId: rid, before, after });
-    }
     // A room invigilator can't also be in that day's reliever pool (relievers must be free).
-    const assignedIds = [...new Set([...seen.values()].map((a) => a.employeeId))];
+    const assignedIds = [...new Set(rows.map((r) => r.employeeId))];
     if (assignedIds.length) {
       const rel = await DB.query(
         singleLineString`select distinct employee_id from exam_reliever where exam_id = $1 and exam_date = $2 and status = 'active' and employee_id = any($3)`,
@@ -1693,12 +1765,15 @@ class ExaminationService {
       if (rel.length) throw new BusinessErrorResult(ErrorCode.BusinessError, "That teacher is a reliever that day — remove them from the reliever pool first.");
     }
 
-    // Lock reassignment for teacher/admin (god bypasses) once the exam day has passed or the
-    // room's roster is submitted — changing who invigilated a finished/submitted exam is wrong.
-    if (!isGod && changes.length) {
+    // Lock once the exam day has passed or a changed room's roster is submitted (god bypasses).
+    const signedRows = await DB.query(
+      singleLineString`select distinct room_id from exam_roster_signature where exam_id = $1 and exam_date = $2 and room_id is not null and signed_at is not null`,
+      [examId, examDate],
+    );
+    const submitted = new Set<string>(signedRows.map((r: any) => r.roomId));
+    if (!isGod && changedRooms.length) {
       if (examDate < istToday()) throw new BusinessErrorResult(ErrorCode.BusinessError, "This exam day has passed and is locked.");
-      const locked = changes.find((c) => submitted.has(c.roomId));
-      if (locked) throw new BusinessErrorResult(ErrorCode.BusinessError, "That room's roster is already submitted — reassignment is locked.");
+      if (changedRooms.some((rid) => submitted.has(rid))) throw new BusinessErrorResult(ErrorCode.BusinessError, "That room's roster is already submitted — reassignment is locked.");
     }
 
     const now = new Date();
@@ -1706,15 +1781,22 @@ class ExaminationService {
       singleLineString`update exam_room_invigilator set status = 'deleted', updatedby_userid = $3, updated_at = $4 where exam_id = $1 and exam_date = $2 and status = 'active'`,
     ];
     const params: any[][] = [[examId, examDate, userId, now]];
-    for (const a of seen.values()) {
+    for (const r of rows) {
       queries.push(
-        singleLineString`insert into exam_room_invigilator (uuid, school_id, exam_id, room_id, exam_date, employee_id, status, createdby_userid, created_at) values ($1,$2,$3,$4,$5,$6,'active',$7,$8)`,
+        singleLineString`insert into exam_room_invigilator (uuid, school_id, exam_id, room_id, exam_date, employee_id, shift_label, from_time, to_time, status, createdby_userid, created_at) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,'active',$10,$11)`,
       );
-      params.push([generateShortUuid(12), schoolId, examId, a.roomId, examDate, a.employeeId, userId, now]);
+      params.push([generateShortUuid(12), schoolId, examId, r.roomId, examDate, r.employeeId, r.shiftLabel, r.fromTime, r.toTime, userId, now]);
     }
     await DB.queriesInTransaction(queries, params);
-    await this.audit(schoolId, examId, "room", "invigilator", `${examDate}: ${seen.size} room(s)`, userId);
-    if (changes.length) await this.notifyDutyChanges(schoolId, examId, examDate, exam.name, changes);
+    await this.audit(schoolId, examId, "room", "invigilator", `${examDate}: ${rows.length} assignment(s)`, userId);
+
+    const notifs: { roomId: string; employeeId: string; assigned: boolean }[] = [];
+    for (const rid of changedRooms) {
+      const p = priorEmp.get(rid) || new Set<string>(), n = newEmp.get(rid) || new Set<string>();
+      for (const e of n) if (!p.has(e)) notifs.push({ roomId: rid, employeeId: e, assigned: true });
+      for (const e of p) if (!n.has(e)) notifs.push({ roomId: rid, employeeId: e, assigned: false });
+    }
+    if (notifs.length) await this.notifyDutyChanges(schoolId, examId, examDate, exam.name, notifs);
     return this.roomInvigilators(schoolId, examId);
   }
 
@@ -1722,24 +1804,23 @@ class ExaminationService {
   // replaced, the previous one ("duty changed"). Fire-and-forget — never fails the save.
   private async notifyDutyChanges(
     schoolId: string, examId: string, examDate: string, examName: string,
-    changes: { roomId: string; before: string | null; after: string | null }[],
+    notifs: { roomId: string; employeeId: string; assigned: boolean }[],
   ): Promise<void> {
     try {
       const code = await this.schoolCode(schoolId);
       if (!code) return;
-      const roomIds = [...new Set(changes.map((c) => c.roomId))];
+      const roomIds = [...new Set(notifs.map((c) => c.roomId))];
       const roomRows = await DB.query(singleLineString`select uuid, name from exam_room where uuid = any($1)`, [roomIds]);
       const roomName = new Map<string, string>(roomRows.map((r: any) => [r.uuid, r.name]));
-      for (const c of changes) {
+      for (const c of notifs) {
         const rn = roomName.get(c.roomId) || "a room";
-        if (c.after) {
-          await notifyInApp(code, [c.after], "exam_duty_assigned", "Invigilation duty",
+        if (c.assigned) {
+          await notifyInApp(code, [c.employeeId], "exam_duty_assigned", "Invigilation duty",
             `You are assigned to invigilate Room ${rn} on ${examDate} (${examName}).`,
             { entityType: "examination", entityId: examId });
-        }
-        if (c.before && c.before !== c.after) {
-          await notifyInApp(code, [c.before], "exam_duty_changed", "Invigilation duty changed",
-            `Your invigilation for Room ${rn} on ${examDate} (${examName}) has been reassigned.`,
+        } else {
+          await notifyInApp(code, [c.employeeId], "exam_duty_changed", "Invigilation duty changed",
+            `Your invigilation for Room ${rn} on ${examDate} (${examName}) has been changed.`,
             { entityType: "examination", entityId: examId });
         }
       }

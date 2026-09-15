@@ -410,6 +410,24 @@ describe("examination: phase 4 — seating rooms", () => {
     expect(save.body.assignments.some((x: any) => x.roomId === roomId && x.examDate === D1)).toBe(true);
   });
 
+  sectionIt("phase 5: a room takes MULTIPLE invigilators with shift + time (hand-off)", async () => {
+    const r = await put(`/examinations/${examId}/room-invigilators/date/${D1}`, {
+      assignments: [
+        { roomId, employeeId: "empShiftA01", shiftLabel: "Shift 1", fromTime: "9:00", toTime: "10:00" },
+        { roomId, employeeId: "empShiftB02", shiftLabel: "Shift 2", fromTime: "10:00", toTime: "11:00" },
+      ],
+    });
+    expect(r.status).toBe(200);
+    const forRoom = r.body.assignments.filter((a: any) => a.roomId === roomId && a.examDate === D1);
+    expect(forRoom.length).toBe(2);
+    const s1 = forRoom.find((a: any) => a.employeeId === "empShiftA01");
+    expect(s1.fromTime).toBe("09:00"); // zero-padded
+    expect(s1.toTime).toBe("10:00");
+    expect(s1.shiftLabel).toBe("Shift 1");
+    // Restore the single 'system' invigilator so downstream reliever/roster tests are unaffected.
+    await put(`/examinations/${examId}/room-invigilators/date/${D1}`, { assignments: [{ roomId, employeeId: "system" }] });
+  });
+
   sectionIt("room roster: admin marks + signs; the signature flows onto the admit card", async () => {
     const r0 = await get(`/examinations/${examId}/room-rosters/${roomId}/${D1}`);
     expect(r0.status).toBe(200);
@@ -449,6 +467,17 @@ describe("examination: phase 4 — seating rooms", () => {
     expect(roster.body.signed).toBe(true);
     expect(roster.body.locked).toBe(false);
     expect(roster.body.correctedByName ?? null).toBeNull();
+  });
+
+  sectionIt("phase 5: class-wise attendance sheet reads + marks a whole section for a date", async () => {
+    const s0 = await get(`/examinations/${examId}/class-attendance/${section!.sectionClassId}/${D1}`);
+    expect(s0.status).toBe(200);
+    expect(s0.body.paper).toBeTruthy();
+    expect(s0.body.total).toBeGreaterThan(0);
+    const marks = s0.body.students.map((st: any) => ({ studentId: st.studentId, status: "present" }));
+    const s1 = await post(`/examinations/${examId}/class-attendance/${section!.sectionClassId}/${D1}`, { marks });
+    expect(s1.status).toBe(200);
+    expect(s1.body.marked).toBe(s1.body.total);
   });
 
   sectionIt("phase 5c: AV room auto-exists, holds ad-hoc students, and signs", async () => {

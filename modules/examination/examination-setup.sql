@@ -301,8 +301,10 @@ create index if not exists idx_exam_room_alloc_room
 create index if not exists idx_exam_room_alloc_exam
     on exam_room_allocation(school_id, exam_id, status);
 
--- exam_room_invigilator: invigilator assigned to a room for one exam day. One active
--- invigilator per (room, date); one employee may cover several rooms a day (warned in UI).
+-- exam_room_invigilator: invigilator(s) assigned to a room for one exam day. MULTIPLE active
+-- invigilators per (room, date) are allowed (Phase 5: shift hand-offs) — each may carry a
+-- shift label + from/to time (HH:MM) so partial duties are logged and an on-duty teacher is
+-- never shown as Free. One employee may still cover several rooms a day (warned in UI).
 create table if not exists exam_room_invigilator (
     uuid varchar(12) primary key,
     school_id varchar(12) not null,
@@ -310,14 +312,23 @@ create table if not exists exam_room_invigilator (
     room_id varchar(12) not null,
     exam_date date not null,
     employee_id varchar(12) not null,
+    shift_label varchar(32),
+    from_time varchar(5),
+    to_time varchar(5),
     status varchar(16) not null check (status in ('active', 'deleted')),
     createdby_userid varchar(12),
     created_at timestamp(0),
     updatedby_userid varchar(12),
     updated_at timestamp(0)
 );
-create unique index if not exists idx_exam_room_invig_cell
-    on exam_room_invigilator(room_id, exam_date) where status = 'active';
+-- Phase 5: multiple invigilators per (room, date) — the old one-per-cell unique index is
+-- dropped, and shift/time columns added (idempotent for existing installs).
+drop index if exists idx_exam_room_invig_cell;
+alter table exam_room_invigilator add column if not exists shift_label varchar(32);
+alter table exam_room_invigilator add column if not exists from_time varchar(5);
+alter table exam_room_invigilator add column if not exists to_time varchar(5);
+create index if not exists idx_exam_room_invig_cell
+    on exam_room_invigilator(exam_id, room_id, exam_date) where status = 'active';
 create index if not exists idx_exam_room_invig_exam
     on exam_room_invigilator(school_id, exam_id, status);
 

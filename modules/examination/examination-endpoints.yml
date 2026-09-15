@@ -437,6 +437,24 @@
           method: post
           cors: true
 
+  get-class-attendance:
+    handler: examination-handler.getClassAttendance
+    name: ${self:service}-get-class-attendance
+    events:
+      - http:
+          path: examinations/{id}/class-attendance/{sectionId}/{date}
+          method: get
+          cors: true
+
+  mark-class-attendance:
+    handler: examination-handler.markClassAttendance
+    name: ${self:service}-mark-class-attendance
+    events:
+      - http:
+          path: examinations/{id}/class-attendance/{sectionId}/{date}
+          method: post
+          cors: true
+
   sign-room-roster-admin:
     handler: examination-handler.signRoomRosterAdmin
     name: ${self:service}-sign-room-roster-admin

@@ -615,6 +615,36 @@ class ExaminationHandler {
     }
   };
 
+  // GET /examinations/{id}/class-attendance/{sectionId}/{date} — incharge cross-verify sheet
+  public getClassAttendance = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const auth = await resolveSchool(event, callback);
+      if (!auth) return;
+      const id = requireParam(event, "id", callback);
+      const sectionId = requireParam(event, "sectionId", callback);
+      const date = requireParam(event, "date", callback);
+      if (!id || !sectionId || !date) return;
+      ResponseBuilder.ok(await examinationService.classAttendance(auth.schoolId, id, sectionId, date), callback);
+    } catch (err: any) { ResponseBuilder.handleError(err, callback); }
+  };
+
+  // POST /examinations/{id}/class-attendance/{sectionId}/{date} { marks: [{studentId, status}] }
+  public markClassAttendance = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const auth = await resolveSchool(event, callback);
+      if (!auth) return;
+      const id = requireParam(event, "id", callback);
+      const sectionId = requireParam(event, "sectionId", callback);
+      const date = requireParam(event, "date", callback);
+      if (!id || !sectionId || !date) return;
+      const body = parseBody<{ marks: any[] }>(event, callback);
+      if (!body) return;
+      ResponseBuilder.ok(await examinationService.markClassAttendance(auth.schoolId, id, sectionId, date, body.marks || [], auth.userId, callerIsExamOverride(event)), callback);
+    } catch (err: any) { ResponseBuilder.handleError(err, callback); }
+  };
+
   // ════ Phase 4: seating rooms ═══════════════════════════════════════════════════
 
   // GET /examinations/{id}/rooms
@@ -996,6 +1026,8 @@ export const signMyRoster = h.signMyRoster;
 export const getRosterAdmin = guard(ACTIONS.EXAM_MANAGE, h.getRosterAdmin);
 export const markRosterAdmin = guard(ACTIONS.EXAM_MANAGE, h.markRosterAdmin);
 export const signRosterAdmin = guard(ACTIONS.EXAM_MANAGE, h.signRosterAdmin);
+export const getClassAttendance = guard(ACTIONS.EXAM_MANAGE, h.getClassAttendance);
+export const markClassAttendance = guard(ACTIONS.EXAM_MANAGE, h.markClassAttendance);
 
 // Phase 4 — seating rooms (admin CRUD + assignment + sign-any, guarded).
 export const getRooms = guard(ACTIONS.EXAM_VIEW, h.getRooms);
