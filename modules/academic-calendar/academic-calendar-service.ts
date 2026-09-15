@@ -40,7 +40,7 @@ const ENTRY_COLS = singleLineString`
   to_char(end_date, 'YYYY-MM-DD') as end_date, type_id, value, detail, sort_order
 `;
 const HOLIDAY_COLS = singleLineString`
-  uuid, to_char(holiday_date, 'YYYY-MM-DD') as holiday_date, name, kind
+  uuid, to_char(holiday_date, 'YYYY-MM-DD') as holiday_date, name, kind, coalesce(staff_working, false) as staff_working
 `;
 
 class AcademicCalendarService {
@@ -275,6 +275,9 @@ class AcademicCalendarService {
   // Upsert a holiday for a date (idempotent on (school, ay, date)).
   async setHoliday(schoolId: string, ay: string, req: SetHolidayRequest, userId: string): Promise<CalendarHoliday> {
     const kind: HolidayKind = req.kind && (HOLIDAY_KINDS as readonly string[]).includes(req.kind) ? req.kind : "full";
+    // staff_working = school is closed for students but staff still report (e.g. a
+    // DM-declared student holiday). Only meaningful for a full closure.
+    const staffWorking = kind === "full" && req.staffWorking === true;
     const existing = await DB.query(
       singleLineString`select uuid from calendar_holiday
         where school_id = $1 and academic_year_id = $2 and holiday_date = $3 and status = 'active'`,
@@ -284,9 +287,9 @@ class AcademicCalendarService {
     if (existing.length) {
       uuid = existing[0].uuid;
       await DB.query(
-        singleLineString`update calendar_holiday set name = $1, kind = $2, updatedby_userid = $3, updated_at = $4
-          where uuid = $5`,
-        [req.name || null, kind, userId, new Date(), uuid],
+        singleLineString`update calendar_holiday set name = $1, kind = $2, staff_working = $3, updatedby_userid = $4, updated_at = $5
+          where uuid = $6`,
+        [req.name || null, kind, staffWorking, userId, new Date(), uuid],
       );
       await this.audit(schoolId, ay, "holiday", uuid, req.holidayDate, "update", req.name || kind, userId);
     } else {
@@ -294,10 +297,10 @@ class AcademicCalendarService {
       await DB.query(
         singleLineString`
           insert into calendar_holiday
-          (uuid, school_id, academic_year_id, holiday_date, name, kind, status, createdby_userid, created_at)
-          values ($1, $2, $3, $4, $5, $6, 'active', $7, $8)
+          (uuid, school_id, academic_year_id, holiday_date, name, kind, staff_working, status, createdby_userid, created_at)
+          values ($1, $2, $3, $4, $5, $6, $7, 'active', $8, $9)
         `,
-        [uuid, schoolId, ay, req.holidayDate, req.name || null, kind, userId, new Date()],
+        [uuid, schoolId, ay, req.holidayDate, req.name || null, kind, staffWorking, userId, new Date()],
       );
       await this.audit(schoolId, ay, "holiday", uuid, req.holidayDate, "create", req.name || kind, userId);
     }
@@ -338,7 +341,7 @@ class AcademicCalendarService {
       const dow = cursor.getUTCDay();
       cursor.setUTCDate(cursor.getUTCDate() + 1);
       if (weeklyOff.includes(dow)) { skipped.push(date); continue; }
-      await this.setHoliday(schoolId, ay, { holidayDate: date, name, kind }, userId);
+      await this.setHoliday(schoolId, ay, { holidayDate: date, name, kind, staffWorking: req.staffWorking }, userId);
       written.push(date);
     }
     return { written, skipped };

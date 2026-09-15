@@ -74,6 +74,10 @@ create unique index if not exists idx_calendar_holiday_unique
     on calendar_holiday(school_id, academic_year_id, holiday_date) where status = 'active';
 create index if not exists idx_calendar_holiday_range
     on calendar_holiday(school_id, academic_year_id, holiday_date, status);
+-- staff_working: a full closure for students where staff still report (e.g. a
+-- DM-declared student holiday). Null/false = closed for everyone. The leave/staff
+-- reconciliation excludes staff_working days so staff aren't wrongly excused.
+alter table calendar_holiday add column if not exists staff_working boolean;
 
 -- Weekly-off configuration lives as a single column on the existing academic_year
 -- row (per school + year) — NOT a new table. Comma-separated weekday numbers

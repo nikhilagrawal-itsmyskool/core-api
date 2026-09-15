@@ -59,12 +59,14 @@ export interface CalendarHoliday {
   holidayDate: string; // yyyy-mm-dd
   name?: string | null;
   kind: HolidayKind;
+  staffWorking?: boolean; // full closure for students, but staff still report
 }
 
 export interface SetHolidayRequest {
   holidayDate: string;
   name?: string | null;
   kind?: HolidayKind; // defaults to 'full'
+  staffWorking?: boolean; // only honoured for a full closure
   academicYearId?: string;
 }
 
@@ -75,6 +77,7 @@ export interface CloseRangeRequest {
   to: string; // yyyy-mm-dd (>= from)
   name?: string | null;
   kind?: HolidayKind; // defaults to 'full'
+  staffWorking?: boolean; // students off, staff report
   academicYearId?: string;
 }
 

@@ -73,13 +73,15 @@ export async function weeklyOffDays(schoolId: string, academicYearId: string): P
 }
 
 // Full holidays (kind='full') in [from, to] inclusive as date(YYYY-MM-DD) -> name.
-// Defensive against a missing academic-calendar module.
+// Excludes staff_working days (student-only closures where staff still report), so staff
+// are NOT excused on those. Defensive against a missing academic-calendar module.
 export async function fullHolidaysInRange(schoolId: string, from: string, to: string): Promise<Map<string, string>> {
   const map = new Map<string, string>();
   try {
     const rows = await DB.query(
       singleLineString`select to_char(holiday_date,'YYYY-MM-DD') as d, name from calendar_holiday
-        where school_id = $1 and status = 'active' and kind = 'full' and holiday_date >= $2 and holiday_date <= $3`,
+        where school_id = $1 and status = 'active' and kind = 'full' and coalesce(staff_working, false) = false
+          and holiday_date >= $2 and holiday_date <= $3`,
       [schoolId, from, to],
     );
     for (const r of rows) map.set(r.d, r.name || "Holiday");
@@ -108,7 +110,7 @@ export async function workingDaysBetween(
   try {
     const rows = await DB.query(
       singleLineString`select to_char(holiday_date,'YYYY-MM-DD') as d from calendar_holiday
-        where school_id = $1 and status = 'active' and kind = 'full'
+        where school_id = $1 and status = 'active' and kind = 'full' and coalesce(staff_working, false) = false
           and holiday_date >= $2 and holiday_date <= $3`,
       [schoolId, from, to],
     );
