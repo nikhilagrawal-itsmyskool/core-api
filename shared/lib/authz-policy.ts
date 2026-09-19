@@ -141,6 +141,7 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
     'supplies.view',
     'timetable.view',
     'student.view',
+    'student.contacts.view',
     'employee.view',
     'syllabus.view',
     'syllabus.progress.mark',

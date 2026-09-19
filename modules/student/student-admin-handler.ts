@@ -1,9 +1,9 @@
 import { ApiCallback, ApiContext, ApiEvent } from '../../shared/lib/api.interfaces';
 import { ResponseBuilder } from '../../shared/lib/response-builder';
 import { ErrorCode } from '../../shared/lib/error-codes';
-import { validateSchoolCodeHeader, getCallerContext, revealStudent } from '../auth/auth-utils';
+import { validateSchoolCodeHeader, getCallerContext, revealStudent, revealStudentIdentity } from '../auth/auth-utils';
 import { maskContactFields } from '../../shared/util/mask-phone';
-import { STUDENT_MASKED_FIELDS } from './student-constants';
+import { STUDENT_CONTACT_FIELDS, STUDENT_IDENTITY_FIELDS } from './student-constants';
 import { studentService } from './student-service';
 import { studentAdminService } from './student-admin-service';
 import { CreateStudentRequest, UpdateStudentRequest } from './student-interfaces';
@@ -40,10 +40,12 @@ class StudentAdminHandler {
         phone: q.phone,
         unreachable: q.unreachable === 'true',
       });
-      const reveal = getCallerContext(event).isAdminGod;
-      (results as any[]).forEach((r: any) =>
-        maskContactFields(r, [...STUDENT_MASKED_FIELDS], reveal)
-      );
+      // Phone numbers reveal to admin/god + teaching staff; Aadhaar to admin/god only.
+      const ctx = getCallerContext(event);
+      (results as any[]).forEach((r: any) => {
+        maskContactFields(r, [...STUDENT_CONTACT_FIELDS], ctx.canRevealContacts);
+        maskContactFields(r, [...STUDENT_IDENTITY_FIELDS], ctx.isAdminGod);
+      });
       ResponseBuilder.ok({ students: results }, callback);
     } catch (err: any) {
       ResponseBuilder.handleError(err, callback);
@@ -84,13 +86,15 @@ class StudentAdminHandler {
 
       const result = await studentAdminService.getDetail(id, schoolId);
       if (!result) { ResponseBuilder.notFound(ErrorCode.InvalidId, 'Student not found', callback); return; }
-      // Student + guardian numbers: admin/god, or the family login that owns this
-      // student. Class-teacher number is an employee's — admin/god only.
+      // Student + guardian numbers: admin/god/teacher, or the family login that owns
+      // this student. Aadhaar is more sensitive — admin/god (or the owning family) only,
+      // never teachers. Class-teacher number is an employee's — admin/god/teacher.
       const ctx = getCallerContext(event);
       const revealOwn = revealStudent(ctx, id);
-      maskContactFields(result as any, ['studentMobile', 'studentWhatsapp', 'familyUniqueNumber', 'aadhaarNumber'], revealOwn);
+      maskContactFields(result as any, ['studentMobile', 'studentWhatsapp', 'familyUniqueNumber'], revealOwn);
+      maskContactFields(result as any, ['aadhaarNumber'], revealStudentIdentity(ctx, id));
       if ((result as any).classTeacher) {
-        maskContactFields((result as any).classTeacher, ['mobile', 'whatsapp'], ctx.isAdminGod);
+        maskContactFields((result as any).classTeacher, ['mobile', 'whatsapp'], ctx.canRevealContacts);
       }
       for (const g of (result as any).guardians || []) {
         maskContactFields(g, ['mobile', 'whatsapp'], revealOwn);

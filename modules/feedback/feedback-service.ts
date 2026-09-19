@@ -24,6 +24,7 @@ import {
   FeedbackView,
   FeedbackThread,
   FeedbackSummary,
+  GroupRow,
   TeacherBreakupRow,
   TimelineEventView,
   WatcherView,
@@ -45,6 +46,13 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 interface ActorCtx {
   isReviewer: boolean;
 }
+
+// The ticket's class, falling back to the student's enrolment when the snapshot is null.
+// Used consistently for the class filter and the class grouping so nothing lands under
+// "no class". References f.* — valid anywhere `feedback f` is the alias.
+const RESOLVED_CLASS = singleLineString`coalesce(f.class_id, (select scc.class_id from student_class scc
+  where scc.student_id = f.student_id and scc.academic_year_id = f.academic_year_id and scc.school_id = f.school_id
+  order by scc.uuid limit 1))`;
 
 class FeedbackService {
   // ── Categories (seeded on first use) ─────────────────────────────────────────
@@ -309,7 +317,7 @@ class FeedbackService {
   // owner holds a reviewer role. `callerId` drives the per-caller unread flag.
   async listFeedback(
     schoolId: string,
-    filters: { status?: string; assignedTo?: string; recordedBy?: string; categoryId?: string; academicYearId?: string; owner?: string; sort?: string; callerId?: string },
+    filters: { status?: string; assignedTo?: string; recordedBy?: string; studentId?: string; classId?: string; date?: string; categoryId?: string; academicYearId?: string; owner?: string; sort?: string; callerId?: string },
   ): Promise<FeedbackView[]> {
     const callerId = filters.callerId || null;
     const { sql, leadParams } = this.headerSelect(callerId);
@@ -318,6 +326,9 @@ class FeedbackService {
     if (filters.status) { params.push(filters.status); conds.push(`f.status = $${params.length}`); }
     if (filters.assignedTo) { params.push(filters.assignedTo); conds.push(`f.assigned_to = $${params.length}`); }
     if (filters.recordedBy) { params.push(filters.recordedBy); conds.push(`f.recorded_by = $${params.length}`); }
+    if (filters.studentId) { params.push(filters.studentId); conds.push(`f.student_id = $${params.length}`); }
+    if (filters.classId) { params.push(filters.classId); conds.push(`${RESOLVED_CLASS} = $${params.length}`); }
+    if (filters.date) { params.push(filters.date); conds.push(`f.visit_date = $${params.length}`); }
     if (filters.categoryId) { params.push(filters.categoryId); conds.push(`f.category_id = $${params.length}`); }
     if (filters.academicYearId) { params.push(filters.academicYearId); conds.push(`f.academic_year_id = $${params.length}`); }
 
@@ -338,6 +349,59 @@ class FeedbackService {
     const rows = await DB.query(`${sql} where ${conds.join(" and ")} ${order}`, params);
     const reviewerSet = new Set(await reviewerEmployeeIds(schoolId));
     return rows.map((r: any) => this.toView(r, reviewerSet));
+  }
+
+  // Server-side grouping for the director dashboard. Returns one row per group (student /
+  // class / teacher / date) with per-status counts across the WHOLE dataset (optionally
+  // narrowed by status + academic year). Drill-down is done by the caller re-listing with
+  // the group's key as a filter (studentId / classId / assignedTo / date).
+  async grouped(
+    schoolId: string,
+    opts: { by: string; status?: string; academicYearId?: string },
+  ): Promise<GroupRow[]> {
+    const by = ["student", "class", "teacher", "date"].includes(opts.by) ? opts.by : "student";
+    const conds: string[] = ["f.school_id = $1"];
+    const params: any[] = [schoolId];
+    if (opts.status) { params.push(opts.status); conds.push(`f.status = $${params.length}`); }
+    if (opts.academicYearId) { params.push(opts.academicYearId); conds.push(`f.academic_year_id = $${params.length}`); }
+    const where = conds.join(" and ");
+    const counts = singleLineString`count(*) filter (where f.status = 'open')::int as open,
+      count(*) filter (where f.status = 'completed')::int as completed,
+      count(*) filter (where f.status = 'cancelled')::int as cancelled,
+      count(*)::int as total, max(f.last_activity_at)::text as last_activity_at`;
+
+    let sql: string;
+    if (by === "student") {
+      sql = singleLineString`select f.student_id as key, max(s.name) as label,
+          max((select cl.name from student_class scc join class cl on cl.uuid = scc.class_id and cl.school_id = scc.school_id
+            where scc.student_id = f.student_id and scc.school_id = f.school_id order by scc.academic_year_id desc limit 1)) as sublabel,
+          ${counts}
+        from feedback f left join student s on s.uuid = f.student_id and s.school_id = f.school_id
+        where ${where} group by f.student_id order by open desc, total desc, label`;
+    } else if (by === "class") {
+      sql = singleLineString`select f.rc as key, max(cl.name) as label, null as sublabel, ${counts}
+        from (select f.*, ${RESOLVED_CLASS} as rc from feedback f where ${where}) f
+        left join class cl on cl.uuid = f.rc and cl.school_id = f.school_id
+        group by f.rc order by open desc, total desc`;
+    } else if (by === "teacher") {
+      sql = singleLineString`select f.assigned_to as key, max(e.name) as label, null as sublabel, ${counts}
+        from feedback f left join employee e on e.uuid = f.assigned_to and e.school_id = f.school_id
+        where ${where} group by f.assigned_to order by open desc, total desc`;
+    } else {
+      sql = singleLineString`select f.visit_date::text as key, f.visit_date::text as label, null as sublabel, ${counts}
+        from feedback f where ${where} group by f.visit_date order by f.visit_date desc nulls last`;
+    }
+    const rows = await DB.query(sql, params);
+    return rows.map((r: any) => ({
+      key: r.key || null,
+      label: r.label || null,
+      sublabel: r.sublabel || null,
+      open: r.open || 0,
+      completed: r.completed || 0,
+      cancelled: r.cancelled || 0,
+      total: r.total || 0,
+      lastActivityAt: r.lastActivityAt || null,
+    }));
   }
 
   // Teacher /me list. tab: 'act' (I own it, open) | 'watching' (I watch it, not owner) |

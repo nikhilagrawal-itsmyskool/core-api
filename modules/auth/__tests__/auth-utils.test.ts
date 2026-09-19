@@ -6,6 +6,7 @@ import {
   getCallerContext,
   revealEmployee,
   revealStudent,
+  revealStudentIdentity,
 } from '../auth-utils';
 
 // Pure unit tests — no running server required.
@@ -111,10 +112,20 @@ describe('getCallerContext', () => {
     return jwt.sign({ auth: MAGIC, type: 'employee', employee_id: employeeId, roles }, SECRET);
   }
 
-  it('flags admin/god employees as isAdminGod', () => {
+  it('flags admin/god employees as isAdminGod (teacher is not privileged)', () => {
     expect(getCallerContext(eventWith(`Bearer ${empToken(['admin'])}`)).isAdminGod).toBe(true);
     expect(getCallerContext(eventWith(`Bearer ${empToken(['god'])}`)).isAdminGod).toBe(true);
     expect(getCallerContext(eventWith(`Bearer ${empToken(['teacher'])}`)).isAdminGod).toBe(false);
+  });
+
+  it('lets admin/god/teacher reveal contacts; other employees and students cannot', () => {
+    expect(getCallerContext(eventWith(`Bearer ${empToken(['admin'])}`)).canRevealContacts).toBe(true);
+    expect(getCallerContext(eventWith(`Bearer ${empToken(['god'])}`)).canRevealContacts).toBe(true);
+    expect(getCallerContext(eventWith(`Bearer ${empToken(['teacher'])}`)).canRevealContacts).toBe(true);
+    expect(getCallerContext(eventWith(`Bearer ${empToken(['class-teacher', 'teacher'])}`)).canRevealContacts).toBe(true);
+    expect(getCallerContext(eventWith(`Bearer ${empToken(['fees-incharge'])}`)).canRevealContacts).toBe(false);
+    const fam = studentToken([{ id: 'a1', name: 'Aya' }]);
+    expect(getCallerContext(eventWith(`Bearer ${fam}`)).canRevealContacts).toBe(false);
   });
 
   it('never marks a student/family token as admin/god, but exposes its child ids', () => {
@@ -125,8 +136,8 @@ describe('getCallerContext', () => {
   });
 
   it('returns the safe/empty context for no or invalid token', () => {
-    expect(getCallerContext(eventWith(undefined))).toEqual({ isAdminGod: false, familyStudentIds: [] });
-    expect(getCallerContext(eventWith('Bearer garbage'))).toEqual({ isAdminGod: false, familyStudentIds: [] });
+    expect(getCallerContext(eventWith(undefined))).toEqual({ isAdminGod: false, canRevealContacts: false, familyStudentIds: [] });
+    expect(getCallerContext(eventWith('Bearer garbage'))).toEqual({ isAdminGod: false, canRevealContacts: false, familyStudentIds: [] });
   });
 
   it('carries the employee_id for the self exception', () => {
@@ -135,17 +146,29 @@ describe('getCallerContext', () => {
 });
 
 describe('revealEmployee / revealStudent', () => {
-  it('revealEmployee: admin/god always, else only own record', () => {
-    expect(revealEmployee({ isAdminGod: true, familyStudentIds: [] }, 'e9')).toBe(true);
-    expect(revealEmployee({ isAdminGod: false, employeeId: 'e1', familyStudentIds: [] }, 'e1')).toBe(true);
-    expect(revealEmployee({ isAdminGod: false, employeeId: 'e1', familyStudentIds: [] }, 'e2')).toBe(false);
-    expect(revealEmployee({ isAdminGod: false, familyStudentIds: [] }, null)).toBe(false);
+  it('revealEmployee: admin/god/teacher always, else only own record', () => {
+    expect(revealEmployee({ isAdminGod: true, canRevealContacts: true, familyStudentIds: [] }, 'e9')).toBe(true);
+    expect(revealEmployee({ isAdminGod: false, canRevealContacts: true, familyStudentIds: [] }, 'e9')).toBe(true);
+    expect(revealEmployee({ isAdminGod: false, canRevealContacts: false, employeeId: 'e1', familyStudentIds: [] }, 'e1')).toBe(true);
+    expect(revealEmployee({ isAdminGod: false, canRevealContacts: false, employeeId: 'e1', familyStudentIds: [] }, 'e2')).toBe(false);
+    expect(revealEmployee({ isAdminGod: false, canRevealContacts: false, familyStudentIds: [] }, null)).toBe(false);
   });
 
-  it('revealStudent: admin/god always, else only own family child', () => {
-    expect(revealStudent({ isAdminGod: true, familyStudentIds: [] }, 's1')).toBe(true);
-    expect(revealStudent({ isAdminGod: false, familyStudentIds: ['s1', 's2'] }, 's2')).toBe(true);
-    expect(revealStudent({ isAdminGod: false, familyStudentIds: ['s1'] }, 's9')).toBe(false);
-    expect(revealStudent({ isAdminGod: false, familyStudentIds: [] }, null)).toBe(false);
+  it('revealStudent: admin/god/teacher always, else only own family child', () => {
+    expect(revealStudent({ isAdminGod: true, canRevealContacts: true, familyStudentIds: [] }, 's1')).toBe(true);
+    expect(revealStudent({ isAdminGod: false, canRevealContacts: true, familyStudentIds: [] }, 's1')).toBe(true);
+    expect(revealStudent({ isAdminGod: false, canRevealContacts: false, familyStudentIds: ['s1', 's2'] }, 's2')).toBe(true);
+    expect(revealStudent({ isAdminGod: false, canRevealContacts: false, familyStudentIds: ['s1'] }, 's9')).toBe(false);
+    expect(revealStudent({ isAdminGod: false, canRevealContacts: false, familyStudentIds: [] }, null)).toBe(false);
+  });
+
+  it('revealStudentIdentity (Aadhaar): admin/god or own family — NEVER a plain teacher', () => {
+    // admin/god sees it
+    expect(revealStudentIdentity({ isAdminGod: true, canRevealContacts: true, familyStudentIds: [] }, 's1')).toBe(true);
+    // teacher (canRevealContacts but not admin/god) is excluded — Aadhaar is more sensitive
+    expect(revealStudentIdentity({ isAdminGod: false, canRevealContacts: true, familyStudentIds: [] }, 's1')).toBe(false);
+    // the owning family still sees their own child's Aadhaar
+    expect(revealStudentIdentity({ isAdminGod: false, canRevealContacts: false, familyStudentIds: ['s1'] }, 's1')).toBe(true);
+    expect(revealStudentIdentity({ isAdminGod: false, canRevealContacts: false, familyStudentIds: ['s1'] }, 's9')).toBe(false);
   });
 });

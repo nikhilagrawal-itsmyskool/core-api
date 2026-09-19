@@ -8,10 +8,14 @@ export const STATUS_VALUES = ['active', 'inactive', 'deleted'] as const;
 
 export const GUARDIAN_RELATIONS = ['father', 'mother', 'guardian', 'other'] as const;
 
-// camelCase response keys carrying a sensitive contact/identity value on a student
-// row. Masked for non admin/god callers. `familyUniqueNumber` = father's mobile
-// (family-login username); `aadhaarNumber` = national ID (more sensitive than a phone).
-export const STUDENT_MASKED_FIELDS = [
+// camelCase response keys carrying a sensitive value on a student row. Two tiers with
+// DIFFERENT reveal gates:
+//   STUDENT_CONTACT_FIELDS  — phone/WhatsApp numbers (+ `familyUniqueNumber`, the father's
+//     mobile / family-login username). Revealed to admin/god AND teaching staff
+//     (canRevealContacts) — teachers routinely phone parents.
+//   STUDENT_IDENTITY_FIELDS — `aadhaarNumber` (national ID, more sensitive than a phone).
+//     Revealed to admin/god only (revealStudentIdentity); teachers stay masked.
+export const STUDENT_CONTACT_FIELDS = [
   'studentMobile',
   'studentWhatsapp',
   'fatherMobile',
@@ -21,7 +25,14 @@ export const STUDENT_MASKED_FIELDS = [
   'guardianMobile',
   'guardianWhatsapp',
   'familyUniqueNumber',
-  'aadhaarNumber',
+] as const;
+
+export const STUDENT_IDENTITY_FIELDS = ['aadhaarNumber'] as const;
+
+// All sensitive fields (both tiers) — kept for callers that mask the whole bundle.
+export const STUDENT_MASKED_FIELDS = [
+  ...STUDENT_CONTACT_FIELDS,
+  ...STUDENT_IDENTITY_FIELDS,
 ] as const;
 
 export const GENDERS = ['M', 'F', 'O'] as const;

@@ -33,7 +33,7 @@ class MessageHandler {
       if (!body) return;
       if (!body.templateKey) { ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'templateKey is required', callback); return; }
       const result = await messageService.preview(ctx.schoolId, body);
-      const reveal = getCallerContext(event).isAdminGod;
+      const reveal = getCallerContext(event).canRevealContacts;
       for (const r of (result as any)?.recipients || []) maskContactFields(r, ['toNumber'], reveal);
       ResponseBuilder.ok(result, callback);
     } catch (err: any) {
@@ -62,7 +62,7 @@ class MessageHandler {
       if (!id) return;
       const job = await messageService.getById(id, ctx.schoolId);
       if (!job) { ResponseBuilder.notFound(ErrorCode.InvalidId, 'Message job not found', callback); return; }
-      const reveal = getCallerContext(event).isAdminGod;
+      const reveal = getCallerContext(event).canRevealContacts;
       for (const r of (job as any)?.recipients || []) maskContactFields(r, ['toNumber'], reveal);
       ResponseBuilder.ok(job, callback);
     } catch (err: any) {

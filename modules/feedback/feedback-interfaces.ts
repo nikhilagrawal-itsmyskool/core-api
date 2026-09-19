@@ -125,6 +125,18 @@ export interface TeacherBreakupRow {
   oldestOpenAt: string | null; // last_activity/created of the oldest open ticket (for aging)
 }
 
+// A server-side group row (student / class / teacher / date) for the dashboard.
+export interface GroupRow {
+  key: string | null;    // studentId / classId / employeeId / date — the drill-down value
+  label: string | null;
+  sublabel: string | null;
+  open: number;
+  completed: number;
+  cancelled: number;
+  total: number;
+  lastActivityAt: string | null;
+}
+
 export interface FeedbackSummary {
   byStatus: { open: number; completed: number; cancelled: number };
   open: number;

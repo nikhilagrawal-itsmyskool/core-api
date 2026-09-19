@@ -86,7 +86,7 @@ class TransportVehicleHandler {
       if (!id) return;
       const result = await transportVehicleService.getById(id, ctx.schoolId);
       if (!result) { ResponseBuilder.notFound(ErrorCode.InvalidId, 'Vehicle not found', callback); return; }
-      maskContactFields(result, [...TRANSPORT_PHONE_FIELDS], getCallerContext(event).isAdminGod);
+      maskContactFields(result, [...TRANSPORT_PHONE_FIELDS], getCallerContext(event).canRevealContacts);
       ResponseBuilder.ok(result, callback);
     } catch (err: any) {
       ResponseBuilder.handleError(err, callback);
@@ -100,7 +100,7 @@ class TransportVehicleHandler {
       if (!ctx) return;
       const q = event.queryStringParameters || {};
       const results = await transportVehicleService.list(ctx.schoolId, q.search);
-      const reveal = getCallerContext(event).isAdminGod;
+      const reveal = getCallerContext(event).canRevealContacts;
       (results as any[]).forEach((r: any) => maskContactFields(r, [...TRANSPORT_PHONE_FIELDS], reveal));
       ResponseBuilder.ok(results, callback);
     } catch (err: any) {

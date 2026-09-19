@@ -3,7 +3,7 @@ import { ResponseBuilder } from '../../shared/lib/response-builder';
 import { ErrorCode } from '../../shared/lib/error-codes';
 import { validateSchoolCodeHeader, getCallerContext } from '../auth/auth-utils';
 import { maskContactFields } from '../../shared/util/mask-phone';
-import { STUDENT_MASKED_FIELDS } from './student-constants';
+import { STUDENT_CONTACT_FIELDS, STUDENT_IDENTITY_FIELDS } from './student-constants';
 import { studentService } from './student-service';
 import { getSignedPhotoUrl } from '../../shared/lib/file-storage';
 import { guard } from '../auth/authz';
@@ -53,11 +53,12 @@ class StudentHandler {
         }
       }
       (results as any[]).forEach((r: any) => delete r.photoStorageKey);
-      // Contact numbers are admin/god-only on the roster/search surface.
-      const reveal = getCallerContext(event).isAdminGod;
-      (results as any[]).forEach((r: any) =>
-        maskContactFields(r, [...STUDENT_MASKED_FIELDS], reveal)
-      );
+      // Phone numbers reveal to admin/god + teaching staff; Aadhaar to admin/god only.
+      const ctx = getCallerContext(event);
+      (results as any[]).forEach((r: any) => {
+        maskContactFields(r, [...STUDENT_CONTACT_FIELDS], ctx.canRevealContacts);
+        maskContactFields(r, [...STUDENT_IDENTITY_FIELDS], ctx.isAdminGod);
+      });
       ResponseBuilder.ok(results, callback);
     } catch (err: any) {
       ResponseBuilder.handleError(err, callback);

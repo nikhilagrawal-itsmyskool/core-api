@@ -48,11 +48,32 @@ class FeedbackHandler {
       const rows = await feedbackService.listFeedback(auth.schoolId, {
         status: q.status || undefined,
         assignedTo: q.assignedTo || undefined,
+        studentId: q.studentId || undefined,
+        classId: q.classId || undefined,
+        date: q.date || undefined,
         categoryId: q.categoryId || undefined,
         academicYearId: q.academicYearId || undefined,
         owner: q.owner || undefined,
         sort: q.sort || undefined,
         callerId: auth.userId,
+      });
+      ResponseBuilder.ok(rows, callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
+  // GET /feedback/grouped?by=student|class|teacher|date&status=&academicYearId=
+  public grouped = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const auth = await resolveSchool(event, callback);
+      if (!auth) return;
+      const q = event.queryStringParameters || {};
+      const rows = await feedbackService.grouped(auth.schoolId, {
+        by: q.by || "student",
+        status: q.status || undefined,
+        academicYearId: q.academicYearId || undefined,
       });
       ResponseBuilder.ok(rows, callback);
     } catch (err: any) {
@@ -214,6 +235,7 @@ const h = new FeedbackHandler();
 export const listCategories = guard(FEEDBACK_ACTIONS["feedback-handler.listCategories"], h.listCategories);
 export const record = guard(FEEDBACK_ACTIONS["feedback-handler.record"], h.record);
 export const list = guard(FEEDBACK_ACTIONS["feedback-handler.list"], h.list);
+export const grouped = guard(FEEDBACK_ACTIONS["feedback-handler.grouped"], h.grouped);
 export const summary = guard(FEEDBACK_ACTIONS["feedback-handler.summary"], h.summary);
 export const getById = guard(FEEDBACK_ACTIONS["feedback-handler.getById"], h.getById);
 export const comment = guard(FEEDBACK_ACTIONS["feedback-handler.comment"], h.comment);

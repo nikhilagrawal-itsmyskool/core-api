@@ -105,7 +105,7 @@ class TransportAssignmentHandler {
       if (!studentId) return;
       const q = event.queryStringParameters || {};
       const result = await transportAssignmentService.studentReport(ctx.schoolId, studentId, q.academicYearId);
-      const reveal = getCallerContext(event).isAdminGod;
+      const reveal = getCallerContext(event).canRevealContacts;
       maskContactFields((result as any)?.morning, [...TRANSPORT_PHONE_FIELDS], reveal);
       maskContactFields((result as any)?.evening, [...TRANSPORT_PHONE_FIELDS], reveal);
       ResponseBuilder.ok(result, callback);
@@ -129,7 +129,7 @@ class TransportAssignmentHandler {
 
       const result = await transportAssignmentService.studentReport(schoolId, studentId, q.academicYearId);
       // Family/student callers are never admin/god → driver/conductor numbers masked.
-      const reveal = getCallerContext(event).isAdminGod;
+      const reveal = getCallerContext(event).canRevealContacts;
       maskContactFields((result as any)?.morning, [...TRANSPORT_PHONE_FIELDS], reveal);
       maskContactFields((result as any)?.evening, [...TRANSPORT_PHONE_FIELDS], reveal);
       ResponseBuilder.ok(result, callback);

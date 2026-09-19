@@ -48,6 +48,15 @@
           method: get
           cors: true
 
+  grouped:
+    handler: feedback-handler.grouped
+    name: ${self:service}-grouped
+    events:
+      - http:
+          path: grouped
+          method: get
+          cors: true
+
   # ── Teacher PWA surface (employee bearer token) — declared before {id} ──────
   me-list:
     handler: feedback-me-handler.list

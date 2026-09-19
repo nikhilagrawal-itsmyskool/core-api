@@ -46,7 +46,7 @@ class StudentBulkHandler {
       }
 
       const students = await studentAdminService.bulkClassRoster(schoolId, q.classId, q.academicYearId);
-      const reveal = getCallerContext(event).isAdminGod;
+      const reveal = getCallerContext(event).canRevealContacts;
       (students as any[]).forEach((r) => maskContactFields(r, ROSTER_CONTACT_FIELDS, reveal));
       ResponseBuilder.ok({ students }, callback);
     } catch (err: any) {

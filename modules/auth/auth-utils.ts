@@ -1,6 +1,7 @@
 import { ApiCallback, ApiEvent } from '../../shared/lib/api.interfaces';
 import { ErrorCode } from '../../shared/lib/error-codes';
 import { ResponseBuilder } from '../../shared/lib/response-builder';
+import { ACTIONS, can } from '../../shared/lib/authz-policy';
 import { DecodedToken, extractAndVerifyToken } from './token-utils';
 
 export function getSchoolCodeFromHeader(event: ApiEvent): string | null {
@@ -65,7 +66,8 @@ export function getAuthorizationHeader(event: ApiEvent): string | undefined {
 // restrictive context (nothing revealed) — safe by default.
 
 export interface CallerContext {
-  isAdminGod: boolean; // employee with the 'admin' or 'god' role → sees every number
+  isAdminGod: boolean; // employee with the 'admin' or 'god' role → privileged operations (e.g. syllabus reconcile)
+  canRevealContacts: boolean; // employee with admin/god/teacher → sees every un-masked number
   employeeId?: string; // own employee uuid → sees own number (self exception)
   familyStudentIds: string[]; // family login's child allowlist → sees own family numbers
 }
@@ -73,24 +75,38 @@ export interface CallerContext {
 export function getCallerContext(event: ApiEvent): CallerContext {
   const token = extractAndVerifyToken(getAuthorizationHeader(event));
   if (!token) {
-    return { isAdminGod: false, familyStudentIds: [] };
+    return { isAdminGod: false, canRevealContacts: false, familyStudentIds: [] };
   }
   const roles = Array.isArray(token.roles) ? token.roles : [];
+  const isEmployee = token.type === 'employee';
+  const isAdminGod = isEmployee && (roles.includes('admin') || roles.includes('god'));
   return {
-    isAdminGod: token.type === 'employee' && (roles.includes('admin') || roles.includes('god')),
+    isAdminGod,
+    // Un-masked mobile/WhatsApp numbers (students, guardians and colleagues) are gated by
+    // the `student.contacts.view` action — admin/god plus teaching staff, who routinely
+    // need to phone parents. Single source of truth with the admin-portal (same action,
+    // same policy). This is contacts-only; it does NOT confer admin/god privileges.
+    canRevealContacts: isEmployee && can(roles, ACTIONS.STUDENT_VIEW_CONTACTS),
     employeeId: token.employee_id,
     familyStudentIds: Array.isArray(token.students) ? token.students.map((s) => s.id) : [],
   };
 }
 
-// Reveal an employee's own number: admin/god, or the caller viewing their own record.
+// Reveal an employee's own number: admin/god/teacher, or the caller viewing their own record.
 export function revealEmployee(ctx: CallerContext, employeeId: string | null | undefined): boolean {
-  return ctx.isAdminGod || (!!employeeId && ctx.employeeId === employeeId);
+  return ctx.canRevealContacts || (!!employeeId && ctx.employeeId === employeeId);
 }
 
-// Reveal a student's / their guardian's number: admin/god, or a family login that
+// Reveal a student's / their guardian's number: admin/god/teacher, or a family login that
 // includes that student.
 export function revealStudent(ctx: CallerContext, studentId: string | null | undefined): boolean {
+  return ctx.canRevealContacts || (!!studentId && ctx.familyStudentIds.includes(studentId));
+}
+
+// Reveal a student's national ID (Aadhaar): admin/god only, or the family login that owns
+// that student. Teachers are deliberately excluded — Aadhaar is more sensitive than a
+// phone, so it does NOT ride the broader canRevealContacts gate.
+export function revealStudentIdentity(ctx: CallerContext, studentId: string | null | undefined): boolean {
   return ctx.isAdminGod || (!!studentId && ctx.familyStudentIds.includes(studentId));
 }
 
