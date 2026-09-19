@@ -28,6 +28,7 @@ export interface LeaveTypeView {
   annualQuota: number | null;         // days/academic-year (null = unlimited)
   attachmentOverDays: number | null;  // attachment required only when days exceed this
   showInBalance: boolean;             // show as a balance card on the staff /me summary
+  allowHalfDay: boolean;              // half-day permitted for this type
 }
 
 // ---- Write requests ----
@@ -38,6 +39,7 @@ export interface ApplyLeaveRequest {
   reason?: string;
   attachment?: AttachmentInput;
   dayPortion?: "full" | "first_half" | "second_half"; // half-day only valid on a single day
+  handover?: any; // academic-handover payload (validated by leave-handover-service)
 }
 
 export interface DecisionRequest {

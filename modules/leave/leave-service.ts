@@ -29,6 +29,7 @@ import {
   LeaveCheck,
 } from "./leave-interfaces";
 import { notifyInApp } from "./leave-notify";
+import { leaveHandoverService } from "./leave-handover-service";
 const { generateShortUuid } = require("../../shared/util/generate-uuid.js");
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -78,9 +79,9 @@ class LeaveService {
       if (have.has(t.code.toLowerCase())) continue;
       await DB.query(
         singleLineString`insert into leave_type
-          (uuid, school_id, code, name, paid, counts_vs_quota, requires_attachment, waivable, approver_role, sort_order, annual_quota, attachment_over_days, show_in_balance, status, createdby_userid, created_at)
-          values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'active', $14, $15)`,
-        [generateShortUuid(12), schoolId, t.code, t.name, t.paid, t.countsVsQuota, t.requiresAttachment, t.waivable, t.approverRole, t.sortOrder, t.annualQuota, t.attachmentOverDays, t.showInBalance, userId, now],
+          (uuid, school_id, code, name, paid, counts_vs_quota, requires_attachment, waivable, approver_role, sort_order, annual_quota, attachment_over_days, show_in_balance, allow_half_day, status, createdby_userid, created_at)
+          values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, 'active', $15, $16)`,
+        [generateShortUuid(12), schoolId, t.code, t.name, t.paid, t.countsVsQuota, t.requiresAttachment, t.waivable, t.approverRole, t.sortOrder, t.annualQuota, t.attachmentOverDays, t.showInBalance, t.allowHalfDay, userId, now],
       );
     }
   }
@@ -88,7 +89,7 @@ class LeaveService {
   async listTypes(schoolId: string): Promise<LeaveTypeView[]> {
     await this.ensureTypes(schoolId);
     const rows = await DB.query(
-      singleLineString`select code, name, paid, counts_vs_quota, requires_attachment, waivable, approver_role, sort_order, status, annual_quota, attachment_over_days, show_in_balance
+      singleLineString`select code, name, paid, counts_vs_quota, requires_attachment, waivable, approver_role, sort_order, status, annual_quota, attachment_over_days, show_in_balance, allow_half_day
         from leave_type where school_id = $1 and status <> 'deleted' order by sort_order asc nulls last, code`,
       [schoolId],
     );
@@ -105,6 +106,7 @@ class LeaveService {
       annualQuota: r.annualQuota ?? null,
       attachmentOverDays: r.attachmentOverDays ?? null,
       showInBalance: r.showInBalance !== false,
+      allowHalfDay: r.allowHalfDay === true,
     }));
   }
 
@@ -120,6 +122,7 @@ class LeaveService {
     if ("attachmentOverDays" in patch) { params.push(patch.attachmentOverDays === null || patch.attachmentOverDays === "" ? null : Math.max(0, Math.floor(Number(patch.attachmentOverDays)))); sets.push(`attachment_over_days = $${i++}`); }
     if ("requiresAttachment" in patch) { params.push(!!patch.requiresAttachment); sets.push(`requires_attachment = $${i++}`); }
     if ("showInBalance" in patch) { params.push(!!patch.showInBalance); sets.push(`show_in_balance = $${i++}`); }
+    if ("allowHalfDay" in patch) { params.push(!!patch.allowHalfDay); sets.push(`allow_half_day = $${i++}`); }
     if ("paid" in patch && ["yes", "no", "discretionary"].includes(patch.paid)) { params.push(patch.paid); sets.push(`paid = $${i++}`); }
     if (!sets.length) return this.listTypes(schoolId);
     params.push(userId); sets.push(`updatedby_userid = $${i++}`);
@@ -132,7 +135,7 @@ class LeaveService {
 
   private async getType(schoolId: string, code: string): Promise<any | null> {
     const rows = await DB.query(
-      singleLineString`select code, name, paid, counts_vs_quota, requires_attachment, waivable, annual_quota, attachment_over_days from leave_type
+      singleLineString`select code, name, paid, counts_vs_quota, requires_attachment, waivable, annual_quota, attachment_over_days, allow_half_day from leave_type
         where school_id = $1 and lower(code) = lower($2) and status = 'active'`,
       [schoolId, code],
     );
@@ -154,6 +157,9 @@ class LeaveService {
     // Half-day (single date only). first_half / second_half both cost 0.5 working days.
     const portion = req.dayPortion === "first_half" || req.dayPortion === "second_half" ? req.dayPortion : "full";
     const isHalf = portion !== "full";
+    if (isHalf && !type.allowHalfDay) {
+      throw new BusinessErrorResult(ErrorCode.BusinessError, `Half-day leave is not available for ${type.name} — only Casual Leave and Leave Without Pay allow a half day`);
+    }
     if (isHalf && req.fromDate !== req.toDate) {
       throw new BusinessErrorResult(ErrorCode.BusinessError, "A half day can only be applied for a single date");
     }
@@ -197,6 +203,10 @@ class LeaveService {
       }
     }
 
+    // Academic handover — teaching staff must complete it before the leave is accepted.
+    // Validated BEFORE the insert so a failure never leaves an orphan application.
+    await leaveHandoverService.assertValid(schoolId, employeeId, req.handover);
+
     const id = generateShortUuid(12);
     const now = new Date();
     await DB.query(
@@ -205,6 +215,7 @@ class LeaveService {
         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending', $10, $11, $10)`,
       [id, schoolId, employeeId, type.code, req.fromDate, req.toDate, workingDays, portion, req.reason?.trim() || null, now, employeeId],
     );
+    await leaveHandoverService.persist(schoolId, id, employeeId, req.fromDate, req.toDate, req.handover, employeeId);
 
     if (req.attachment?.base64Data && req.attachment?.mimeType) {
       const a = req.attachment;

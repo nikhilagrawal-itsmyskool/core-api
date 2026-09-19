@@ -3,6 +3,7 @@ import { ResponseBuilder } from "../../shared/lib/response-builder";
 import { ErrorCode } from "../../shared/lib/error-codes";
 import { resolveSchool, requireApprover, parseBody, requireParam } from "./handler-util";
 import { leaveService } from "./leave-service";
+import { leaveHandoverService } from "./leave-handover-service";
 import { DecisionRequest } from "./leave-interfaces";
 
 const MONTH_RE = /^\d{4}-\d{2}$/;
@@ -31,6 +32,37 @@ class LeaveHandler {
       const body = parseBody<any>(event, callback);
       if (!body) return;
       ResponseBuilder.ok(await leaveService.updateConfig(auth.schoolId, { dailyCap: body.dailyCap }, auth.userId), callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
+  // GET /leave/applications/{id}/handover
+  public getHandover = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const auth = await resolveSchool(event, callback);
+      if (!auth) return;
+      const id = requireParam(event, "id", callback);
+      if (!id) return;
+      ResponseBuilder.ok(await leaveHandoverService.getForApplication(auth.schoolId, id), callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
+  // GET /leave/applications/{id}/handover/file/{fileId}
+  public getHandoverFile = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const auth = await resolveSchool(event, callback);
+      if (!auth) return;
+      const id = requireParam(event, "id", callback);
+      const fileId = requireParam(event, "fileId", callback);
+      if (!id || !fileId) return;
+      const f = await leaveHandoverService.getFile(auth.schoolId, id, fileId);
+      if (!f) return ResponseBuilder.notFound(ErrorCode.GeneralError, "File not found", callback);
+      ResponseBuilder.ok(f, callback);
     } catch (err: any) {
       ResponseBuilder.handleError(err, callback);
     }
@@ -185,6 +217,8 @@ class LeaveHandler {
 const h = new LeaveHandler();
 export const getConfig = h.getConfig;
 export const updateConfig = h.updateConfig;
+export const getHandover = h.getHandover;
+export const getHandoverFile = h.getHandoverFile;
 export const listTypes = h.listTypes;
 export const updateType = h.updateType;
 export const listApplications = h.listApplications;

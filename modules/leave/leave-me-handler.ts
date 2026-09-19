@@ -5,7 +5,10 @@ import { resolveEmployee, parseBody, requireParam } from "./handler-util";
 import { leaveService } from "./leave-service";
 import { leaveAttendanceService } from "./leave-attendance-service";
 import { leaveDeductionService } from "./leave-deduction-service";
+import { leaveHandoverService } from "./leave-handover-service";
 import { ApplyLeaveRequest } from "./leave-interfaces";
+
+const DATE_RE2 = /^\d{4}-\d{2}-\d{2}$/;
 
 const MONTH_RE = /^\d{4}-\d{2}$/;
 
@@ -24,6 +27,22 @@ class LeaveMeHandler {
       const emp = resolveEmployee(event, callback);
       if (!emp) return;
       ResponseBuilder.ok(await leaveService.listTypes(emp.schoolId), callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
+  // GET /leave/me/handover-preview?fromDate=&toDate=
+  public handoverPreview = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const emp = resolveEmployee(event, callback);
+      if (!emp) return;
+      const q = event.queryStringParameters || {};
+      if (!q.fromDate || !DATE_RE2.test(q.fromDate) || !q.toDate || !DATE_RE2.test(q.toDate)) {
+        return ResponseBuilder.badRequest(ErrorCode.InvalidInput, "fromDate and toDate (YYYY-MM-DD) are required", callback);
+      }
+      ResponseBuilder.ok(await leaveHandoverService.preview(emp.schoolId, emp.employeeId, q.fromDate, q.toDate), callback);
     } catch (err: any) {
       ResponseBuilder.handleError(err, callback);
     }
@@ -143,6 +162,7 @@ class LeaveMeHandler {
 
 const h = new LeaveMeHandler();
 export const listTypes = h.listTypes;
+export const handoverPreview = h.handoverPreview;
 export const summary = h.summary;
 export const listApplications = h.listApplications;
 export const apply = h.apply;

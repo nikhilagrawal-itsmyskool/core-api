@@ -56,6 +56,9 @@ alter table leave_type add column if not exists attachment_over_days integer;
 -- type is still selectable in the apply picker and its quota still enforces, but it isn't
 -- advertised as a standing entitlement (e.g. Bereavement). null treated as true.
 alter table leave_type add column if not exists show_in_balance boolean;
+-- Whether a half-day (first/second half) may be applied for this type. Policy: only Casual
+-- Leave and Leave Without Pay allow half days. null treated as false.
+alter table leave_type add column if not exists allow_half_day boolean;
 
 -- leave_application: one applied leave (a date range). Backdating allowed.
 create table if not exists leave_application (
@@ -105,6 +108,28 @@ create table if not exists leave_audit (
     changed_at timestamp(0)
 );
 create index if not exists idx_leave_audit_application on leave_audit(application_id);
+
+-- leave_handover: the academic handover a teaching-staff member must complete before a
+-- leave is accepted (policy "Academic Handover"). One row per application. Structured data
+-- kept as jsonb; lesson-plan / worksheet files hang off file_storage (entity 'leave_handover').
+--   affected  = snapshot of missed periods: [{date, dayOfWeek, periods:[{seq,slotLabel,classId,className,subjectId,subjectName}]}]
+--   topics    = per affected class+subject: [{classId,className,subjectId,subjectName,chapter,topic,substitution}]
+--   other_duties = {duties:[...checked labels...], covering, note}
+create table if not exists leave_handover (
+    uuid varchar(12) primary key,
+    school_id varchar(12) not null,
+    application_id varchar(12) not null,
+    is_teaching boolean,
+    affected jsonb,
+    topics jsonb,
+    lesson_plan text,
+    other_duties jsonb,
+    createdby_userid varchar(12),
+    created_at timestamp(0),
+    updatedby_userid varchar(12),
+    updated_at timestamp(0)
+);
+create unique index if not exists idx_leave_handover_app on leave_handover(school_id, application_id);
 
 -- ── Attendance (feed only; phase 2 populates these) ──────────────────────────
 -- employee_biometric_map: resolves the device's enrollment code to an employee.

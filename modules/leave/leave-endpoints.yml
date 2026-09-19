@@ -100,6 +100,26 @@
           method: get
           cors: true
 
+  get-handover:
+    handler: leave-handler.getHandover
+    name: ${self:service}-get-handover
+    events:
+      - http:
+          path: applications/{id}/handover
+          method: get
+          cors: true
+
+  get-handover-file:
+    handler: leave-handler.getHandoverFile
+    name: ${self:service}-get-handover-file
+    memorySize: 512
+    timeout: 20
+    events:
+      - http:
+          path: applications/{id}/handover/file/{fileId}
+          method: get
+          cors: true
+
   balance:
     handler: leave-handler.balance
     name: ${self:service}-balance
@@ -261,11 +281,22 @@
           method: get
           cors: true
 
+  me-handover-preview:
+    handler: leave-me-handler.handoverPreview
+    name: ${self:service}-me-handover-preview
+    memorySize: 512
+    timeout: 20
+    events:
+      - http:
+          path: me/handover-preview
+          method: get
+          cors: true
+
   me-apply:
     handler: leave-me-handler.apply
     name: ${self:service}-me-apply
-    memorySize: 512
-    timeout: 20
+    memorySize: 1024
+    timeout: 30
     events:
       - http:
           path: me/applications
