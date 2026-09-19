@@ -357,9 +357,12 @@ class FeedbackService {
   // the group's key as a filter (studentId / classId / assignedTo / date).
   async grouped(
     schoolId: string,
-    opts: { by: string; status?: string; academicYearId?: string },
+    opts: { by: string; status?: string; academicYearId?: string; order?: string },
   ): Promise<GroupRow[]> {
     const by = ["student", "class", "teacher", "date"].includes(opts.by) ? opts.by : "student";
+    // 'count' (default) = most feedback first; 'natural' = alphabetical / class-order /
+    // chronological for easy browsing + lookup.
+    const natural = opts.order === "natural";
     const conds: string[] = ["f.school_id = $1"];
     const params: any[] = [schoolId];
     if (opts.status) { params.push(opts.status); conds.push(`f.status = $${params.length}`); }
@@ -377,19 +380,19 @@ class FeedbackService {
             where scc.student_id = f.student_id and scc.school_id = f.school_id order by scc.academic_year_id desc limit 1)) as sublabel,
           ${counts}
         from feedback f left join student s on s.uuid = f.student_id and s.school_id = f.school_id
-        where ${where} group by f.student_id order by open desc, total desc, label`;
+        where ${where} group by f.student_id order by ${natural ? "max(s.name) asc nulls last" : "open desc, total desc, max(s.name)"}`;
     } else if (by === "class") {
       sql = singleLineString`select f.rc as key, max(cl.name) as label, null as sublabel, ${counts}
         from (select f.*, ${RESOLVED_CLASS} as rc from feedback f where ${where}) f
         left join class cl on cl.uuid = f.rc and cl.school_id = f.school_id
-        group by f.rc order by open desc, total desc`;
+        group by f.rc order by ${natural ? "max(cl.seq) asc nulls last, max(cl.name) asc" : "open desc, total desc"}`;
     } else if (by === "teacher") {
       sql = singleLineString`select f.assigned_to as key, max(e.name) as label, null as sublabel, ${counts}
         from feedback f left join employee e on e.uuid = f.assigned_to and e.school_id = f.school_id
-        where ${where} group by f.assigned_to order by open desc, total desc`;
+        where ${where} group by f.assigned_to order by ${natural ? "max(e.name) asc nulls last" : "open desc, total desc"}`;
     } else {
       sql = singleLineString`select f.visit_date::text as key, f.visit_date::text as label, null as sublabel, ${counts}
-        from feedback f where ${where} group by f.visit_date order by f.visit_date desc nulls last`;
+        from feedback f where ${where} group by f.visit_date order by ${natural ? "f.visit_date asc nulls last" : "f.visit_date desc nulls last"}`;
     }
     const rows = await DB.query(sql, params);
     return rows.map((r: any) => ({

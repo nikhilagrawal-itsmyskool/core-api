@@ -74,6 +74,7 @@ class FeedbackHandler {
         by: q.by || "student",
         status: q.status || undefined,
         academicYearId: q.academicYearId || undefined,
+        order: q.order || undefined,
       });
       ResponseBuilder.ok(rows, callback);
     } catch (err: any) {
