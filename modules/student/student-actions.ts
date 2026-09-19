@@ -25,6 +25,10 @@ export const STUDENT_ACTIONS: Record<string, string> = {
   'house-handler.listTeachers': STUDENT_VIEW,
   'student-lookup-handler.list': STUDENT_VIEW,
   'student-lookup-handler.suggestByPincode': STUDENT_VIEW,
+  // Reports: field catalogue is harmless metadata (view); the roster export
+  // reveals unmasked contacts to admin/god, so it's a manage-screen surface.
+  'student-report-handler.fields': STUDENT_VIEW,
+  'student-report-handler.roster': STUDENT_MANAGE,
   'student-photo-handler.get': STUDENT_VIEW,
   'student-guardian-handler.list': STUDENT_VIEW,
   'student-address-handler.list': STUDENT_VIEW,

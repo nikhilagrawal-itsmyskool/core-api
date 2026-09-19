@@ -282,6 +282,25 @@
           method: post
           cors: true
 
+  # ---- Reports (printable roster / contact-list export) — literal, before '{id}' ----
+  report-fields:
+    handler: student-report-handler.fields
+    name: ${self:service}-report-fields
+    events:
+      - http:
+          path: reports/fields
+          method: get
+          cors: true
+
+  report-roster:
+    handler: student-report-handler.roster
+    name: ${self:service}-report-roster
+    events:
+      - http:
+          path: reports/roster
+          method: post
+          cors: true
+
   # ---- Guardians (nested under a student) ----
   list-guardians:
     handler: student-guardian-handler.list
