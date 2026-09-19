@@ -17,6 +17,17 @@
           method: get
           cors: true
 
+  # Holiday / weekly-off flags for a date (no class needed) — lets the marking
+  # screen warn as soon as a date is picked, before a class is selected.
+  get-day-info:
+    handler: attendance-handler.getDayInfo
+    name: ${self:service}-get-day-info
+    events:
+      - http:
+          path: day-info
+          method: get
+          cors: true
+
   # Roster for the marking screen
   get-roster:
     handler: attendance-handler.getRoster

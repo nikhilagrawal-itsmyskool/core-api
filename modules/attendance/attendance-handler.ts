@@ -9,6 +9,25 @@ import { attendanceService } from './attendance-service';
 import { OpenSessionRequest, SaveMarksRequest, EditRecordRequest } from './attendance-interfaces';
 
 class AttendanceHandler {
+  // GET /day-info?academicYearId=&date= — holiday / weekly-off flags for a date,
+  // resolved without a class so the UI can warn as soon as a date is picked.
+  public getDayInfo = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
+    _context.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const ctx = await resolveSchool(event, callback);
+      if (!ctx) return;
+      const q = event.queryStringParameters || {};
+      if (!q.academicYearId || !q.date) {
+        ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'academicYearId and date are required', callback);
+        return;
+      }
+      const dayInfo = await resolveDayFlags(ctx.schoolId, q.academicYearId, q.date);
+      ResponseBuilder.ok({ dayInfo }, callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
   // GET /roster?classId=&academicYearId=&date=
   public getRoster = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
     _context.callbackWaitsForEmptyEventLoop = false;
@@ -175,6 +194,7 @@ class AttendanceHandler {
 }
 
 const handler = new AttendanceHandler();
+export const getDayInfo = guard(ATTENDANCE_ACTIONS['attendance-handler.getDayInfo'], handler.getDayInfo);
 export const getStudentAttendance = guard(ATTENDANCE_ACTIONS['attendance-handler.getStudentAttendance'], handler.getStudentAttendance);
 export const getRegister = guard(ATTENDANCE_ACTIONS['attendance-handler.getRegister'], handler.getRegister);
 export const getRoster = guard(ATTENDANCE_ACTIONS['attendance-handler.getRoster'], handler.getRoster);

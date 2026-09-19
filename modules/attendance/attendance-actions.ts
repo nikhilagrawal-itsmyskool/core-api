@@ -8,6 +8,7 @@ const MARK = 'attendance.mark'; // not in ACTIONS catalog (no UI branch), but a 
 const { ATTENDANCE_FINALIZE } = ACTIONS;
 
 export const ATTENDANCE_ACTIONS: Record<string, string> = {
+  'attendance-handler.getDayInfo': MARK,
   'attendance-handler.getRoster': MARK,
   'attendance-handler.getRegister': MARK,
   'attendance-handler.getStudentAttendance': MARK,
