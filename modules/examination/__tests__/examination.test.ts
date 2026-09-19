@@ -469,6 +469,39 @@ describe("examination: phase 4 — seating rooms", () => {
     expect(roster.body.correctedByName ?? null).toBeNull();
   });
 
+  sectionIt("phase 5: the room roster exposes a signatures list (invigilator authoritative)", async () => {
+    // The earlier test signed (roomId, D1) as the assigned invigilator ("system").
+    const roster = await get(`/examinations/${examId}/room-rosters/${roomId}/${D1}`);
+    expect(Array.isArray(roster.body.signatures)).toBe(true);
+    const inv = (roster.body.signatures || []).find((s: any) => s.roleLabel === "invigilator");
+    expect(inv).toBeTruthy();
+    expect(inv.signedAt).toBeTruthy();
+    expect(roster.body.signed).toBe(true); // an invigilator signature ⇒ submitted
+  });
+
+  sectionIt("phase 5: reliever/incharge countersignature — appended, non-authoritative, no all-marked gate", async () => {
+    // A room with NO assigned invigilator: the god/incharge caller signs it as a
+    // countersignature — proving (a) role auto-detects to 'incharge', (b) no all-marked gate
+    // (we post no marks), (c) it does NOT mark the room "submitted" (that needs an invigilator),
+    // and (d) it does NOT touch the admit card. This is the same append path relievers use.
+    const r2 = await post(`/examinations/${examId}/rooms`, { name: "R2sig", sortOrder: 8 });
+    const room2 = r2.body.rooms.find((x: any) => x.name === "R2sig").uuid;
+    await put(`/examinations/${examId}/rooms/${room2}/allocations`, {
+      allocations: [{ sectionClassId: section!.sectionClassId, rollFrom: 1, rollTo: 999 }],
+    });
+    try {
+      const rs = await post(`/examinations/${examId}/room-rosters/${room2}/${D1}/sign`, { signatureBase64: TINY_PNG });
+      expect(rs.status).toBe(200);
+      expect(rs.body.signed).toBe(false); // no invigilator ⇒ not submitted
+      const sigs = rs.body.signatures || [];
+      expect(sigs.length).toBe(1);
+      expect(sigs[0].roleLabel).toBe("incharge");
+      expect(sigs[0].signedAt).toBeTruthy();
+    } finally {
+      await del(`/examinations/${examId}/rooms/${room2}`);
+    }
+  });
+
   sectionIt("phase 5: class-wise attendance sheet reads + marks a whole section for a date", async () => {
     const s0 = await get(`/examinations/${examId}/class-attendance/${section!.sectionClassId}/${D1}`);
     expect(s0.status).toBe(200);

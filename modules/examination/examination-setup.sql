@@ -333,8 +333,10 @@ create index if not exists idx_exam_room_invig_exam
     on exam_room_invigilator(school_id, exam_id, status);
 
 -- exam_reliever (Phase 5b): a day-level pool of break-cover floaters per (exam, date) — not
--- tied to a room, and they never sign anything. A person can't be both a room invigilator and
--- a reliever on the same date (enforced in app).
+-- tied to a room. They are on floor duty across ALL rooms that day (deliver papers, relieve
+-- invigilators) and DO countersign each room roster (role_label='reliever'); their signature
+-- is on the room sheet only, never on the admit card. A person can't be both a room
+-- invigilator and a reliever on the same date (enforced in app).
 create table if not exists exam_reliever (
     uuid varchar(12) primary key,
     school_id varchar(12) not null,
@@ -362,22 +364,25 @@ alter table exam_attendance add column if not exists room_id varchar(12);
 alter table exam_attendance add column if not exists corrected_by_employee_id varchar(12);
 alter table exam_attendance add column if not exists corrected_at timestamp(0);
 
--- exam_roster_signature (Phase 5): the AUTHORITATIVE record of one daily signing event —
--- one row per (room, date) for seating exams, or per (paper, section) for non-seating. The
--- drawn signature PNG is anchored to THIS row's uuid in file_storage
--- (entity_type='exam_roster_signature', entity_id=uuid — a clean 12-char owner, mirroring the
--- document-ack pattern, instead of a composite key that overflowed entity_id varchar(12)).
--- A fresh signature is drawn at each submit; god corrections to a signed roster retain the
--- invigilator's signature and stamp corrected_by/at here. exam_attendance.signature_file_id is
--- kept as a denormalised pointer so the admit card renders without a join.
+-- exam_roster_signature (Phase 5): the record of daily roster signing events. MANY signers
+-- may sign one roster — each room (or section) has one row PER signer, tagged role_label
+-- ('invigilator' | 'reliever' | 'incharge'). The drawn signature PNG is anchored to THAT
+-- row's uuid in file_storage (entity_type='exam_roster_signature', entity_id=uuid — a clean
+-- 12-char owner, mirroring the document-ack pattern). A fresh signature is drawn at each
+-- submit. The AUTHORITATIVE signer (drives "submitted" + admit card + corrections) is the
+-- invigilator row; reliever/incharge rows are additional countersignatures shown on the room
+-- sheet only. god/admin corrections to a signed roster retain the invigilator's signature and
+-- stamp corrected_by/at on the invigilator row. exam_attendance.signature_file_id keeps the
+-- invigilator's signature as a denormalised pointer so the admit card renders without a join.
 create table if not exists exam_roster_signature (
     uuid varchar(12) primary key,
     school_id varchar(12) not null,
     exam_id varchar(12) not null,
-    -- 'r:<roomId>:<date>' (seating) | 'p:<paperId>:<sectionId>' (section) — the unique event key.
+    -- 'r:<roomId>:<date>' (seating) | 'p:<paperId>:<sectionId>' (section) — the roster key.
     scope_key varchar(48) not null,
     room_id varchar(12),          -- set for seating rosters (powers the completion board)
     exam_date date,
+    role_label varchar(16),       -- 'invigilator' | 'reliever' | 'incharge'
     signed_by_employee_id varchar(12),
     signed_at timestamp(0),
     signature_file_id varchar(12),
@@ -388,7 +393,15 @@ create table if not exists exam_roster_signature (
     updatedby_userid varchar(12),
     updated_at timestamp(0)
 );
-create unique index if not exists idx_exam_roster_sig_scope
+alter table exam_roster_signature add column if not exists role_label varchar(16);
+-- Legacy single-signer rows were always the invigilator's sign; tag them so the authoritative
+-- lookup (role_label='invigilator') keeps returning them.
+update exam_roster_signature set role_label = 'invigilator' where role_label is null;
+-- Multi-signer: one row per (roster, signer). Replaces the old one-row-per-scope unique index.
+drop index if exists idx_exam_roster_sig_scope;
+create unique index if not exists idx_exam_roster_sig_scope_signer
+    on exam_roster_signature(exam_id, scope_key, signed_by_employee_id);
+create index if not exists idx_exam_roster_sig_scope
     on exam_roster_signature(exam_id, scope_key);
 create index if not exists idx_exam_roster_sig_room
     on exam_roster_signature(school_id, exam_id, room_id);

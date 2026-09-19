@@ -77,6 +77,13 @@ export async function cleanupTestExams(): Promise<void> {
   await p.query("delete from exam_print_log where exam_id = any($1)", [ids]);
   await p.query("delete from exam_attendance where exam_id = any($1)", [ids]);
   await p.query("delete from exam_attendance_audit where exam_id = any($1)", [ids]);
+  // Roster signatures (multi-signer) + their anchored PNGs, relievers, AV occupants.
+  const sigRows = await p.query("select uuid from exam_roster_signature where exam_id = any($1)", [ids]);
+  const sigIds = sigRows.rows.map((r: any) => r.uuid);
+  if (sigIds.length) await p.query("delete from file_storage where entity_type = 'exam_roster_signature' and entity_id = any($1)", [sigIds]);
+  await p.query("delete from exam_roster_signature where exam_id = any($1)", [ids]);
+  await p.query("delete from exam_reliever where exam_id = any($1)", [ids]);
+  await p.query("delete from exam_av_occupant where exam_id = any($1)", [ids]);
   // Seating rooms (Phase 4) + their uploaded plan images.
   const roomRows = await p.query("select uuid from exam_room where exam_id = any($1)", [ids]);
   const roomIds = roomRows.rows.map((r: any) => r.uuid);

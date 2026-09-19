@@ -767,7 +767,11 @@ class ExaminationHandler {
       const roomId = requireParam(event, "roomId", callback);
       const date = requireParam(event, "date", callback);
       if (!id || !roomId || !date) return;
-      ResponseBuilder.ok(await examinationService.roomRoster(auth.schoolId, id, roomId, date), callback);
+      const roster = await examinationService.roomRoster(auth.schoolId, id, roomId, date);
+      // The incharge/god viewer's duty role: 'invigilator' if actually assigned here (then she
+      // signs authoritatively), else 'incharge' (she may correct marks + countersigns).
+      const viewerRole = await examinationService.myRoomRole(id, roomId, date, auth.userId, true);
+      ResponseBuilder.ok({ ...roster, viewerRole, canMark: true }, callback);
     } catch (err: any) { ResponseBuilder.handleError(err, callback); }
   };
 
@@ -906,7 +910,9 @@ class ExaminationHandler {
 
   // ── /me room duties (PWA) ──────────────────────────────────────────────────────
 
-  // Shared resolver: verify the caller is the assigned invigilator for this (room, date).
+  // Shared resolver: resolve the caller's duty role for this (room, date) — assigned
+  // invigilator, that day's floor reliever, or god/exam-incharge (override). Null ⇒ not on
+  // duty ⇒ 403. Read + sign are open to any role; marking is gated to invigilator/incharge.
   private async meRoomParams(event: ApiEvent, callback: ApiCallback) {
     const emp = resolveEmployee(event, callback);
     if (!emp) return null;
@@ -914,11 +920,13 @@ class ExaminationHandler {
     const roomId = requireParam(event, "roomId", callback);
     const date = requireParam(event, "date", callback);
     if (!examId || !roomId || !date) return null;
-    if (!(await examinationService.canInvigilateRoom(examId, roomId, date, emp.employeeId))) {
-      ResponseBuilder.forbidden(ErrorCode.MissingPermission, "You are not the assigned invigilator for this room", callback);
+    const override = callerIsExamOverride(event);
+    const role = await examinationService.myRoomRole(examId, roomId, date, emp.employeeId, override);
+    if (!role) {
+      ResponseBuilder.forbidden(ErrorCode.MissingPermission, "You are not on duty for this room today", callback);
       return null;
     }
-    return { emp, examId, roomId, date };
+    return { emp, examId, roomId, date, role, override };
   }
 
   // GET /me/exam/rooms
@@ -937,7 +945,9 @@ class ExaminationHandler {
     try {
       const p = await this.meRoomParams(event, callback);
       if (!p) return;
-      ResponseBuilder.ok(await examinationService.roomRoster(p.emp.schoolId, p.examId, p.roomId, p.date), callback);
+      const roster = await examinationService.roomRoster(p.emp.schoolId, p.examId, p.roomId, p.date);
+      // A reliever gets a read-only roster (sign only); invigilator/incharge may also mark.
+      ResponseBuilder.ok({ ...roster, viewerRole: p.role, canMark: p.role === "invigilator" || p.role === "incharge" }, callback);
     } catch (err: any) { ResponseBuilder.handleError(err, callback); }
   };
 
@@ -947,9 +957,13 @@ class ExaminationHandler {
     try {
       const p = await this.meRoomParams(event, callback);
       if (!p) return;
+      if (p.role !== "invigilator" && p.role !== "incharge") {
+        ResponseBuilder.forbidden(ErrorCode.MissingPermission, "Only the room invigilator can mark attendance — relievers sign only", callback);
+        return;
+      }
       const body = parseBody<{ marks: any[] }>(event, callback);
       if (!body) return;
-      ResponseBuilder.ok(await examinationService.markRoomAttendance(p.emp.schoolId, p.examId, p.roomId, p.date, body.marks || [], p.emp.employeeId), callback);
+      ResponseBuilder.ok(await examinationService.markRoomAttendance(p.emp.schoolId, p.examId, p.roomId, p.date, body.marks || [], p.emp.employeeId, p.override), callback);
     } catch (err: any) { ResponseBuilder.handleError(err, callback); }
   };
 
@@ -959,6 +973,10 @@ class ExaminationHandler {
     try {
       const p = await this.meRoomParams(event, callback);
       if (!p) return;
+      if (p.role !== "invigilator" && p.role !== "incharge") {
+        ResponseBuilder.forbidden(ErrorCode.MissingPermission, "Only the room supervisor can change the AV student list", callback);
+        return;
+      }
       const body = parseBody<{ studentId: string; action?: string }>(event, callback);
       if (!body) return;
       const result = body.action === "remove"
@@ -976,7 +994,8 @@ class ExaminationHandler {
       if (!p) return;
       const body = parseBody<{ signatureBase64?: string }>(event, callback);
       if (!body) return;
-      ResponseBuilder.ok(await examinationService.signRoomRoster(p.emp.schoolId, p.examId, p.roomId, p.date, p.emp.employeeId, false, body.signatureBase64), callback);
+      // override (god/incharge) bypasses the day lock; a reliever/invigilator is bound by it.
+      ResponseBuilder.ok(await examinationService.signRoomRoster(p.emp.schoolId, p.examId, p.roomId, p.date, p.emp.employeeId, p.override, body.signatureBase64), callback);
     } catch (err: any) { ResponseBuilder.handleError(err, callback); }
   };
 }
