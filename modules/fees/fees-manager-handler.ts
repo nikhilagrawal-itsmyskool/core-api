@@ -5,6 +5,7 @@ import { guard } from '../auth/authz';
 import { FEE_ACTIONS } from './fees-actions';
 import { resolveSchool } from './fees-util';
 import { feesManagerService } from './fees-manager-service';
+import { feesReportService } from './fees-report-service';
 
 class FeesManagerHandler {
   // GET /fees/manager/summary — per-year dues + grand total + today's collection (fees vs transport)
@@ -57,6 +58,18 @@ class FeesManagerHandler {
     }
   };
 
+  // GET /fees/manager/top-dues — cross-year accumulated-dues report (shares the admin report engine)
+  public topDues = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
+    _context.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const ctx = await resolveSchool(event, callback);
+      if (!ctx) return;
+      ResponseBuilder.ok(await feesReportService.topDues(ctx.schoolId, event.queryStringParameters || {}), callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
   // GET /fees/manager/due-students?academicYearId=... — students who owe now, by class
   public dueStudents = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
     _context.callbackWaitsForEmptyEventLoop = false;
@@ -78,3 +91,4 @@ export const dueStudents = guard(FEE_ACTIONS['fees-manager-handler.dueStudents']
 export const dayCollection = guard(FEE_ACTIONS['fees-manager-handler.dayCollection'], handler.dayCollection);
 export const search = guard(FEE_ACTIONS['fees-manager-handler.search'], handler.search);
 export const studentDues = guard(FEE_ACTIONS['fees-manager-handler.studentDues'], handler.studentDues);
+export const topDues = guard(FEE_ACTIONS['fees-manager-handler.topDues'], handler.topDues);

@@ -191,6 +191,12 @@
     name: ${self:service}-manager-student-dues
     events:
       - http: { path: 'manager/student-dues', method: get, cors: true }
+  manager-top-dues:
+    handler: fees-manager-handler.topDues
+    name: ${self:service}-manager-top-dues
+    timeout: 60
+    events:
+      - http: { path: 'manager/top-dues', method: get, cors: true }
 
   # ---- Concessions ----
   create-concession:
@@ -363,6 +369,12 @@
     name: ${self:service}-dues
     events:
       - http: { path: 'reports/dues', method: get, cors: true }
+  top-dues:
+    handler: fees-report-handler.topDues
+    name: ${self:service}-top-dues
+    timeout: 60
+    events:
+      - http: { path: 'reports/top-dues', method: get, cors: true }
   set-followup:
     handler: fees-report-handler.setFollowup
     name: ${self:service}-set-followup

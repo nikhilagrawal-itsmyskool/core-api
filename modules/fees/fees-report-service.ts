@@ -246,6 +246,96 @@ class FeesReportService {
     };
   }
 
+  // Cross-year "accumulated dues" report: one row per student who owes anything, a column per academic
+  // year (each = due-now evaluated at end of THIS month — so past years show their full outstanding and
+  // the current year shows only what's due till this month), the grand total, class, and every
+  // guardian's name+phone. Ranked by total desc. Includes left/withdrawn students (flagged), excludes
+  // deleted. Shared by the admin report (reports/top-dues) and the manager desk (manager/top-dues).
+  public async topDues(schoolId: string, q: any) {
+    const bkt = dueBuckets();
+    const currentAyId = q?.academicYearId || null;
+    const limit = Math.min(Math.max(Number(q?.limit) || 5000, 1), 5000);
+
+    const perYear: any[] = await DB.query(
+      singleLineString`
+        with charges as (
+          select e.student_id, e.academic_year_id, e.uuid, e.debit,
+            (fc.due_date is null or fc.due_date <= $2) as due_now
+          from student_ledger_entry e
+          left join fee_cycle fc on fc.uuid = e.cycle_id and fc.status = 'active'
+          where e.school_id = $1 and e.kind = 'charge' and e.status = 'active' and e.student_id is not null
+        ),
+        paid as (
+          select settles_entry_id, sum(credit) as c from student_ledger_entry
+          where school_id = $1 and status = 'active' and settles_entry_id is not null group by settles_entry_id
+        ),
+        per_charge as (
+          select c.student_id, c.academic_year_id, greatest(0, c.debit - coalesce(p.c, 0)) as remaining, c.due_now
+          from charges c left join paid p on p.settles_entry_id = c.uuid
+        )
+        select student_id, academic_year_id, coalesce(sum(remaining) filter (where due_now), 0) as due_now
+        from per_charge group by student_id, academic_year_id
+        having coalesce(sum(remaining) filter (where due_now), 0) > 0.5`,
+      [schoolId, bkt.endOfMonth]
+    );
+
+    const byStudent: Record<string, any> = {};
+    const yearsSeen = new Set<string>();
+    perYear.forEach((r) => {
+      const amt = Number(r.dueNow || 0);
+      if (amt <= 0.5) return;
+      const s = (byStudent[r.studentId] ||= { studentId: r.studentId, byYear: {}, total: 0 });
+      s.byYear[r.academicYearId] = amt; s.total += amt; yearsSeen.add(r.academicYearId);
+    });
+    let list: any[] = Object.values(byStudent).filter((s: any) => s.total > 0.5).sort((a: any, b: any) => b.total - a.total).slice(0, limit);
+    if (!list.length) return { columns: [], rows: [], monthLabel: bkt.monthEndLabel, currentAcademicYearId: currentAyId, generatedAt: istToday(), studentCount: 0, grandTotal: 0 };
+
+    const ids = list.map((s: any) => s.studentId);
+
+    // column set (only years that actually have dues), ascending by name so the current year sits rightmost
+    const ays: any[] = await DB.query(singleLineString`select uuid, name from academic_year where school_id = $1 and uuid = any($2) order by name`, [schoolId, [...yearsSeen]]);
+    const columns = ays.map((a) => ({ academicYearId: a.uuid, name: a.name, isCurrent: a.uuid === currentAyId }));
+
+    // student info + class (prefer current-AY enrollment, else latest) + left flag; excludes deleted
+    const info: any[] = await DB.query(
+      singleLineString`
+        select s.uuid, s.name, s.admission_number, s.status, s.withdrawal_date,
+          (select c.name from student_class sc left join class c on c.uuid = sc.class_id
+             left join academic_year ay on ay.uuid = sc.academic_year_id
+             where sc.student_id = s.uuid and sc.school_id = $1 and sc.status <> 'deleted'
+             order by (sc.academic_year_id = $3) desc, ay.start_date desc nulls last limit 1) as class_name
+        from student s where s.school_id = $1 and s.uuid = any($2) and s.status <> 'deleted'`,
+      [schoolId, ids, currentAyId]
+    );
+    const infoById: Record<string, any> = {}; info.forEach((r) => (infoById[r.uuid] = r));
+
+    // all active guardians, grouped per student (father, mother, guardian, then others)
+    const g: any[] = await DB.query(
+      singleLineString`select student_id, relation, name, mobile, is_primary_contact from student_guardian
+        where school_id = $1 and student_id = any($2) and status = 'active'`,
+      [schoolId, ids]
+    );
+    const relRank = (r: string) => (r === 'father' ? 0 : r === 'mother' ? 1 : r === 'guardian' ? 2 : 3);
+    const contactsById: Record<string, any[]> = {};
+    g.forEach((row) => { (contactsById[row.studentId] ||= []).push({ relation: row.relation, name: row.name || null, mobile: row.mobile || null }); });
+    Object.values(contactsById).forEach((arr) => arr.sort((a, b) => relRank(a.relation) - relRank(b.relation)));
+
+    const rows = list
+      .filter((s: any) => infoById[s.studentId])
+      .map((s: any) => {
+        const i = infoById[s.studentId];
+        return {
+          studentId: s.studentId, name: i.name || s.studentId, admissionNumber: i.admissionNumber || null,
+          className: i.className || '—', hasLeft: i.status !== 'active' || i.withdrawalDate != null,
+          contacts: contactsById[s.studentId] || [], byYear: s.byYear, total: s.total,
+        };
+      });
+    return {
+      columns, rows, monthLabel: bkt.monthEndLabel, currentAcademicYearId: currentAyId,
+      generatedAt: istToday(), studentCount: rows.length, grandTotal: rows.reduce((a, r) => a + r.total, 0),
+    };
+  }
+
   // Family (linked siblings + self) dues for the drawer — each member's due-now, full-year, prior-year net.
   public async familyDues(schoolId: string, studentId: string, q: any) {
     const ay = q?.academicYearId;

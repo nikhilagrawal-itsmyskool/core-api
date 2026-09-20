@@ -42,6 +42,16 @@ class FeesReportHandler {
     } catch (err: any) { ResponseBuilder.handleError(err, callback); }
   };
 
+  // Cross-year accumulated-dues report (one row/student, a column per year, ranked by total).
+  public topDues = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const rc = await resolveSchool(event, callback); if (!rc) return;
+      const result = await feesReportService.topDues(rc.schoolId, event.queryStringParameters || {});
+      ResponseBuilder.ok(result, callback);
+    } catch (err: any) { ResponseBuilder.handleError(err, callback); }
+  };
+
   public setFollowup = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
     ctx.callbackWaitsForEmptyEventLoop = false;
     try {
@@ -133,6 +143,7 @@ export const dailyCollection = guard(FEE_ACTIONS['fees-report-handler.dailyColle
 export const overview = guard(FEE_ACTIONS['fees-report-handler.overview'], handler.overview);
 export const ungeneratedStudents = guard(FEE_ACTIONS['fees-report-handler.ungeneratedStudents'], handler.ungeneratedStudents);
 export const dues = guard(FEE_ACTIONS['fees-report-handler.dues'], handler.dues);
+export const topDues = guard(FEE_ACTIONS['fees-report-handler.topDues'], handler.topDues);
 export const setFollowup = guard(FEE_ACTIONS['fees-report-handler.setFollowup'], handler.setFollowup);
 export const getFollowup = guard(FEE_ACTIONS['fees-report-handler.getFollowup'], handler.getFollowup);
 export const familyDues = guard(FEE_ACTIONS['fees-report-handler.familyDues'], handler.familyDues);
