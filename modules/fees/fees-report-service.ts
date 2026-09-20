@@ -292,8 +292,8 @@ class FeesReportService {
 
     const ids = list.map((s: any) => s.studentId);
 
-    // column set (only years that actually have dues), ascending by name so the current year sits rightmost
-    const ays: any[] = await DB.query(singleLineString`select uuid, name from academic_year where school_id = $1 and uuid = any($2) order by name`, [schoolId, [...yearsSeen]]);
+    // column set (only years that actually have dues), newest first so the CURRENT year is the first column
+    const ays: any[] = await DB.query(singleLineString`select uuid, name from academic_year where school_id = $1 and uuid = any($2) order by name desc`, [schoolId, [...yearsSeen]]);
     const columns = ays.map((a) => ({ academicYearId: a.uuid, name: a.name, isCurrent: a.uuid === currentAyId }));
 
     // student info + class (prefer current-AY enrollment, else latest) + left flag; excludes deleted
