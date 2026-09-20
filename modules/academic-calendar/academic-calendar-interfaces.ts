@@ -78,6 +78,7 @@ export interface CloseRangeRequest {
   name?: string | null;
   kind?: HolidayKind; // defaults to 'full'
   staffWorking?: boolean; // students off, staff report
+  notify?: boolean; // parents (SMS/WhatsApp) + staff (in-app) on declare
   academicYearId?: string;
 }
 

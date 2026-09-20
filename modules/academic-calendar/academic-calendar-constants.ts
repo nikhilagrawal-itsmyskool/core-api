@@ -18,5 +18,9 @@ export const DEFAULT_TYPES: { code: string; name: string; sortOrder: number }[] 
 export const HOLIDAY_KINDS = ["full", "restricted"] as const;
 export type HolidayKind = (typeof HOLIDAY_KINDS)[number];
 
+// Communication template key used when a closure is declared with "notify parents".
+// Must match the message_template rows (sms + whatsapp) registered for the school.
+export const CLOSURE_TEMPLATE_KEY = "school_closure";
+
 // Weekly-off rule: Sunday only (getUTCDay() === 0). Saturdays are working days.
 export const WEEKLY_OFF_DOW = [0];

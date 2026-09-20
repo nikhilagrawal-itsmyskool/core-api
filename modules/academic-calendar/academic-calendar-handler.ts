@@ -8,6 +8,7 @@ import { ErrorCode } from "../../shared/lib/error-codes";
 import { resolveSchool, parseBody, requireParam } from "./handler-util";
 import { getCurrentAcademicYearId, isValidDate } from "./academic-calendar-common";
 import { academicCalendarService } from "./academic-calendar-service";
+import { notifyClosureParents, notifyClosureStaff } from "./academic-calendar-notify";
 import {
   AddEntryRequest,
   CreateTypeRequest,
@@ -21,6 +22,17 @@ const MAX_RANGE_DAYS = 400;
 
 function badDate(callback: ApiCallback, field = "date"): void {
   ResponseBuilder.badRequest(ErrorCode.InvalidInput, `${field} (YYYY-MM-DD) is required`, callback);
+}
+
+// Human "period" string for the closure notification: single day -> "on 05-Sep-2026";
+// range -> "from 05-Sep to 08-Sep-2026" (kept short for the DLT variable cap).
+const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+function dMon(iso: string, withYear = true): string {
+  const [y, m, d] = iso.split("-");
+  return `${d}-${MON[Number(m) - 1]}${withYear ? `-${y}` : ""}`;
+}
+function closurePeriod(from: string, to: string): string {
+  return from === to ? `on ${dMon(from)}` : `from ${dMon(from, false)} to ${dMon(to)}`;
 }
 
 async function resolveAy(schoolId: string, provided?: string): Promise<string | null> {
@@ -234,7 +246,20 @@ class AcademicCalendarHandler {
       const ay = await resolveAy(auth.schoolId, body.academicYearId);
       if (!ay) return ResponseBuilder.badRequest(ErrorCode.BusinessError, "No current academic year", callback);
       const result = await academicCalendarService.closeRange(auth.schoolId, ay, body, auth.userId);
-      ResponseBuilder.ok(result, callback);
+
+      // Notify (opt-in): parents by SMS/WhatsApp + staff in-app. Fire-and-forget —
+      // a notify failure must never fail the closure that was already written.
+      let notified = false;
+      if (body.notify && result.written.length > 0) {
+        const period = closurePeriod(body.from, body.to);
+        const reason = (body.name || "").trim();
+        const [jobId] = await Promise.all([
+          notifyClosureParents(auth.schoolCode, period, reason),
+          notifyClosureStaff(auth.schoolCode, period, reason),
+        ]);
+        notified = !!jobId;
+      }
+      ResponseBuilder.ok({ ...result, notified }, callback);
     } catch (err: any) {
       ResponseBuilder.handleError(err, callback);
     }

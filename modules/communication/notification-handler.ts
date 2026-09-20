@@ -12,6 +12,7 @@ import { notificationService, NotifyRecipientType } from "./notification-service
 interface CreateNotificationBody {
   recipientType: NotifyRecipientType;
   recipientIds: string[];
+  all?: boolean;
   key?: string;
   title: string;
   body?: string;
@@ -61,15 +62,16 @@ class NotificationHandler {
       if (body.recipientType !== "employee" && body.recipientType !== "student") {
         return ResponseBuilder.badRequest(ErrorCode.InvalidInput, "recipientType must be employee or student", callback);
       }
-      if (!Array.isArray(body.recipientIds) || !body.recipientIds.length) {
-        return ResponseBuilder.badRequest(ErrorCode.InvalidInput, "recipientIds is required", callback);
+      if (!body.all && (!Array.isArray(body.recipientIds) || !body.recipientIds.length)) {
+        return ResponseBuilder.badRequest(ErrorCode.InvalidInput, "recipientIds is required (or set all:true)", callback);
       }
       if (!body.title) return ResponseBuilder.badRequest(ErrorCode.InvalidInput, "title is required", callback);
       const userId = event.requestContext?.authorizer?.principalId || "system";
       const result = await notificationService.create({
         schoolId,
         recipientType: body.recipientType,
-        recipientIds: body.recipientIds,
+        recipientIds: body.recipientIds || [],
+        all: body.all,
         key: body.key,
         title: body.title,
         body: body.body,

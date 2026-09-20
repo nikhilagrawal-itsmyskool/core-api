@@ -7,6 +7,7 @@ export interface CreateNotificationInput {
   schoolId: string;
   recipientType: NotifyRecipientType;
   recipientIds: string[];
+  all?: boolean; // when true, ignore recipientIds and target every active recipient of this type
   key?: string;
   title: string;
   body?: string;
@@ -36,7 +37,16 @@ class NotificationService {
   }
 
   async create(input: CreateNotificationInput): Promise<{ created: number }> {
-    const ids = [...new Set((input.recipientIds || []).filter(Boolean))];
+    let ids = [...new Set((input.recipientIds || []).filter(Boolean))];
+    // Broadcast: resolve every active employee/student of the school.
+    if (input.all) {
+      const table = input.recipientType === "employee" ? "employee" : "student";
+      const rows = await DB.query(
+        singleLineString`select uuid from ${table} where school_id = $1 and status = 'active'`,
+        [input.schoolId],
+      );
+      ids = rows.map((r: any) => r.uuid);
+    }
     if (!ids.length || !input.title) return { created: 0 };
     const now = new Date();
     for (const rid of ids) {
