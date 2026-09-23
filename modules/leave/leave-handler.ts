@@ -41,7 +41,7 @@ class LeaveHandler {
   public getHandover = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
     ctx.callbackWaitsForEmptyEventLoop = false;
     try {
-      const auth = await resolveSchool(event, callback);
+      const auth = await requireApprover(event, callback); // approver-only: reveals reason + handover
       if (!auth) return;
       const id = requireParam(event, "id", callback);
       if (!id) return;
@@ -55,7 +55,7 @@ class LeaveHandler {
   public getHandoverFile = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
     ctx.callbackWaitsForEmptyEventLoop = false;
     try {
-      const auth = await resolveSchool(event, callback);
+      const auth = await requireApprover(event, callback); // approver-only: lesson-plan / worksheet files
       if (!auth) return;
       const id = requireParam(event, "id", callback);
       const fileId = requireParam(event, "fileId", callback);
@@ -172,7 +172,7 @@ class LeaveHandler {
   public getAttachment = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
     ctx.callbackWaitsForEmptyEventLoop = false;
     try {
-      const auth = await resolveSchool(event, callback);
+      const auth = await requireApprover(event, callback); // approver-only: supporting doc (e.g. medical certificate)
       if (!auth) return;
       const id = requireParam(event, "id", callback);
       if (!id) return;
