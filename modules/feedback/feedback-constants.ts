@@ -33,6 +33,8 @@ export const CATEGORY_SEED: CategorySeed[] = [
   { name: "Attendance", sortOrder: 3 },
   { name: "Health", sortOrder: 4 },
   { name: "Fees", sortOrder: 5 },
+  { name: "Transport", sortOrder: 6 },
+  { name: "Office", sortOrder: 7 },
   { name: "Other", sortOrder: 9 },
 ];
 
