@@ -1523,10 +1523,11 @@ class ExaminationService {
       singleLineString`select uuid, name, sort_order, kind from exam_room where school_id = $1 and exam_id = $2 and status = 'active' order by sort_order asc nulls last, name`,
       [schoolId, examId],
     );
+    // Base plan only (exam_date null) — per-date overrides are read via getRoomsForDate.
     const allocs = await DB.query(
       singleLineString`select a.uuid, a.room_id, a.section_class_id, a.roll_from, a.roll_to, a.sort_order, c.name as section_name
         from exam_room_allocation a join class c on c.uuid = a.section_class_id
-        where a.school_id = $1 and a.exam_id = $2 and a.status = 'active'
+        where a.school_id = $1 and a.exam_id = $2 and a.status = 'active' and a.exam_date is null
         order by a.sort_order asc nulls last, c.name`,
       [schoolId, examId],
     );
@@ -1550,6 +1551,79 @@ class ExaminationService {
       examId,
       rooms: rooms.map((r: any) => ({ uuid: r.uuid, name: r.name, sortOrder: r.sortOrder, kind: r.kind || 'seating', hasImage: withImage.has(r.uuid), allocations: byRoom[r.uuid] || [] })),
     };
+  }
+
+  // Rooms with their allocations RESOLVED for one exam date: a room shows its date-specific
+  // override if it has one that day, else its base allocations. `hasOverride` flags rooms that
+  // carry an override; `dateHasCustom` says the day has any override at all (drives the
+  // "Customise this day" vs "Revert to base" UI). The base plan is untouched.
+  async getRoomsForDate(schoolId: string, examId: string, examDate: string): Promise<any> {
+    const base = await this.getRooms(schoolId, examId);
+    const dated = await DB.query(
+      singleLineString`select a.uuid, a.room_id, a.section_class_id, a.roll_from, a.roll_to, a.sort_order, c.name as section_name
+        from exam_room_allocation a join class c on c.uuid = a.section_class_id
+        where a.exam_id = $1 and a.status = 'active' and a.exam_date = $2
+        order by a.sort_order asc nulls last, c.name`,
+      [examId, examDate],
+    );
+    const byRoom: Record<string, any[]> = {};
+    for (const a of dated) {
+      (byRoom[a.roomId] ||= []).push({
+        uuid: a.uuid, sectionClassId: a.sectionClassId, sectionName: a.sectionName,
+        grade: gradeOf(a.sectionName), rollFrom: a.rollFrom, rollTo: a.rollTo,
+      });
+    }
+    const overridden = new Set(Object.keys(byRoom));
+    return {
+      examId, examDate, dateHasCustom: overridden.size > 0,
+      rooms: base.rooms.map((r: any) => ({
+        ...r,
+        hasOverride: overridden.has(r.uuid),
+        allocations: overridden.has(r.uuid) ? byRoom[r.uuid] : r.allocations,
+      })),
+    };
+  }
+
+  // Clone the base plan into date-specific rows for a day so it can be edited without touching
+  // the base. No-op if the day already has overrides.
+  async customiseSeatingDay(schoolId: string, examId: string, examDate: string, userId: string): Promise<any> {
+    await this.requireExam(schoolId, examId);
+    const existing = await DB.query(
+      singleLineString`select 1 from exam_room_allocation where exam_id = $1 and exam_date = $2 and status = 'active' limit 1`,
+      [examId, examDate],
+    );
+    if (!existing.length) {
+      const base = await DB.query(
+        singleLineString`select room_id, section_class_id, roll_from, roll_to, sort_order
+          from exam_room_allocation where exam_id = $1 and status = 'active' and exam_date is null`,
+        [examId],
+      );
+      const now = new Date();
+      const queries: string[] = [];
+      const params: any[][] = [];
+      for (const a of base) {
+        queries.push(
+          singleLineString`insert into exam_room_allocation
+            (uuid, school_id, exam_id, room_id, exam_date, section_class_id, roll_from, roll_to, sort_order, status, createdby_userid, created_at)
+            values ($1,$2,$3,$4,$5,$6,$7,$8,$9,'active',$10,$11)`,
+        );
+        params.push([generateShortUuid(12), schoolId, examId, a.roomId, examDate, a.sectionClassId, a.rollFrom, a.rollTo, a.sortOrder, userId, now]);
+      }
+      if (queries.length) await DB.queriesInTransaction(queries, params);
+      await this.audit(schoolId, examId, "room", "seating-customise-day", examDate, userId);
+    }
+    return this.getRoomsForDate(schoolId, examId, examDate);
+  }
+
+  // Drop a day's overrides — the day falls back to the base plan.
+  async revertSeatingDay(schoolId: string, examId: string, examDate: string, userId: string): Promise<any> {
+    await this.requireExam(schoolId, examId);
+    await DB.query(
+      singleLineString`update exam_room_allocation set status = 'deleted', updatedby_userid = $3, updated_at = $4 where exam_id = $1 and exam_date = $2 and status = 'active'`,
+      [examId, examDate, userId, new Date()],
+    );
+    await this.audit(schoolId, examId, "room", "seating-revert-day", examDate, userId);
+    return this.getRoomsForDate(schoolId, examId, examDate);
   }
 
   async saveRoom(schoolId: string, examId: string, body: { uuid?: string; name: string; sortOrder?: number }, userId: string): Promise<any> {
@@ -1586,8 +1660,9 @@ class ExaminationService {
     return this.getRooms(schoolId, examId);
   }
 
-  // Replace-all the allocations of one room.
-  async saveRoomAllocations(schoolId: string, examId: string, roomId: string, allocations: any[], userId: string): Promise<any> {
+  // Replace-all the allocations of one room. examDate null → the base plan; a date → that
+  // room's override for that day only (base and other days untouched).
+  async saveRoomAllocations(schoolId: string, examId: string, roomId: string, allocations: any[], userId: string, examDate: string | null = null): Promise<any> {
     await this.requireExam(schoolId, examId);
     const room = await this.roomById(schoolId, examId, roomId);
     if (!room) throw new BusinessErrorResult(ErrorCode.BusinessError, "Room not found");
@@ -1601,21 +1676,27 @@ class ExaminationService {
       }))
       .filter((a) => a.sectionClassId);
     const now = new Date();
-    const queries: string[] = [
-      singleLineString`update exam_room_allocation set status = 'deleted', updatedby_userid = $3, updated_at = $4 where room_id = $1 and exam_id = $2 and status = 'active'`,
-    ];
-    const params: any[][] = [[roomId, examId, userId, now]];
+    const queries: string[] = [];
+    const params: any[][] = [];
+    // Clear only the target layer so base and per-date overrides never clobber each other.
+    if (examDate) {
+      queries.push(singleLineString`update exam_room_allocation set status = 'deleted', updatedby_userid = $3, updated_at = $4 where room_id = $1 and exam_id = $2 and status = 'active' and exam_date = $5`);
+      params.push([roomId, examId, userId, now, examDate]);
+    } else {
+      queries.push(singleLineString`update exam_room_allocation set status = 'deleted', updatedby_userid = $3, updated_at = $4 where room_id = $1 and exam_id = $2 and status = 'active' and exam_date is null`);
+      params.push([roomId, examId, userId, now]);
+    }
     for (const a of clean) {
       queries.push(
         singleLineString`insert into exam_room_allocation
-          (uuid, school_id, exam_id, room_id, section_class_id, roll_from, roll_to, sort_order, status, createdby_userid, created_at)
-          values ($1,$2,$3,$4,$5,$6,$7,$8,'active',$9,$10)`,
+          (uuid, school_id, exam_id, room_id, exam_date, section_class_id, roll_from, roll_to, sort_order, status, createdby_userid, created_at)
+          values ($1,$2,$3,$4,$5,$6,$7,$8,$9,'active',$10,$11)`,
       );
-      params.push([generateShortUuid(12), schoolId, examId, roomId, a.sectionClassId, a.rollFrom, a.rollTo, a.sortOrder, userId, now]);
+      params.push([generateShortUuid(12), schoolId, examId, roomId, examDate, a.sectionClassId, a.rollFrom, a.rollTo, a.sortOrder, userId, now]);
     }
     await DB.queriesInTransaction(queries, params);
-    await this.audit(schoolId, examId, "room", "allocations", `${room.name}: ${clean.length} row(s)`, userId);
-    return this.getRooms(schoolId, examId);
+    await this.audit(schoolId, examId, "room", "allocations", `${room.name}${examDate ? ` @${examDate}` : ""}: ${clean.length} row(s)`, userId);
+    return examDate ? this.getRoomsForDate(schoolId, examId, examDate) : this.getRooms(schoolId, examId);
   }
 
   // Clone another exam's rooms+allocations into this one (replaces any existing scheme).
@@ -1665,13 +1746,34 @@ class ExaminationService {
     for (const r of paperRows) (gradesByDate[r.examDate] ||= []).push(r.grade);
     const dates = Object.keys(gradesByDate).sort();
 
-    // A seating room is active on a date if any of its allocated sections has a paper that day.
-    // The AV room (kind='av') is a holding room — active on EVERY exam date.
+    // A seating room is active on a date if any section in its RESOLVED layout for that day (a
+    // date-specific override if present, else the base plan) has a paper that day. The AV room
+    // (kind='av') is a holding room — active on EVERY exam date. Load base + overrides once and
+    // resolve per (room, date) in memory.
+    const allAllocs = await DB.query(
+      singleLineString`select a.room_id, to_char(a.exam_date, 'YYYY-MM-DD') as exam_date, c.name as section_name
+        from exam_room_allocation a join class c on c.uuid = a.section_class_id
+        where a.exam_id = $1 and a.status = 'active'`,
+      [examId],
+    );
+    const baseGrades: Record<string, Set<string>> = {};
+    const datedGrades: Record<string, Record<string, Set<string>>> = {};
+    for (const a of allAllocs) {
+      const g = gradeOf(a.sectionName);
+      if (a.examDate) ((datedGrades[a.roomId] ||= {})[a.examDate] ||= new Set()).add(g);
+      else (baseGrades[a.roomId] ||= new Set()).add(g);
+    }
+    const gradesForRoomDate = (roomId: string, d: string): Set<string> => {
+      const dd = datedGrades[roomId]?.[d];
+      return dd && dd.size ? dd : (baseGrades[roomId] || new Set());
+    };
     const avRoomIds = rooms.filter((rm: any) => rm.kind === 'av').map((rm: any) => rm.uuid);
     const activeByDate: Record<string, string[]> = {};
     for (const d of dates) {
       const gset = new Set(gradesByDate[d]);
-      const seatingActive = rooms.filter((rm: any) => rm.kind !== 'av' && (rm.allocations || []).some((a: any) => gset.has(a.grade))).map((rm: any) => rm.uuid);
+      const seatingActive = rooms
+        .filter((rm: any) => rm.kind !== 'av' && [...gradesForRoomDate(rm.uuid, d)].some((g) => gset.has(g)))
+        .map((rm: any) => rm.uuid);
       activeByDate[d] = [...seatingActive, ...avRoomIds];
     }
 
@@ -1897,15 +1999,31 @@ class ExaminationService {
     return rows;
   }
 
-  // Resolve who sits in a room on a date: for each allocated section that has a paper that
-  // day, the students in its roll-range (or the whole section as a fallback).
-  private async roomOccupants(schoolId: string, exam: any, roomId: string, examDate: string): Promise<any[]> {
-    const allocs = await DB.query(
+  // The allocations that apply to (room, date): the room's date-specific overrides if any
+  // exist for that day, else its base (exam_date null) rows. This is the single resolution
+  // point for per-date seating layouts.
+  private async allocationsFor(examId: string, roomId: string, examDate: string): Promise<any[]> {
+    const dated = await DB.query(
       singleLineString`select a.section_class_id, a.roll_from, a.roll_to, c.name as section_name
         from exam_room_allocation a join class c on c.uuid = a.section_class_id
-        where a.room_id = $1 and a.status = 'active' order by a.sort_order asc nulls last, c.name`,
-      [roomId],
+        where a.room_id = $1 and a.exam_id = $2 and a.status = 'active' and a.exam_date = $3
+        order by a.sort_order asc nulls last, c.name`,
+      [roomId, examId, examDate],
     );
+    if (dated.length) return dated;
+    return DB.query(
+      singleLineString`select a.section_class_id, a.roll_from, a.roll_to, c.name as section_name
+        from exam_room_allocation a join class c on c.uuid = a.section_class_id
+        where a.room_id = $1 and a.exam_id = $2 and a.status = 'active' and a.exam_date is null
+        order by a.sort_order asc nulls last, c.name`,
+      [roomId, examId],
+    );
+  }
+
+  // Resolve who sits in a room on a date: for each allocated section (date-override or base)
+  // that has a paper that day, the students in its roll-range (or the whole section fallback).
+  private async roomOccupants(schoolId: string, exam: any, roomId: string, examDate: string): Promise<any[]> {
+    const allocs = await this.allocationsFor(exam.uuid, roomId, examDate);
     const occ: any[] = [];
     for (const a of allocs) {
       const grade = gradeOf(a.sectionName);

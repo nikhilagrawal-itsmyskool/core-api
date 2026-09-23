@@ -556,6 +556,58 @@ describe("examination: phase 4 — seating rooms", () => {
     await put(`/examinations/${examId}/relievers/date/${D1}`, { employeeIds: [] }); // cleanup
   });
 
+  sectionIt("per-date seating override: a room with no base plan activates for one day only", async () => {
+    // A fresh room with NO base allocation is inactive on D1 (nobody sits there by default).
+    const r = await post(`/examinations/${examId}/rooms`, { name: "OverrideRoom", sortOrder: 7 });
+    const rid = r.body.rooms.find((x: any) => x.name === "OverrideRoom").uuid;
+    try {
+      const grid0 = await get(`/examinations/${examId}/room-invigilators`);
+      expect((grid0.body.activeByDate?.[D1] || [])).not.toContain(rid);
+
+      // Add a DATE-SPECIFIC override for D1 only (the sample section sits on D1).
+      const save = await put(`/examinations/${examId}/rooms/${rid}/allocations`, {
+        examDate: D1, allocations: [{ sectionClassId: section!.sectionClassId, rollFrom: 1, rollTo: 999 }],
+      });
+      expect(save.status).toBe(200);
+      expect(save.body.examDate).toBe(D1);
+      const rmDated = save.body.rooms.find((x: any) => x.uuid === rid);
+      expect(rmDated.hasOverride).toBe(true);
+      expect(rmDated.allocations.length).toBe(1);
+
+      // Now the room is active on D1 (override took effect)…
+      const grid1 = await get(`/examinations/${examId}/room-invigilators`);
+      expect((grid1.body.activeByDate?.[D1] || [])).toContain(rid);
+      // …its roster resolves the override's students…
+      const roster = await get(`/examinations/${examId}/room-rosters/${rid}/${D1}`);
+      expect(roster.body.sections.reduce((n: number, s: any) => n + s.students.length, 0)).toBeGreaterThan(0);
+      // …but the BASE plan is untouched (no override date → empty).
+      const baseRooms = await get(`/examinations/${examId}/rooms`);
+      expect(baseRooms.body.rooms.find((x: any) => x.uuid === rid).allocations.length).toBe(0);
+
+      // Revert the day → the room drops back to inactive (base is still empty).
+      const rev = await post(`/examinations/${examId}/seating/date/${D1}/revert`, {});
+      expect(rev.status).toBe(200);
+      const grid2 = await get(`/examinations/${examId}/room-invigilators`);
+      expect((grid2.body.activeByDate?.[D1] || [])).not.toContain(rid);
+    } finally {
+      await del(`/examinations/${examId}/rooms/${rid}`);
+    }
+  });
+
+  sectionIt("per-date seating: Customise this day clones the base plan into editable date rows", async () => {
+    const day = await get(`/examinations/${examId}/rooms/date/${D1}`);
+    expect(day.status).toBe(200);
+    expect(day.body.dateHasCustom).toBe(false); // no overrides yet
+    // roomId has a base allocation (from an earlier test) → it should carry into the clone.
+    const cust = await post(`/examinations/${examId}/seating/date/${D1}/customise`, {});
+    expect(cust.status).toBe(200);
+    expect(cust.body.dateHasCustom).toBe(true);
+    expect(cust.body.rooms.find((x: any) => x.uuid === roomId).hasOverride).toBe(true);
+    // Revert to leave the shared exam state clean for later tests.
+    const rev = await post(`/examinations/${examId}/seating/date/${D1}/revert`, {});
+    expect(rev.body.dateHasCustom).toBe(false);
+  });
+
   sectionIt("room image: upload, read back, and it appears on the room roster", async () => {
     const up = await put(`/examinations/${examId}/rooms/${roomId}/image`, { imageBase64: TINY_PNG, mimeType: "image/png", fileName: "room.png" });
     expect(up.status).toBe(200);

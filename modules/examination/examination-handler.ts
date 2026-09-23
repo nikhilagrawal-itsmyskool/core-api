@@ -659,6 +659,45 @@ class ExaminationHandler {
     } catch (err: any) { ResponseBuilder.handleError(err, callback); }
   };
 
+  // GET /examinations/{id}/rooms/date/{date} — rooms with allocations resolved for one day.
+  public getRoomsForDate = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const auth = await resolveSchool(event, callback);
+      if (!auth) return;
+      const id = requireParam(event, "id", callback);
+      const date = requireParam(event, "date", callback);
+      if (!id || !date) return;
+      ResponseBuilder.ok(await examinationService.getRoomsForDate(auth.schoolId, id, date), callback);
+    } catch (err: any) { ResponseBuilder.handleError(err, callback); }
+  };
+
+  // POST /examinations/{id}/seating/date/{date}/customise — clone base plan into this day.
+  public customiseSeatingDay = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const auth = await resolveSchool(event, callback);
+      if (!auth) return;
+      const id = requireParam(event, "id", callback);
+      const date = requireParam(event, "date", callback);
+      if (!id || !date) return;
+      ResponseBuilder.ok(await examinationService.customiseSeatingDay(auth.schoolId, id, date, auth.userId), callback);
+    } catch (err: any) { ResponseBuilder.handleError(err, callback); }
+  };
+
+  // POST /examinations/{id}/seating/date/{date}/revert — drop this day's overrides.
+  public revertSeatingDay = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const auth = await resolveSchool(event, callback);
+      if (!auth) return;
+      const id = requireParam(event, "id", callback);
+      const date = requireParam(event, "date", callback);
+      if (!id || !date) return;
+      ResponseBuilder.ok(await examinationService.revertSeatingDay(auth.schoolId, id, date, auth.userId), callback);
+    } catch (err: any) { ResponseBuilder.handleError(err, callback); }
+  };
+
   // POST /examinations/{id}/rooms { uuid?, name, sortOrder? }
   public saveRoom = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
     ctx.callbackWaitsForEmptyEventLoop = false;
@@ -695,9 +734,10 @@ class ExaminationHandler {
       const id = requireParam(event, "id", callback);
       const roomId = requireParam(event, "roomId", callback);
       if (!id || !roomId) return;
-      const body = parseBody<{ allocations: any[] }>(event, callback);
+      const body = parseBody<{ allocations: any[]; examDate?: string }>(event, callback);
       if (!body) return;
-      ResponseBuilder.ok(await examinationService.saveRoomAllocations(auth.schoolId, id, roomId, body.allocations || [], auth.userId), callback);
+      // examDate present → save this room's override for that day; absent → the base plan.
+      ResponseBuilder.ok(await examinationService.saveRoomAllocations(auth.schoolId, id, roomId, body.allocations || [], auth.userId, body.examDate || null), callback);
     } catch (err: any) { ResponseBuilder.handleError(err, callback); }
   };
 
@@ -1050,9 +1090,12 @@ export const markClassAttendance = guard(ACTIONS.EXAM_MANAGE, h.markClassAttenda
 
 // Phase 4 — seating rooms (admin CRUD + assignment + sign-any, guarded).
 export const getRooms = guard(ACTIONS.EXAM_VIEW, h.getRooms);
+export const getRoomsForDate = guard(ACTIONS.EXAM_VIEW, h.getRoomsForDate);
 export const saveRoom = guard(ACTIONS.EXAM_MANAGE, h.saveRoom);
 export const deleteRoom = guard(ACTIONS.EXAM_MANAGE, h.deleteRoom);
 export const saveRoomAllocations = guard(ACTIONS.EXAM_MANAGE, h.saveRoomAllocations);
+export const customiseSeatingDay = guard(ACTIONS.EXAM_MANAGE, h.customiseSeatingDay);
+export const revertSeatingDay = guard(ACTIONS.EXAM_MANAGE, h.revertSeatingDay);
 export const copyRooms = guard(ACTIONS.EXAM_MANAGE, h.copyRooms);
 export const getRoomInvigilators = guard(ACTIONS.EXAM_VIEW, h.getRoomInvigilators);
 export const saveRoomInvigilatorsForDate = guard(ACTIONS.EXAM_MANAGE, h.saveRoomInvigilatorsForDate);

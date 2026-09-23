@@ -296,10 +296,19 @@ create table if not exists exam_room_allocation (
     updatedby_userid varchar(12),
     updated_at timestamp(0)
 );
+-- Per-date seating override: a room's allocation normally applies to EVERY exam date
+-- (exam_date null = the base plan). A row with a specific exam_date overrides that room's
+-- seating for that one day only — so a day with a different layout (e.g. the last day, when
+-- some grades are done and students are merged into fewer rooms) can be captured without
+-- disturbing the base plan. Resolution per (room, date): use the room's date-specific rows if
+-- any exist for that date, else its base (null) rows.
+alter table exam_room_allocation add column if not exists exam_date date;
 create index if not exists idx_exam_room_alloc_room
     on exam_room_allocation(school_id, room_id, status);
 create index if not exists idx_exam_room_alloc_exam
     on exam_room_allocation(school_id, exam_id, status);
+create index if not exists idx_exam_room_alloc_room_date
+    on exam_room_allocation(room_id, exam_date, status);
 
 -- exam_room_invigilator: invigilator(s) assigned to a room for one exam day. MULTIPLE active
 -- invigilators per (room, date) are allowed (Phase 5: shift hand-offs) — each may carry a

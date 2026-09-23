@@ -356,6 +356,33 @@
           method: get
           cors: true
 
+  get-rooms-for-date:
+    handler: examination-handler.getRoomsForDate
+    name: ${self:service}-get-rooms-for-date
+    events:
+      - http:
+          path: examinations/{id}/rooms/date/{date}
+          method: get
+          cors: true
+
+  customise-seating-day:
+    handler: examination-handler.customiseSeatingDay
+    name: ${self:service}-customise-seating-day
+    events:
+      - http:
+          path: examinations/{id}/seating/date/{date}/customise
+          method: post
+          cors: true
+
+  revert-seating-day:
+    handler: examination-handler.revertSeatingDay
+    name: ${self:service}-revert-seating-day
+    events:
+      - http:
+          path: examinations/{id}/seating/date/{date}/revert
+          method: post
+          cors: true
+
   save-room:
     handler: examination-handler.saveRoom
     name: ${self:service}-save-room
