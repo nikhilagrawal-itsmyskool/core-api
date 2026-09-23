@@ -449,6 +449,8 @@ class LeaveService {
     const auditDetail = overridden ? `OVERRIDE: ${warnings.join(" ")}${overrideReason ? ` — ${overrideReason}` : ""}`.slice(0, 256) : null;
     await this.audit(schoolId, id, overridden ? "override" : "approve", auditDetail, "pending", "approved", userId);
     await this.notifyDecision(schoolId, id, app.employeeId, NOTIFY.APPROVED, "Leave approved", type?.name, app.fromDate, app.toDate);
+    // Forward the academic handover to any covering teachers the applicant named per class.
+    await this.notifySubstitutes(schoolId, id, app.employeeId, app.fromDate, app.toDate);
     const application = (await this.getApplication(schoolId, id))!;
     return { needsConfirmation: false, application, overridden };
   }
@@ -609,6 +611,38 @@ class LeaveService {
     if (!code) return;
     const range = from === to ? from : `${from} to ${to}`;
     await notifyInApp(code, "employee", [employeeId], key, title, `Your ${typeName || "leave"} (${range}) was ${title.toLowerCase().includes("approv") ? "approved" : "rejected"}`, { entityType: FILE_ENTITY_TYPE, entityId: id });
+  }
+
+  // On approval, ping each teacher the applicant named to cover a class (from the handover
+  // topics). Informational only — the substitute just gets a deep link to the read-only
+  // handover (topic + lesson plan + worksheets, served from the existing file_storage rows;
+  // nothing is copied). Grouped so one teacher covering two classes gets a single notification.
+  private async notifySubstitutes(schoolId: string, id: string, applicantId: string, from: string, to: string): Promise<void> {
+    const code = await this.schoolCode(schoolId);
+    if (!code) return;
+    const rows = await DB.query(
+      singleLineString`select topics from leave_handover where school_id = $1 and application_id = $2`,
+      [schoolId, id],
+    );
+    if (!rows.length) return;
+    const topics: any[] = Array.isArray(rows[0].topics) ? rows[0].topics : [];
+    const bySub = new Map<string, string[]>();
+    for (const t of topics) {
+      if (t && t.substituteId) {
+        const label = `${t.className || "a class"}${t.subjectName ? ` · ${t.subjectName}` : ""}`;
+        const arr = bySub.get(t.substituteId) || [];
+        arr.push(label);
+        bySub.set(t.substituteId, arr);
+      }
+    }
+    if (!bySub.size) return;
+    const applicant = await this.employeeName(schoolId, applicantId);
+    const range = from === to ? from : `${from} to ${to}`;
+    for (const [subId, classes] of bySub) {
+      await notifyInApp(code, "employee", [subId], NOTIFY.COVERING, "You're covering a class",
+        `${applicant} is on leave (${range}). You're covering ${classes.join(", ")}. Lesson plan & worksheet attached.`,
+        { entityType: "leave_covering", entityId: id });
+    }
   }
 }
 

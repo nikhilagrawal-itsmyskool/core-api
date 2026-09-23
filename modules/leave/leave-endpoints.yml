@@ -322,3 +322,32 @@
           path: me/applications/{id}/attachment
           method: get
           cors: true
+
+  me-covering:
+    handler: leave-me-handler.covering
+    name: ${self:service}-me-covering
+    events:
+      - http:
+          path: me/covering
+          method: get
+          cors: true
+
+  me-get-covering:
+    handler: leave-me-handler.getCovering
+    name: ${self:service}-me-get-covering
+    events:
+      - http:
+          path: me/covering/{id}
+          method: get
+          cors: true
+
+  me-get-covering-file:
+    handler: leave-me-handler.getCoveringFile
+    name: ${self:service}-me-get-covering-file
+    memorySize: 512
+    timeout: 20
+    events:
+      - http:
+          path: me/covering/{id}/file/{fileId}
+          method: get
+          cors: true

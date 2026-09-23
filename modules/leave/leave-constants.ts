@@ -25,6 +25,7 @@ export const NOTIFY = {
   APPROVED: "leave_approved",     // -> applicant
   REJECTED: "leave_rejected",     // -> applicant
   CANCELLED: "leave_cancelled",   // -> applicant (self-serve confirm)
+  COVERING: "leave_covering",     // -> substitute teacher on approval (handover forward)
 } as const;
 
 // Roles that may approve/reject + see oversight (staff records, reports, config).

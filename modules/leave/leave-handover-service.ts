@@ -144,6 +144,38 @@ class LeaveHandoverService {
     };
   }
 
+  // Is this teacher named to cover a class on this (approved) leave? Guards the /me/covering reads.
+  async isSubstitute(schoolId: string, applicationId: string, employeeId: string): Promise<boolean> {
+    const rows = await DB.query(
+      singleLineString`select 1 from leave_handover h join leave_application a on a.uuid = h.application_id and a.school_id = h.school_id
+        where h.school_id = $1 and h.application_id = $2 and a.status = 'approved' and h.topics @> $3::jsonb limit 1`,
+      [schoolId, applicationId, JSON.stringify([{ substituteId: employeeId }])],
+    );
+    return rows.length > 0;
+  }
+
+  // Approved leaves (not fully past) where this teacher is named to cover a class — the
+  // "Classes I'm covering" list. `today` is the IST calendar day (from the handler).
+  async listCovering(schoolId: string, employeeId: string, today: string): Promise<any[]> {
+    const rows = await DB.query(
+      singleLineString`select a.uuid as application_id, a.employee_id, a.from_date::text as from_date, a.to_date::text as to_date,
+          a.leave_type_code, e.name as applicant_name, h.topics
+        from leave_handover h join leave_application a on a.uuid = h.application_id and a.school_id = h.school_id
+        left join employee e on e.uuid = a.employee_id and e.school_id = a.school_id
+        where h.school_id = $1 and a.status = 'approved' and a.to_date >= $2 and h.topics @> $3::jsonb
+        order by a.from_date`,
+      [schoolId, today, JSON.stringify([{ substituteId: employeeId }])],
+    );
+    return rows.map((r: any) => ({
+      applicationId: r.applicationId,
+      applicantName: r.applicantName || null,
+      fromDate: r.fromDate,
+      toDate: r.toDate,
+      leaveTypeCode: r.leaveTypeCode,
+      myClasses: (Array.isArray(r.topics) ? r.topics : []).filter((t: any) => t && t.substituteId === employeeId),
+    }));
+  }
+
   // Fetch one handover file as a data URI (Approvals "view").
   async getFile(schoolId: string, applicationId: string, fileId: string): Promise<any | null> {
     const rows = await DB.query(

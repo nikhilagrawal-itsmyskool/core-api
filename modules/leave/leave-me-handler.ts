@@ -158,6 +158,67 @@ class LeaveMeHandler {
       ResponseBuilder.handleError(err, callback);
     }
   };
+
+  // GET /leave/me/covering — approved leaves (not past) where I'm named to cover a class.
+  public covering = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const emp = resolveEmployee(event, callback);
+      if (!emp) return;
+      ResponseBuilder.ok(await leaveHandoverService.listCovering(emp.schoolId, emp.employeeId, istToday()), callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
+  // GET /leave/me/covering/{id} — the handover I'm covering (topic + lesson plan + files).
+  public getCovering = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const emp = resolveEmployee(event, callback);
+      if (!emp) return;
+      const id = requireParam(event, "id", callback);
+      if (!id) return;
+      if (!(await leaveHandoverService.isSubstitute(emp.schoolId, id, emp.employeeId))) {
+        return ResponseBuilder.notFound(ErrorCode.InvalidId, "Not found", callback);
+      }
+      const handover = await leaveHandoverService.getForApplication(emp.schoolId, id);
+      const app = await leaveService.getApplication(emp.schoolId, id);
+      const myClasses = ((handover?.topics as any[]) || []).filter((t) => t && t.substituteId === emp.employeeId);
+      ResponseBuilder.ok({
+        applicationId: id,
+        applicantName: app?.employeeName || null,
+        fromDate: app?.fromDate || null,
+        toDate: app?.toDate || null,
+        leaveTypeCode: app?.leaveTypeCode || null,
+        myClasses,
+        handover,
+      }, callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
+  // GET /leave/me/covering/{id}/file/{fileId} — a lesson plan / worksheet file, scoped to a substitute.
+  public getCoveringFile = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const emp = resolveEmployee(event, callback);
+      if (!emp) return;
+      const id = requireParam(event, "id", callback);
+      if (!id) return;
+      const fileId = requireParam(event, "fileId", callback);
+      if (!fileId) return;
+      if (!(await leaveHandoverService.isSubstitute(emp.schoolId, id, emp.employeeId))) {
+        return ResponseBuilder.notFound(ErrorCode.InvalidId, "Not found", callback);
+      }
+      const f = await leaveHandoverService.getFile(emp.schoolId, id, fileId);
+      if (!f) return ResponseBuilder.notFound(ErrorCode.InvalidId, "File not found", callback);
+      ResponseBuilder.ok(f, callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
 }
 
 const h = new LeaveMeHandler();
@@ -170,3 +231,6 @@ export const cancel = h.cancel;
 export const attendance = h.attendance;
 export const deductions = h.deductions;
 export const getAttachment = h.getAttachment;
+export const covering = h.covering;
+export const getCovering = h.getCovering;
+export const getCoveringFile = h.getCoveringFile;
