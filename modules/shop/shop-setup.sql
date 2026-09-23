@@ -72,12 +72,17 @@ create index if not exists idx_shop_purchase_log_batch on shop_purchase_log(batc
 create index if not exists idx_shop_purchase_log_school on shop_purchase_log(school_id, status);
 create index if not exists idx_shop_purchase_log_item on shop_purchase_log(item_id);
 
--- Table 4: shop_set (class sets)
+-- Table 4: shop_set (grade sets)
+-- A set is the recipe + price list for one grade in one session. The school buys
+-- pre-assembled sets from an external party (see shop_set_intake) and assigns a
+-- whole set to a student (see shop_sale). Keyed by grade ('I'..'X','Nursery',
+-- 'LKG','UKG' - the class name with the "-<section>" dropped), not class_no.
 create table if not exists shop_set (
     uuid varchar(12) primary key,
     school_id varchar(12) not null,
     name varchar(128) not null,
-    class_no smallint not null,
+    class_no smallint,
+    grade varchar(16),
     academic_session varchar(16) not null,
     description varchar(512),
     status varchar(16) not null check (status in ('active', 'deleted')),
@@ -87,11 +92,19 @@ create table if not exists shop_set (
     updated_at timestamp(0)
 );
 
-create index if not exists idx_shop_set_school_id on shop_set(school_id, status);
-create index if not exists idx_shop_set_class_session on shop_set(school_id, class_no, academic_session);
-create unique index if not exists idx_shop_set_class_session_unique on shop_set(school_id, class_no, academic_session) where status = 'active';
+-- Migrate the legacy class_no key to the grade key (additive, idempotent).
+alter table shop_set add column if not exists grade varchar(16);
+alter table shop_set alter column class_no drop not null;
 
--- Table 5: shop_set_item (items within a class set)
+create index if not exists idx_shop_set_school_id on shop_set(school_id, status);
+create index if not exists idx_shop_set_grade_session on shop_set(school_id, grade, academic_session);
+create unique index if not exists idx_shop_set_grade_session_unique on shop_set(school_id, grade, academic_session) where status = 'active' and grade is not null;
+
+-- Table 5: shop_set_item (recipe line within a set)
+-- Price lives HERE, not on the catalog item: the same physical item can be priced
+-- differently in different grade sets. mrp = unit list price, discount_pct = 0..100
+-- (books usually 0, stationery 10/20/30), quantity = units of this line per set.
+-- Line price = quantity * mrp * (1 - discount_pct/100); set price = sum of lines.
 create table if not exists shop_set_item (
     uuid varchar(12) primary key,
     set_id varchar(12) not null,
@@ -99,14 +112,69 @@ create table if not exists shop_set_item (
     item_id varchar(12) not null,
     section varchar(16) not null check (section in ('main', 'additional', 'other')),
     quantity integer not null,
+    mrp decimal(10,2),
+    discount_pct decimal(5,2),
     sort_order integer,
     status varchar(16) not null check (status in ('active', 'deleted')),
     createdby_userid varchar(12),
     created_at timestamp(0)
 );
 
+alter table shop_set_item add column if not exists mrp decimal(10,2);
+alter table shop_set_item add column if not exists discount_pct decimal(5,2);
+
 create index if not exists idx_shop_set_item_set_id on shop_set_item(set_id);
 create index if not exists idx_shop_set_item_school on shop_set_item(school_id, status);
+
+-- Table 5b: shop_set_intake (procurement - sets received from an external party)
+-- Stock unit is the SET. received = sum(qty_sets); assigned = count of active
+-- shop_sale rows for the set; remaining = received - assigned. unit_cost is
+-- nullable (filled in later; v1 leaves it blank / assumes cost == set price).
+create table if not exists shop_set_intake (
+    uuid varchar(12) primary key,
+    school_id varchar(12) not null,
+    set_id varchar(12) not null,
+    grade varchar(16) not null,
+    academic_session varchar(16) not null,
+    qty_sets integer not null,
+    unit_cost decimal(10,2),
+    supplier varchar(128),
+    intake_date date not null,
+    notes varchar(512),
+    status varchar(16) not null check (status in ('active', 'deleted')),
+    createdby_userid varchar(12),
+    created_at timestamp(0),
+    updatedby_userid varchar(12),
+    updated_at timestamp(0)
+);
+
+create index if not exists idx_shop_set_intake_set on shop_set_intake(set_id, status);
+create index if not exists idx_shop_set_intake_school on shop_set_intake(school_id, status);
+create index if not exists idx_shop_set_intake_grade on shop_set_intake(school_id, grade, academic_session);
+
+-- Table 5c: shop_loose_movement (the "loose box" - leftovers from declined items)
+-- When a set is assigned but the student declines some lines, those items drop
+-- into the loose box (qty > 0, reason 'decline'). Loose on-hand per item =
+-- sum(qty). Negative qty records taking items back out (issued to another
+-- student, returned to vendor, written off, or a manual adjustment).
+create table if not exists shop_loose_movement (
+    uuid varchar(12) primary key,
+    school_id varchar(12) not null,
+    item_id varchar(12) not null,
+    academic_session varchar(16),
+    grade varchar(16),
+    qty integer not null,
+    reason varchar(24) not null check (reason in ('decline', 'issue', 'return_vendor', 'writeoff', 'adjust')),
+    ref_sale_id varchar(12),
+    note varchar(512),
+    status varchar(16) not null check (status in ('active', 'deleted')),
+    createdby_userid varchar(12),
+    created_at timestamp(0)
+);
+
+create index if not exists idx_shop_loose_school on shop_loose_movement(school_id, status);
+create index if not exists idx_shop_loose_item on shop_loose_movement(item_id, status);
+create index if not exists idx_shop_loose_session on shop_loose_movement(school_id, academic_session, status);
 
 -- Table 6: shop_sale (sale/bill header)
 create table if not exists shop_sale (

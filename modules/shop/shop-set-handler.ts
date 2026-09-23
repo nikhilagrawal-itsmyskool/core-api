@@ -6,6 +6,13 @@ import { shopItemService } from './shop-item-service';
 import { shopSetService } from './shop-set-service';
 import { SECTION_VALUES } from './shop-constants';
 
+// "I-A" -> "I"; a name without a hyphen is its own grade (matches parseGrade).
+function parseGrade(name: string): string {
+  const n = (name || '').trim();
+  const idx = n.lastIndexOf('-');
+  return idx <= 0 ? n : n.slice(0, idx).trim();
+}
+
 class ShopSetHandler {
   public create = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
     _context.callbackWaitsForEmptyEventLoop = false;
@@ -15,10 +22,9 @@ class ShopSetHandler {
       if (!schoolId) { ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'Invalid school code', callback); return; }
 
       const body = JSON.parse(event.body || '{}');
-      if (!body.name) { ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'name is required', callback); return; }
-      if (!body.classNo || body.classNo < 1 || body.classNo > 12) {
-        ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'classNo (1-12) is required', callback); return;
-      }
+      // Accept grade directly, or derive it from a class name (drops the section).
+      if (!body.grade && body.className) body.grade = parseGrade(body.className);
+      if (!body.grade) { ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'grade is required', callback); return; }
       if (!body.academicSession) { ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'academicSession is required', callback); return; }
 
       for (const item of (body.items || [])) {
@@ -50,10 +56,46 @@ class ShopSetHandler {
 
       const q = event.queryStringParameters || {};
       const results = await shopSetService.listSets(schoolId, {
-        classNo: q.classNo ? parseInt(q.classNo, 10) : undefined,
+        grade: q.grade,
         academicSession: q.academicSession,
       });
       ResponseBuilder.ok(results, callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
+  public getStock = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
+    _context.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const schoolCode = validateSchoolCodeHeader(event);
+      const schoolId = await shopItemService.getSchoolIdByCode(schoolCode);
+      if (!schoolId) { ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'Invalid school code', callback); return; }
+
+      const id = event.pathParameters?.id;
+      if (!id) { ResponseBuilder.badRequest(ErrorCode.MissingId, 'Set ID is required', callback); return; }
+
+      const result = await shopSetService.getSetStock(id, schoolId);
+      if (!result) { ResponseBuilder.notFound(ErrorCode.InvalidId, 'Set not found', callback); return; }
+      ResponseBuilder.ok(result, callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
+  public listLoose = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
+    _context.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const schoolCode = validateSchoolCodeHeader(event);
+      const schoolId = await shopItemService.getSchoolIdByCode(schoolCode);
+      if (!schoolId) { ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'Invalid school code', callback); return; }
+
+      const q = event.queryStringParameters || {};
+      const result = await shopSetService.listLoose(schoolId, {
+        grade: q.grade,
+        academicSession: q.academicSession,
+      });
+      ResponseBuilder.ok(result, callback);
     } catch (err: any) {
       ResponseBuilder.handleError(err, callback);
     }
@@ -131,5 +173,7 @@ const handler = new ShopSetHandler();
 export const create = handler.create;
 export const list = handler.list;
 export const getById = handler.getById;
+export const getStock = handler.getStock;
+export const listLoose = handler.listLoose;
 export const update = handler.update;
 export const remove = handler.remove;

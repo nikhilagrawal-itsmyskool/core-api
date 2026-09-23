@@ -3,7 +3,7 @@ import { ResponseBuilder } from '../../shared/lib/response-builder';
 import { ErrorCode } from '../../shared/lib/error-codes';
 import { validateSchoolCodeHeader } from '../auth/auth-utils';
 import { shopItemService } from './shop-item-service';
-import { shopSaleService } from './shop-sale-service';
+import { shopSaleService, SetAlreadyAssignedError } from './shop-sale-service';
 
 function isValidDate(s: string): boolean {
   return /^\d{4}-\d{2}-\d{2}$/.test(s) && !isNaN(Date.parse(s));
@@ -52,6 +52,41 @@ class ShopSaleHandler {
     }
   };
 
+  // Assign a whole set to a student (the primary flow), minus declined lines.
+  public assign = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
+    _context.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const schoolCode = validateSchoolCodeHeader(event);
+      const schoolId = await shopItemService.getSchoolIdByCode(schoolCode);
+      if (!schoolId) { ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'Invalid school code', callback); return; }
+
+      const body = JSON.parse(event.body || '{}');
+      if (!body.studentId) { ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'studentId is required', callback); return; }
+      if (!body.setId) { ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'setId is required', callback); return; }
+      if (!body.saleDate || !isValidDate(body.saleDate)) {
+        ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'saleDate is required (YYYY-MM-DD)', callback); return;
+      }
+      if (body.amountPaid == null || body.amountPaid < 0) {
+        ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'amountPaid is required', callback); return;
+      }
+      if (body.declinedSetItemIds != null && !Array.isArray(body.declinedSetItemIds)) {
+        ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'declinedSetItemIds must be an array', callback); return;
+      }
+
+      const userId = event.requestContext?.authorizer?.principalId || 'system';
+      const result = await shopSaleService.assignSet(body, schoolId, userId);
+      ResponseBuilder.ok(result, callback);
+    } catch (err: any) {
+      if (err instanceof SetAlreadyAssignedError) {
+        ResponseBuilder.badRequest(ErrorCode.InvalidInput, err.message, callback);
+      } else if (err.message === 'Set not found') {
+        ResponseBuilder.badRequest(ErrorCode.InvalidInput, err.message, callback);
+      } else {
+        ResponseBuilder.handleError(err, callback);
+      }
+    }
+  };
+
   public list = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
     _context.callbackWaitsForEmptyEventLoop = false;
     try {
@@ -93,5 +128,6 @@ class ShopSaleHandler {
 
 const handler = new ShopSaleHandler();
 export const create = handler.create;
+export const assign = handler.assign;
 export const list = handler.list;
 export const getById = handler.getById;

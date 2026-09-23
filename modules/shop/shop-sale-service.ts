@@ -3,11 +3,104 @@ import {
   ShopSale,
   ShopSaleDetail,
   CreateSaleRequest,
+  AssignSetRequest,
 } from './shop-interfaces';
 import { DEFAULTS } from './shop-constants';
+import { shopSetService } from './shop-set-service';
 const { generateShortUuid } = require('../../shared/util/generate-uuid.js');
 
+// Raised when a student already has this set assigned. Caught by the handler.
+export class SetAlreadyAssignedError extends Error {
+  constructor() { super('This set is already assigned to the student'); this.name = 'SetAlreadyAssignedError'; }
+}
+
 class ShopSaleService {
+  // Assign a whole set to a student, minus any declined recipe lines. Pricing is
+  // taken from the set recipe (not purchase logs). Declined lines drop into the
+  // loose box. No item-level stock is decremented (set-level "sets + loose box").
+  public async assignSet(data: AssignSetRequest, schoolId: string, userId: string): Promise<ShopSaleDetail> {
+    const set = await shopSetService.getSet(data.setId, schoolId);
+    if (!set) throw new Error('Set not found');
+
+    // One active assignment of a given set per student.
+    const dupe = await DB.query(
+      `select uuid from shop_sale where school_id = $1 and student_id = $2 and set_id = $3 and status = 'active' limit 1`,
+      [schoolId, data.studentId, data.setId]
+    );
+    if (dupe.length > 0) throw new SetAlreadyAssignedError();
+
+    const declined = new Set(data.declinedSetItemIds || []);
+    const includedLines = set.items.filter(li => !declined.has(li.uuid));
+    const declinedLines = set.items.filter(li => declined.has(li.uuid));
+
+    let totalMrp = 0;
+    let totalDiscount = 0;
+    let totalAmount = 0;
+    for (const li of includedLines) {
+      const mrp = li.mrp ?? 0;
+      const unitPrice = li.unitPrice ?? 0;
+      totalMrp += mrp * li.quantity;
+      totalDiscount += (mrp - unitPrice) * li.quantity;
+      totalAmount += li.lineTotal ?? 0;
+    }
+    totalMrp = parseFloat(totalMrp.toFixed(2));
+    totalDiscount = parseFloat(totalDiscount.toFixed(2));
+    totalAmount = parseFloat(totalAmount.toFixed(2));
+
+    const paymentStatus = data.amountPaid >= totalAmount ? 'paid'
+      : data.amountPaid > 0 ? 'partial' : 'due';
+
+    const saleUuid = generateShortUuid(12);
+    const now = new Date();
+    const queries: string[] = [];
+    const params: any[][] = [];
+
+    queries.push(singleLineString`
+      insert into shop_sale
+      (uuid, school_id, student_id, sale_date, set_id, academic_session,
+       total_mrp, total_discount, total_amount, amount_paid, payment_status,
+       notes, status, createdby_userid, created_at)
+      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+    `);
+    params.push([
+      saleUuid, schoolId, data.studentId, data.saleDate,
+      data.setId, set.academicSession,
+      totalMrp, totalDiscount, totalAmount, data.amountPaid,
+      paymentStatus, data.notes || null, DEFAULTS.STATUS, userId, now,
+    ]);
+
+    for (const li of includedLines) {
+      queries.push(singleLineString`
+        insert into shop_sale_item
+        (uuid, sale_id, school_id, item_id, quantity, mrp, discount_pct,
+         unit_price, line_total, returned_quantity, status, createdby_userid, created_at)
+        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+      `);
+      params.push([
+        generateShortUuid(12), saleUuid, schoolId, li.itemId,
+        li.quantity, li.mrp ?? null, li.discountPct ?? null,
+        li.unitPrice ?? null, li.lineTotal ?? null, DEFAULTS.RETURNED_QUANTITY,
+        DEFAULTS.STATUS, userId, now,
+      ]);
+    }
+
+    // Declined lines fall into the loose box (positive qty, reason 'decline').
+    for (const li of declinedLines) {
+      queries.push(singleLineString`
+        insert into shop_loose_movement
+        (uuid, school_id, item_id, academic_session, grade, qty, reason, ref_sale_id, note, status, createdby_userid, created_at)
+        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      `);
+      params.push([
+        generateShortUuid(12), schoolId, li.itemId, set.academicSession, set.grade,
+        li.quantity, 'decline', saleUuid, null, DEFAULTS.STATUS, userId, now,
+      ]);
+    }
+
+    await DB.queriesInTransaction(queries, params);
+    return this.getSale(saleUuid, schoolId) as Promise<ShopSaleDetail>;
+  }
+
   public async createSale(data: CreateSaleRequest, schoolId: string, userId: string): Promise<ShopSaleDetail> {
     const saleUuid = generateShortUuid(12);
     const now = new Date();
@@ -126,7 +219,7 @@ class ShopSaleService {
   public async getSale(id: string, schoolId: string): Promise<ShopSaleDetail | null> {
     const sales = await DB.query(
       singleLineString`
-        select s.*, st.name as student_name, st.admission_no as student_admission_no
+        select s.*, st.name as student_name, st.admission_number as student_admission_no
         from shop_sale s
         left join student st on s.student_id = st.uuid
         where s.uuid = $1 and s.school_id = $2 and s.status = 'active'

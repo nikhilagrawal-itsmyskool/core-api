@@ -156,6 +156,24 @@
           method: get
           cors: true
 
+  get-set-stock:
+    handler: shop-set-handler.getStock
+    name: ${self:service}-get-set-stock
+    events:
+      - http:
+          path: sets/{id}/stock
+          method: get
+          cors: true
+
+  list-loose:
+    handler: shop-set-handler.listLoose
+    name: ${self:service}-list-loose
+    events:
+      - http:
+          path: loose
+          method: get
+          cors: true
+
   update-set:
     handler: shop-set-handler.update
     name: ${self:service}-update-set
@@ -174,6 +192,34 @@
           method: delete
           cors: true
 
+  # Set intakes (procurement - sets received from vendor)
+  create-intake:
+    handler: shop-intake-handler.create
+    name: ${self:service}-create-intake
+    events:
+      - http:
+          path: intakes
+          method: post
+          cors: true
+
+  list-intakes:
+    handler: shop-intake-handler.list
+    name: ${self:service}-list-intakes
+    events:
+      - http:
+          path: intakes
+          method: get
+          cors: true
+
+  delete-intake:
+    handler: shop-intake-handler.remove
+    name: ${self:service}-delete-intake
+    events:
+      - http:
+          path: intakes/{id}
+          method: delete
+          cors: true
+
   # Sales
   create-sale:
     handler: shop-sale-handler.create
@@ -181,6 +227,15 @@
     events:
       - http:
           path: sales
+          method: post
+          cors: true
+
+  assign-set:
+    handler: shop-sale-handler.assign
+    name: ${self:service}-assign-set
+    events:
+      - http:
+          path: sales/assign
           method: post
           cors: true
 

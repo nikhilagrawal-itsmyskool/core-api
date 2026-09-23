@@ -1,6 +1,6 @@
 import { ApiCallback, ApiContext, ApiEvent } from '../../shared/lib/api.interfaces';
 import { ResponseBuilder } from '../../shared/lib/response-builder';
-import { ITEM_TYPES, SECTIONS, PAYMENT_STATUSES, CLASS_NOS } from './shop-constants';
+import { ITEM_TYPES, SECTIONS, PAYMENT_STATUSES, CLASS_NOS, GRADES, LOOSE_REASONS } from './shop-constants';
 
 export const getLookups = async (_event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
   _context.callbackWaitsForEmptyEventLoop = false;
@@ -9,5 +9,7 @@ export const getLookups = async (_event: ApiEvent, _context: ApiContext, callbac
     sections: SECTIONS,
     paymentStatuses: PAYMENT_STATUSES,
     classNos: CLASS_NOS,
+    grades: GRADES,
+    looseReasons: LOOSE_REASONS,
   }, callback);
 };
