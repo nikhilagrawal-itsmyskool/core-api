@@ -18,7 +18,8 @@ export interface HandoverInput {
   topics?: Array<{ classId: string; className?: string; subjectId?: string | null; subjectName?: string | null; chapter?: string | null; topic: string; substitution?: string | null }>;
   lessonPlan?: string;
   otherDuties?: { duties?: string[]; covering?: string; note?: string };
-  lessonPlanFile?: FileInput | null;
+  lessonPlanFile?: FileInput | null; // legacy single (still accepted)
+  lessonPlanFiles?: FileInput[];
   worksheetFiles?: FileInput[];
   affected?: AffectedDay[]; // snapshot from the preview (optional; recomputed if absent)
 }
@@ -67,7 +68,7 @@ class LeaveHandoverService {
     const isTeaching = await isTeachingStaff(schoolId, employeeId);
     if (!isTeaching) return false;
     const h = input || {};
-    const hasLessonPlan = !!(h.lessonPlan && h.lessonPlan.trim()) || !!h.lessonPlanFile?.base64Data;
+    const hasLessonPlan = !!(h.lessonPlan && h.lessonPlan.trim()) || (h.lessonPlanFiles?.length ?? 0) > 0 || !!h.lessonPlanFile?.base64Data;
     const duties = h.otherDuties || {};
     const hasDuties = !!(duties.duties && duties.duties.length) || !!(duties.covering && duties.covering.trim()) || !!(duties.note && duties.note.trim());
     const topics = Array.isArray(h.topics) ? h.topics : [];
@@ -100,7 +101,8 @@ class LeaveHandoverService {
         h.lessonPlan?.trim() || null, JSON.stringify(duties), userId, now],
     );
 
-    await this.uploadDoc(schoolId, applicationId, employeeId, h.lessonPlanFile, "lesson_plan");
+    for (const p of h.lessonPlanFiles || []) await this.uploadDoc(schoolId, applicationId, employeeId, p, "lesson_plan");
+    if (h.lessonPlanFile) await this.uploadDoc(schoolId, applicationId, employeeId, h.lessonPlanFile, "lesson_plan"); // legacy single
     for (const w of h.worksheetFiles || []) await this.uploadDoc(schoolId, applicationId, employeeId, w, "worksheet");
   }
 
