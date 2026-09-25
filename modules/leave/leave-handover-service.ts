@@ -4,7 +4,7 @@ import { ErrorCode } from "../../shared/lib/error-codes";
 import { fileStorageService } from "../../shared/lib/file-storage";
 import { ATTACHMENT_ALLOWED_MIME, ATTACHMENT_MAX_BYTES } from "./leave-constants";
 import {
-  getCurrentAcademicYearId, weeklyOffDays, fullHolidaysInRange, datesInRange,
+  getCurrentAcademicYearId, weeklyOffDays, studentHolidaysInRange, datesInRange,
 } from "./leave-common";
 import {
   isTeachingStaff, affectedPeriods, currentTopic, parseGrade, AffectedDay,
@@ -27,14 +27,17 @@ export interface HandoverInput {
 function stripPrefix(b64: string): string { return (b64 || "").replace(/^data:[^;]+;base64,/, ""); }
 
 class LeaveHandoverService {
-  // Working dates in [from,to] the teacher would actually miss (excludes weekly-offs + holidays).
-  private async workingDates(schoolId: string, from: string, to: string): Promise<string[]> {
+  // Dates in [from,to] on which the teacher would actually miss CLASSES: excludes weekly-offs
+  // AND every full student holiday (staff_working or not — students are off, so no classes).
+  // This differs from leave-deduction "working days" (which keep staff_working days): a leave
+  // on a student holiday needs no academic handover even though the day is still paid work.
+  private async teachingDates(schoolId: string, from: string, to: string): Promise<string[]> {
     const ay = await getCurrentAcademicYearId(schoolId);
     const weeklyOff = ay ? await weeklyOffDays(schoolId, ay) : [0];
-    const holidays = await fullHolidaysInRange(schoolId, from, to);
+    const studentOff = await studentHolidaysInRange(schoolId, from, to);
     return datesInRange(from, to).filter((d) => {
       const dow = new Date(`${d}T00:00:00Z`).getUTCDay();
-      return !weeklyOff.includes(dow) && !holidays.has(d);
+      return !weeklyOff.includes(dow) && !studentOff.has(d);
     });
   }
 
@@ -42,7 +45,7 @@ class LeaveHandoverService {
   // best-effort prefilled topic per distinct class+subject.
   async preview(schoolId: string, employeeId: string, fromDate: string, toDate: string): Promise<any> {
     const isTeaching = await isTeachingStaff(schoolId, employeeId);
-    const dates = await this.workingDates(schoolId, fromDate, toDate);
+    const dates = await this.teachingDates(schoolId, fromDate, toDate);
     const affected = await affectedPeriods(schoolId, employeeId, dates);
 
     // Distinct class+subject across all affected days → one topic row each.
@@ -58,15 +61,23 @@ class LeaveHandoverService {
       const t = await currentTopic(schoolId, parseGrade(c.className || ""), c.subjectName || "", c.classId);
       topics.push({ classId: c.classId, className: c.className, subjectId: c.subjectId, subjectName: c.subjectName, chapter: t?.chapter || null, topic: t?.topic || "", substitution: "" });
     }
-    return { isTeaching, affected, topics };
+    // Handover is only required when the teacher actually misses classes on the leave dates —
+    // a student holiday (even a staff-working one) or a day with no timetabled periods needs none.
+    const handoverRequired = isTeaching && affected.some((d) => (d.periods?.length ?? 0) > 0);
+    return { isTeaching, handoverRequired, affected, topics };
   }
 
   // Throw a business error if a teaching-staff member has not provided the mandatory handover
   // parts. Returns whether the caller is teaching staff (office staff need no handover). Call
   // this BEFORE creating the application so a validation failure never leaves an orphan row.
-  async assertValid(schoolId: string, employeeId: string, input: HandoverInput | undefined): Promise<boolean> {
+  async assertValid(schoolId: string, employeeId: string, input: HandoverInput | undefined, fromDate: string, toDate: string): Promise<boolean> {
     const isTeaching = await isTeachingStaff(schoolId, employeeId);
     if (!isTeaching) return false;
+    // No classes on the leave dates (student holiday — incl. staff-working — or no timetabled
+    // periods) → nothing to hand over; don't force a lesson plan / topics / duties.
+    const dates = await this.teachingDates(schoolId, fromDate, toDate);
+    const affected = await affectedPeriods(schoolId, employeeId, dates);
+    if (!affected.some((d) => (d.periods?.length ?? 0) > 0)) return true;
     const h = input || {};
     const hasLessonPlan = !!(h.lessonPlan && h.lessonPlan.trim()) || (h.lessonPlanFiles?.length ?? 0) > 0 || !!h.lessonPlanFile?.base64Data;
     const duties = h.otherDuties || {};
@@ -89,7 +100,7 @@ class LeaveHandoverService {
     const topics = Array.isArray(h.topics) ? h.topics : [];
 
     // Snapshot the affected periods (from the preview if supplied, else recompute now).
-    const affected = h.affected && h.affected.length ? h.affected : await affectedPeriods(schoolId, employeeId, await this.workingDates(schoolId, fromDate, toDate));
+    const affected = h.affected && h.affected.length ? h.affected : await affectedPeriods(schoolId, employeeId, await this.teachingDates(schoolId, fromDate, toDate));
 
     const now = new Date();
     await DB.query(

@@ -205,7 +205,7 @@ class LeaveService {
 
     // Academic handover — teaching staff must complete it before the leave is accepted.
     // Validated BEFORE the insert so a failure never leaves an orphan application.
-    await leaveHandoverService.assertValid(schoolId, employeeId, req.handover);
+    await leaveHandoverService.assertValid(schoolId, employeeId, req.handover, req.fromDate, req.toDate);
 
     const id = generateShortUuid(12);
     const now = new Date();

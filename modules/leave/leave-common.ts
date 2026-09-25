@@ -91,6 +91,26 @@ export async function fullHolidaysInRange(schoolId: string, from: string, to: st
   return map;
 }
 
+// Full student closures in [from,to] REGARDLESS of staff_working. On any full holiday the
+// students are off, so there are no classes to hand over — even on a staff_working day where
+// staff still report (those ARE excluded from fullHolidaysInRange for leave-deduction, but
+// students are still off). Used to decide whether a leave needs an academic handover.
+export async function studentHolidaysInRange(schoolId: string, from: string, to: string): Promise<Set<string>> {
+  const set = new Set<string>();
+  try {
+    const rows = await DB.query(
+      singleLineString`select to_char(holiday_date,'YYYY-MM-DD') as d from calendar_holiday
+        where school_id = $1 and status = 'active' and kind = 'full'
+          and holiday_date >= $2 and holiday_date <= $3`,
+      [schoolId, from, to],
+    );
+    for (const r of rows) set.add(r.d);
+  } catch {
+    /* calendar module not installed */
+  }
+  return set;
+}
+
 // Working days in [from, to] inclusive: calendar days minus weekly-offs minus full
 // holidays (calendar_holiday). Both YYYY-MM-DD. Defensive against a missing calendar
 // module. Returns 0 if the range is inverted.
