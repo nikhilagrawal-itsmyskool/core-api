@@ -4,6 +4,8 @@ import {
   ShopSaleDetail,
   CreateSaleRequest,
   AssignSetRequest,
+  BulkAssignRequest,
+  BulkAssignResult,
 } from './shop-interfaces';
 import { DEFAULTS } from './shop-constants';
 import { shopSetService } from './shop-set-service';
@@ -12,6 +14,18 @@ const { generateShortUuid } = require('../../shared/util/generate-uuid.js');
 // Raised when a student already has this set assigned. Caught by the handler.
 export class SetAlreadyAssignedError extends Error {
   constructor() { super('This set is already assigned to the student'); this.name = 'SetAlreadyAssignedError'; }
+}
+
+const round2 = (n: number) => parseFloat(n.toFixed(2));
+
+// Resolve a set-level discount amount (₹ off the base) from the three input
+// modes; exactly one is expected. Clamped to [0, base].
+function resolveDiscount(base: number, opts: { discount?: number; discountPct?: number; finalAmount?: number }): number {
+  let d = 0;
+  if (opts.finalAmount != null) d = base - opts.finalAmount;
+  else if (opts.discountPct != null) d = base * opts.discountPct / 100;
+  else if (opts.discount != null) d = opts.discount;
+  return round2(Math.max(0, Math.min(d, base)));
 }
 
 class ShopSaleService {
@@ -43,11 +57,13 @@ class ShopSaleService {
       totalDiscount += (mrp - unitPrice) * li.quantity;
       totalAmount += li.lineTotal ?? 0;
     }
-    totalMrp = parseFloat(totalMrp.toFixed(2));
-    totalDiscount = parseFloat(totalDiscount.toFixed(2));
-    totalAmount = parseFloat(totalAmount.toFixed(2));
+    totalMrp = round2(totalMrp);
+    totalDiscount = round2(totalDiscount);
+    const baseTotal = round2(totalAmount);
+    const extraDiscount = resolveDiscount(baseTotal, data);
+    const payable = round2(baseTotal - extraDiscount);
 
-    const paymentStatus = data.amountPaid >= totalAmount ? 'paid'
+    const paymentStatus = data.amountPaid >= payable ? 'paid'
       : data.amountPaid > 0 ? 'partial' : 'due';
 
     const saleUuid = generateShortUuid(12);
@@ -58,14 +74,14 @@ class ShopSaleService {
     queries.push(singleLineString`
       insert into shop_sale
       (uuid, school_id, student_id, sale_date, set_id, academic_session,
-       total_mrp, total_discount, total_amount, amount_paid, payment_status,
+       total_mrp, total_discount, extra_discount, total_amount, amount_paid, payment_status,
        notes, status, createdby_userid, created_at)
-      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
     `);
     params.push([
       saleUuid, schoolId, data.studentId, data.saleDate,
       data.setId, set.academicSession,
-      totalMrp, totalDiscount, totalAmount, data.amountPaid,
+      totalMrp, totalDiscount, extraDiscount, payable, data.amountPaid,
       paymentStatus, data.notes || null, DEFAULTS.STATUS, userId, now,
     ]);
 
@@ -216,12 +232,76 @@ class ShopSaleService {
     return this.getSale(saleUuid, schoolId) as Promise<ShopSaleDetail>;
   }
 
+  // Assign the full set (no declines) to many students at a common discount,
+  // recorded as paid in full. Students already holding the set are skipped.
+  public async assignSetBulk(data: BulkAssignRequest, schoolId: string, userId: string): Promise<BulkAssignResult> {
+    const set = await shopSetService.getSet(data.setId, schoolId);
+    if (!set) throw new Error('Set not found');
+
+    const existing = await DB.query(
+      `select student_id from shop_sale where school_id = $1 and set_id = $2 and status = 'active'`,
+      [schoolId, data.setId]
+    );
+    const already = new Set(existing.map((r: any) => r.studentId));
+    const targets = [...new Set(data.studentIds)].filter(id => !already.has(id));
+    const skipped = data.studentIds.filter(id => already.has(id));
+
+    if (targets.length === 0) {
+      return { assigned: 0, skipped: skipped.length, skippedStudentIds: skipped };
+    }
+
+    const baseTotal = round2(set.items.reduce((s, li) => s + (li.lineTotal ?? 0), 0));
+    const totalMrp = round2(set.items.reduce((s, li) => s + (li.mrp ?? 0) * li.quantity, 0));
+    const totalDiscount = round2(set.items.reduce((s, li) => s + ((li.mrp ?? 0) - (li.unitPrice ?? 0)) * li.quantity, 0));
+    const extraDiscount = resolveDiscount(baseTotal, data);
+    const payable = round2(baseTotal - extraDiscount);
+
+    const now = new Date();
+    const queries: string[] = [];
+    const params: any[][] = [];
+
+    for (const studentId of targets) {
+      const saleUuid = generateShortUuid(12);
+      queries.push(singleLineString`
+        insert into shop_sale
+        (uuid, school_id, student_id, sale_date, set_id, academic_session,
+         total_mrp, total_discount, extra_discount, total_amount, amount_paid, payment_status,
+         notes, status, createdby_userid, created_at)
+        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+      `);
+      params.push([
+        saleUuid, schoolId, studentId, data.saleDate, data.setId, set.academicSession,
+        totalMrp, totalDiscount, extraDiscount, payable, payable, 'paid',
+        data.notes || null, DEFAULTS.STATUS, userId, now,
+      ]);
+      for (const li of set.items) {
+        queries.push(singleLineString`
+          insert into shop_sale_item
+          (uuid, sale_id, school_id, item_id, quantity, mrp, discount_pct,
+           unit_price, line_total, returned_quantity, status, createdby_userid, created_at)
+          values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        `);
+        params.push([
+          generateShortUuid(12), saleUuid, schoolId, li.itemId,
+          li.quantity, li.mrp ?? null, li.discountPct ?? null,
+          li.unitPrice ?? null, li.lineTotal ?? null, DEFAULTS.RETURNED_QUANTITY,
+          DEFAULTS.STATUS, userId, now,
+        ]);
+      }
+    }
+
+    await DB.queriesInTransaction(queries, params);
+    return { assigned: targets.length, skipped: skipped.length, skippedStudentIds: skipped };
+  }
+
   public async getSale(id: string, schoolId: string): Promise<ShopSaleDetail | null> {
     const sales = await DB.query(
       singleLineString`
-        select s.*, st.name as student_name, st.admission_number as student_admission_no
+        select s.*, st.name as student_name, st.admission_number as student_admission_no,
+               xs.grade as set_grade, xs.name as set_name
         from shop_sale s
         left join student st on s.student_id = st.uuid
+        left join shop_set xs on s.set_id = xs.uuid
         where s.uuid = $1 and s.school_id = $2 and s.status = 'active'
       `,
       [id, schoolId]
@@ -248,13 +328,16 @@ class ShopSaleService {
   public async listSales(schoolId: string, filters: {
     academicSession?: string;
     studentId?: string;
+    setId?: string;
     startDate?: string;
     endDate?: string;
   }): Promise<ShopSale[]> {
     let query = singleLineString`
-      select s.*, st.name as student_name, st.admission_no as student_admission_no
+      select s.*, st.name as student_name, st.admission_number as student_admission_no,
+             xs.grade as set_grade, xs.name as set_name
       from shop_sale s
       left join student st on s.student_id = st.uuid
+      left join shop_set xs on s.set_id = xs.uuid
       where s.school_id = $1 and s.status = 'active'
     `;
     const queryParams: any[] = [schoolId];
@@ -262,6 +345,7 @@ class ShopSaleService {
 
     if (filters.academicSession) { query += ` and s.academic_session = $${p++}`; queryParams.push(filters.academicSession); }
     if (filters.studentId) { query += ` and s.student_id = $${p++}`; queryParams.push(filters.studentId); }
+    if (filters.setId) { query += ` and s.set_id = $${p++}`; queryParams.push(filters.setId); }
     if (filters.startDate) { query += ` and s.sale_date >= $${p++}`; queryParams.push(filters.startDate); }
     if (filters.endDate) { query += ` and s.sale_date <= $${p++}`; queryParams.push(filters.endDate); }
 
@@ -275,6 +359,7 @@ class ShopSaleService {
       ...sale,
       totalMrp: sale.totalMrp != null ? parseFloat(sale.totalMrp) : null,
       totalDiscount: sale.totalDiscount != null ? parseFloat(sale.totalDiscount) : null,
+      extraDiscount: sale.extraDiscount != null ? parseFloat(sale.extraDiscount) : null,
       totalAmount: sale.totalAmount != null ? parseFloat(sale.totalAmount) : null,
       amountPaid: sale.amountPaid != null ? parseFloat(sale.amountPaid) : null,
     };

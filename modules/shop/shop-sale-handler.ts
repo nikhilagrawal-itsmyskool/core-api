@@ -87,6 +87,35 @@ class ShopSaleHandler {
     }
   };
 
+  // Assign the full set to many students at once (grade drawer).
+  public assignBulk = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
+    _context.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const schoolCode = validateSchoolCodeHeader(event);
+      const schoolId = await shopItemService.getSchoolIdByCode(schoolCode);
+      if (!schoolId) { ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'Invalid school code', callback); return; }
+
+      const body = JSON.parse(event.body || '{}');
+      if (!body.setId) { ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'setId is required', callback); return; }
+      if (!Array.isArray(body.studentIds) || body.studentIds.length === 0) {
+        ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'studentIds (non-empty array) is required', callback); return;
+      }
+      if (!body.saleDate || !isValidDate(body.saleDate)) {
+        ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'saleDate is required (YYYY-MM-DD)', callback); return;
+      }
+
+      const userId = event.requestContext?.authorizer?.principalId || 'system';
+      const result = await shopSaleService.assignSetBulk(body, schoolId, userId);
+      ResponseBuilder.ok(result, callback);
+    } catch (err: any) {
+      if (err.message === 'Set not found') {
+        ResponseBuilder.badRequest(ErrorCode.InvalidInput, err.message, callback);
+      } else {
+        ResponseBuilder.handleError(err, callback);
+      }
+    }
+  };
+
   public list = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
     _context.callbackWaitsForEmptyEventLoop = false;
     try {
@@ -98,6 +127,7 @@ class ShopSaleHandler {
       const results = await shopSaleService.listSales(schoolId, {
         academicSession: q.academicSession,
         studentId: q.studentId,
+        setId: q.setId,
         startDate: q.startDate,
         endDate: q.endDate,
       });
@@ -129,5 +159,6 @@ class ShopSaleHandler {
 const handler = new ShopSaleHandler();
 export const create = handler.create;
 export const assign = handler.assign;
+export const assignBulk = handler.assignBulk;
 export const list = handler.list;
 export const getById = handler.getById;

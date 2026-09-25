@@ -239,6 +239,15 @@
           method: post
           cors: true
 
+  assign-set-bulk:
+    handler: shop-sale-handler.assignBulk
+    name: ${self:service}-assign-set-bulk
+    events:
+      - http:
+          path: sales/assign-bulk
+          method: post
+          cors: true
+
   list-sales:
     handler: shop-sale-handler.list
     name: ${self:service}-list-sales

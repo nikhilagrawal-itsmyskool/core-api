@@ -11,6 +11,13 @@ import {
 import { DEFAULTS, GRADE_ORDER } from './shop-constants';
 const { generateShortUuid } = require('../../shared/util/generate-uuid.js');
 
+// Parse the stored highlight_publishers JSON string into an array (safe on junk).
+function parsePublishers(raw: any): string[] {
+  if (!raw) return [];
+  try { const v = JSON.parse(raw); return Array.isArray(v) ? v : []; }
+  catch { return []; }
+}
+
 // unitPrice = mrp * (1 - discountPct/100); rounded to 2dp. Missing price -> 0.
 function priceLine(mrp: number | null, discountPct: number | null, quantity: number) {
   const m = mrp != null ? mrp : 0;
@@ -31,12 +38,14 @@ class ShopSetService {
 
     queries.push(singleLineString`
       insert into shop_set
-      (uuid, school_id, name, grade, academic_session, description, status, createdby_userid, created_at)
-      values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      (uuid, school_id, name, grade, academic_session, description, highlight_publishers, status, createdby_userid, created_at)
+      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
     `);
     params.push([
       setUuid, schoolId, name, data.grade, data.academicSession,
-      data.description || null, DEFAULTS.STATUS, userId, now,
+      data.description || null,
+      data.highlightPublishers?.length ? JSON.stringify(data.highlightPublishers) : null,
+      DEFAULTS.STATUS, userId, now,
     ]);
 
     let sort = 0;
@@ -88,6 +97,7 @@ class ShopSetService {
 
     return {
       ...sets[0],
+      highlightPublishers: parsePublishers(sets[0].highlightPublishers),
       items,
       setPrice: parseFloat(setPrice.toFixed(2)),
     };
@@ -150,6 +160,10 @@ class ShopSetService {
 
     if (data.name !== undefined) { updates.push(`name = $${i++}`); updateParams.push(data.name); }
     if (data.description !== undefined) { updates.push(`description = $${i++}`); updateParams.push(data.description || null); }
+    if (data.highlightPublishers !== undefined) {
+      updates.push(`highlight_publishers = $${i++}`);
+      updateParams.push(data.highlightPublishers?.length ? JSON.stringify(data.highlightPublishers) : null);
+    }
 
     if (updates.length > 0) {
       updates.push(`updatedby_userid = $${i++}`); updateParams.push(userId);

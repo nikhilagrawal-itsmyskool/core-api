@@ -127,6 +127,7 @@ export interface ShopSet {
   classNo?: number;
   academicSession: string;
   description?: string;
+  highlightPublishers?: string[]; // publishers broken out into their own subtotal
   status: string;
   createdbyUserid: string;
   createdAt: Date;
@@ -174,6 +175,7 @@ export interface CreateSetRequest {
   grade: string;
   academicSession: string;
   description?: string;
+  highlightPublishers?: string[];
   items: CreateSetItemRequest[];
 }
 
@@ -189,6 +191,7 @@ export interface CreateSetItemRequest {
 export interface UpdateSetRequest {
   name?: string;
   description?: string;
+  highlightPublishers?: string[];
   items?: CreateSetItemRequest[];
 }
 
@@ -259,6 +262,7 @@ export interface ShopSale {
   academicSession?: string;
   totalMrp?: number;
   totalDiscount?: number;
+  extraDiscount?: number;
   totalAmount?: number;
   amountPaid?: number;
   paymentStatus: PaymentStatus;
@@ -271,6 +275,8 @@ export interface ShopSale {
   // Joined fields
   studentName?: string;
   studentAdmissionNo?: string;
+  setGrade?: string;
+  setName?: string;
 }
 
 export interface ShopSaleItem {
@@ -314,6 +320,8 @@ export interface CreateSaleItemRequest {
 
 // Assign a whole set to a student, optionally minus some declined recipe lines.
 // Pricing comes from the set recipe; declined lines drop into the loose box.
+// An optional set-level discount reduces the payable: give exactly one of
+// discount (₹ off) / discountPct (% off) / finalAmount (target payable ₹).
 export interface AssignSetRequest {
   studentId: string;
   setId: string;
@@ -321,6 +329,26 @@ export interface AssignSetRequest {
   amountPaid: number;
   notes?: string;
   declinedSetItemIds?: string[]; // shop_set_item uuids the student did not take
+  discount?: number;
+  discountPct?: number;
+  finalAmount?: number;
+}
+
+// Assign the full set (no declines) to many students at once, at a common
+// discount, recorded as paid in full. Already-assigned students are skipped.
+export interface BulkAssignRequest {
+  setId: string;
+  studentIds: string[];
+  saleDate: string;
+  discount?: number;
+  discountPct?: number;
+  notes?: string;
+}
+
+export interface BulkAssignResult {
+  assigned: number;
+  skipped: number;
+  skippedStudentIds: string[];
 }
 
 // ── Stats ─────────────────────────────────────────────────────────────────────

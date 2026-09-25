@@ -95,6 +95,10 @@ create table if not exists shop_set (
 -- Migrate the legacy class_no key to the grade key (additive, idempotent).
 alter table shop_set add column if not exists grade varchar(16);
 alter table shop_set alter column class_no drop not null;
+-- Presentation only: JSON array of publisher names to break out into their own
+-- subtotal on the set detail (e.g. ["NCERT"]); other books fall into "Other
+-- Books". Empty/null => a single "Books" group.
+alter table shop_set add column if not exists highlight_publishers varchar(512);
 
 create index if not exists idx_shop_set_school_id on shop_set(school_id, status);
 create index if not exists idx_shop_set_grade_session on shop_set(school_id, grade, academic_session);
@@ -189,6 +193,7 @@ create table if not exists shop_sale (
     total_amount decimal(12,2),
     amount_paid decimal(12,2),
     payment_status varchar(16) not null check (payment_status in ('paid', 'partial', 'due')),
+    extra_discount decimal(12,2),
     notes varchar(512),
     status varchar(16) not null check (status in ('active', 'deleted')),
     createdby_userid varchar(12),
@@ -197,7 +202,12 @@ create table if not exists shop_sale (
     updated_at timestamp(0)
 );
 
+-- Set-level concession applied at assignment (₹ off the recipe total), separate
+-- from the per-line MRP discounts already baked into total_discount.
+alter table shop_sale add column if not exists extra_discount decimal(12,2);
+
 create index if not exists idx_shop_sale_school_id on shop_sale(school_id, status);
+create index if not exists idx_shop_sale_set on shop_sale(school_id, set_id) where set_id is not null;
 create index if not exists idx_shop_sale_student on shop_sale(school_id, student_id);
 create index if not exists idx_shop_sale_date on shop_sale(school_id, sale_date);
 create index if not exists idx_shop_sale_session on shop_sale(school_id, academic_session) where academic_session is not null;
