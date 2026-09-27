@@ -56,6 +56,7 @@ describe('Student report API', () => {
   });
 
   afterAll(async () => {
+    await pool.query(`delete from student_report_saved where school_id = $1 and name like $2`, [f.schoolId, `${f.tag}%`]);
     await cleanupFixtures(pool, f);
     await pool.end();
   });
@@ -114,6 +115,23 @@ describe('Student report API', () => {
     expect(body.rows[0].studentName).toContain('Chirag');
   });
 
+  it('orders within a class by roll number, ascending then descending', async () => {
+    // classA has Bela (roll 1) and Aarav (roll 2).
+    const asc = await roster({
+      academicYearId: f.yearFromId, classIds: [f.classAId],
+      fields: ['rollNumber', 'studentName'], sort: { field: 'rollNumber', dir: 'asc' },
+    });
+    expect(asc.status).toBe(200);
+    expect(asc.body.rows.map((r) => r.rollNumber)).toEqual([1, 2]);
+    expect(asc.body.meta.sort).toEqual({ field: 'rollNumber', dir: 'asc' });
+
+    const desc = await roster({
+      academicYearId: f.yearFromId, classIds: [f.classAId],
+      fields: ['rollNumber', 'studentName'], sort: { field: 'rollNumber', dir: 'desc' },
+    });
+    expect(desc.body.rows.map((r) => r.rollNumber)).toEqual([2, 1]);
+  });
+
   it('rejects an empty class selection', async () => {
     const { status } = await roster({ academicYearId: f.yearFromId, classIds: [], fields: ['studentName'] });
     expect(status).toBe(400);
@@ -122,5 +140,66 @@ describe('Student report API', () => {
   it('rejects an empty field selection', async () => {
     const { status } = await roster({ academicYearId: f.yearFromId, classIds: [f.classAId], fields: [] });
     expect(status).toBe(400);
+  });
+
+  describe('saved reports', () => {
+    let savedName;
+    let savedId;
+
+    it('saves a report (columns + filter + layout, not classes)', async () => {
+      savedName = `${f.tag}-Contacts`;
+      const res = await fetch(`${BASE_URL}/reports/saved`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          name: savedName,
+          config: { fields: ['studentName', 'fatherMobile'], filter: 'rte', orientation: 'landscape', pageBreak: false, classIds: ['should-be-ignored'] },
+        }),
+      });
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      savedId = body.uuid;
+      expect(body.name).toBe(savedName);
+      expect(body.config.filter).toBe('rte');
+      expect(body.config.orientation).toBe('landscape');
+      expect(body.config.fields).toEqual(['studentName', 'fatherMobile']);
+      expect(body.config).not.toHaveProperty('classIds'); // classes are never saved
+    });
+
+    it('lists the saved report', async () => {
+      const res = await fetch(`${BASE_URL}/reports/saved`, { headers });
+      expect(res.status).toBe(200);
+      const { saved } = await res.json();
+      expect(saved.some((s) => s.uuid === savedId)).toBe(true);
+    });
+
+    it('upserts by name (re-saving updates config, no duplicate)', async () => {
+      const res = await fetch(`${BASE_URL}/reports/saved`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ name: savedName, config: { fields: ['studentName'], filter: 'all', orientation: 'portrait', pageBreak: true } }),
+      });
+      expect(res.status).toBe(200);
+      expect((await res.json()).uuid).toBe(savedId); // same row
+      const list = await (await fetch(`${BASE_URL}/reports/saved`, { headers })).json();
+      expect(list.saved.filter((s) => s.name === savedName).length).toBe(1);
+      expect(list.saved.find((s) => s.uuid === savedId).config.filter).toBe('all');
+    });
+
+    it('rejects saving with no fields', async () => {
+      const res = await fetch(`${BASE_URL}/reports/saved`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ name: `${f.tag}-Empty`, config: { fields: [] } }),
+      });
+      expect(res.status).toBe(400);
+    });
+
+    it('deletes the saved report', async () => {
+      const res = await fetch(`${BASE_URL}/reports/saved/${savedId}`, { method: 'DELETE', headers });
+      expect(res.status).toBe(200);
+      const list = await (await fetch(`${BASE_URL}/reports/saved`, { headers })).json();
+      expect(list.saved.some((s) => s.uuid === savedId)).toBe(false);
+    });
   });
 });

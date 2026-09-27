@@ -1,6 +1,7 @@
-import { DB } from '../../shared/lib/db';
+import { DB, singleLineString } from '../../shared/lib/db';
 import { BusinessErrorResult } from '../../shared/lib/errors';
 import { ErrorCode } from '../../shared/lib/error-codes';
+const { generateShortUuid } = require('../../shared/util/generate-uuid.js');
 
 // ── Printable roster reports ────────────────────────────────────────────────
 // A single generic engine: pick a set of classes (one academic year), pick the
@@ -59,9 +60,24 @@ export interface ReportRequest {
   classIds: string[];
   fields: string[];
   filter?: ReportFilter;
+  sort?: { field?: string; dir?: string };
 }
 
 const MAX_CLASSES = 80;
+
+// Allowed order-by columns (within each class). Class is always the primary sort so
+// rows stay class-contiguous for page-breaks.
+const SORT_FIELDS: Record<string, string> = {
+  rollNumber: 'sc.roll_number',
+  studentName: 's.name',
+  admissionDate: 's.admission_date',
+};
+
+function normalizeSort(raw: any): { field: string; dir: 'asc' | 'desc' } {
+  const field = SORT_FIELDS[raw?.field] ? raw.field : 'rollNumber';
+  const dir = raw?.dir === 'desc' ? 'desc' : 'asc';
+  return { field, dir };
+}
 
 class StudentReportService {
   // The field catalogue the column-picker renders (grouped, ordered as declared).
@@ -112,6 +128,11 @@ class StudentReportService {
     if (filter === 'rte') filterSql = ' and s.rte = true';
     else if (filter === 'examOnly') filterSql = ' and s.exam_only = true';
 
+    const sort = normalizeSort(req.sort);
+    const sortCol = SORT_FIELDS[sort.field];
+    const tiebreak = sort.field === 'studentName' ? '' : ', s.name asc';
+    const orderBy = `order by c.name asc, ${sortCol} ${sort.dir} nulls last${tiebreak}`;
+
     const sql = `
       select ${selectList}
       from student_class sc
@@ -135,7 +156,7 @@ class StudentReportService {
       ) g on true
       where sc.school_id = $1 and sc.academic_year_id = $2 and sc.class_id in (${inList})
         and (sc.status is null or sc.status <> 'deleted') and s.status <> 'deleted'${filterSql}
-      order by c.name asc, sc.roll_number asc nulls last, s.name asc
+      ${orderBy}
     `;
 
     const rows = (await DB.query(sql, params)) as any[];
@@ -158,12 +179,72 @@ class StudentReportService {
         academicYearId,
         filter,
         fields,
+        sort,
         generatedAt: new Date().toISOString(),
         total: rows.length,
         classes,
       },
       rows,
     };
+  }
+
+  // ── Saved reports (school-wide templates) ─────────────────────────────────
+  // Only the builder options are stored — never the class selection.
+  private sanitizeConfig(raw: any): {
+    fields: string[];
+    filter: ReportFilter;
+    orientation: string;
+    pageBreak: boolean;
+    sort: { field: string; dir: 'asc' | 'desc' };
+  } {
+    const fields = Array.isArray(raw?.fields) ? raw.fields.filter((k: any) => REPORT_FIELDS[k]) : [];
+    if (!fields.length) throw new BusinessErrorResult(ErrorCode.BusinessError, 'Select at least one field before saving');
+    const filter: ReportFilter = raw?.filter === 'rte' || raw?.filter === 'examOnly' ? raw.filter : 'all';
+    const orientation = raw?.orientation === 'landscape' ? 'landscape' : 'portrait';
+    const pageBreak = !!raw?.pageBreak;
+    const sort = normalizeSort(raw?.sort);
+    return { fields, filter, orientation, pageBreak, sort };
+  }
+
+  public async listSaved(schoolId: string): Promise<any[]> {
+    return (await DB.query(
+      singleLineString`select uuid, name, config from student_report_saved where school_id = $1 and status = 'active' order by lower(name)`,
+      [schoolId]
+    )) as any[];
+  }
+
+  // Upsert by name (case-insensitive): re-saving under an existing name updates its config.
+  public async saveReport(schoolId: string, name: string, rawConfig: any, userId: string): Promise<any> {
+    const clean = (name || '').trim().slice(0, 128);
+    if (!clean) throw new BusinessErrorResult(ErrorCode.BusinessError, 'A report name is required');
+    const config = this.sanitizeConfig(rawConfig);
+    const now = new Date();
+
+    const existing = await DB.query(
+      singleLineString`select uuid from student_report_saved where school_id = $1 and lower(name) = lower($2) and status = 'active' limit 1`,
+      [schoolId, clean]
+    );
+    if (existing.length) {
+      await DB.query(
+        singleLineString`update student_report_saved set name = $3, config = $4, updatedby_userid = $5, updated_at = $6 where uuid = $1 and school_id = $2`,
+        [existing[0].uuid, schoolId, clean, JSON.stringify(config), userId, now]
+      );
+      return { uuid: existing[0].uuid, name: clean, config };
+    }
+    const uuid = generateShortUuid(12);
+    await DB.query(
+      singleLineString`insert into student_report_saved (uuid, school_id, name, config, status, createdby_userid, created_at) values ($1, $2, $3, $4, 'active', $5, $6)`,
+      [uuid, schoolId, clean, JSON.stringify(config), userId, now]
+    );
+    return { uuid, name: clean, config };
+  }
+
+  public async deleteSaved(schoolId: string, id: string, userId: string): Promise<boolean> {
+    const rows = await DB.query(
+      singleLineString`update student_report_saved set status = 'deleted', updatedby_userid = $3, updated_at = $4 where uuid = $1 and school_id = $2 and status = 'active' returning uuid`,
+      [id, schoolId, userId, new Date()]
+    );
+    return (rows as any[]).length > 0;
   }
 }
 

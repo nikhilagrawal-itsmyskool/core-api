@@ -8,6 +8,10 @@ import { studentReportService, REPORT_CONTACT_FIELDS, ReportRequest } from './st
 import { guard } from '../auth/authz';
 import { STUDENT_ACTIONS } from './student-actions';
 
+function userId(event: ApiEvent): string {
+  return event.requestContext?.authorizer?.principalId || 'system';
+}
+
 class StudentReportHandler {
   private async resolveSchool(event: ApiEvent, callback: ApiCallback): Promise<string | null> {
     const schoolCode = validateSchoolCodeHeader(event);
@@ -55,8 +59,55 @@ class StudentReportHandler {
       ResponseBuilder.handleError(err, callback);
     }
   };
+
+  // GET /reports/saved — school-wide saved report templates.
+  public listSaved = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
+    _context.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const schoolId = await this.resolveSchool(event, callback);
+      if (!schoolId) return;
+      const saved = await studentReportService.listSaved(schoolId);
+      ResponseBuilder.ok({ saved }, callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
+  // POST /reports/saved — { name, config: { fields, filter, orientation, pageBreak } }.
+  public saveReport = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
+    _context.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const schoolId = await this.resolveSchool(event, callback);
+      if (!schoolId) return;
+      if (!event.body) { ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'Request body is required', callback); return; }
+      const body = JSON.parse(event.body);
+      const saved = await studentReportService.saveReport(schoolId, body.name, body.config, userId(event));
+      ResponseBuilder.ok(saved, callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
+  // DELETE /reports/saved/{id}
+  public deleteSaved = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
+    _context.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const schoolId = await this.resolveSchool(event, callback);
+      if (!schoolId) return;
+      const id = event.pathParameters?.id;
+      if (!id) { ResponseBuilder.badRequest(ErrorCode.MissingId, 'Report ID is required', callback); return; }
+      const ok = await studentReportService.deleteSaved(schoolId, id, userId(event));
+      if (!ok) { ResponseBuilder.notFound(ErrorCode.InvalidId, 'Saved report not found', callback); return; }
+      ResponseBuilder.ok({ message: 'Saved report deleted' }, callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
 }
 
 const handler = new StudentReportHandler();
 export const fields = guard(STUDENT_ACTIONS['student-report-handler.fields'], handler.fields);
 export const roster = guard(STUDENT_ACTIONS['student-report-handler.roster'], handler.roster);
+export const listSaved = guard(STUDENT_ACTIONS['student-report-handler.listSaved'], handler.listSaved);
+export const saveReport = guard(STUDENT_ACTIONS['student-report-handler.saveReport'], handler.saveReport);
+export const deleteSaved = guard(STUDENT_ACTIONS['student-report-handler.deleteSaved'], handler.deleteSaved);

@@ -29,6 +29,9 @@ export const STUDENT_ACTIONS: Record<string, string> = {
   // reveals unmasked contacts to admin/god, so it's a manage-screen surface.
   'student-report-handler.fields': STUDENT_VIEW,
   'student-report-handler.roster': STUDENT_MANAGE,
+  'student-report-handler.listSaved': STUDENT_MANAGE,
+  'student-report-handler.saveReport': STUDENT_MANAGE,
+  'student-report-handler.deleteSaved': STUDENT_MANAGE,
   'student-photo-handler.get': STUDENT_VIEW,
   'student-guardian-handler.list': STUDENT_VIEW,
   'student-address-handler.list': STUDENT_VIEW,

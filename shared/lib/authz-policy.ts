@@ -77,6 +77,11 @@ export const ACTIONS = {
   ACADEMIC_CALENDAR_MANAGE: 'academic-calendar.manage',
   EXAM_VIEW: 'exam.view',
   EXAM_MANAGE: 'exam.manage',
+  // Developmental programmes (Spoken English & Life Communication, …). view = the
+  // teacher Class->Month->Theme reader + catalog (teacher/admin); manage = author
+  // units + re-upload source docs (admin/god/programme-incharge).
+  PROGRAMME_VIEW: 'programme.view',
+  PROGRAMME_MANAGE: 'programme.manage',
   ASSISTANT_USE: 'assistant.use',
   // Home-visit feedback / complaints. view = read category lookup (teachers, to record);
   // record = log + assign to a teacher (teachers); respond = the assigned teacher's reply
@@ -125,6 +130,8 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
     'syllabus.view',
     'syllabus.manage',
     'syllabus.progress.mark',
+    'programme.view',
+    'programme.manage',
     'assembly.view',
     'assembly.manage',
     'homework.post',
@@ -145,6 +152,7 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
     'employee.view',
     'syllabus.view',
     'syllabus.progress.mark',
+    'programme.view',
     'assembly.view',
     'academic-calendar.view',
     // Feedback/complaints: any teacher may record + assign, and respond to items
@@ -166,6 +174,7 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
   'hiring-incharge': ['hiring.*'],
   'transport-incharge': ['transport.*'],
   'syllabus-incharge': ['syllabus.*'],
+  'programme-incharge': ['programme.*'],
   'assembly-incharge': ['assembly.*'],
   // Exam incharge === admin, but scoped to the examination module.
   'exam-incharge': ['exam.*'],

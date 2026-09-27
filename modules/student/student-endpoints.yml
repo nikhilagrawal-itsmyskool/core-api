@@ -301,6 +301,34 @@
           method: post
           cors: true
 
+  # Saved report templates (school-wide). Literal 'reports/saved' before 'reports/saved/{id}'.
+  report-saved-list:
+    handler: student-report-handler.listSaved
+    name: ${self:service}-report-saved-list
+    events:
+      - http:
+          path: reports/saved
+          method: get
+          cors: true
+
+  report-saved-create:
+    handler: student-report-handler.saveReport
+    name: ${self:service}-report-saved-create
+    events:
+      - http:
+          path: reports/saved
+          method: post
+          cors: true
+
+  report-saved-delete:
+    handler: student-report-handler.deleteSaved
+    name: ${self:service}-report-saved-delete
+    events:
+      - http:
+          path: reports/saved/{id}
+          method: delete
+          cors: true
+
   # ---- Guardians (nested under a student) ----
   list-guardians:
     handler: student-guardian-handler.list

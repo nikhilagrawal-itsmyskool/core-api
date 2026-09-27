@@ -1,0 +1,5 @@
+{
+  "httpPort": 6057,
+  "lambdaPort": 6058,
+  "prefix": "programmes"
+}

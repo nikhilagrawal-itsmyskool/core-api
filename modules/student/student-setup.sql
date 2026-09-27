@@ -199,3 +199,22 @@ alter table student_address alter column country_code type varchar(64);
 -- Shared file_storage gains a photo variant ('original' | 'thumb').
 -- Null is treated as 'original' for legacy rows.
 alter table file_storage add column if not exists variant varchar(16);
+
+-- Table 6: student_report_saved (school-wide saved report templates). config holds
+-- the builder's remembered options — { fields: [...], filter, orientation, pageBreak }.
+-- Classes are NOT saved: they are chosen fresh each run. Shared across all admins.
+create table if not exists student_report_saved (
+    uuid varchar(12) primary key,
+    school_id varchar(12) not null,
+    name varchar(128) not null,
+    config jsonb,
+    status varchar(16) check (status in ('active', 'deleted')),
+    createdby_userid varchar(12),
+    created_at timestamp(0),
+    updatedby_userid varchar(12),
+    updated_at timestamp(0)
+);
+
+create index if not exists idx_student_report_saved_school on student_report_saved(school_id, status);
+create unique index if not exists idx_student_report_saved_name_unique
+    on student_report_saved(school_id, lower(name)) where status = 'active';

@@ -1,0 +1,132 @@
+  # Health check
+  health:
+    handler: health-handler.health
+    events:
+      - http:
+          path: health
+          method: get
+          cors: true
+
+  # ── Lookups ───────────────────────────────────────────────────────────────
+  get-lookups:
+    handler: programmes-lookup-handler.getLookups
+    name: ${self:service}-get-lookups
+    events:
+      - http:
+          path: lookups
+          method: get
+          cors: true
+
+  get-grades:
+    handler: programmes-lookup-handler.getGrades
+    name: ${self:service}-get-grades
+    events:
+      - http:
+          path: grades
+          method: get
+          cors: true
+
+  # ── Programme catalog (the programme rows + their seeded masters) ───────────
+  # Listed at /catalog (not /programmes) — the module is already mounted under the
+  # /programmes basePath, so /programmes/programmes would be redundant.
+  list-programmes:
+    handler: programme-handler.list
+    name: ${self:service}-list-programmes
+    events:
+      - http:
+          path: catalog
+          method: get
+          cors: true
+
+  get-programme:
+    handler: programme-handler.getByCode
+    name: ${self:service}-get-programme
+    events:
+      - http:
+          path: catalog/{code}
+          method: get
+          cors: true
+
+  # ── Units (admin content editor) ────────────────────────────────────────────
+  list-units:
+    handler: programmes-unit-handler.list
+    name: ${self:service}-list-units
+    events:
+      - http:
+          path: units
+          method: get
+          cors: true
+
+  create-unit:
+    handler: programmes-unit-handler.create
+    name: ${self:service}-create-unit
+    events:
+      - http:
+          path: units
+          method: post
+          cors: true
+
+  get-unit:
+    handler: programmes-unit-handler.getById
+    name: ${self:service}-get-unit
+    events:
+      - http:
+          path: units/{id}
+          method: get
+          cors: true
+
+  update-unit:
+    handler: programmes-unit-handler.update
+    name: ${self:service}-update-unit
+    events:
+      - http:
+          path: units/{id}
+          method: put
+          cors: true
+
+  delete-unit:
+    handler: programmes-unit-handler.remove
+    name: ${self:service}-delete-unit
+    events:
+      - http:
+          path: units/{id}
+          method: delete
+          cors: true
+
+  # ── Teacher reader (the Class -> Month -> Theme surface) ─────────────────────
+  teach:
+    handler: programmes-unit-handler.teach
+    name: ${self:service}-teach
+    events:
+      - http:
+          path: teach
+          method: get
+          cors: true
+
+  # ── Source documents (store / download / re-upload) ──────────────────────────
+  list-sources:
+    handler: programmes-source-handler.list
+    name: ${self:service}-list-sources
+    events:
+      - http:
+          path: sources
+          method: get
+          cors: true
+
+  download-source:
+    handler: programmes-source-handler.download
+    name: ${self:service}-download-source
+    events:
+      - http:
+          path: sources/{grade}/file
+          method: get
+          cors: true
+
+  upload-source:
+    handler: programmes-source-handler.upload
+    name: ${self:service}-upload-source
+    events:
+      - http:
+          path: sources/{grade}
+          method: post
+          cors: true
