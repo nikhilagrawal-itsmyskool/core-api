@@ -177,6 +177,16 @@ export async function restoreRolls(classId: string, academicYearId: string, snap
   for (const s of snapshot) await setRoll(classId, academicYearId, s.studentId, s.rollNumber);
 }
 
+// Remove a student's report-card values (marks / area grades / header) left by service tests.
+// Schemes are left in place — they're the real seed-on-first-use rows, harmless to keep.
+export async function cleanupReport(studentId: string, ayId: string): Promise<void> {
+  const { schoolId } = await getContext();
+  const p = getPool();
+  await p.query("delete from exam_report_mark where school_id = $1 and academic_year_id = $2 and student_id = $3", [schoolId, ayId, studentId]);
+  await p.query("delete from exam_report_area_grade where school_id = $1 and academic_year_id = $2 and student_id = $3", [schoolId, ayId, studentId]);
+  await p.query("delete from exam_report where school_id = $1 and academic_year_id = $2 and student_id = $3", [schoolId, ayId, studentId]);
+}
+
 // Remove test branding (school-scoped) so the suite never leaves logo/stamp behind.
 export async function cleanupBranding(): Promise<void> {
   const { schoolId } = await getContext();

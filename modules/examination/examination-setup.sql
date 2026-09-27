@@ -198,6 +198,14 @@ create table if not exists school_branding (
 alter table school_branding add column if not exists school_name varchar(256);
 alter table school_branding add column if not exists motto varchar(256);
 alter table school_branding add column if not exists address varchar(512);
+-- Extra masthead fields the report card needs (edited on the same Branding page). board_logo is
+-- the right-side board/affiliation crest (existing logo_file_id stays the school crest).
+alter table school_branding add column if not exists affiliation_no varchar(64);
+alter table school_branding add column if not exists school_code varchar(64);
+alter table school_branding add column if not exists contact varchar(128);
+alter table school_branding add column if not exists email varchar(128);
+alter table school_branding add column if not exists website varchar(128);
+alter table school_branding add column if not exists board_logo_file_id varchar(12);
 
 -- ══ Phase 3: exam attendance + invigilator signatures ════════════════════════════
 
@@ -438,3 +446,182 @@ create unique index if not exists idx_exam_av_occupant_cell
     on exam_av_occupant(exam_id, exam_date, student_id);
 create index if not exists idx_exam_av_occupant_day
     on exam_av_occupant(school_id, exam_id, exam_date);
+
+-- ══ Report cards (Term-1 marks + co-scholastic → Achievement Record) ══════════════════
+-- A data-driven report card. A `scheme` per (school, academic-year, grade band) is the
+-- blueprint; every column/area/grade is a row, so the three bands (1-3, 4-5, 6-9) differ by
+-- DATA not code, and one renderer draws them all. Student values (marks, area grades, header)
+-- reference the scheme by STABLE CODES, never a hard FK — an edit to a label never touches data.
+-- Everything carries academic_year_id + (for values) term, so years/terms stand alone.
+
+-- exam_report_scheme: the card blueprint for a grade band.
+create table if not exists exam_report_scheme (
+    uuid varchar(12) primary key,
+    school_id varchar(12) not null,
+    academic_year_id varchar(12) not null,
+    band varchar(16) not null,               -- '1-3' | '4-5' | '6-9' | 'pre-primary'
+    name varchar(128) not null,
+    applies_to_grades varchar(128) not null,  -- csv of class-name grade prefixes, e.g. 'I,II,III'
+    status varchar(16) not null check (status in ('active', 'deleted')),
+    createdby_userid varchar(12),
+    created_at timestamp(0),
+    updatedby_userid varchar(12),
+    updated_at timestamp(0)
+);
+create unique index if not exists idx_exam_report_scheme_band
+    on exam_report_scheme(school_id, academic_year_id, band) where status = 'active';
+
+-- exam_report_component: the NUMERIC columns of a scheme, PER TERM (Term-1 and Term-2 are
+-- different rows). code is unique within (scheme, term); marks reference it by code.
+create table if not exists exam_report_component (
+    uuid varchar(12) primary key,
+    school_id varchar(12) not null,
+    academic_year_id varchar(12) not null,
+    scheme_id varchar(12) not null,
+    term smallint not null,                   -- 1 | 2
+    code varchar(24) not null,                -- 'PT1','CT1','NB1','SEA1','CP1','ORAL1','HY'...
+    label varchar(64) not null,               -- 'PT-I', 'Half Yearly'...
+    max_marks integer not null,
+    sort_order integer,
+    status varchar(16) not null check (status in ('active', 'deleted')),
+    createdby_userid varchar(12),
+    created_at timestamp(0),
+    updatedby_userid varchar(12),
+    updated_at timestamp(0)
+);
+create index if not exists idx_exam_report_component_scheme
+    on exam_report_component(scheme_id, term, status);
+
+-- exam_report_subject: the subject ROWS of a scheme (NOT per term — same subjects both terms).
+-- report_label is the printed name (can differ per band); syllabus_subject is the name matched
+-- against the syllabus plan to resolve the teacher for marks-entry access.
+create table if not exists exam_report_subject (
+    uuid varchar(12) primary key,
+    school_id varchar(12) not null,
+    academic_year_id varchar(12) not null,
+    scheme_id varchar(12) not null,
+    code varchar(24) not null,                -- 'ENG','HIN','MATH','EVS','SCI','SST','COMP'
+    report_label varchar(64) not null,        -- 'EVS', 'Social Science'...
+    syllabus_subject varchar(128),            -- comma list of syllabus_subject names (teacher link)
+    sort_order integer,
+    status varchar(16) not null check (status in ('active', 'deleted')),
+    createdby_userid varchar(12),
+    created_at timestamp(0),
+    updatedby_userid varchar(12),
+    updated_at timestamp(0)
+);
+create index if not exists idx_exam_report_subject_scheme
+    on exam_report_subject(scheme_id, status);
+
+-- exam_report_area: the GRADE-only rows (co-scholastic / personality / other), grouped by
+-- section. scale_kind names which grade scale its dropdown+legend use. value_type 'grade' (a
+-- letter) or 'text' (free text, e.g. pre-primary "At school I enjoy").
+create table if not exists exam_report_area (
+    uuid varchar(12) primary key,
+    school_id varchar(12) not null,
+    academic_year_id varchar(12) not null,
+    scheme_id varchar(12) not null,
+    section varchar(48) not null,             -- 'Co-Scholastic' | 'Personality Development' | 'Other Areas'
+    label varchar(128) not null,
+    scale_kind varchar(24) not null,          -- 'coscholastic' (matches exam_report_grade_scale.kind)
+    value_type varchar(8) not null,           -- 'grade' | 'text'
+    sort_order integer,
+    status varchar(16) not null check (status in ('active', 'deleted')),
+    createdby_userid varchar(12),
+    created_at timestamp(0),
+    updatedby_userid varchar(12),
+    updated_at timestamp(0)
+);
+create index if not exists idx_exam_report_area_scheme
+    on exam_report_area(scheme_id, status);
+
+-- exam_report_grade_scale: the two legends (scholastic A1..E with % ranges; coscholastic A..D).
+-- Per scheme so a band can diverge (e.g. pre-primary A+..D). scholastic rows drive the computed
+-- subject grade (% -> letter); coscholastic rows are the class-teacher's allowed area choices.
+create table if not exists exam_report_grade_scale (
+    uuid varchar(12) primary key,
+    school_id varchar(12) not null,
+    academic_year_id varchar(12) not null,
+    scheme_id varchar(12) not null,
+    kind varchar(16) not null,                -- 'scholastic' | 'coscholastic'
+    grade varchar(8) not null,                -- 'A1','A2',...,'E' | 'A','B','C','D'
+    label varchar(64) not null,
+    min_pct integer,                          -- scholastic only (inclusive)
+    max_pct integer,
+    sort_order integer,
+    status varchar(16) not null check (status in ('active', 'deleted')),
+    createdby_userid varchar(12),
+    created_at timestamp(0),
+    updatedby_userid varchar(12),
+    updated_at timestamp(0)
+);
+create index if not exists idx_exam_report_grade_scale_scheme
+    on exam_report_grade_scale(scheme_id, kind, status);
+
+-- exam_report: the per-student card header (attendance, house, remark, promoted-to, photo) for
+-- one (student, academic-year, term). print_count/printed_at track system prints (Phase B).
+create table if not exists exam_report (
+    uuid varchar(12) primary key,
+    school_id varchar(12) not null,
+    academic_year_id varchar(12) not null,
+    term smallint not null,
+    student_id varchar(12) not null,
+    class_id varchar(12) not null,
+    attendance_present integer,
+    attendance_total integer,
+    house varchar(64),
+    remark text,
+    promoted_to varchar(64),
+    photo_ref varchar(12),
+    print_count integer,
+    printed_at timestamp(0),
+    status varchar(16) not null check (status in ('active', 'deleted')),
+    createdby_userid varchar(12),
+    created_at timestamp(0),
+    updatedby_userid varchar(12),
+    updated_at timestamp(0)
+);
+create unique index if not exists idx_exam_report_cell
+    on exam_report(school_id, academic_year_id, term, student_id) where status = 'active';
+
+-- exam_report_mark: one student's mark for a (subject, component) in a term. subject_teacher-entered.
+create table if not exists exam_report_mark (
+    uuid varchar(12) primary key,
+    school_id varchar(12) not null,
+    academic_year_id varchar(12) not null,
+    term smallint not null,
+    student_id varchar(12) not null,
+    class_id varchar(12) not null,
+    subject_code varchar(24) not null,        -- exam_report_subject.code
+    component_code varchar(24) not null,      -- exam_report_component.code
+    value numeric(6,2),
+    createdby_userid varchar(12),
+    created_at timestamp(0),
+    updatedby_userid varchar(12),
+    updated_at timestamp(0)
+);
+create unique index if not exists idx_exam_report_mark_cell
+    on exam_report_mark(school_id, academic_year_id, term, student_id, subject_code, component_code);
+create index if not exists idx_exam_report_mark_class
+    on exam_report_mark(school_id, academic_year_id, term, class_id, subject_code);
+
+-- exam_report_area_grade: one student's grade (or free text) for an area in a term. class_teacher-entered.
+create table if not exists exam_report_area_grade (
+    uuid varchar(12) primary key,
+    school_id varchar(12) not null,
+    academic_year_id varchar(12) not null,
+    term smallint not null,
+    student_id varchar(12) not null,
+    class_id varchar(12) not null,
+    area_id varchar(12) not null,             -- exam_report_area.uuid
+    grade varchar(8),
+    text_value text,
+    createdby_userid varchar(12),
+    created_at timestamp(0),
+    updatedby_userid varchar(12),
+    updated_at timestamp(0)
+);
+create unique index if not exists idx_exam_report_area_grade_cell
+    on exam_report_area_grade(school_id, academic_year_id, term, student_id, area_id);
+create index if not exists idx_exam_report_area_grade_class
+    on exam_report_area_grade(school_id, academic_year_id, term, class_id);

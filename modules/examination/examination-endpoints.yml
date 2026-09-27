@@ -603,3 +603,44 @@
           path: me/exam/rooms/{examId}/{roomId}/{date}/av-students
           method: post
           cors: true
+
+  # ── Report cards ──────────────────────────────────────────────────────────────────────
+  # All /me/report/* routes share ONE Lambda (internal dispatch on method+resource) to stay
+  # under CloudFormation's 500-resource-per-stack cap; /report/* is its own guarded function.
+  report-me:
+    handler: report-handler.reportMe
+    name: ${self:service}-report-me
+    events:
+      - http:
+          path: me/report/subjects
+          method: get
+          cors: true
+      - http:
+          path: me/report/classes
+          method: get
+          cors: true
+      - http:
+          path: me/report/marks/{classId}/{subjectCode}/{term}
+          method: get
+          cors: true
+      - http:
+          path: me/report/marks/{classId}/{subjectCode}/{term}
+          method: post
+          cors: true
+      - http:
+          path: me/report/coscholastic/{classId}/{term}
+          method: get
+          cors: true
+      - http:
+          path: me/report/coscholastic/{classId}/{term}
+          method: post
+          cors: true
+
+  report-admin:
+    handler: report-handler.reportAdmin
+    name: ${self:service}-report-admin
+    events:
+      - http:
+          path: report/progress/{term}
+          method: get
+          cors: true

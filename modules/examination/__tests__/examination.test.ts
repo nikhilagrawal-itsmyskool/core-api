@@ -1,8 +1,10 @@
 import {
   BASE_URL, headers, getContext, closePool, cleanupTestExams, TEST_MARKER,
   getSampleSection, cleanupBranding, getPaperId, cleanupSignature,
-  getSectionRolls, setRoll, restoreRolls,
+  getSectionRolls, setRoll, restoreRolls, cleanupReport,
 } from "./helpers";
+import { reportService } from "../report-service";
+import { DB } from "../../../shared/lib/db";
 
 // 1x1 transparent PNG for branding upload tests.
 const TINY_PNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
@@ -689,5 +691,102 @@ describe("examination: phase 4 — seating rooms", () => {
     const d = await del(`/examinations/${examId}/rooms/${roomId}`);
     expect(d.status).toBe(200);
     expect(d.body.rooms.filter((r: any) => r.kind !== "av").length).toBe(0);
+  });
+});
+
+// Report cards are entered through employee-scoped /me endpoints (subject/class teachers), which
+// the offline HTTP harness can't authenticate — so the marks/co-scholastic logic is exercised at
+// the SERVICE level here (the god-override path; teacher-access checks are role-gated, covered by
+// the authz layer). Runs in-process, so it closes the shared DB pool at the end.
+describe("examination: report cards (service)", () => {
+  let schoolId = "";
+  let ayId = "";
+  let section: { sectionClassId: string; grade: string; studentId: string; academicYearId: string } | null = null;
+  const reportIt = (name: string, fn: any) =>
+    it(name, async () => { if (!section) { console.warn(`[skip: no enrolment] ${name}`); return; } return fn(); });
+
+  beforeAll(async () => {
+    const ctx = await getContext();
+    schoolId = ctx.schoolId; ayId = ctx.academicYearId;
+    section = await getSampleSection();
+    if (section) ayId = section.academicYearId; // the year that actually has enrolment
+    // Reset schemes so ensureSchemes reseeds from the current definitions (fresh in each run).
+    for (const t of ["exam_report_scheme", "exam_report_component", "exam_report_subject", "exam_report_area", "exam_report_grade_scale"]) {
+      await DB.query(`delete from ${t} where school_id = $1 and academic_year_id = $2`, [schoolId, ayId]);
+    }
+  });
+  afterAll(async () => {
+    if (section) await cleanupReport(section.studentId, ayId);
+    await DB.end();
+  });
+
+  it("seeds FOUR bands idempotently (incl. pre-primary, which is grade-only + free-text)", async () => {
+    await reportService.ensureSchemes(schoolId, ayId, "system");
+    await reportService.ensureSchemes(schoolId, ayId, "system"); // second call must not duplicate
+    const schemes = await DB.query(`select uuid, band from exam_report_scheme where school_id = $1 and academic_year_id = $2 and status = 'active' order by band`, [schoolId, ayId]);
+    expect(schemes.map((s: any) => s.band).sort()).toEqual(["1-3", "4-5", "6-9", "pre-primary"]);
+    const pre = schemes.find((s: any) => s.band === "pre-primary");
+    const comps = await DB.query(`select count(*)::int n from exam_report_component where scheme_id = $1 and status = 'active'`, [pre.uuid]);
+    expect(comps[0].n).toBe(0); // pre-primary has no numeric marks
+    const textAreas = await DB.query(`select count(*)::int n from exam_report_area where scheme_id = $1 and value_type = 'text' and status = 'active'`, [pre.uuid]);
+    expect(textAreas[0].n).toBe(2); // "Specific Participation" + "At school I enjoy"
+    const plus = await DB.query(`select count(*)::int n from exam_report_grade_scale where scheme_id = $1 and kind = 'coscholastic' and grade = 'A+' and status = 'active'`, [pre.uuid]);
+    expect(plus[0].n).toBe(1); // A+ scale
+    const sch = await DB.query(`select count(*)::int n from exam_report_grade_scale where scheme_id = $1 and kind = 'scholastic' and status = 'active'`, [pre.uuid]);
+    expect(sch[0].n).toBe(0); // no scholastic scale for pre-primary
+  });
+
+  reportIt("resolves the class scheme, and marks save validates against the component max", async () => {
+    const scheme = await reportService.schemeForClass(schoolId, ayId, section!.sectionClassId, "system");
+    expect(scheme).toBeTruthy();
+    expect(["1-3", "4-5", "6-9"]).toContain(scheme.band);
+
+    // English exists in every band; term-1 grid lists its components + the class roster.
+    const grid = await reportService.marksGrid(schoolId, ayId, section!.sectionClassId, "ENG", 1, "system");
+    expect(grid.components.length).toBeGreaterThan(0);
+    expect(grid.students.length).toBeGreaterThan(0);
+
+    const comp = grid.components[0];
+    const stu = grid.students[0];
+    const saved = await reportService.saveMarks(schoolId, ayId, section!.sectionClassId, "ENG", 1,
+      [{ studentId: stu.studentId, marks: { [comp.code]: comp.max } }], "system", true);
+    expect(saved.students.find((s: any) => s.studentId === stu.studentId).marks[comp.code]).toBe(comp.max);
+
+    // Over the max is rejected.
+    let threw = false;
+    try {
+      await reportService.saveMarks(schoolId, ayId, section!.sectionClassId, "ENG", 1,
+        [{ studentId: stu.studentId, marks: { [comp.code]: comp.max + 1 } }], "system", true);
+    } catch { threw = true; }
+    expect(threw).toBe(true);
+  });
+
+  reportIt("co-scholastic grid saves an area grade + the class-teacher header", async () => {
+    const grid = await reportService.coscholasticGrid(schoolId, ayId, section!.sectionClassId, 1, "system");
+    expect(grid.areas.length).toBeGreaterThan(0);
+    expect(grid.scale.length).toBeGreaterThan(0);
+    const area = grid.areas.find((a: any) => a.valueType === "grade");
+    const stu = grid.students[0];
+    const saved = await reportService.saveCoscholastic(schoolId, ayId, section!.sectionClassId, 1,
+      [{ studentId: stu.studentId, grades: { [area.id]: "A" }, remark: "__test remark__", attendancePresent: 150, attendanceTotal: 180 }], "system", true);
+    const back = saved.students.find((s: any) => s.studentId === stu.studentId);
+    expect(back.grades[area.id]).toBe("A");
+    expect(back.remark).toBe("__test remark__");
+    expect(back.attendancePresent).toBe(150);
+  });
+
+  reportIt("progress dashboard reflects a fully-entered subject", async () => {
+    // Fill EVERY term-1 component of English for the whole class → English shows done for this class.
+    const grid = await reportService.marksGrid(schoolId, ayId, section!.sectionClassId, "ENG", 1, "system");
+    const entries = grid.students.map((s: any) => ({ studentId: s.studentId, marks: Object.fromEntries(grid.components.map((c: any) => [c.code, 1])) }));
+    await reportService.saveMarks(schoolId, ayId, section!.sectionClassId, "ENG", 1, entries, "system", true);
+    const p = await reportService.progress(schoolId, ayId, 1, "system");
+    const cls = p.classes.find((c: any) => c.classId === section!.sectionClassId);
+    expect(cls).toBeTruthy();
+    const eng = cls.subjects.find((x: any) => x.subjectCode === "ENG");
+    expect(eng.complete).toBe(eng.total);
+    expect(eng.done).toBe(true);
+    // Clean the marks we just wrote for the whole class (not only the sample student).
+    for (const s of grid.students) await cleanupReport(s.studentId, ayId);
   });
 });
