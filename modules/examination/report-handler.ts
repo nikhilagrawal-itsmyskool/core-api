@@ -27,7 +27,7 @@ class ReportHandler {
       if (!emp) return;
       const ay = await this.ay(event, emp.schoolId);
       if (!ay) { ResponseBuilder.ok({ subjects: [] }, callback); return; }
-      ResponseBuilder.ok({ academicYearId: ay, subjects: await reportService.mySubjects(emp.schoolId, ay, emp.employeeId) }, callback);
+      ResponseBuilder.ok({ academicYearId: ay, currentTerm: await reportService.currentTerm(emp.schoolId, ay), subjects: await reportService.mySubjects(emp.schoolId, ay, emp.employeeId) }, callback);
     } catch (err: any) { ResponseBuilder.handleError(err, callback); }
   };
 
@@ -76,7 +76,7 @@ class ReportHandler {
       if (!emp) return;
       const ay = await this.ay(event, emp.schoolId);
       if (!ay) { ResponseBuilder.ok({ classes: [] }, callback); return; }
-      ResponseBuilder.ok({ academicYearId: ay, classes: await reportService.myReportClasses(emp.schoolId, ay, emp.employeeId, callerIsExamOverride(event)) }, callback);
+      ResponseBuilder.ok({ academicYearId: ay, currentTerm: await reportService.currentTerm(emp.schoolId, ay), classes: await reportService.myReportClasses(emp.schoolId, ay, emp.employeeId, callerIsExamOverride(event)) }, callback);
     } catch (err: any) { ResponseBuilder.handleError(err, callback); }
   };
 
@@ -124,7 +124,7 @@ class ReportHandler {
       const term = this.term(event);
       const ay = await this.ay(event, auth.schoolId);
       if (!ay) { ResponseBuilder.ok({ term, classes: [], pctEntered: 0, pendingSubjects: 0 }, callback); return; }
-      ResponseBuilder.ok(await reportService.progress(auth.schoolId, ay, term, auth.userId), callback);
+      ResponseBuilder.ok({ ...(await reportService.progress(auth.schoolId, ay, term, auth.userId)), currentTerm: await reportService.currentTerm(auth.schoolId, ay) }, callback);
     } catch (err: any) { ResponseBuilder.handleError(err, callback); }
   };
 
@@ -222,6 +222,32 @@ class ReportHandler {
       ResponseBuilder.ok(await reportService.saveScheme(auth.schoolId, ay, band, body, auth.userId), callback);
     } catch (err: any) { ResponseBuilder.handleError(err, callback); }
   };
+
+  // GET /report/config — { term2StartsOn, currentTerm }
+  public getReportConfig = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const auth = await resolveSchool(event, callback);
+      if (!auth) return;
+      const ay = await this.ay(event, auth.schoolId);
+      if (!ay) { ResponseBuilder.ok({ term2StartsOn: null, currentTerm: 1 }, callback); return; }
+      ResponseBuilder.ok({ ...(await reportService.getConfig(auth.schoolId, ay)), currentTerm: await reportService.currentTerm(auth.schoolId, ay) }, callback);
+    } catch (err: any) { ResponseBuilder.handleError(err, callback); }
+  };
+
+  // POST /report/config { term2StartsOn }
+  public setReportConfig = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const auth = await resolveSchool(event, callback);
+      if (!auth) return;
+      const ay = await this.ay(event, auth.schoolId);
+      if (!ay) { ResponseBuilder.badRequest(ErrorCode.BusinessError, "No academic year", callback); return; }
+      const body = parseBody<{ term2StartsOn?: string | null }>(event, callback);
+      if (!body) return;
+      ResponseBuilder.ok(await reportService.setConfig(auth.schoolId, ay, body.term2StartsOn || null, auth.userId), callback);
+    } catch (err: any) { ResponseBuilder.handleError(err, callback); }
+  };
 }
 
 // requireParam echoes an error to the callback on miss; term has a sane default so read it raw.
@@ -269,4 +295,6 @@ export const reportAdmin = guard(ACTIONS.EXAM_MANAGE, dispatch({
   "POST /report/cards/{classId}/{term}": h.recordReportPrint,
   "GET /report/scheme/{band}": h.getScheme,
   "POST /report/scheme/{band}": h.saveScheme,
+  "GET /report/config": h.getReportConfig,
+  "POST /report/config": h.setReportConfig,
 }));

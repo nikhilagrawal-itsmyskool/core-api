@@ -668,3 +668,11 @@
           path: report/scheme/{band}
           method: post
           cors: true
+      - http:
+          path: report/config
+          method: get
+          cors: true
+      - http:
+          path: report/config
+          method: post
+          cors: true

@@ -481,6 +481,35 @@ class ReportService {
     return this.getScheme(schoolId, ayId, band, userId);
   }
 
+  // ── Report config (term-2 start → default term) ─────────────────────────────────────
+  async getConfig(schoolId: string, ayId: string): Promise<{ term2StartsOn: string | null }> {
+    const r = await DB.query(
+      singleLineString`select to_char(term2_starts_on, 'YYYY-MM-DD') as term2_starts_on from exam_report_config where school_id = $1 and academic_year_id = $2`,
+      [schoolId, ayId],
+    );
+    return { term2StartsOn: r.length ? r[0].term2StartsOn : null };
+  }
+
+  // The default term for today: before term2_starts_on → 1, on/after → 2 (blank → 1). Not hard-coded.
+  async currentTerm(schoolId: string, ayId: string): Promise<number> {
+    const { term2StartsOn } = await this.getConfig(schoolId, ayId);
+    if (!term2StartsOn) return 1;
+    const today = new Date().toISOString().slice(0, 10);
+    return today >= term2StartsOn ? 2 : 1;
+  }
+
+  async setConfig(schoolId: string, ayId: string, term2StartsOn: string | null, userId: string): Promise<any> {
+    const val = term2StartsOn && /^\d{4}-\d{2}-\d{2}$/.test(term2StartsOn) ? term2StartsOn : null;
+    const now = new Date();
+    const ex = await DB.query(singleLineString`select 1 from exam_report_config where school_id = $1 and academic_year_id = $2`, [schoolId, ayId]);
+    if (ex.length) {
+      await DB.query(singleLineString`update exam_report_config set term2_starts_on = $3, updatedby_userid = $4, updated_at = $5 where school_id = $1 and academic_year_id = $2`, [schoolId, ayId, val, userId, now]);
+    } else {
+      await DB.query(singleLineString`insert into exam_report_config (school_id, academic_year_id, term2_starts_on, updatedby_userid, updated_at) values ($1,$2,$3,$4,$5)`, [schoolId, ayId, val, userId, now]);
+    }
+    return { term2StartsOn: val, currentTerm: await this.currentTerm(schoolId, ayId) };
+  }
+
   // ── Printed report cards (Phase B) ──────────────────────────────────────────────────
   private matchScholastic(scale: any[], pct: number): string | null {
     const r = scale.find((s: any) => s.minPct != null && s.maxPct != null && pct >= Number(s.minPct) && pct <= Number(s.maxPct));

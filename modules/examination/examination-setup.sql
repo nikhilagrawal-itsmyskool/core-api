@@ -584,6 +584,18 @@ create table if not exists exam_report (
 create unique index if not exists idx_exam_report_cell
     on exam_report(school_id, academic_year_id, term, student_id) where status = 'active';
 
+-- exam_report_config: per-(school, academic-year) report settings. `term2_starts_on` drives the
+-- default term on the entry/report screens — before it → Term 1, on/after → Term 2 (blank →
+-- always Term 1). Never hard-coded; the school sets the date.
+create table if not exists exam_report_config (
+    school_id varchar(12) not null,
+    academic_year_id varchar(12) not null,
+    term2_starts_on date,
+    updatedby_userid varchar(12),
+    updated_at timestamp(0),
+    primary key (school_id, academic_year_id)
+);
+
 -- exam_report_teacher: the exam-incharge's explicit teacher assignment for a (class, report
 -- subject). ONE teacher per subject. When set, it OVERRIDES the syllabus-derived access (so
 -- marks-entry no longer depends on the fuzzy syllabus name match); when absent, access falls
