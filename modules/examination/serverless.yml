@@ -12,6 +12,12 @@ custom:
   fullServiceName: ${self:custom.prefix}-${self:custom.baseServiceName}
   customDomain:
    basePath: 'examination'
+  # Nest each function into its own CloudFormation sub-stack so the module isn't capped at the
+  # 500-resource-per-stack limit (same config assembly + fees already run).
+  splitStacks:
+    perFunction: true
+    perType: false
+    perGroupFunction: false
   $<<: ${file(../global-config-${self:provider.stage}.yml):custom}
 
 service: ${self:provider.stage}-${self:custom.fullServiceName}
@@ -24,6 +30,7 @@ plugins:
   - serverless-domain-manager
   - ../../plugins/serverless-cors-defaults.js
   - ../../plugins/serverless-authorizer.js
+  - serverless-plugin-split-stacks
 
 functions: ${file(examination-endpoints.yml)}
 
