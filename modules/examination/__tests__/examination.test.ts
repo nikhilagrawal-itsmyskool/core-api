@@ -711,7 +711,7 @@ describe("examination: report cards (service)", () => {
     section = await getSampleSection();
     if (section) ayId = section.academicYearId; // the year that actually has enrolment
     // Reset schemes so ensureSchemes reseeds from the current definitions (fresh in each run).
-    for (const t of ["exam_report_scheme", "exam_report_component", "exam_report_subject", "exam_report_area", "exam_report_grade_scale"]) {
+    for (const t of ["exam_report_scheme", "exam_report_component", "exam_report_subject", "exam_report_area", "exam_report_grade_scale", "exam_report_teacher"]) {
       await DB.query(`delete from ${t} where school_id = $1 and academic_year_id = $2`, [schoolId, ayId]);
     }
   });
@@ -788,5 +788,24 @@ describe("examination: report cards (service)", () => {
     expect(eng.done).toBe(true);
     // Clean the marks we just wrote for the whole class (not only the sample student).
     for (const s of grid.students) await cleanupReport(s.studentId, ayId);
+  });
+
+  reportIt("subject mapping: an explicit teacher assignment overrides access", async () => {
+    const cls = section!.sectionClassId;
+    const before = await reportService.subjectMapping(schoolId, ayId, cls, "system");
+    expect(before.subjects.find((s: any) => s.subjectCode === "ENG")).toBeTruthy();
+
+    const m = await reportService.assignSubjectTeacher(schoolId, ayId, cls, "ENG", "teachertst1", "system");
+    const engAfter = m.subjects.find((s: any) => s.subjectCode === "ENG");
+    expect(engAfter.assignedTeacherId).toBe("teachertst1");
+    expect(engAfter.source).toBe("assigned");
+
+    // The assigned teacher can enter; anyone else cannot (explicit assignment is authoritative).
+    expect(await reportService.canEnterSubject(schoolId, ayId, cls, "ENG", "teachertst1", false)).toBe(true);
+    expect(await reportService.canEnterSubject(schoolId, ayId, cls, "ENG", "someoneelse", false)).toBe(false);
+
+    // Reverting clears the override (back to syllabus/none).
+    const rev = await reportService.assignSubjectTeacher(schoolId, ayId, cls, "ENG", "", "system");
+    expect(rev.subjects.find((s: any) => s.subjectCode === "ENG").source).not.toBe("assigned");
   });
 });

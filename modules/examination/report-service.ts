@@ -183,13 +183,32 @@ class ReportService {
 
   private async classStudents(schoolId: string, ayId: string, classId: string): Promise<any[]> {
     return DB.query(
-      singleLineString`select s.uuid as student_id, s.name, s.admission_number, sc.roll_number
+      singleLineString`select s.uuid as student_id, s.name, s.admission_number, sc.roll_number,
+          (select h.name from house h where h.uuid = s.house_id) as house_name
         from student_class sc
         join student s on s.uuid = sc.student_id and s.school_id = sc.school_id and s.status = 'active'
         where sc.class_id = $1 and sc.academic_year_id = $2 and sc.school_id = $3 and (sc.status is null or sc.status <> 'deleted')
         order by sc.roll_number asc nulls last, s.name`,
       [classId, ayId, schoolId],
     );
+  }
+
+  // Live attendance for a class up to today: total finalized sessions (same for everyone) +
+  // each student's present-or-late count. Prefills the report header (the class teacher can edit).
+  private async attendanceSummary(schoolId: string, ayId: string, classId: string): Promise<{ total: number; present: Map<string, number> }> {
+    const totalRows = await DB.query(
+      singleLineString`select count(*)::int as n from attendance_session
+        where school_id = $1 and academic_year_id = $2 and class_id = $3 and status = 'finalized' and attendance_date <= current_date`,
+      [schoolId, ayId, classId],
+    );
+    const presentRows = await DB.query(
+      singleLineString`select ar.student_id, count(*)::int as n from attendance_record ar
+        join attendance_session ses on ses.uuid = ar.session_id and ses.status = 'finalized'
+          and ses.academic_year_id = $2 and ses.class_id = $3 and ses.attendance_date <= current_date
+        where ar.school_id = $1 and ar.status in ('present', 'late') group by ar.student_id`,
+      [schoolId, ayId, classId],
+    );
+    return { total: Number(totalRows[0]?.n || 0), present: new Map(presentRows.map((r: any) => [r.studentId, Number(r.n)])) };
   }
 
   private async schemeComponents(schemeId: string, term: number): Promise<any[]> {
@@ -230,24 +249,57 @@ class ReportService {
     return rows.length > 0;
   }
 
+  // The exam-incharge's explicit teacher for a (class, subject), or null (→ fall back to syllabus).
+  private async explicitTeacherId(schoolId: string, ayId: string, classId: string, subjectCode: string): Promise<string | null> {
+    const rows = await DB.query(
+      singleLineString`select teacher_id from exam_report_teacher where school_id = $1 and academic_year_id = $2 and class_id = $3 and subject_code = $4 and status = 'active' limit 1`,
+      [schoolId, ayId, classId, subjectCode],
+    );
+    return rows.length ? rows[0].teacherId : null;
+  }
+
+  // Can this employee enter marks for (class, subject)? An explicit assignment wins outright;
+  // otherwise fall back to the syllabus offering.
+  private async canTeach(schoolId: string, ayId: string, classId: string, subjectCode: string, syllabusSubjectList: string, employeeId: string): Promise<boolean> {
+    const explicit = await this.explicitTeacherId(schoolId, ayId, classId, subjectCode);
+    if (explicit) return explicit === employeeId;
+    return this.teachesSubject(schoolId, ayId, classId, syllabusSubjectList, employeeId);
+  }
+
+  // Distinct syllabus teachers pinned to a (class) for any of a subject's syllabus names.
+  private async syllabusTeachersFor(schoolId: string, ayId: string, classId: string, syllabusSubjectList: string): Promise<{ id: string; name: string }[]> {
+    const names = this.syllabusNames(syllabusSubjectList);
+    if (!names.length) return [];
+    const rows = await DB.query(
+      singleLineString`select distinct pt.teacher_id, e.name
+        from syllabus_plan_teacher pt
+        join syllabus sy on sy.uuid = pt.syllabus_id and sy.status = 'active' and sy.academic_year_id = $2
+        join syllabus_subject ss on ss.uuid = sy.subject_id and ss.status = 'active'
+        left join employee e on e.uuid = pt.teacher_id and e.school_id = pt.school_id
+        where pt.school_id = $1 and pt.class_id = $3 and pt.status = 'active' and lower(trim(ss.name)) = any($4)`,
+      [schoolId, ayId, classId, names],
+    );
+    return rows.map((r: any) => ({ id: r.teacherId, name: r.name }));
+  }
+
   // Classes the caller may enter co-scholastic for: the class(es) they are class-teacher of,
   // or — for a god/exam-incharge override — every class with enrolment this year.
   async myReportClasses(schoolId: string, ayId: string, employeeId: string, isOverride: boolean): Promise<any[]> {
     if (isOverride) {
       return DB.query(
-        singleLineString`select distinct sc.class_id, c.name as class_name
+        singleLineString`select distinct sc.class_id, c.name as class_name, c.seq
           from student_class sc join class c on c.uuid = sc.class_id and c.school_id = sc.school_id and c.base_class_id is null
           join student s on s.uuid = sc.student_id and s.school_id = sc.school_id and s.status = 'active'
           where sc.school_id = $1 and sc.academic_year_id = $2 and (sc.status is null or sc.status <> 'deleted')
-          order by c.name`,
+          order by c.seq asc nulls last, c.name`,
         [schoolId, ayId],
       );
     }
     return DB.query(
-      singleLineString`select ct.class_id, c.name as class_name
+      singleLineString`select ct.class_id, c.name as class_name, c.seq
         from class_teacher ct join class c on c.uuid = ct.class_id and c.school_id = ct.school_id
         where ct.school_id = $1 and ct.academic_year_id = $2 and ct.teacher_id = $3 and ct.status = 'active'
-        order by c.name`,
+        order by c.seq asc nulls last, c.name`,
       [schoolId, ayId, employeeId],
     );
   }
@@ -263,7 +315,31 @@ class ReportService {
   // The (class, subject) pairs a teacher may enter marks for — their syllabus offerings mapped
   // onto each class's report scheme.
   async mySubjects(schoolId: string, ayId: string, employeeId: string): Promise<any[]> {
-    const rows = await DB.query(
+    // Every explicit assignment for the year: whichever (class, subject) are pinned, and to whom.
+    const explicit = await DB.query(
+      singleLineString`select class_id, subject_code, teacher_id from exam_report_teacher where school_id = $1 and academic_year_id = $2 and status = 'active'`,
+      [schoolId, ayId],
+    );
+    const explicitBy = new Map<string, string>(explicit.map((r: any) => [`${r.classId}|${r.subjectCode}`, r.teacherId]));
+
+    const out: any[] = [];
+    const seen = new Set<string>();
+    const add = async (classId: string, subjectCode: string) => {
+      const key = `${classId}|${subjectCode}`;
+      if (seen.has(key)) return;
+      const scheme = await this.schemeForClass(schoolId, ayId, classId, employeeId);
+      if (!scheme) return;
+      const subj = (await this.schemeSubjects(scheme.uuid)).find((s: any) => s.code === subjectCode);
+      if (!subj) return;
+      seen.add(key);
+      out.push({ classId, className: scheme.className, subjectCode, reportLabel: subj.reportLabel, schemeId: scheme.uuid, band: scheme.band });
+    };
+
+    // 1) Subjects explicitly assigned to me — these hold even without a syllabus offering.
+    for (const r of explicit as any[]) if (r.teacherId === employeeId) await add(r.classId, r.subjectCode);
+
+    // 2) Syllabus-derived subjects — but skip any (class, subject) explicitly claimed by someone else.
+    const syl = await DB.query(
       singleLineString`select distinct pt.class_id, c.name as class_name, ss.name as syllabus_subject
         from syllabus_plan_teacher pt
         join syllabus sy on sy.uuid = pt.syllabus_id and sy.status = 'active' and sy.academic_year_id = $2
@@ -273,17 +349,68 @@ class ReportService {
         order by c.name`,
       [schoolId, ayId, employeeId],
     );
-    const out: any[] = [];
-    for (const r of rows) {
+    for (const r of syl as any[]) {
       const scheme = await this.schemeForClass(schoolId, ayId, r.classId, employeeId);
       if (!scheme) continue;
-      const subjects = await this.schemeSubjects(scheme.uuid);
       const target = String(r.syllabusSubject || "").trim().toLowerCase();
-      const match = subjects.find((s: any) => this.syllabusNames(s.syllabusSubject).includes(target));
+      const match = (await this.schemeSubjects(scheme.uuid)).find((s: any) => this.syllabusNames(s.syllabusSubject).includes(target));
       if (!match) continue;
-      out.push({ classId: r.classId, className: r.className, subjectCode: match.code, reportLabel: match.reportLabel, schemeId: scheme.uuid, band: scheme.band });
+      const claimed = explicitBy.get(`${r.classId}|${match.code}`);
+      if (claimed && claimed !== employeeId) continue; // someone else owns this subject explicitly
+      await add(r.classId, match.code);
     }
     return out;
+  }
+
+  // ── Subject mapping (exam-incharge) ─────────────────────────────────────────────────
+  // Per class: each report subject, the syllabus subjects it draws from, the syllabus-derived
+  // teacher(s), and the currently-effective teacher (an explicit assignment wins over syllabus).
+  async subjectMapping(schoolId: string, ayId: string, classId: string, userId: string): Promise<any> {
+    const scheme = await this.schemeForClass(schoolId, ayId, classId, userId);
+    if (!scheme) throw new BusinessErrorResult(ErrorCode.BusinessError, "No report scheme for this class");
+    const subjects = await this.schemeSubjects(scheme.uuid);
+    const out: any[] = [];
+    for (const subj of subjects) {
+      const assignedId = await this.explicitTeacherId(schoolId, ayId, classId, subj.code);
+      const assignedName = assignedId ? await this.empName(schoolId, assignedId) : null;
+      const sylTeachers = await this.syllabusTeachersFor(schoolId, ayId, classId, subj.syllabusSubject);
+      out.push({
+        subjectCode: subj.code, reportLabel: subj.reportLabel,
+        syllabusSubjects: this.syllabusNames(subj.syllabusSubject).length ? String(subj.syllabusSubject) : null,
+        syllabusTeachers: sylTeachers,
+        assignedTeacherId: assignedId, assignedTeacherName: assignedName,
+        effectiveTeacher: assignedName || sylTeachers[0]?.name || null,
+        source: assignedId ? "assigned" : (sylTeachers.length ? "syllabus" : "none"),
+      });
+    }
+    return { className: scheme.className, band: scheme.band, subjects: out };
+  }
+
+  private async empName(schoolId: string, employeeId: string): Promise<string | null> {
+    const r = await DB.query(singleLineString`select name from employee where uuid = $1 and school_id = $2`, [employeeId, schoolId]);
+    return r.length ? r[0].name : null;
+  }
+
+  // Assign (or clear) the explicit teacher for a (class, subject). Empty teacherId reverts to syllabus.
+  async assignSubjectTeacher(schoolId: string, ayId: string, classId: string, subjectCode: string, teacherId: string, userId: string): Promise<any> {
+    const scheme = await this.schemeForClass(schoolId, ayId, classId, userId);
+    if (!scheme) throw new BusinessErrorResult(ErrorCode.BusinessError, "No report scheme for this class");
+    if (!(await this.schemeSubjects(scheme.uuid)).some((s: any) => s.code === subjectCode)) {
+      throw new BusinessErrorResult(ErrorCode.BusinessError, "Subject not in this class's scheme");
+    }
+    const now = new Date();
+    await DB.query(
+      singleLineString`update exam_report_teacher set status = 'deleted', updatedby_userid = $4, updated_at = $5 where school_id = $1 and academic_year_id = $2 and class_id = $3 and subject_code = $6 and status = 'active'`,
+      [schoolId, ayId, classId, userId, now, subjectCode],
+    );
+    if (teacherId && teacherId.trim()) {
+      await DB.query(
+        singleLineString`insert into exam_report_teacher (uuid, school_id, academic_year_id, class_id, subject_code, teacher_id, status, createdby_userid, created_at)
+          values ($1,$2,$3,$4,$5,$6,'active',$7,$8)`,
+        [generateShortUuid(12), schoolId, ayId, classId, subjectCode, teacherId.trim(), userId, now],
+      );
+    }
+    return this.subjectMapping(schoolId, ayId, classId, userId);
   }
 
   // Whether a caller may view/enter a (class, subject) — the assigned syllabus teacher, or
@@ -295,7 +422,7 @@ class ReportService {
     const subjects = await this.schemeSubjects(scheme.uuid);
     const subject = subjects.find((s: any) => s.code === subjectCode);
     if (!subject) return false;
-    return this.teachesSubject(schoolId, ayId, classId, subject.syllabusSubject, employeeId);
+    return this.canTeach(schoolId, ayId, classId, subjectCode, subject.syllabusSubject, employeeId);
   }
 
   // ── Marks entry ────────────────────────────────────────────────────────────────────
@@ -333,7 +460,7 @@ class ReportService {
     const subjects = await this.schemeSubjects(scheme.uuid);
     const subject = subjects.find((s: any) => s.code === subjectCode);
     if (!subject) throw new BusinessErrorResult(ErrorCode.BusinessError, "Subject not in this class's scheme");
-    if (!isOverride && !(await this.teachesSubject(schoolId, ayId, classId, subject.syllabusSubject, employeeId))) {
+    if (!isOverride && !(await this.canTeach(schoolId, ayId, classId, subjectCode, subject.syllabusSubject, employeeId))) {
       throw new BusinessErrorResult(ErrorCode.BusinessError, "You are not the assigned teacher for this subject in this class");
     }
     const components = await this.schemeComponents(scheme.uuid, term);
@@ -397,16 +524,22 @@ class ReportService {
       [schoolId, ayId, term, classId],
     );
     const hmap = new Map<string, any>(headers.map((h: any) => [h.studentId, h]));
+    const houses = await DB.query(singleLineString`select name from house where school_id = $1 and status = 'active' order by name`, [schoolId]);
+    const att = await this.attendanceSummary(schoolId, ayId, classId);
     return {
       className: scheme.className, term,
       scale: scale.map((s: any) => ({ grade: s.grade, label: s.label })),
+      houses: houses.map((h: any) => h.name),
       areas: areas.map((a: any) => ({ id: a.uuid, section: a.section, label: a.label, valueType: a.valueType })),
       students: students.map((s: any) => {
         const h: any = hmap.get(s.studentId) || {};
+        // Prefill house from the student's lifelong assignment and attendance live from records;
+        // a saved header value (the class teacher's own edit) always wins.
         return {
           studentId: s.studentId, name: s.name, admissionNumber: s.admissionNumber, rollNumber: s.rollNumber,
-          attendancePresent: h.attendancePresent ?? null, attendanceTotal: h.attendanceTotal ?? null,
-          house: h.house ?? null, remark: h.remark ?? null,
+          attendancePresent: h.attendancePresent ?? (att.present.get(s.studentId) ?? 0),
+          attendanceTotal: h.attendanceTotal ?? att.total,
+          house: h.house ?? s.houseName ?? null, remark: h.remark ?? null,
           grades: Object.fromEntries(areas.map((a: any) => {
             const g: any = gmap.get(`${s.studentId}|${a.uuid}`);
             return [a.uuid, g ? (a.valueType === "text" ? g.textValue : g.grade) : null];
@@ -490,11 +623,11 @@ class ReportService {
     await this.ensureSchemes(schoolId, ayId, userId);
     // Classes that have a scheme = classes with an active student_class enrolment this year.
     const classes = await DB.query(
-      singleLineString`select distinct sc.class_id, c.name as class_name
+      singleLineString`select distinct sc.class_id, c.name as class_name, c.seq
         from student_class sc join class c on c.uuid = sc.class_id and c.school_id = sc.school_id and c.base_class_id is null
         join student s on s.uuid = sc.student_id and s.school_id = sc.school_id and s.status = 'active'
         where sc.school_id = $1 and sc.academic_year_id = $2 and (sc.status is null or sc.status <> 'deleted')
-        order by c.name`,
+        order by c.seq asc nulls last, c.name`,
       [schoolId, ayId],
     );
     const out: any[] = [];

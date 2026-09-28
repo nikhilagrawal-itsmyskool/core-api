@@ -644,3 +644,11 @@
           path: report/progress/{term}
           method: get
           cors: true
+      - http:
+          path: report/mapping/{classId}
+          method: get
+          cors: true
+      - http:
+          path: report/mapping/{classId}
+          method: post
+          cors: true

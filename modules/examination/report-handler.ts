@@ -127,6 +127,39 @@ class ReportHandler {
       ResponseBuilder.ok(await reportService.progress(auth.schoolId, ay, term, auth.userId), callback);
     } catch (err: any) { ResponseBuilder.handleError(err, callback); }
   };
+
+  // GET /report/mapping/{classId} — per-class subject → teacher mapping (guarded).
+  public getSubjectMapping = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const auth = await resolveSchool(event, callback);
+      if (!auth) return;
+      const classId = requireParam(event, "classId", callback);
+      if (!classId) return;
+      const ay = await this.ay(event, auth.schoolId);
+      if (!ay) { ResponseBuilder.badRequest(ErrorCode.BusinessError, "No academic year", callback); return; }
+      ResponseBuilder.ok(await reportService.subjectMapping(auth.schoolId, ay, classId, auth.userId), callback);
+    } catch (err: any) { ResponseBuilder.handleError(err, callback); }
+  };
+
+  // POST /report/mapping/{classId} { subjectCode, teacherId } — assign/clear the subject teacher.
+  // subjectCode is in the body (not the path) so GET+POST share one API-Gateway resource.
+  public assignSubjectTeacher = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const auth = await resolveSchool(event, callback);
+      if (!auth) return;
+      const classId = requireParam(event, "classId", callback);
+      if (!classId) return;
+      const ay = await this.ay(event, auth.schoolId);
+      if (!ay) { ResponseBuilder.badRequest(ErrorCode.BusinessError, "No academic year", callback); return; }
+      const body = parseBody<{ subjectCode?: string; teacherId?: string }>(event, callback);
+      if (!body) return;
+      const subjectCode = (body.subjectCode || "").trim();
+      if (!subjectCode) { ResponseBuilder.badRequest(ErrorCode.BusinessError, "subjectCode is required", callback); return; }
+      ResponseBuilder.ok(await reportService.assignSubjectTeacher(auth.schoolId, ay, classId, subjectCode, body.teacherId || "", auth.userId), callback);
+    } catch (err: any) { ResponseBuilder.handleError(err, callback); }
+  };
 }
 
 // requireParam echoes an error to the callback on miss; term has a sane default so read it raw.
@@ -147,13 +180,27 @@ const ME_ROUTES: Record<string, any> = {
   "GET /me/report/coscholastic/{classId}/{term}": h.getMyCoscholastic,
   "POST /me/report/coscholastic/{classId}/{term}": h.saveMyCoscholastic,
 };
-export const reportMe = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+// Resolve "METHOD /path" from an event, tolerating serverless-offline's /examination prefix.
+function routeKey(event: ApiEvent): string {
   const anyEvent = event as any;
   const method = event.httpMethod || anyEvent.requestContext?.http?.method;
-  const resource = event.resource || anyEvent.requestContext?.resourcePath || anyEvent.requestContext?.http?.path || "";
-  const fn = ME_ROUTES[`${method} ${resource}`] || ME_ROUTES[`${method} ${resource.replace(/^\/?examination/, "")}`];
-  if (!fn) { ResponseBuilder.notFound(ErrorCode.GeneralError, "Not found", callback); return; }
-  return fn(event, ctx, callback);
-};
-// /report — guarded (exam-incharge dashboard).
-export const reportAdmin = guard(ACTIONS.EXAM_VIEW, h.getProgress);
+  const resource = (event.resource || anyEvent.requestContext?.resourcePath || anyEvent.requestContext?.http?.path || "").replace(/^\/?examination/, "");
+  return `${method} ${resource}`;
+}
+function dispatch(routes: Record<string, any>) {
+  return async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    const fn = routes[routeKey(event)];
+    if (!fn) { ResponseBuilder.notFound(ErrorCode.GeneralError, "Not found", callback); return; }
+    return fn(event, ctx, callback);
+  };
+}
+
+export const reportMe = dispatch(ME_ROUTES);
+
+// /report — the exam-incharge surface (dashboard + subject mapping read/write). One guarded
+// dispatcher (exam.manage) so it stays a single Lambda under CloudFormation's 500-resource cap.
+export const reportAdmin = guard(ACTIONS.EXAM_MANAGE, dispatch({
+  "GET /report/progress/{term}": h.getProgress,
+  "GET /report/mapping/{classId}": h.getSubjectMapping,
+  "POST /report/mapping/{classId}": h.assignSubjectTeacher,
+}));

@@ -584,6 +584,26 @@ create table if not exists exam_report (
 create unique index if not exists idx_exam_report_cell
     on exam_report(school_id, academic_year_id, term, student_id) where status = 'active';
 
+-- exam_report_teacher: the exam-incharge's explicit teacher assignment for a (class, report
+-- subject). ONE teacher per subject. When set, it OVERRIDES the syllabus-derived access (so
+-- marks-entry no longer depends on the fuzzy syllabus name match); when absent, access falls
+-- back to the syllabus offering. Per academic year.
+create table if not exists exam_report_teacher (
+    uuid varchar(12) primary key,
+    school_id varchar(12) not null,
+    academic_year_id varchar(12) not null,
+    class_id varchar(12) not null,
+    subject_code varchar(24) not null,        -- exam_report_subject.code
+    teacher_id varchar(12) not null,
+    status varchar(16) not null check (status in ('active', 'deleted')),
+    createdby_userid varchar(12),
+    created_at timestamp(0),
+    updatedby_userid varchar(12),
+    updated_at timestamp(0)
+);
+create unique index if not exists idx_exam_report_teacher_cell
+    on exam_report_teacher(school_id, academic_year_id, class_id, subject_code) where status = 'active';
+
 -- exam_report_mark: one student's mark for a (subject, component) in a term. subject_teacher-entered.
 create table if not exists exam_report_mark (
     uuid varchar(12) primary key,
