@@ -14,7 +14,7 @@ type Band = {
   name: string;
   grades: string; // csv of grade prefixes
   components: Record<number, [string, string, number][]>; // term -> [code, label, max][]
-  subjects: [string, string, string][]; // [code, reportLabel, syllabusSubject]
+  subjects: [string, string, string, string?][]; // [code, reportLabel, syllabusSubject, appliesToGrades?]
   areas: Record<string, AreaEntry[]>; // section -> entries[]
   scholastic?: [string, string, number, number][]; // default = SCHOLASTIC_SCALE; [] = none (pre-primary)
   coscholastic?: [string, string][]; // default = COSCHOLASTIC_SCALE
@@ -40,14 +40,36 @@ const JUNIOR_AREAS: Record<string, string[]> = {
   "Other Areas": ["Discipline", "Value Systems", "Social Skills", "Scientific Skills", "Thinking Skills", "Emotional Skills"],
 };
 
+// Grade-band structure (school-specific). Each scheme = one distinct (subjects × mark-columns)
+// combination: 1-2 (EVS, junior 7-col), 3 alone (Science/Social Studies subjects but still the
+// junior 7-col), 4-5 (same subjects, 5-col), 6-8 (Sanskrit in), 9 (Computer→IT, no Sanskrit).
+const JUNIOR_7COL = {
+  1: [["PT1", "PT-I", 10], ["CT1", "Class Test", 10], ["NB1", "NB-I", 5], ["SEA1", "SEA", 5], ["CP1", "Class Perf", 10], ["ORAL1", "Oral", 10], ["HY", "Half Yearly", 50]],
+  2: [["PT2", "PT-II", 10], ["CT2", "Class Test", 10], ["NB2", "NB-II", 5], ["SEA2", "SEA", 5], ["CP2", "Class Perf", 10], ["ORAL2", "Oral", 10], ["ANNUAL", "Annual Exam", 50]],
+} as Record<number, [string, string, number][]>;
+const SENIOR_4COL = {
+  1: [["PT1", "PT-I", 10], ["NB1", "NB-I", 5], ["SEA1", "SEA", 5], ["HY", "Half Yearly", 80]],
+  2: [["PT2", "PT-II", 10], ["NB2", "NB-II", 5], ["SEA2", "SEA", 5], ["ANNUAL", "Annual Exam", 80]],
+} as Record<number, [string, string, number][]>;
+const MIDDLE_SUBJECTS: [string, string, string, string?][] = [["ENG", "English", "English,English I"], ["HIN", "Hindi", "Hindi,Hindi I"], ["MATH", "Mathematics", "Mathematics"], ["SCI", "Science", "Science"], ["SST", "Social Studies", "Social Studies"], ["COMP", "Computer Science", "Computer"]];
+const SENIOR_AREAS = {
+  "Co-Scholastic": ["Work Education", "Value Education", "General Awareness and Reasoning", "Art Education", "Physical Education"],
+  "Other Areas": ["Discipline", "English Conversation", "Value System", "Performing Art", "Sports & Games"],
+} as Record<string, AreaEntry[]>;
+
 const BANDS: Band[] = [
   {
-    band: "1-3", name: "Achievement Record · 1-3", grades: "I,II,III",
-    components: {
-      1: [["PT1", "PT-I", 10], ["CT1", "Class Test", 10], ["NB1", "NB-I", 5], ["SEA1", "SEA", 5], ["CP1", "Class Perf", 10], ["ORAL1", "Oral", 10], ["HY", "Half Yearly", 50]],
-      2: [["PT2", "PT-II", 10], ["CT2", "Class Test", 10], ["NB2", "NB-II", 5], ["SEA2", "SEA", 5], ["CP2", "Class Perf", 10], ["ORAL2", "Oral", 10], ["ANNUAL", "Annual Exam", 50]],
-    },
+    band: "1-2", name: "Achievement Record · 1-2", grades: "I,II",
+    components: JUNIOR_7COL,
     subjects: [["ENG", "English", "English,English I"], ["HIN", "Hindi", "Hindi,Hindi I"], ["MATH", "Mathematics", "Mathematics"], ["EVS", "EVS", "Environmental Science"], ["COMP", "Computer Science", "Computer"]],
+    areas: JUNIOR_AREAS,
+  },
+  {
+    // Class 3 alone: the 4-5 subject set (Science + Social Studies) on the junior 7-column
+    // structure — fits neither 1-2 (different subjects) nor 4-5 (different columns).
+    band: "3", name: "Achievement Record · 3", grades: "III",
+    components: JUNIOR_7COL,
+    subjects: MIDDLE_SUBJECTS,
     areas: JUNIOR_AREAS,
   },
   {
@@ -56,20 +78,20 @@ const BANDS: Band[] = [
       1: [["PT1", "PT-I", 10], ["CT1", "Class Test", 10], ["NB1", "NB-I", 5], ["SEA1", "SEA", 5], ["HY", "Half Yearly", 70]],
       2: [["PT2", "PT-II", 10], ["CT2", "Class Test", 10], ["NB2", "NB-II", 5], ["SEA2", "SEA", 5], ["ANNUAL", "Annual Exam", 70]],
     },
-    subjects: [["ENG", "English", "English,English I"], ["HIN", "Hindi", "Hindi,Hindi I"], ["MATH", "Mathematics", "Mathematics"], ["SCI", "Science", "Science"], ["SST", "Social Studies", "Social Studies"], ["COMP", "Computer Science", "Computer"]],
+    subjects: MIDDLE_SUBJECTS,
     areas: JUNIOR_AREAS,
   },
   {
-    band: "6-9", name: "Achievement Record · 6-9", grades: "VI,VII,VIII,IX",
-    components: {
-      1: [["PT1", "PT-I", 10], ["NB1", "NB-I", 5], ["SEA1", "SEA", 5], ["HY", "Half Yearly", 80]],
-      2: [["PT2", "PT-II", 10], ["NB2", "NB-II", 5], ["SEA2", "SEA", 5], ["ANNUAL", "Annual Exam", 80]],
-    },
-    subjects: [["ENG", "English", "English,English I"], ["HIN", "Hindi", "Hindi,Hindi I"], ["MATH", "Mathematics", "Mathematics"], ["SCI", "Science", "Science"], ["SST", "Social Science", "Social Science,Social Science (Part 1),Social Studies"], ["COMP", "Computer Science", "Computer"]],
-    areas: {
-      "Co-Scholastic": ["Work Education", "Value Education", "General Awareness and Reasoning", "Art Education", "Physical Education"],
-      "Other Areas": ["Discipline", "English Conversation", "Value System", "Performing Art", "Sports & Games"],
-    },
+    band: "6-8", name: "Achievement Record · 6-8", grades: "VI,VII,VIII",
+    components: SENIOR_4COL,
+    subjects: [["ENG", "English", "English,English I"], ["HIN", "Hindi", "Hindi,Hindi I"], ["SANS", "Sanskrit", "Sanskrit"], ["MATH", "Mathematics", "Mathematics"], ["SCI", "Science", "Science"], ["SST", "Social Science", "Social Science,Social Science (Part 1),Social Studies"], ["COMP", "Computer Science", "Computer"]],
+    areas: SENIOR_AREAS,
+  },
+  {
+    band: "9", name: "Achievement Record · 9", grades: "IX",
+    components: SENIOR_4COL,
+    subjects: [["ENG", "English", "English,English I"], ["HIN", "Hindi", "Hindi,Hindi I"], ["MATH", "Mathematics", "Mathematics"], ["SCI", "Science", "Science"], ["SST", "Social Science", "Social Science,Social Science (Part 1),Social Studies"], ["COMP", "IT", "Computer"]],
+    areas: SENIOR_AREAS,
   },
   {
     // Pre-primary "Progress Report": no numeric marks — everything is graded (A+..D). Its two
@@ -122,15 +144,17 @@ class ReportService {
         }
       }
       let ssort = 0;
-      for (const [code, label, syl] of b.subjects) {
+      for (const [code, label, syl, grades] of b.subjects) {
         await DB.query(
-          singleLineString`insert into exam_report_subject (uuid, school_id, academic_year_id, scheme_id, code, report_label, syllabus_subject, sort_order, status, createdby_userid, created_at)
-            values ($1,$2,$3,$4,$5,$6,$7,$8,'active',$9,$10)`,
-          [generateShortUuid(12), schoolId, ayId, schemeId, code, label, syl, ssort++, userId, now],
+          singleLineString`insert into exam_report_subject (uuid, school_id, academic_year_id, scheme_id, code, report_label, syllabus_subject, applies_to_grades, sort_order, status, createdby_userid, created_at)
+            values ($1,$2,$3,$4,$5,$6,$7,$8,$9,'active',$10,$11)`,
+          [generateShortUuid(12), schoolId, ayId, schemeId, code, label, syl, grades || null, ssort++, userId, now],
         );
       }
+      // sort_order runs CONTINUOUSLY across sections (not reset per section) so the sections stay
+      // grouped when ordered globally — otherwise every section's item-0 sorts together, etc.
+      let asort = 0;
       for (const section of Object.keys(b.areas)) {
-        let asort = 0;
         for (const entry of b.areas[section]) {
           const label = Array.isArray(entry) ? entry[0] : entry;
           const valueType = Array.isArray(entry) ? entry[1] : "grade";
@@ -222,9 +246,17 @@ class ReportService {
 
   private async schemeSubjects(schemeId: string): Promise<any[]> {
     return DB.query(
-      singleLineString`select code, report_label, syllabus_subject from exam_report_subject where scheme_id = $1 and status = 'active' order by sort_order asc nulls last`,
+      singleLineString`select code, report_label, syllabus_subject, applies_to_grades from exam_report_subject where scheme_id = $1 and status = 'active' order by sort_order asc nulls last`,
       [schemeId],
     );
+  }
+
+  // A subject with a grade scope (applies_to_grades) shows only for those grades; blank = all
+  // grades in the band. gradeLower is the class's grade, lowercased.
+  private subjectInGrade(subj: any, gradeLower: string): boolean {
+    const scope = String(subj.appliesToGrades || "").trim();
+    if (!scope) return true;
+    return scope.split(",").map((g) => g.trim().toLowerCase()).includes(gradeLower);
   }
 
   // ── Access (via syllabus offerings) ────────────────────────────────────────────────
@@ -405,7 +437,8 @@ class ReportService {
   async subjectMapping(schoolId: string, ayId: string, classId: string, userId: string): Promise<any> {
     const scheme = await this.schemeForClass(schoolId, ayId, classId, userId);
     if (!scheme) throw new BusinessErrorResult(ErrorCode.BusinessError, "No report scheme for this class");
-    const subjects = await this.schemeSubjects(scheme.uuid);
+    const grade = gradeOf(scheme.className).toLowerCase();
+    const subjects = (await this.schemeSubjects(scheme.uuid)).filter((s: any) => this.subjectInGrade(s, grade));
     const out: any[] = [];
     for (const subj of subjects) {
       const assignedId = await this.explicitTeacherId(schoolId, ayId, classId, subj.code);
@@ -464,7 +497,7 @@ class ReportService {
     const s = sc[0];
     const [components, subjects, areas, gradeScales] = await Promise.all([
       DB.query(singleLineString`select uuid, term, code, label, max_marks, sort_order from exam_report_component where scheme_id = $1 and status = 'active' order by term, sort_order asc nulls last`, [s.uuid]),
-      DB.query(singleLineString`select uuid, code, report_label, syllabus_subject, sort_order from exam_report_subject where scheme_id = $1 and status = 'active' order by sort_order asc nulls last`, [s.uuid]),
+      DB.query(singleLineString`select uuid, code, report_label, syllabus_subject, applies_to_grades, sort_order from exam_report_subject where scheme_id = $1 and status = 'active' order by sort_order asc nulls last`, [s.uuid]),
       DB.query(singleLineString`select uuid, section, label, value_type, scale_kind, sort_order from exam_report_area where scheme_id = $1 and status = 'active' order by sort_order asc nulls last`, [s.uuid]),
       DB.query(singleLineString`select uuid, kind, grade, label, min_pct, max_pct, sort_order from exam_report_grade_scale where scheme_id = $1 and status = 'active' order by kind, sort_order asc nulls last`, [s.uuid]),
     ]);
@@ -486,13 +519,15 @@ class ReportService {
     }
     for (const s of payload.subjects || []) {
       if (!s.uuid) continue;
-      await DB.query(singleLineString`update exam_report_subject set report_label = $2, syllabus_subject = $3, updatedby_userid = $4, updated_at = $5 where uuid = $1 and scheme_id = $6 and status = 'active'`,
-        [s.uuid, String(s.reportLabel || "").slice(0, 64), s.syllabusSubject ? String(s.syllabusSubject).slice(0, 128) : null, userId, now, schemeId]);
+      const ssort = typeof s.sortOrder === "number" ? s.sortOrder : null; // reorder support
+      await DB.query(singleLineString`update exam_report_subject set report_label = $2, syllabus_subject = $3, applies_to_grades = $4, sort_order = coalesce($5, sort_order), updatedby_userid = $6, updated_at = $7 where uuid = $1 and scheme_id = $8 and status = 'active'`,
+        [s.uuid, String(s.reportLabel || "").slice(0, 64), s.syllabusSubject ? String(s.syllabusSubject).slice(0, 128) : null, s.appliesToGrades ? String(s.appliesToGrades).slice(0, 64) : null, ssort, userId, now, schemeId]);
     }
     for (const a of payload.areas || []) {
       if (!a.uuid) continue;
-      await DB.query(singleLineString`update exam_report_area set section = $2, label = $3, updatedby_userid = $4, updated_at = $5 where uuid = $1 and scheme_id = $6 and status = 'active'`,
-        [a.uuid, String(a.section || "").slice(0, 48), String(a.label || "").slice(0, 128), userId, now, schemeId]);
+      const asort = typeof a.sortOrder === "number" ? a.sortOrder : null; // reorder support
+      await DB.query(singleLineString`update exam_report_area set section = $2, label = $3, sort_order = coalesce($4, sort_order), updatedby_userid = $5, updated_at = $6 where uuid = $1 and scheme_id = $7 and status = 'active'`,
+        [a.uuid, String(a.section || "").slice(0, 48), String(a.label || "").slice(0, 128), asort, userId, now, schemeId]);
     }
     for (const g of payload.gradeScales || []) {
       if (!g.uuid) continue;
@@ -569,7 +604,8 @@ class ReportService {
     const scheme = await this.schemeForClass(schoolId, ayId, classId, userId);
     if (!scheme) throw new BusinessErrorResult(ErrorCode.BusinessError, "No report scheme for this class");
     const components = await this.schemeComponents(scheme.uuid, term);
-    const subjects = await this.schemeSubjects(scheme.uuid);
+    const cardGrade = gradeOf(scheme.className).toLowerCase();
+    const subjects = (await this.schemeSubjects(scheme.uuid)).filter((s: any) => this.subjectInGrade(s, cardGrade));
     const areas = await DB.query(
       singleLineString`select uuid, section, label, value_type from exam_report_area where scheme_id = $1 and status = 'active' order by sort_order asc nulls last`,
       [scheme.uuid],
@@ -722,6 +758,7 @@ class ReportService {
     const subjects = await this.schemeSubjects(scheme.uuid);
     const subject = subjects.find((s: any) => s.code === subjectCode);
     if (!subject) return false;
+    if (!this.subjectInGrade(subject, gradeOf(scheme.className).toLowerCase())) return false; // subject not offered in this grade
     return this.canTeach(schoolId, ayId, classId, subjectCode, subject.syllabusSubject, employeeId);
   }
 
@@ -935,7 +972,8 @@ class ReportService {
     for (const c of classes) {
       const scheme = await this.schemeForClass(schoolId, ayId, c.classId, userId);
       if (!scheme) continue;
-      const subjects = await this.schemeSubjects(scheme.uuid);
+      const pgGrade = gradeOf(c.className).toLowerCase();
+      const subjects = (await this.schemeSubjects(scheme.uuid)).filter((s: any) => this.subjectInGrade(s, pgGrade));
       if (!subjects.length) continue; // grade-only schemes (pre-primary) have no marks to track
       const components = await this.schemeComponents(scheme.uuid, term);
       const students = await this.classStudents(schoolId, ayId, c.classId);

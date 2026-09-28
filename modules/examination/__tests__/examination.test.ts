@@ -720,11 +720,11 @@ describe("examination: report cards (service)", () => {
     await DB.end();
   });
 
-  it("seeds FOUR bands idempotently (incl. pre-primary, which is grade-only + free-text)", async () => {
+  it("seeds SIX bands idempotently (incl. pre-primary, which is grade-only + free-text)", async () => {
     await reportService.ensureSchemes(schoolId, ayId, "system");
     await reportService.ensureSchemes(schoolId, ayId, "system"); // second call must not duplicate
     const schemes = await DB.query(`select uuid, band from exam_report_scheme where school_id = $1 and academic_year_id = $2 and status = 'active' order by band`, [schoolId, ayId]);
-    expect(schemes.map((s: any) => s.band).sort()).toEqual(["1-3", "4-5", "6-9", "pre-primary"]);
+    expect(schemes.map((s: any) => s.band).sort()).toEqual(["1-2", "3", "4-5", "6-8", "9", "pre-primary"]);
     const pre = schemes.find((s: any) => s.band === "pre-primary");
     const comps = await DB.query(`select count(*)::int n from exam_report_component where scheme_id = $1 and status = 'active'`, [pre.uuid]);
     expect(comps[0].n).toBe(0); // pre-primary has no numeric marks
@@ -739,7 +739,7 @@ describe("examination: report cards (service)", () => {
   reportIt("resolves the class scheme, and marks save validates against the component max", async () => {
     const scheme = await reportService.schemeForClass(schoolId, ayId, section!.sectionClassId, "system");
     expect(scheme).toBeTruthy();
-    expect(["1-3", "4-5", "6-9"]).toContain(scheme.band);
+    expect(["1-2", "3", "4-5", "6-8", "9"]).toContain(scheme.band);
 
     // English exists in every band; term-1 grid lists its components + the class roster.
     const grid = await reportService.marksGrid(schoolId, ayId, section!.sectionClassId, "ENG", 1, "system");
@@ -838,16 +838,27 @@ describe("examination: report cards (service)", () => {
   });
 
   it("format config: getScheme returns editable rows; saveScheme edits a label by uuid", async () => {
-    const sc = await reportService.getScheme(schoolId, ayId, "1-3", "system");
+    const sc = await reportService.getScheme(schoolId, ayId, "1-2", "system");
     expect(sc.subjects.length).toBeGreaterThan(0);
     expect(sc.components.length).toBeGreaterThan(0);
     expect(sc.gradeScales.length).toBeGreaterThan(0);
     const subj = sc.subjects.find((s: any) => s.code === "EVS");
     expect(subj).toBeTruthy();
     // Rename EVS's printed label; the subject CODE stays EVS (so marks never orphan).
-    const saved = await reportService.saveScheme(schoolId, ayId, "1-3", { subjects: [{ uuid: subj.uuid, reportLabel: "Environmental Studies", syllabusSubject: subj.syllabusSubject }] }, "system");
+    const saved = await reportService.saveScheme(schoolId, ayId, "1-2", { subjects: [{ uuid: subj.uuid, reportLabel: "Environmental Studies", syllabusSubject: subj.syllabusSubject }] }, "system");
     const after = saved.subjects.find((s: any) => s.code === "EVS");
     expect(after.reportLabel).toBe("Environmental Studies");
+  });
+
+  it("scheme structure: Sanskrit in 6-8, IT (not Sanskrit) in 9, junior 7-col for class 3", async () => {
+    const s68 = await reportService.getScheme(schoolId, ayId, "6-8", "system");
+    expect(s68.subjects.some((s: any) => s.code === "SANS")).toBe(true);
+    const s9 = await reportService.getScheme(schoolId, ayId, "9", "system");
+    expect(s9.subjects.some((s: any) => s.code === "SANS")).toBe(false);
+    expect(s9.subjects.find((s: any) => s.code === "COMP").reportLabel).toBe("IT");
+    const s3 = await reportService.getScheme(schoolId, ayId, "3", "system");
+    expect(s3.subjects.some((s: any) => s.code === "SCI")).toBe(true); // middle subjects
+    expect(s3.components.filter((c: any) => c.term === 1).length).toBe(7); // junior 7-column
   });
 
   it("report config: term2_starts_on drives the current-term default (never hard-coded)", async () => {

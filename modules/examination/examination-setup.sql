@@ -512,6 +512,10 @@ create table if not exists exam_report_subject (
 );
 create index if not exists idx_exam_report_subject_scheme
     on exam_report_subject(scheme_id, status);
+-- Optional per-subject grade scope WITHIN a band (comma list of grades, e.g. 'VI,VII,VIII').
+-- null/blank = applies to every grade the band covers. Lets a band-level scheme carry a subject
+-- (e.g. Sanskrit in 6-9) that only some of its grades actually take.
+alter table exam_report_subject add column if not exists applies_to_grades varchar(64);
 
 -- exam_report_area: the GRADE-only rows (co-scholastic / personality / other), grouped by
 -- section. scale_kind names which grade scale its dropdown+legend use. value_type 'grade' (a
