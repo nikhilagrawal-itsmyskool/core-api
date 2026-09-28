@@ -808,4 +808,22 @@ describe("examination: report cards (service)", () => {
     const rev = await reportService.assignSubjectTeacher(schoolId, ayId, cls, "ENG", "", "system");
     expect(rev.subjects.find((s: any) => s.subjectCode === "ENG").source).not.toBe("assigned");
   });
+
+  reportIt("report cards: assembles scheme + students + totals, and recordPrint stamps the count", async () => {
+    const cls = section!.sectionClassId;
+    const d = await reportService.reportCards(schoolId, ayId, cls, 1, "system");
+    expect(d.scheme).toBeTruthy();
+    expect(Array.isArray(d.scheme.components)).toBe(true);
+    expect(d.students.length).toBeGreaterThan(0);
+    const stu = d.students[0];
+    expect(stu).toHaveProperty("overall");
+    expect(stu).toHaveProperty("subjectTotals");
+    expect(stu).toHaveProperty("marks");
+
+    const r = await reportService.recordPrint(schoolId, ayId, cls, 1, [stu.studentId], "system");
+    expect(r.printed).toBe(1);
+    const d2 = await reportService.reportCards(schoolId, ayId, cls, 1, "system");
+    expect(d2.students.find((x: any) => x.studentId === stu.studentId).printCount).toBeGreaterThanOrEqual(1);
+    await cleanupReport(stu.studentId, ayId);
+  });
 });

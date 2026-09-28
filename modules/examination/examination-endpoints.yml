@@ -652,3 +652,11 @@
           path: report/mapping/{classId}
           method: post
           cors: true
+      - http:
+          path: report/cards/{classId}/{term}
+          method: get
+          cors: true
+      - http:
+          path: report/cards/{classId}/{term}
+          method: post
+          cors: true

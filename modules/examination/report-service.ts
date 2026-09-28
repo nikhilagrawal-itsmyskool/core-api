@@ -2,6 +2,7 @@ import { DB, singleLineString } from "../../shared/lib/db";
 import { BusinessErrorResult } from "../../shared/lib/errors";
 import { ErrorCode } from "../../shared/lib/error-codes";
 import { gradeOf } from "./examination-common";
+import { fileStorageService } from "../../shared/lib/file-storage";
 const { generateShortUuid } = require("../../shared/util/generate-uuid.js");
 
 // ── Report cards (Term-1 marks + co-scholastic). Data-driven: a per-(school, AY, band)
@@ -420,6 +421,162 @@ class ReportService {
       );
     }
     return this.subjectMapping(schoolId, ayId, classId, userId);
+  }
+
+  // ── Printed report cards (Phase B) ──────────────────────────────────────────────────
+  private matchScholastic(scale: any[], pct: number): string | null {
+    const r = scale.find((s: any) => s.minPct != null && s.maxPct != null && pct >= Number(s.minPct) && pct <= Number(s.maxPct));
+    return r ? r.grade : null;
+  }
+
+  private async brandingBlock(schoolId: string): Promise<any> {
+    const rows = await DB.query(
+      singleLineString`select school_name, motto, address, affiliation_no, school_code, contact, email, website,
+          logo_file_id, board_logo_file_id, stamp_file_id from school_branding where school_id = $1`,
+      [schoolId],
+    );
+    const b: any = rows[0] || {};
+    const dataUri = async (fileId: string | null | undefined) => {
+      if (!fileId) return null;
+      try { const f = await fileStorageService.getWithData(fileId, schoolId); return f ? `data:${f.mimeType};base64,${f.data}` : null; } catch { return null; }
+    };
+    return {
+      schoolName: b.schoolName || null, motto: b.motto || null, address: b.address || null,
+      affiliationNo: b.affiliationNo || null, schoolCode: b.schoolCode || null,
+      contact: b.contact || null, email: b.email || null, website: b.website || null,
+      logoDataUri: await dataUri(b.logoFileId), boardLogoDataUri: await dataUri(b.boardLogoFileId), stampDataUri: await dataUri(b.stampFileId),
+    };
+  }
+
+  // All the data to render a class's report cards for a term: scheme (columns/subjects/areas/
+  // scales), branding masthead, and each student's header + marks + area grades + computed
+  // subject totals/grades. exam.manage-only (incharge/admin/god) — enforced at the handler.
+  async reportCards(schoolId: string, ayId: string, classId: string, term: number, userId: string): Promise<any> {
+    const scheme = await this.schemeForClass(schoolId, ayId, classId, userId);
+    if (!scheme) throw new BusinessErrorResult(ErrorCode.BusinessError, "No report scheme for this class");
+    const components = await this.schemeComponents(scheme.uuid, term);
+    const subjects = await this.schemeSubjects(scheme.uuid);
+    const areas = await DB.query(
+      singleLineString`select uuid, section, label, value_type from exam_report_area where scheme_id = $1 and status = 'active' order by sort_order asc nulls last`,
+      [scheme.uuid],
+    );
+    const scholScale = await DB.query(
+      singleLineString`select grade, label, min_pct, max_pct from exam_report_grade_scale where scheme_id = $1 and kind = 'scholastic' and status = 'active' order by sort_order asc nulls last`,
+      [scheme.uuid],
+    );
+    const coschScale = await DB.query(
+      singleLineString`select grade, label from exam_report_grade_scale where scheme_id = $1 and kind = 'coscholastic' and status = 'active' order by sort_order asc nulls last`,
+      [scheme.uuid],
+    );
+    const branding = await this.brandingBlock(schoolId);
+
+    const students = await DB.query(
+      singleLineString`select s.uuid as student_id, s.name, s.admission_number, s.dob, sc.roll_number,
+          (select h.name from house h where h.uuid = s.house_id) as house_name,
+          (select g.name from student_guardian g where g.student_id = s.uuid and g.relation = 'father' and g.status = 'active' limit 1) as father_name,
+          (select g.name from student_guardian g where g.student_id = s.uuid and g.relation = 'mother' and g.status = 'active' limit 1) as mother_name,
+          (select fs.uuid from file_storage fs where fs.entity_type = 'student' and fs.entity_id = s.uuid and fs.school_id = s.school_id order by fs.created_at desc limit 1) as photo_file_id
+        from student_class sc
+        join student s on s.uuid = sc.student_id and s.school_id = sc.school_id and s.status = 'active'
+        where sc.class_id = $1 and sc.academic_year_id = $2 and sc.school_id = $3 and (sc.status is null or sc.status <> 'deleted')
+        order by sc.roll_number asc nulls last, s.name`,
+      [classId, ayId, schoolId],
+    );
+    const marks = await DB.query(
+      singleLineString`select student_id, subject_code, component_code, value from exam_report_mark
+        where school_id = $1 and academic_year_id = $2 and term = $3 and class_id = $4`,
+      [schoolId, ayId, term, classId],
+    );
+    const mMap = new Map<string, number>();
+    for (const m of marks) mMap.set(`${m.studentId}|${m.subjectCode}|${m.componentCode}`, Number(m.value));
+    const grades = await DB.query(
+      singleLineString`select student_id, area_id, grade, text_value from exam_report_area_grade
+        where school_id = $1 and academic_year_id = $2 and term = $3 and class_id = $4`,
+      [schoolId, ayId, term, classId],
+    );
+    const gMap = new Map<string, any>();
+    for (const g of grades) gMap.set(`${g.studentId}|${g.areaId}`, g);
+    const headers = await DB.query(
+      singleLineString`select student_id, attendance_present, attendance_total, house, remark, promoted_to, print_count, to_char(printed_at, 'YYYY-MM-DD HH24:MI') as printed_at
+        from exam_report where school_id = $1 and academic_year_id = $2 and term = $3 and class_id = $4 and status = 'active'`,
+      [schoolId, ayId, term, classId],
+    );
+    const hMap = new Map<string, any>(headers.map((h: any) => [h.studentId, h]));
+
+    const needPhoto = scheme.band === "pre-primary";
+    const outStudents: any[] = [];
+    for (const s of students) {
+      const h: any = hMap.get(s.studentId) || {};
+      const subjectTotals: Record<string, any> = {};
+      let overallTotal = 0, overallMax = 0;
+      for (const subj of subjects) {
+        let t = 0, max = 0, any = false;
+        for (const c of components) {
+          max += Number(c.maxMarks);
+          const v = mMap.get(`${s.studentId}|${subj.code}|${c.code}`);
+          if (v != null) { t += v; any = true; }
+        }
+        const pct = max ? (t / max) * 100 : 0;
+        subjectTotals[subj.code] = { total: any ? t : null, max, grade: any ? this.matchScholastic(scholScale, pct) : null };
+        if (any) { overallTotal += t; overallMax += max; }
+      }
+      const areaGrades: Record<string, any> = {};
+      for (const a of areas) {
+        const g: any = gMap.get(`${s.studentId}|${a.uuid}`);
+        areaGrades[a.uuid] = g ? (a.valueType === "text" ? g.textValue : g.grade) : null;
+      }
+      outStudents.push({
+        studentId: s.studentId, name: s.name, admissionNumber: s.admissionNumber, rollNumber: s.rollNumber,
+        dob: s.dob ? new Date(s.dob).toISOString().slice(0, 10) : null, fatherName: s.fatherName, motherName: s.motherName,
+        house: h.house ?? s.houseName ?? null,
+        attendancePresent: h.attendancePresent ?? null, attendanceTotal: h.attendanceTotal ?? null,
+        remark: h.remark ?? null, promotedTo: h.promotedTo ?? null,
+        photoDataUri: needPhoto && s.photoFileId ? await (async () => { try { const f = await fileStorageService.getWithData(s.photoFileId, schoolId); return f ? `data:${f.mimeType};base64,${f.data}` : null; } catch { return null; } })() : null,
+        marks: subjects.reduce((acc: any, subj: any) => { acc[subj.code] = components.reduce((mm: any, c: any) => { const v = mMap.get(`${s.studentId}|${subj.code}|${c.code}`); mm[c.code] = v == null ? null : v; return mm; }, {}); return acc; }, {}),
+        subjectTotals,
+        overall: { total: overallTotal, max: overallMax, percentage: overallMax ? Math.round((overallTotal / overallMax) * 1000) / 10 : null },
+        areaGrades,
+        printCount: h.printCount ?? 0, printedAt: h.printedAt ?? null,
+      });
+    }
+    return {
+      className: scheme.className, band: scheme.band, term, branding,
+      scheme: {
+        components: components.map((c: any) => ({ code: c.code, label: c.label, max: c.maxMarks })),
+        subjects: subjects.map((s: any) => ({ code: s.code, label: s.reportLabel })),
+        areas: areas.map((a: any) => ({ id: a.uuid, section: a.section, label: a.label, valueType: a.valueType })),
+        scholasticScale: scholScale.map((s: any) => ({ grade: s.grade, label: s.label, minPct: s.minPct, maxPct: s.maxPct })),
+        coscholasticScale: coschScale.map((s: any) => ({ grade: s.grade, label: s.label })),
+      },
+      students: outStudents,
+    };
+  }
+
+  // Record a print for a set of students (increments print_count, stamps printed_at). Creates a
+  // header row if none exists yet.
+  async recordPrint(schoolId: string, ayId: string, classId: string, term: number, studentIds: string[], userId: string): Promise<any> {
+    const now = new Date();
+    for (const sid of studentIds || []) {
+      const studentId = (sid || "").trim();
+      if (!studentId) continue;
+      const ex = await DB.query(
+        singleLineString`select uuid, print_count from exam_report where school_id = $1 and academic_year_id = $2 and term = $3 and student_id = $4 and status = 'active'`,
+        [schoolId, ayId, term, studentId],
+      );
+      if (ex.length) {
+        await DB.query(
+          singleLineString`update exam_report set print_count = $2, printed_at = $3, updatedby_userid = $4, updated_at = $3 where uuid = $1`,
+          [ex[0].uuid, Number(ex[0].printCount || 0) + 1, now, userId],
+        );
+      } else {
+        await DB.query(
+          singleLineString`insert into exam_report (uuid, school_id, academic_year_id, term, student_id, class_id, print_count, printed_at, status, createdby_userid, created_at)
+            values ($1,$2,$3,$4,$5,$6,1,$7,'active',$8,$7)`,
+          [generateShortUuid(12), schoolId, ayId, term, studentId, classId, now, userId],
+        );
+      }
+    }
+    return { ok: true, printed: (studentIds || []).length };
   }
 
   // Whether a caller may view/enter a (class, subject) — the assigned syllabus teacher, or

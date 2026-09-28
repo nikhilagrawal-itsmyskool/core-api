@@ -160,6 +160,38 @@ class ReportHandler {
       ResponseBuilder.ok(await reportService.assignSubjectTeacher(auth.schoolId, ay, classId, subjectCode, body.teacherId || "", auth.userId), callback);
     } catch (err: any) { ResponseBuilder.handleError(err, callback); }
   };
+
+  // GET /report/cards/{classId}/{term} — all data to render a class's report cards for a term.
+  public getReportCards = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const auth = await resolveSchool(event, callback);
+      if (!auth) return;
+      const classId = requireParam(event, "classId", callback);
+      if (!classId) return;
+      const term = this.term(event);
+      const ay = await this.ay(event, auth.schoolId);
+      if (!ay) { ResponseBuilder.badRequest(ErrorCode.BusinessError, "No academic year", callback); return; }
+      ResponseBuilder.ok(await reportService.reportCards(auth.schoolId, ay, classId, term, auth.userId), callback);
+    } catch (err: any) { ResponseBuilder.handleError(err, callback); }
+  };
+
+  // POST /report/cards/{classId}/{term} { studentIds } — record a print (count + timestamp).
+  public recordReportPrint = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const auth = await resolveSchool(event, callback);
+      if (!auth) return;
+      const classId = requireParam(event, "classId", callback);
+      if (!classId) return;
+      const term = this.term(event);
+      const ay = await this.ay(event, auth.schoolId);
+      if (!ay) { ResponseBuilder.badRequest(ErrorCode.BusinessError, "No academic year", callback); return; }
+      const body = parseBody<{ studentIds: string[] }>(event, callback);
+      if (!body) return;
+      ResponseBuilder.ok(await reportService.recordPrint(auth.schoolId, ay, classId, term, body.studentIds || [], auth.userId), callback);
+    } catch (err: any) { ResponseBuilder.handleError(err, callback); }
+  };
 }
 
 // requireParam echoes an error to the callback on miss; term has a sane default so read it raw.
@@ -203,4 +235,6 @@ export const reportAdmin = guard(ACTIONS.EXAM_MANAGE, dispatch({
   "GET /report/progress/{term}": h.getProgress,
   "GET /report/mapping/{classId}": h.getSubjectMapping,
   "POST /report/mapping/{classId}": h.assignSubjectTeacher,
+  "GET /report/cards/{classId}/{term}": h.getReportCards,
+  "POST /report/cards/{classId}/{term}": h.recordReportPrint,
 }));
