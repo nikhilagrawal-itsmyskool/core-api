@@ -20,8 +20,15 @@ class EmployeeHandler {
 
       const name = event.queryStringParameters?.name;
       const includeDeleted = event.queryStringParameters?.includeDeleted === 'true';
+      const rolesParam = event.queryStringParameters?.roles;
+      const roleCodes = rolesParam
+        ? rolesParam
+            .split(',')
+            .map((s) => s.trim())
+            .filter(Boolean)
+        : undefined;
 
-      const results = await employeeService.search(schoolId, name, includeDeleted);
+      const results = await employeeService.search(schoolId, name, includeDeleted, roleCodes);
       const ctx = getCallerContext(event);
       for (const r of results || []) {
         // familyUniqueNumber is the login id — but it is the employee's mobile number.

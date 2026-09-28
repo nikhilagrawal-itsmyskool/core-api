@@ -19,19 +19,74 @@ class EmployeeService {
     return results.length > 0 ? results[0].uuid : null;
   }
 
-  public async search(schoolId: string, name?: string, includeDeleted?: boolean): Promise<Employee[]> {
+  public async search(
+    schoolId: string,
+    name?: string,
+    includeDeleted?: boolean,
+    roleCodes?: string[]
+  ): Promise<EmployeeWithRoles[]> {
     const searchPattern = name && name.trim() ? `%${name.trim()}%` : '%';
     const statusFilter = includeDeleted ? ACTIVE_AND_DELETED_STATUS : ACTIVE_STATUS;
+    const filterRoles = (roleCodes || []).map((c) => c.trim()).filter(Boolean);
 
-    const query = singleLineString`
-      select * from employee
-      where school_id = $1
-        and status in ${statusFilter}
-        and lower(name) like lower($2)
-      order by name
-    `;
+    let query: string;
+    let params: any[];
+    if (filterRoles.length > 0) {
+      // AND semantics: keep only employees that hold every selected role code.
+      const placeholders = filterRoles.map((_, i) => `$${i + 3}`).join(', ');
+      query = singleLineString`
+        select e.* from employee e
+        where e.school_id = $1
+          and e.status in ${statusFilter}
+          and lower(e.name) like lower($2)
+          and (
+            select count(distinct r.code)
+            from employee_role er
+            join role r on r.uuid = er.role_id
+            where er.employee_id = e.uuid and er.school_id = e.school_id
+              and r.code in (${placeholders})
+          ) = ${filterRoles.length}
+        order by e.name
+      `;
+      params = [schoolId, searchPattern, ...filterRoles];
+    } else {
+      query = singleLineString`
+        select * from employee
+        where school_id = $1
+          and status in ${statusFilter}
+          and lower(name) like lower($2)
+        order by name
+      `;
+      params = [schoolId, searchPattern];
+    }
 
-    return DB.query(query, [schoolId, searchPattern]);
+    const employees = await DB.query(query, params);
+    if (employees.length === 0) {
+      return [];
+    }
+
+    // Attach each employee's full role list in one round-trip.
+    const ids = employees.map((e: Employee) => e.uuid);
+    const idPlaceholders = ids.map((_: string, i: number) => `$${i + 2}`).join(', ');
+    const roleRows = await DB.query(
+      singleLineString`
+        select er.employee_id, r.uuid, r.code, r.name
+        from employee_role er
+        join role r on r.uuid = er.role_id
+        where er.school_id = $1 and er.employee_id in (${idPlaceholders})
+        order by r.name
+      `,
+      [schoolId, ...ids]
+    );
+
+    const rolesByEmployee = new Map<string, EmployeeRole[]>();
+    for (const row of roleRows) {
+      const list = rolesByEmployee.get(row.employeeId) || [];
+      list.push({ uuid: row.uuid, code: row.code, name: row.name });
+      rolesByEmployee.set(row.employeeId, list);
+    }
+
+    return employees.map((e: Employee) => ({ ...e, roles: rolesByEmployee.get(e.uuid) || [] }));
   }
 
   public async getById(id: string, schoolId: string): Promise<EmployeeWithRoles | null> {

@@ -192,6 +192,32 @@ describe('Employee API', () => {
       expect(data.some((e: any) => e.uuid === createdId)).toBe(true);
     });
 
+    it('should return the role list on each search result', async () => {
+      const response = await fetch(`${searchUrl}?name=Test Admin`, { method: 'GET', headers });
+      expect(response.status).toBe(200);
+      const data = await response.json();
+      const admin = data.find((e: any) => e.uuid === createdWithRoleId);
+      expect(admin).toBeDefined();
+      expect(admin.roles.map((r: any) => r.code)).toContain('admin');
+    });
+
+    it('should filter by role code (only employees holding that role)', async () => {
+      const response = await fetch(`${searchUrl}?roles=admin`, { method: 'GET', headers });
+      expect(response.status).toBe(200);
+      const data = await response.json();
+      // Every returned employee must hold the admin role, and our admin is present.
+      expect(data.every((e: any) => e.roles.some((r: any) => r.code === 'admin'))).toBe(true);
+      expect(data.some((e: any) => e.uuid === createdWithRoleId)).toBe(true);
+    });
+
+    it('should AND multiple role codes (employee must hold all)', async () => {
+      // Test Admin holds only "admin", so requiring admin AND god yields nothing for it.
+      const response = await fetch(`${searchUrl}?roles=admin,god`, { method: 'GET', headers });
+      expect(response.status).toBe(200);
+      const data = await response.json();
+      expect(data.some((e: any) => e.uuid === createdWithRoleId)).toBe(false);
+    });
+
     it('should return 400 for missing X-School-Code header', async () => {
       const response = await fetch(searchUrl, {
         method: 'GET',
