@@ -285,23 +285,30 @@ class ReportService {
   // Classes the caller may enter co-scholastic for: the class(es) they are class-teacher of,
   // or — for a god/exam-incharge override — every class with enrolment this year.
   async myReportClasses(schoolId: string, ayId: string, employeeId: string, isOverride: boolean): Promise<any[]> {
-    if (isOverride) {
-      return DB.query(
+    await this.ensureSchemes(schoolId, ayId, employeeId);
+    const schemes = await DB.query(
+      singleLineString`select applies_to_grades from exam_report_scheme where school_id = $1 and academic_year_id = $2 and status = 'active'`,
+      [schoolId, ayId],
+    );
+    const covered = new Set<string>(schemes.flatMap((s: any) => String(s.appliesToGrades || "").split(",").map((g: string) => g.trim())));
+    const rows = isOverride
+      ? await DB.query(
         singleLineString`select distinct sc.class_id, c.name as class_name, c.seq
           from student_class sc join class c on c.uuid = sc.class_id and c.school_id = sc.school_id and c.base_class_id is null
           join student s on s.uuid = sc.student_id and s.school_id = sc.school_id and s.status = 'active'
           where sc.school_id = $1 and sc.academic_year_id = $2 and (sc.status is null or sc.status <> 'deleted')
           order by c.seq asc nulls last, c.name`,
         [schoolId, ayId],
+      )
+      : await DB.query(
+        singleLineString`select ct.class_id, c.name as class_name, c.seq
+          from class_teacher ct join class c on c.uuid = ct.class_id and c.school_id = ct.school_id
+          where ct.school_id = $1 and ct.academic_year_id = $2 and ct.teacher_id = $3 and ct.status = 'active'
+          order by c.seq asc nulls last, c.name`,
+        [schoolId, ayId, employeeId],
       );
-    }
-    return DB.query(
-      singleLineString`select ct.class_id, c.name as class_name, c.seq
-        from class_teacher ct join class c on c.uuid = ct.class_id and c.school_id = ct.school_id
-        where ct.school_id = $1 and ct.academic_year_id = $2 and ct.teacher_id = $3 and ct.status = 'active'
-        order by c.seq asc nulls last, c.name`,
-      [schoolId, ayId, employeeId],
-    );
+    // Drop classes whose grade has no report scheme (junk/placeholder classes).
+    return rows.filter((r: any) => covered.has(gradeOf(r.className)));
   }
 
   async isClassTeacher(schoolId: string, ayId: string, classId: string, employeeId: string): Promise<boolean> {
