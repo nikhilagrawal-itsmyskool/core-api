@@ -129,6 +129,15 @@
           method: get
           cors: true
 
+  summary:
+    handler: leave-handler.summary
+    name: ${self:service}-summary
+    events:
+      - http:
+          path: summary
+          method: get
+          cors: true
+
   # ── Attendance (phase 2): reconciled views + manual mark + biometric import ──
   attendance-mark:
     handler: leave-attendance-handler.mark

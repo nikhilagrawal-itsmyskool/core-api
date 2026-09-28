@@ -86,6 +86,9 @@ export const ACTIONS = {
   PROGRAMME_VIEW: 'programme.view',
   PROGRAMME_MANAGE: 'programme.manage',
   ASSISTANT_USE: 'assistant.use',
+  // Staff leave. apply = self-service (teacher/admin); manage = oversight (god-only for now).
+  LEAVE_APPLY: 'leave.apply',
+  LEAVE_MANAGE: 'leave.manage',
   // Home-visit feedback / complaints. view = read category lookup (teachers, to record);
   // record = log + assign to a teacher (teachers); respond = the assigned teacher's reply
   // (teachers, own items only); review = director dashboard + complete/reopen. `review` is
@@ -95,6 +98,8 @@ export const ACTIONS = {
   FEEDBACK_RECORD: 'feedback.record',
   FEEDBACK_RESPOND: 'feedback.respond',
   FEEDBACK_REVIEW: 'feedback.review',
+  // Director's Cockpit / School Pulse landing (director + god). Read-only heartbeat.
+  COCKPIT_VIEW: 'cockpit.view',
 } as const;
 
 // Role -> allowed actions. Mirror of policy.js ROLE_PERMISSIONS (order preserved).
@@ -143,6 +148,8 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
     'exam.*',
     'subject-mapping.manage', // report-card subject→teacher mapping (admin + god only, NOT exam-incharge)
     'receipt.verify', // Scan & Verify (admin + god only; NOT fee incharges)
+    'leave.apply', // Self-service leave only; oversight (leave.manage) is god-only for now
+    'documents.sign', // Read & sign own documents; authoring (documents.manage) is god-only
   ],
   // Standard teaching staff: view-only across the modules they can reach.
   teacher: [
@@ -158,6 +165,8 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
     'programme.view',
     'assembly.view',
     'academic-calendar.view',
+    'leave.apply',
+    'documents.sign',
     // Feedback/complaints: any teacher may record + assign, and respond to items
     // assigned to them. Reviewing/completing (feedback.review) is god-only.
     'feedback.view',
@@ -187,6 +196,24 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
   'transport-attendance': ['transport.attendance.mark'],
   // Collection-desk manager: a locked, read-only fee-collection view and nothing else.
   manager: ['fee.manager.view'],
+  // Education director: lands on the Cockpit / School Pulse and reviews the school's
+  // heartbeat. Read-oriented oversight across the pulse domains. Additive — a person can
+  // also hold `god`. Mirrors admin-portal/src/permissions/policy.js.
+  director: [
+    'cockpit.view',
+    'feedback.view',
+    'feedback.review',
+    'assembly.view',
+    'assembly.manage',
+    'syllabus.view',
+    'student.view',
+    'student.contacts.view',
+    'academic-calendar.view',
+    'timetable.view',
+    'transport.view',
+    'leave.apply',
+    'leave.manage',
+  ],
 };
 
 // True if any of `roles` grants `action`. Supports '*' and 'module.*' wildcards.

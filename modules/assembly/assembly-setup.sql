@@ -276,6 +276,9 @@ create table if not exists assembly_school_config (
     updatedby_userid varchar(12),
     updated_at timestamp(0)
 );
+-- Director cockpit: per-school checklist due time (IST 'HH:MM') for the daily
+-- on-time heartbeat. Null = not configured (no on-time/late split).
+alter table assembly_school_config add column if not exists checklist_due_time varchar(5);
 
 -- Table 12: assembly_house_rotation (assembly-specific house rotation order)
 -- A row = this house participates in assembly duty rotation, at this sort_order.

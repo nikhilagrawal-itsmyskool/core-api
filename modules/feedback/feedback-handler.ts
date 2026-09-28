@@ -95,6 +95,20 @@ class FeedbackHandler {
     }
   };
 
+  // GET /feedback/flow?weeks=8&academicYearId=   (director cockpit: opened vs resolved + backlog)
+  public flow = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const auth = await resolveSchool(event, callback);
+      if (!auth) return;
+      const q = event.queryStringParameters || {};
+      const weeks = Math.min(26, Math.max(2, parseInt(q.weeks || "8", 10) || 8));
+      ResponseBuilder.ok(await feedbackService.flow(auth.schoolId, weeks, q.academicYearId || undefined), callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
   // GET /feedback/{id}  (full ticket thread)
   public getById = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
     ctx.callbackWaitsForEmptyEventLoop = false;
@@ -238,6 +252,7 @@ export const record = guard(FEEDBACK_ACTIONS["feedback-handler.record"], h.recor
 export const list = guard(FEEDBACK_ACTIONS["feedback-handler.list"], h.list);
 export const grouped = guard(FEEDBACK_ACTIONS["feedback-handler.grouped"], h.grouped);
 export const summary = guard(FEEDBACK_ACTIONS["feedback-handler.summary"], h.summary);
+export const flow = guard(FEEDBACK_ACTIONS["feedback-handler.flow"], h.flow);
 export const getById = guard(FEEDBACK_ACTIONS["feedback-handler.getById"], h.getById);
 export const comment = guard(FEEDBACK_ACTIONS["feedback-handler.comment"], h.comment);
 export const assign = guard(FEEDBACK_ACTIONS["feedback-handler.assign"], h.assign);

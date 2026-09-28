@@ -617,6 +617,49 @@ class FeedbackService {
     return { byStatus, open: byStatus.open, awaitingDirector, outWithTeachers, byTeacher };
   }
 
+  // Director cockpit: weekly opened-vs-resolved flow + open backlog, over the last `weeks`
+  // weeks (Mon-anchored, IST). Lets the director see whether tickets are being cleared or
+  // piling up. Dates are shifted +5:30 so week bucketing follows the Indian calendar day.
+  async flow(schoolId: string, weeks: number, academicYearId?: string): Promise<any> {
+    const conds: string[] = ["school_id = $1"];
+    const params: any[] = [schoolId];
+    if (academicYearId) { params.push(academicYearId); conds.push(`academic_year_id = $${params.length}`); }
+    const rows = await DB.query(
+      singleLineString`select to_char(created_at + interval '330 minutes', 'YYYY-MM-DD') as created_date,
+          case when closed_at is null then null else to_char(closed_at + interval '330 minutes', 'YYYY-MM-DD') end as closed_date,
+          status
+        from feedback where ${conds.join(" and ")}`,
+      params,
+    );
+
+    const iso = (d: Date) => d.toISOString().slice(0, 10);
+    const addDays = (s: string, n: number) => { const d = new Date(`${s}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return iso(d); };
+    const nowIst = new Date(Date.now() + 330 * 60000);
+    const todayIst = iso(nowIst);
+    const thisMonday = addDays(todayIst, -((nowIst.getUTCDay() + 6) % 7));
+    const weekStarts: string[] = [];
+    for (let i = weeks - 1; i >= 0; i--) weekStarts.push(addDays(thisMonday, -7 * i));
+
+    const series = weekStarts.map((w) => {
+      const wEnd = addDays(w, 6);
+      let opened = 0, resolved = 0, backlog = 0;
+      for (const r of rows) {
+        if (r.createdDate >= w && r.createdDate <= wEnd) opened++;
+        if (r.status === "completed" && r.closedDate && r.closedDate >= w && r.closedDate <= wEnd) resolved++;
+        if (r.createdDate <= wEnd && (!r.closedDate || r.closedDate > wEnd)) backlog++;
+      }
+      return { weekStart: w, opened, resolved, backlog };
+    });
+
+    let oldestOpenDate: string | null = null;
+    for (const r of rows) if (!r.closedDate && (!oldestOpenDate || r.createdDate < oldestOpenDate)) oldestOpenDate = r.createdDate;
+    const open = series.length ? series[series.length - 1].backlog : 0;
+    const oldestOpenDays = oldestOpenDate
+      ? Math.max(0, Math.round((Date.parse(`${todayIst}T00:00:00Z`) - Date.parse(`${oldestOpenDate}T00:00:00Z`)) / 86400000))
+      : 0;
+    return { weeks: series, open, oldestOpenDate, oldestOpenDays };
+  }
+
   // ── Low-level helpers ────────────────────────────────────────────────────────
   private async findRaw(schoolId: string, id: string): Promise<any | null> {
     const rows = await DB.query(

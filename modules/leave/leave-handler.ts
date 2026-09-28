@@ -7,6 +7,7 @@ import { leaveHandoverService } from "./leave-handover-service";
 import { DecisionRequest } from "./leave-interfaces";
 
 const MONTH_RE = /^\d{4}-\d{2}$/;
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 // Admin/office surface (X-School-Code + JWT). Approve/reject require an approver
 // (god/admin) role; the rest are read/listing for the office.
@@ -198,6 +199,28 @@ class LeaveHandler {
     }
   };
 
+  // GET /leave/summary?from=YYYY-MM-DD&to=YYYY-MM-DD  (director cockpit)
+  // Per-day on-leave roster + pending-approvals count. Defaults to the last 7 days ending today.
+  public summary = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const auth = await resolveSchool(event, callback);
+      if (!auth) return;
+      const q = event.queryStringParameters || {};
+      const today = new Date().toISOString().slice(0, 10);
+      const to = q.to && DATE_RE.test(q.to) ? q.to : today;
+      let from = q.from && DATE_RE.test(q.from) ? q.from : "";
+      if (!from) {
+        const d = new Date(to + "T00:00:00Z");
+        d.setUTCDate(d.getUTCDate() - 6);
+        from = d.toISOString().slice(0, 10);
+      }
+      ResponseBuilder.ok(await leaveService.summary(auth.schoolId, from, to), callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
   // GET /leave/balance?employeeId=&month=YYYY-MM
   public balance = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
     ctx.callbackWaitsForEmptyEventLoop = false;
@@ -227,4 +250,5 @@ export const approve = h.approve;
 export const reject = h.reject;
 export const getAttachment = h.getAttachment;
 export const getAudit = h.getAudit;
+export const summary = h.summary;
 export const balance = h.balance;

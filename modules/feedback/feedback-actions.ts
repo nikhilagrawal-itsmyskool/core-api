@@ -17,6 +17,7 @@ export const FEEDBACK_ACTIONS: Record<string, string> = {
   "feedback-handler.list": FEEDBACK_REVIEW,
   "feedback-handler.grouped": FEEDBACK_REVIEW,
   "feedback-handler.summary": FEEDBACK_REVIEW,
+  "feedback-handler.flow": FEEDBACK_REVIEW,
   "feedback-handler.getById": FEEDBACK_REVIEW,
   "feedback-handler.comment": FEEDBACK_REVIEW,
   "feedback-handler.assign": FEEDBACK_REVIEW,

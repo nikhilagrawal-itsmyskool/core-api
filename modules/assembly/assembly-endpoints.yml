@@ -384,6 +384,15 @@
           method: get
           cors: true
 
+  get-pulse:
+    handler: assembly-pulse-handler.pulse
+    name: ${self:service}-get-pulse
+    events:
+      - http:
+          path: pulse
+          method: get
+          cors: true
+
   # ── Plans ─────────────────────────────────────────────────────────────────
   create-plan:
     handler: assembly-plan-handler.create

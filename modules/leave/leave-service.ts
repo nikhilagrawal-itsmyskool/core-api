@@ -288,6 +288,35 @@ class LeaveService {
     return rows.length ? this.toView(rows[0]) : null;
   }
 
+  // Director cockpit: per-day on-leave roster (approved applications) across [from, to]
+  // plus the count of applications still awaiting approval. One row per calendar date so
+  // the frontend can plot the "staff on leave per day" bar chart and drill into names.
+  async summary(schoolId: string, from: string, to: string): Promise<any> {
+    const apps = await DB.query(
+      singleLineString`select a.uuid, a.employee_id, e.name as employee_name, a.leave_type_code,
+          a.from_date::text as from_date, a.to_date::text as to_date, a.day_portion
+        from leave_application a
+        left join employee e on e.uuid = a.employee_id and e.school_id = a.school_id
+        where a.school_id = $1 and a.status = 'approved' and a.to_date >= $2 and a.from_date <= $3`,
+      [schoolId, from, to],
+    );
+    const pendingRows = await DB.query(
+      singleLineString`select count(1)::int as n from leave_application where school_id = $1 and status = 'pending'`,
+      [schoolId],
+    );
+    const pending = pendingRows[0] ? Number(pendingRows[0].n) : 0;
+    const days: any[] = [];
+    const end = new Date(to + "T00:00:00Z");
+    for (let d = new Date(from + "T00:00:00Z"); d <= end; d.setUTCDate(d.getUTCDate() + 1)) {
+      const iso = d.toISOString().slice(0, 10);
+      const names = apps
+        .filter((a: any) => a.fromDate <= iso && a.toDate >= iso)
+        .map((a: any) => ({ employeeId: a.employeeId, name: a.employeeName || null, leaveTypeCode: a.leaveTypeCode }));
+      days.push({ date: iso, count: names.length, names });
+    }
+    return { from, to, pending, days };
+  }
+
   private async listApplicationsRaw(schoolId: string, id: string): Promise<any[]> {
     return DB.query(
       singleLineString`select a.uuid, a.employee_id, e.name as employee_name, a.leave_type_code, t.name as leave_type_name,

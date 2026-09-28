@@ -20,11 +20,13 @@ export interface AssemblyConfig {
   mode: AssemblyMode;
   title?: string;
   subtitle?: string;
+  checklistDueTime?: string; // IST 'HH:MM' — director cockpit on-time cutoff
 }
 export interface SetConfigRequest {
   mode?: AssemblyMode;
   title?: string | null;
   subtitle?: string | null;
+  checklistDueTime?: string | null;
 }
 
 export interface HouseTeacherView { employeeId: string; name?: string; }

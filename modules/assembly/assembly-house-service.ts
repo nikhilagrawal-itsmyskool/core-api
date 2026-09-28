@@ -18,21 +18,27 @@ class AssemblyHouseService {
 
   public async getConfig(schoolId: string): Promise<AssemblyConfig> {
     const rows = await DB.query(
-      singleLineString`select school_id, mode, title, subtitle from assembly_school_config where school_id = $1`,
+      singleLineString`select school_id, mode, title, subtitle, checklist_due_time from assembly_school_config where school_id = $1`,
       [schoolId],
     );
     if (rows.length === 0) return { schoolId, mode: 'template' };
-    return { schoolId, mode: rows[0].mode, title: rows[0].title || undefined, subtitle: rows[0].subtitle || undefined };
+    return {
+      schoolId, mode: rows[0].mode, title: rows[0].title || undefined, subtitle: rows[0].subtitle || undefined,
+      checklistDueTime: rows[0].checklistDueTime || undefined,
+    };
   }
 
   public async setConfig(data: SetConfigRequest, schoolId: string, userId: string): Promise<AssemblyConfig> {
     if (data.mode && !ASSEMBLY_MODES.includes(data.mode)) throw new BusinessErrorResult(ErrorCode.BusinessError, `Invalid mode: ${data.mode}`);
+    if (data.checklistDueTime && !/^([01]\d|2[0-3]):[0-5]\d$/.test(data.checklistDueTime)) {
+      throw new BusinessErrorResult(ErrorCode.BusinessError, 'checklistDueTime must be HH:MM (24-hour)');
+    }
     const existing = await DB.query(singleLineString`select school_id from assembly_school_config where school_id = $1`, [schoolId]);
     const now = new Date();
     if (existing.length === 0) {
       await DB.query(
-        singleLineString`insert into assembly_school_config (school_id, mode, title, subtitle, createdby_userid, created_at) values ($1,$2,$3,$4,$5,$6)`,
-        [schoolId, data.mode || 'template', data.title || null, data.subtitle || null, userId, now],
+        singleLineString`insert into assembly_school_config (school_id, mode, title, subtitle, checklist_due_time, createdby_userid, created_at) values ($1,$2,$3,$4,$5,$6,$7)`,
+        [schoolId, data.mode || 'template', data.title || null, data.subtitle || null, data.checklistDueTime || null, userId, now],
       );
     } else {
       const updates: string[] = []; const params: any[] = []; let i = 1;
@@ -40,6 +46,7 @@ class AssemblyHouseService {
       if (data.mode !== undefined) set('mode', data.mode);
       if (data.title !== undefined) set('title', data.title || null);
       if (data.subtitle !== undefined) set('subtitle', data.subtitle || null);
+      if (data.checklistDueTime !== undefined) set('checklist_due_time', data.checklistDueTime || null);
       if (updates.length) {
         set('updatedby_userid', userId); set('updated_at', now); params.push(schoolId);
         await DB.query(singleLineString`update assembly_school_config set ${updates.join(', ')} where school_id = $${i}`, params);
