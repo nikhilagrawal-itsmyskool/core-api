@@ -556,6 +556,8 @@ class ReportService {
       [scheme.uuid],
     );
     const branding = await this.brandingBlock(schoolId);
+    const ayRow = await DB.query(singleLineString`select name from academic_year where uuid = $1`, [ayId]);
+    const academicYear = ayRow[0]?.name || null;
 
     const students = await DB.query(
       singleLineString`select s.uuid as student_id, s.name, s.admission_number, s.dob, sc.roll_number,
@@ -629,7 +631,7 @@ class ReportService {
       });
     }
     return {
-      className: scheme.className, band: scheme.band, term, branding,
+      className: scheme.className, band: scheme.band, term, branding, academicYear,
       scheme: {
         components: components.map((c: any) => ({ code: c.code, label: c.label, max: c.maxMarks })),
         subjects: subjects.map((s: any) => ({ code: s.code, label: s.reportLabel })),
@@ -666,6 +668,22 @@ class ReportService {
       }
     }
     return { ok: true, printed: (studentIds || []).length };
+  }
+
+  // One student's latest photo as a data URI. Fetched ONE student at a time (not embedded in the
+  // whole-class reportCards payload, which blew API Gateway's 10MB limit) — the print pass calls
+  // this per pre-primary student, then resizes client-side before printing.
+  async reportPhoto(schoolId: string, studentId: string): Promise<{ dataUri: string | null }> {
+    const rows = await DB.query(
+      singleLineString`select uuid from file_storage where entity_type = 'student' and entity_id = $1 and school_id = $2 order by created_at desc limit 1`,
+      [studentId, schoolId],
+    );
+    const fileId = rows[0]?.uuid;
+    if (!fileId) return { dataUri: null };
+    try {
+      const f = await fileStorageService.getWithData(fileId, schoolId);
+      return { dataUri: f ? `data:${f.mimeType};base64,${f.data}` : null };
+    } catch { return { dataUri: null }; }
   }
 
   // Whether a caller may view/enter a (class, subject) — the assigned syllabus teacher, or

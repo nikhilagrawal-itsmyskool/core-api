@@ -193,6 +193,19 @@ class ReportHandler {
     } catch (err: any) { ResponseBuilder.handleError(err, callback); }
   };
 
+  // GET /report/photo/{studentId} — one student's latest photo as a data URI (print pass fetches
+  // these per pre-primary student, then resizes client-side; kept off the whole-class payload).
+  public getReportPhoto = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const auth = await resolveSchool(event, callback);
+      if (!auth) return;
+      const studentId = requireParam(event, "studentId", callback);
+      if (!studentId) return;
+      ResponseBuilder.ok(await reportService.reportPhoto(auth.schoolId, studentId), callback);
+    } catch (err: any) { ResponseBuilder.handleError(err, callback); }
+  };
+
   // GET /report/scheme/{band} — the editable format (components/subjects/areas/scale) for a band.
   public getScheme = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
     ctx.callbackWaitsForEmptyEventLoop = false;
@@ -293,6 +306,7 @@ export const reportAdmin = guard(ACTIONS.EXAM_MANAGE, dispatch({
   "POST /report/mapping/{classId}": h.assignSubjectTeacher,
   "GET /report/cards/{classId}/{term}": h.getReportCards,
   "POST /report/cards/{classId}/{term}": h.recordReportPrint,
+  "GET /report/photo/{studentId}": h.getReportPhoto,
   "GET /report/scheme/{band}": h.getScheme,
   "POST /report/scheme/{band}": h.saveScheme,
   "GET /report/config": h.getReportConfig,
