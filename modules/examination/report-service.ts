@@ -164,13 +164,14 @@ class ReportService {
     await this.ensureSchemes(schoolId, ayId, userId);
     const cls = await this.classInfo(schoolId, classId);
     if (!cls) return null;
-    const grade = gradeOf(cls.name);
+    const grade = gradeOf(cls.name).toLowerCase();
     const rows = await DB.query(
       singleLineString`select uuid, band, name, applies_to_grades from exam_report_scheme where school_id = $1 and academic_year_id = $2 and status = 'active'`,
       [schoolId, ayId],
     );
     for (const s of rows) {
-      const grades = String(s.appliesToGrades || "").split(",").map((g: string) => g.trim());
+      // Case-insensitive: a class may be "NURSERY-A" while the scheme lists "Nursery".
+      const grades = String(s.appliesToGrades || "").split(",").map((g: string) => g.trim().toLowerCase());
       if (grades.includes(grade)) return { ...s, grade, className: cls.name };
     }
     return null;
@@ -290,7 +291,7 @@ class ReportService {
       singleLineString`select applies_to_grades from exam_report_scheme where school_id = $1 and academic_year_id = $2 and status = 'active'`,
       [schoolId, ayId],
     );
-    const covered = new Set<string>(schemes.flatMap((s: any) => String(s.appliesToGrades || "").split(",").map((g: string) => g.trim())));
+    const covered = new Set<string>(schemes.flatMap((s: any) => String(s.appliesToGrades || "").split(",").map((g: string) => g.trim().toLowerCase())));
     const rows = isOverride
       ? await DB.query(
         singleLineString`select distinct sc.class_id, c.name as class_name, c.seq
@@ -307,8 +308,9 @@ class ReportService {
           order by c.seq asc nulls last, c.name`,
         [schoolId, ayId, employeeId],
       );
-    // Drop classes whose grade has no report scheme (junk/placeholder classes).
-    return rows.filter((r: any) => covered.has(gradeOf(r.className)));
+    // Drop classes whose grade has no report scheme (junk/placeholder classes). Case-insensitive
+    // so "NURSERY-A" matches a scheme listing "Nursery".
+    return rows.filter((r: any) => covered.has(gradeOf(r.className).toLowerCase()));
   }
 
   async isClassTeacher(schoolId: string, ayId: string, classId: string, employeeId: string): Promise<boolean> {
@@ -643,6 +645,7 @@ class ReportService {
       const scheme = await this.schemeForClass(schoolId, ayId, c.classId, userId);
       if (!scheme) continue;
       const subjects = await this.schemeSubjects(scheme.uuid);
+      if (!subjects.length) continue; // grade-only schemes (pre-primary) have no marks to track
       const components = await this.schemeComponents(scheme.uuid, term);
       const students = await this.classStudents(schoolId, ayId, c.classId);
       const marks = await DB.query(
