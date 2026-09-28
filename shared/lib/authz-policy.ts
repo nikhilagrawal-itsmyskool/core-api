@@ -131,7 +131,6 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
     'syllabus.manage',
     'syllabus.progress.mark',
     'programme.view',
-    'programme.manage',
     'assembly.view',
     'assembly.manage',
     'homework.post',

@@ -74,7 +74,7 @@ class ProgrammesUnitHandler {
   ) => {
     _context.callbackWaitsForEmptyEventLoop = false;
     try {
-      if (!requireAction(event, "programme.manage", callback)) return;
+      if (!requireAction(event, "godpwa.programme.manage", callback)) return;
       const ctx = await resolveSchool(event, callback);
       if (!ctx) return;
       const body = parseBody<CreateUnitRequest>(event, callback);
@@ -93,7 +93,7 @@ class ProgrammesUnitHandler {
   ) => {
     _context.callbackWaitsForEmptyEventLoop = false;
     try {
-      if (!requireAction(event, "programme.manage", callback)) return;
+      if (!requireAction(event, "godpwa.programme.manage", callback)) return;
       const ctx = await resolveSchool(event, callback);
       if (!ctx) return;
       const id = requireParam(event, "id", callback);
@@ -118,7 +118,7 @@ class ProgrammesUnitHandler {
   ) => {
     _context.callbackWaitsForEmptyEventLoop = false;
     try {
-      if (!requireAction(event, "programme.manage", callback)) return;
+      if (!requireAction(event, "godpwa.programme.manage", callback)) return;
       const ctx = await resolveSchool(event, callback);
       if (!ctx) return;
       const id = requireParam(event, "id", callback);

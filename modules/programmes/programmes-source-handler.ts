@@ -76,7 +76,7 @@ class ProgrammesSourceHandler {
   ) => {
     _context.callbackWaitsForEmptyEventLoop = false;
     try {
-      if (!requireAction(event, "programme.manage", callback)) return;
+      if (!requireAction(event, "godpwa.programme.manage", callback)) return;
       const ctx = await resolveSchool(event, callback);
       if (!ctx) return;
       const grade = requireParam(event, "grade", callback);
