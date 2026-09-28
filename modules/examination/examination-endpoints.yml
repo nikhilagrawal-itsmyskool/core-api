@@ -645,12 +645,20 @@
           method: get
           cors: true
       - http:
+          path: report/coscholastic-progress/{term}
+          method: get
+          cors: true
+      - http:
           path: report/mapping/{classId}
           method: get
           cors: true
       - http:
           path: report/mapping/{classId}
           method: post
+          cors: true
+      - http:
+          path: report/classes
+          method: get
           cors: true
       - http:
           path: report/cards/{classId}/{term}

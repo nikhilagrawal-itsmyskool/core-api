@@ -76,7 +76,9 @@ class ReportHandler {
       if (!emp) return;
       const ay = await this.ay(event, emp.schoolId);
       if (!ay) { ResponseBuilder.ok({ classes: [] }, callback); return; }
-      ResponseBuilder.ok({ academicYearId: ay, currentTerm: await reportService.currentTerm(emp.schoolId, ay), classes: await reportService.myReportClasses(emp.schoolId, ay, emp.employeeId, callerIsExamOverride(event)) }, callback);
+      // Co-scholastic is a class-teacher task — list ONLY the caller's own class-teacher classes,
+      // even for the exam-incharge (who prints report cards via /report/classes instead).
+      ResponseBuilder.ok({ academicYearId: ay, currentTerm: await reportService.currentTerm(emp.schoolId, ay), classes: await reportService.myReportClasses(emp.schoolId, ay, emp.employeeId, false) }, callback);
     } catch (err: any) { ResponseBuilder.handleError(err, callback); }
   };
 
@@ -128,6 +130,19 @@ class ReportHandler {
     } catch (err: any) { ResponseBuilder.handleError(err, callback); }
   };
 
+  // GET /report/coscholastic-progress/{term} — per-class co-scholastic completion (incharge tab).
+  public getCoscholasticProgress = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const auth = await resolveSchool(event, callback);
+      if (!auth) return;
+      const term = this.term(event);
+      const ay = await this.ay(event, auth.schoolId);
+      if (!ay) { ResponseBuilder.ok({ term, classes: [], pctEntered: 0, pendingClasses: 0 }, callback); return; }
+      ResponseBuilder.ok({ ...(await reportService.coscholasticProgress(auth.schoolId, ay, term, auth.userId)), currentTerm: await reportService.currentTerm(auth.schoolId, ay) }, callback);
+    } catch (err: any) { ResponseBuilder.handleError(err, callback); }
+  };
+
   // GET /report/mapping/{classId} — per-class subject → teacher mapping (guarded).
   public getSubjectMapping = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
     ctx.callbackWaitsForEmptyEventLoop = false;
@@ -158,6 +173,19 @@ class ReportHandler {
       const subjectCode = (body.subjectCode || "").trim();
       if (!subjectCode) { ResponseBuilder.badRequest(ErrorCode.BusinessError, "subjectCode is required", callback); return; }
       ResponseBuilder.ok(await reportService.assignSubjectTeacher(auth.schoolId, ay, classId, subjectCode, body.teacherId || "", auth.userId), callback);
+    } catch (err: any) { ResponseBuilder.handleError(err, callback); }
+  };
+
+  // GET /report/classes — every class that has a report scheme (for the Report Cards screen).
+  // exam.manage (incharge/admin/god) — not scoped to class-teacher assignment.
+  public getReportClasses = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const auth = await resolveSchool(event, callback);
+      if (!auth) return;
+      const ay = await this.ay(event, auth.schoolId);
+      if (!ay) { ResponseBuilder.ok({ classes: [], currentTerm: 1 }, callback); return; }
+      ResponseBuilder.ok({ academicYearId: ay, currentTerm: await reportService.currentTerm(auth.schoolId, ay), classes: await reportService.schemeClasses(auth.schoolId, ay, auth.userId) }, callback);
     } catch (err: any) { ResponseBuilder.handleError(err, callback); }
   };
 
@@ -302,8 +330,10 @@ export const reportMe = dispatch(ME_ROUTES);
 // dispatcher (exam.manage) so it stays a single Lambda under CloudFormation's 500-resource cap.
 export const reportAdmin = guard(ACTIONS.EXAM_MANAGE, dispatch({
   "GET /report/progress/{term}": h.getProgress,
+  "GET /report/coscholastic-progress/{term}": h.getCoscholasticProgress,
   "GET /report/mapping/{classId}": h.getSubjectMapping,
   "POST /report/mapping/{classId}": h.assignSubjectTeacher,
+  "GET /report/classes": h.getReportClasses,
   "GET /report/cards/{classId}/{term}": h.getReportCards,
   "POST /report/cards/{classId}/{term}": h.recordReportPrint,
   "GET /report/photo/{studentId}": h.getReportPhoto,

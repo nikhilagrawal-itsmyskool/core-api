@@ -314,6 +314,26 @@ class ReportService {
     return rows.filter((r: any) => covered.has(gradeOf(r.className).toLowerCase()));
   }
 
+  // Every class that has a report scheme (seq-ordered) — the Report Cards surface for the
+  // incharge/admin/god, who print for any class (not scoped to class-teacher assignment).
+  async schemeClasses(schoolId: string, ayId: string, userId: string): Promise<any[]> {
+    await this.ensureSchemes(schoolId, ayId, userId);
+    const schemes = await DB.query(
+      singleLineString`select applies_to_grades from exam_report_scheme where school_id = $1 and academic_year_id = $2 and status = 'active'`,
+      [schoolId, ayId],
+    );
+    const covered = new Set<string>(schemes.flatMap((s: any) => String(s.appliesToGrades || "").split(",").map((g: string) => g.trim().toLowerCase())));
+    const rows = await DB.query(
+      singleLineString`select distinct sc.class_id, c.name as class_name, c.seq
+        from student_class sc join class c on c.uuid = sc.class_id and c.school_id = sc.school_id and c.base_class_id is null
+        join student s on s.uuid = sc.student_id and s.school_id = sc.school_id and s.status = 'active'
+        where sc.school_id = $1 and sc.academic_year_id = $2 and (sc.status is null or sc.status <> 'deleted')
+        order by c.seq asc nulls last, c.name`,
+      [schoolId, ayId],
+    );
+    return rows.filter((r: any) => covered.has(gradeOf(r.className).toLowerCase()));
+  }
+
   async isClassTeacher(schoolId: string, ayId: string, classId: string, employeeId: string): Promise<boolean> {
     const rows = await DB.query(
       singleLineString`select 1 from class_teacher where school_id = $1 and academic_year_id = $2 and class_id = $3 and teacher_id = $4 and status = 'active' limit 1`,
@@ -369,6 +389,13 @@ class ReportService {
       if (claimed && claimed !== employeeId) continue; // someone else owns this subject explicitly
       await add(r.classId, match.code);
     }
+    // Order by grade sequence (class.seq) — not class name, which sorts Roman numerals wrongly
+    // (I, II, III, IV, IX, V, …). Fall back to name, then subject label.
+    const seqRows = await DB.query(singleLineString`select uuid, seq from class where school_id = $1`, [schoolId]);
+    const seqOf = new Map<string, number>(seqRows.map((r: any) => [r.uuid, r.seq == null ? 9999 : Number(r.seq)]));
+    out.sort((a, b) => (seqOf.get(a.classId) ?? 9999) - (seqOf.get(b.classId) ?? 9999)
+      || String(a.className).localeCompare(String(b.className))
+      || String(a.reportLabel).localeCompare(String(b.reportLabel)));
     return out;
   }
 
@@ -928,6 +955,44 @@ class ReportService {
         doneCount: subjRows.filter((x: any) => x.done).length, subjectCount: subjRows.length });
     }
     return { term, classes: out, pctEntered: totalSubjects ? Math.round((doneSubjects / totalSubjects) * 100) : 0, pendingSubjects: totalSubjects - doneSubjects };
+  }
+
+  // Co-scholastic completion per class (the class-teacher task) — mirrors progress() but tracks
+  // area grades instead of marks. Powers the incharge's Co-Scholastic Progress tab; a class is
+  // "done" when every student has a grade for every grade-type area.
+  async coscholasticProgress(schoolId: string, ayId: string, term: number, userId: string): Promise<any> {
+    await this.ensureSchemes(schoolId, ayId, userId);
+    const classes = await DB.query(
+      singleLineString`select distinct sc.class_id, c.name as class_name, c.seq
+        from student_class sc join class c on c.uuid = sc.class_id and c.school_id = sc.school_id and c.base_class_id is null
+        join student s on s.uuid = sc.student_id and s.school_id = sc.school_id and s.status = 'active'
+        where sc.school_id = $1 and sc.academic_year_id = $2 and (sc.status is null or sc.status <> 'deleted')
+        order by c.seq asc nulls last, c.name`,
+      [schoolId, ayId],
+    );
+    const out: any[] = [];
+    let doneClasses = 0, totalClasses = 0;
+    for (const c of classes) {
+      const scheme = await this.schemeForClass(schoolId, ayId, c.classId, userId);
+      if (!scheme) continue;
+      const areas = await DB.query(
+        singleLineString`select uuid from exam_report_area where scheme_id = $1 and status = 'active' and (value_type is null or value_type <> 'text')`,
+        [scheme.uuid],
+      );
+      if (!areas.length) continue; // nothing gradeable to track
+      const students = await this.classStudents(schoolId, ayId, c.classId);
+      const grades = await DB.query(
+        singleLineString`select student_id, area_id from exam_report_area_grade
+          where school_id = $1 and academic_year_id = $2 and term = $3 and class_id = $4`,
+        [schoolId, ayId, term, c.classId],
+      );
+      const filled = new Set<string>(grades.map((g: any) => `${g.studentId}|${g.areaId}`));
+      const complete = students.filter((s: any) => areas.every((a: any) => filled.has(`${s.studentId}|${a.uuid}`))).length;
+      const done = students.length > 0 && complete === students.length;
+      totalClasses++; if (done) doneClasses++;
+      out.push({ classId: c.classId, className: c.className, band: scheme.band, total: students.length, complete, done });
+    }
+    return { term, classes: out, pctEntered: totalClasses ? Math.round((doneClasses / totalClasses) * 100) : 0, pendingClasses: totalClasses - doneClasses };
   }
 }
 

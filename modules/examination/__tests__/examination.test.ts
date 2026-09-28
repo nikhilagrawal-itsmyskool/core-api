@@ -790,6 +790,16 @@ describe("examination: report cards (service)", () => {
     for (const s of grid.students) await cleanupReport(s.studentId, ayId);
   });
 
+  reportIt("co-scholastic progress + scheme-classes list the class", async () => {
+    const all = await reportService.schemeClasses(schoolId, ayId, "system");
+    expect(all.some((c: any) => c.classId === section!.sectionClassId)).toBe(true);
+    const cp = await reportService.coscholasticProgress(schoolId, ayId, 1, "system");
+    const cls = cp.classes.find((c: any) => c.classId === section!.sectionClassId);
+    expect(cls).toBeTruthy();
+    expect(cls.total).toBeGreaterThan(0);
+    expect(cls.complete).toBeLessThanOrEqual(cls.total);
+  });
+
   reportIt("subject mapping: an explicit teacher assignment overrides access", async () => {
     const cls = section!.sectionClassId;
     const before = await reportService.subjectMapping(schoolId, ayId, cls, "system");
