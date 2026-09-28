@@ -1,7 +1,7 @@
 import { ApiCallback, ApiContext, ApiEvent } from "../../shared/lib/api.interfaces";
 import { ResponseBuilder } from "../../shared/lib/response-builder";
 import { ErrorCode } from "../../shared/lib/error-codes";
-import { guard } from "../auth/authz";
+import { guard, requireAction } from "../auth/authz";
 import { ACTIONS } from "../../shared/lib/authz-policy";
 import { resolveSchool, resolveEmployee, parseBody, requireParam, callerIsExamOverride } from "./handler-util";
 import { getCurrentAcademicYearId } from "./examination-common";
@@ -147,6 +147,7 @@ class ReportHandler {
   public getSubjectMapping = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
     ctx.callbackWaitsForEmptyEventLoop = false;
     try {
+      if (!requireAction(event, ACTIONS.SUBJECT_MAPPING_MANAGE, callback)) return; // admin/god only, not exam-incharge
       const auth = await resolveSchool(event, callback);
       if (!auth) return;
       const classId = requireParam(event, "classId", callback);
@@ -162,6 +163,7 @@ class ReportHandler {
   public assignSubjectTeacher = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
     ctx.callbackWaitsForEmptyEventLoop = false;
     try {
+      if (!requireAction(event, ACTIONS.SUBJECT_MAPPING_MANAGE, callback)) return; // admin/god only, not exam-incharge
       const auth = await resolveSchool(event, callback);
       if (!auth) return;
       const classId = requireParam(event, "classId", callback);

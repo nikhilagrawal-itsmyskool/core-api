@@ -77,6 +77,9 @@ export const ACTIONS = {
   ACADEMIC_CALENDAR_MANAGE: 'academic-calendar.manage',
   EXAM_VIEW: 'exam.view',
   EXAM_MANAGE: 'exam.manage',
+  // Report-card subject→teacher mapping. Deliberately OUTSIDE the exam.* namespace so the
+  // exam-incharge (who holds exam.*) does NOT get it — mapping is an admin/god config task.
+  SUBJECT_MAPPING_MANAGE: 'subject-mapping.manage',
   // Developmental programmes (Spoken English & Life Communication, …). view = the
   // teacher Class->Month->Theme reader + catalog (teacher/admin); manage = author
   // units + re-upload source docs (admin/god/programme-incharge).
@@ -138,6 +141,7 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
     'academic-calendar.view',
     'academic-calendar.manage',
     'exam.*',
+    'subject-mapping.manage', // report-card subject→teacher mapping (admin + god only, NOT exam-incharge)
     'receipt.verify', // Scan & Verify (admin + god only; NOT fee incharges)
   ],
   // Standard teaching staff: view-only across the modules they can reach.
