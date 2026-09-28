@@ -8,6 +8,7 @@ export interface Programme {
   name: string;
   motto: string | null;
   philosophy: string | null;
+  teacherGuidance?: string[] | null;
   status: string;
 }
 

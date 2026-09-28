@@ -43,6 +43,11 @@ create unique index if not exists idx_programme_code_unique
     on programme(school_id, lower(code)) where status = 'active';
 create index if not exists idx_programme_school on programme(school_id);
 
+-- Programme-level teacher guidance: an ordered jsonb array of short "how to teach this
+-- programme" principles, shown as one collapsed card at the top of the teacher reader
+-- (distinct from each unit's month-specific F14 Teacher Guidance). Added idempotently.
+alter table programme add column if not exists teacher_guidance jsonb;
+
 -- Table 2: programme_field_type (the monthly field headings + order; F01..F15 for SELC)
 -- The unit's `fields` JSON stores code -> content; labels and display order live HERE.
 create table if not exists programme_field_type (

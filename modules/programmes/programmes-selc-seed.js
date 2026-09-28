@@ -13,6 +13,17 @@ const PROGRAMME = {
     "English is the medium. Communication is the skill. Thinking is the foundation. Life is the context. Responsible action is the outcome.",
 };
 
+// Programme-level "how to teach this" essence (not verbatim from the handbook), shown as
+// one collapsed card at the top of the teacher reader. Kept short and principle-level.
+const TEACHER_GUIDANCE = [
+  "Use the month as a resource bank, not a checklist — model briefly, then let children talk.",
+  "Model conversations are examples to adapt, never scripts to memorise.",
+  "Meaning first: support the attempt, correct selectively, then step back as confidence grows.",
+  "Judge communication, not perfect grammar; pronunciation means being understood, not an accent.",
+  "Assess by observation over time, not memorised answers.",
+  "About two communication periods a week, plus short daily practice — greetings, questions, asking for help.",
+];
+
 // §6 — the 15 monthly fields (code -> heading), in display order.
 const FIELD_TYPES = [
   { code: "F01", name: "Theme" },
@@ -160,6 +171,7 @@ function gradeFromFilename(fileName) {
 
 module.exports = {
   PROGRAMME,
+  TEACHER_GUIDANCE,
   FIELD_TYPES,
   MATERIAL_TYPES,
   DOMAINS,

@@ -16,7 +16,7 @@ export async function getProgrammeByCode(
 ): Promise<Programme | null> {
   const rows = await DB.query(
     singleLineString`
-      select uuid, school_id, code, name, motto, philosophy, status
+      select uuid, school_id, code, name, motto, philosophy, teacher_guidance, status
       from programme where school_id = $1 and lower(code) = lower($2) and status = 'active'
     `,
     [schoolId, code],

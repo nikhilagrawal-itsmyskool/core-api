@@ -67,18 +67,19 @@ async function ensureProgramme(pool, schoolId) {
     `select uuid from programme where school_id = $1 and lower(code) = lower($2) and status = 'active'`,
     [schoolId, seed.PROGRAMME.code],
   );
+  const guidance = JSON.stringify(seed.TEACHER_GUIDANCE || []);
   if (existing) {
     await pool.query(
-      `update programme set name=$1, motto=$2, philosophy=$3, updatedby_userid=$4, updated_at=$5 where uuid=$6`,
-      [seed.PROGRAMME.name, seed.PROGRAMME.motto, seed.PROGRAMME.philosophy, IMPORT_USER, new Date(), existing.uuid],
+      `update programme set name=$1, motto=$2, philosophy=$3, teacher_guidance=$4, updatedby_userid=$5, updated_at=$6 where uuid=$7`,
+      [seed.PROGRAMME.name, seed.PROGRAMME.motto, seed.PROGRAMME.philosophy, guidance, IMPORT_USER, new Date(), existing.uuid],
     );
     return existing.uuid;
   }
   const uuid = generateShortUuid(12);
   await pool.query(
-    `insert into programme (uuid, school_id, code, name, motto, philosophy, status, createdby_userid, created_at)
-     values ($1,$2,$3,$4,$5,$6,'active',$7,$8)`,
-    [uuid, schoolId, seed.PROGRAMME.code, seed.PROGRAMME.name, seed.PROGRAMME.motto, seed.PROGRAMME.philosophy, IMPORT_USER, new Date()],
+    `insert into programme (uuid, school_id, code, name, motto, philosophy, teacher_guidance, status, createdby_userid, created_at)
+     values ($1,$2,$3,$4,$5,$6,$7,'active',$8,$9)`,
+    [uuid, schoolId, seed.PROGRAMME.code, seed.PROGRAMME.name, seed.PROGRAMME.motto, seed.PROGRAMME.philosophy, guidance, IMPORT_USER, new Date()],
   );
   return uuid;
 }
