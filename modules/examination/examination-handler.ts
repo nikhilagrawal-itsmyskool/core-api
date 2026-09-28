@@ -398,7 +398,7 @@ class ExaminationHandler {
     try {
       const auth = await resolveSchool(event, callback);
       if (!auth) return;
-      const body = parseBody<{ schoolName?: string; motto?: string; address?: string }>(event, callback);
+      const body = parseBody<{ schoolName?: string; motto?: string; address?: string; affiliationNo?: string; schoolCode?: string; contact?: string; email?: string; website?: string }>(event, callback);
       if (!body) return;
       ResponseBuilder.ok(await examinationService.setBrandingText(auth.schoolId, body, auth.userId), callback);
     } catch (err: any) {

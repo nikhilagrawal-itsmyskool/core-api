@@ -576,9 +576,9 @@ class ExaminationService {
     return uuid;
   }
 
-  private async brandingDataUris(schoolId: string): Promise<{ logoDataUri: string | null; stampDataUri: string | null }> {
+  private async brandingDataUris(schoolId: string): Promise<{ logoDataUri: string | null; stampDataUri: string | null; boardLogoDataUri: string | null }> {
     const rows = await DB.query(
-      singleLineString`select logo_file_id, stamp_file_id from school_branding where school_id = $1`,
+      singleLineString`select logo_file_id, stamp_file_id, board_logo_file_id from school_branding where school_id = $1`,
       [schoolId],
     );
     const toUri = async (fileId: string | null | undefined): Promise<string | null> => {
@@ -586,8 +586,8 @@ class ExaminationService {
       const f = await fileStorageService.getWithData(fileId, schoolId);
       return f ? `data:${f.mimeType};base64,${f.data}` : null;
     };
-    if (!rows.length) return { logoDataUri: null, stampDataUri: null };
-    return { logoDataUri: await toUri(rows[0].logoFileId), stampDataUri: await toUri(rows[0].stampFileId) };
+    if (!rows.length) return { logoDataUri: null, stampDataUri: null, boardLogoDataUri: null };
+    return { logoDataUri: await toUri(rows[0].logoFileId), stampDataUri: await toUri(rows[0].stampFileId), boardLogoDataUri: await toUri(rows[0].boardLogoFileId) };
   }
 
   // All the data the portal needs to render printable admit cards for a section: the
@@ -760,35 +760,44 @@ class ExaminationService {
   // ── Branding (central; logo + office stamp) ─────────────────────────────────────
   async getBranding(schoolId: string): Promise<any> {
     const rows = await DB.query(
-      singleLineString`select logo_file_id, stamp_file_id, school_name, motto, address from school_branding where school_id = $1`,
+      singleLineString`select logo_file_id, stamp_file_id, board_logo_file_id, school_name, motto, address,
+          affiliation_no, school_code, contact, email, website from school_branding where school_id = $1`,
       [schoolId],
     );
     const base = rows.length ? rows[0] : {};
     const uris = await this.brandingDataUris(schoolId);
     return {
-      logoFileId: base.logoFileId || null, stampFileId: base.stampFileId || null,
+      logoFileId: base.logoFileId || null, stampFileId: base.stampFileId || null, boardLogoFileId: base.boardLogoFileId || null,
       schoolName: base.schoolName || null, motto: base.motto || null, address: base.address || null,
+      affiliationNo: base.affiliationNo || null, schoolCode: base.schoolCode || null,
+      contact: base.contact || null, email: base.email || null, website: base.website || null,
       ...uris,
     };
   }
 
-  // Save the printed-header text (school name / motto / address).
-  async setBrandingText(schoolId: string, text: { schoolName?: string; motto?: string; address?: string }, userId: string): Promise<any> {
+  // Save the printed-header text — school name / motto / address plus the report-card masthead
+  // fields (affiliation no, school code, contact, email, website).
+  async setBrandingText(schoolId: string, text: { schoolName?: string; motto?: string; address?: string; affiliationNo?: string; schoolCode?: string; contact?: string; email?: string; website?: string }, userId: string): Promise<any> {
     const now = new Date();
     const exists = await DB.query(singleLineString`select 1 from school_branding where school_id = $1`, [schoolId]);
     const vals = [
       (text.schoolName || "").trim().slice(0, 256) || null,
       (text.motto || "").trim().slice(0, 256) || null,
       (text.address || "").trim().slice(0, 512) || null,
+      (text.affiliationNo || "").trim().slice(0, 64) || null,
+      (text.schoolCode || "").trim().slice(0, 64) || null,
+      (text.contact || "").trim().slice(0, 128) || null,
+      (text.email || "").trim().slice(0, 128) || null,
+      (text.website || "").trim().slice(0, 128) || null,
     ];
     if (exists.length) {
       await DB.query(
-        singleLineString`update school_branding set school_name = $2, motto = $3, address = $4, updatedby_userid = $5, updated_at = $6 where school_id = $1`,
+        singleLineString`update school_branding set school_name = $2, motto = $3, address = $4, affiliation_no = $5, school_code = $6, contact = $7, email = $8, website = $9, updatedby_userid = $10, updated_at = $11 where school_id = $1`,
         [schoolId, ...vals, userId, now],
       );
     } else {
       await DB.query(
-        singleLineString`insert into school_branding (school_id, school_name, motto, address, updatedby_userid, updated_at) values ($1, $2, $3, $4, $5, $6)`,
+        singleLineString`insert into school_branding (school_id, school_name, motto, address, affiliation_no, school_code, contact, email, website, updatedby_userid, updated_at) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
         [schoolId, ...vals, userId, now],
       );
     }
@@ -797,16 +806,21 @@ class ExaminationService {
 
   async setBrandingImage(
     schoolId: string,
-    kind: "logo" | "stamp",
+    kind: "logo" | "stamp" | "boardLogo",
     base64Data: string,
     mimeType: string,
     fileName: string,
     userId: string,
   ): Promise<any> {
-    if (kind !== "logo" && kind !== "stamp") throw new BusinessErrorResult(ErrorCode.BusinessError, "kind must be logo or stamp");
+    const cols: Record<string, { entityType: string; col: string }> = {
+      logo: { entityType: "school_logo", col: "logo_file_id" },
+      stamp: { entityType: "school_stamp", col: "stamp_file_id" },
+      boardLogo: { entityType: "school_board_logo", col: "board_logo_file_id" },
+    };
+    if (!cols[kind]) throw new BusinessErrorResult(ErrorCode.BusinessError, "kind must be logo, stamp or boardLogo");
     if (!base64Data) throw new BusinessErrorResult(ErrorCode.BusinessError, "image data is required");
-    const entityType = kind === "logo" ? "school_logo" : "school_stamp";
-    const col = kind === "logo" ? "logo_file_id" : "stamp_file_id";
+    const entityType = cols[kind].entityType;
+    const col = cols[kind].col;
 
     const stored = await fileStorageService.upload({
       fileName: fileName || `${kind}.png`,
