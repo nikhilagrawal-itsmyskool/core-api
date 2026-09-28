@@ -660,3 +660,11 @@
           path: report/cards/{classId}/{term}
           method: post
           cors: true
+      - http:
+          path: report/scheme/{band}
+          method: get
+          cors: true
+      - http:
+          path: report/scheme/{band}
+          method: post
+          cors: true

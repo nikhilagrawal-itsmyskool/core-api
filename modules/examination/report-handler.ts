@@ -192,6 +192,36 @@ class ReportHandler {
       ResponseBuilder.ok(await reportService.recordPrint(auth.schoolId, ay, classId, term, body.studentIds || [], auth.userId), callback);
     } catch (err: any) { ResponseBuilder.handleError(err, callback); }
   };
+
+  // GET /report/scheme/{band} — the editable format (components/subjects/areas/scale) for a band.
+  public getScheme = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const auth = await resolveSchool(event, callback);
+      if (!auth) return;
+      const band = requireParam(event, "band", callback);
+      if (!band) return;
+      const ay = await this.ay(event, auth.schoolId);
+      if (!ay) { ResponseBuilder.badRequest(ErrorCode.BusinessError, "No academic year", callback); return; }
+      ResponseBuilder.ok(await reportService.getScheme(auth.schoolId, ay, band, auth.userId), callback);
+    } catch (err: any) { ResponseBuilder.handleError(err, callback); }
+  };
+
+  // POST /report/scheme/{band} — save edited labels/maxes/areas/scale.
+  public saveScheme = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const auth = await resolveSchool(event, callback);
+      if (!auth) return;
+      const band = requireParam(event, "band", callback);
+      if (!band) return;
+      const ay = await this.ay(event, auth.schoolId);
+      if (!ay) { ResponseBuilder.badRequest(ErrorCode.BusinessError, "No academic year", callback); return; }
+      const body = parseBody<any>(event, callback);
+      if (!body) return;
+      ResponseBuilder.ok(await reportService.saveScheme(auth.schoolId, ay, band, body, auth.userId), callback);
+    } catch (err: any) { ResponseBuilder.handleError(err, callback); }
+  };
 }
 
 // requireParam echoes an error to the callback on miss; term has a sane default so read it raw.
@@ -237,4 +267,6 @@ export const reportAdmin = guard(ACTIONS.EXAM_MANAGE, dispatch({
   "POST /report/mapping/{classId}": h.assignSubjectTeacher,
   "GET /report/cards/{classId}/{term}": h.getReportCards,
   "POST /report/cards/{classId}/{term}": h.recordReportPrint,
+  "GET /report/scheme/{band}": h.getScheme,
+  "POST /report/scheme/{band}": h.saveScheme,
 }));

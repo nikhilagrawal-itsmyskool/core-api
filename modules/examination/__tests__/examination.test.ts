@@ -826,4 +826,17 @@ describe("examination: report cards (service)", () => {
     expect(d2.students.find((x: any) => x.studentId === stu.studentId).printCount).toBeGreaterThanOrEqual(1);
     await cleanupReport(stu.studentId, ayId);
   });
+
+  it("format config: getScheme returns editable rows; saveScheme edits a label by uuid", async () => {
+    const sc = await reportService.getScheme(schoolId, ayId, "1-3", "system");
+    expect(sc.subjects.length).toBeGreaterThan(0);
+    expect(sc.components.length).toBeGreaterThan(0);
+    expect(sc.gradeScales.length).toBeGreaterThan(0);
+    const subj = sc.subjects.find((s: any) => s.code === "EVS");
+    expect(subj).toBeTruthy();
+    // Rename EVS's printed label; the subject CODE stays EVS (so marks never orphan).
+    const saved = await reportService.saveScheme(schoolId, ayId, "1-3", { subjects: [{ uuid: subj.uuid, reportLabel: "Environmental Studies", syllabusSubject: subj.syllabusSubject }] }, "system");
+    const after = saved.subjects.find((s: any) => s.code === "EVS");
+    expect(after.reportLabel).toBe("Environmental Studies");
+  });
 });

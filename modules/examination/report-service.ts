@@ -423,6 +423,64 @@ class ReportService {
     return this.subjectMapping(schoolId, ayId, classId, userId);
   }
 
+  // ── Format config (Phase B.2): edit a scheme's labels/columns/areas/scale ───────────
+  // EDIT-only (update existing rows by uuid). Codes stay fixed — marks reference component_code
+  // + subject_code, and area grades reference the area uuid — so changing a label/max/range/etc.
+  // never orphans a value. (Add/remove/reorder is a later pass.)
+  async getScheme(schoolId: string, ayId: string, band: string, userId: string): Promise<any> {
+    await this.ensureSchemes(schoolId, ayId, userId);
+    const sc = await DB.query(
+      singleLineString`select uuid, band, name, applies_to_grades from exam_report_scheme where school_id = $1 and academic_year_id = $2 and band = $3 and status = 'active' limit 1`,
+      [schoolId, ayId, band],
+    );
+    if (!sc.length) throw new BusinessErrorResult(ErrorCode.BusinessError, "No scheme for that band");
+    const s = sc[0];
+    const [components, subjects, areas, gradeScales] = await Promise.all([
+      DB.query(singleLineString`select uuid, term, code, label, max_marks, sort_order from exam_report_component where scheme_id = $1 and status = 'active' order by term, sort_order asc nulls last`, [s.uuid]),
+      DB.query(singleLineString`select uuid, code, report_label, syllabus_subject, sort_order from exam_report_subject where scheme_id = $1 and status = 'active' order by sort_order asc nulls last`, [s.uuid]),
+      DB.query(singleLineString`select uuid, section, label, value_type, scale_kind, sort_order from exam_report_area where scheme_id = $1 and status = 'active' order by sort_order asc nulls last`, [s.uuid]),
+      DB.query(singleLineString`select uuid, kind, grade, label, min_pct, max_pct, sort_order from exam_report_grade_scale where scheme_id = $1 and status = 'active' order by kind, sort_order asc nulls last`, [s.uuid]),
+    ]);
+    return { scheme: { uuid: s.uuid, band: s.band, name: s.name, appliesToGrades: s.appliesToGrades }, components, subjects, areas, gradeScales };
+  }
+
+  async saveScheme(schoolId: string, ayId: string, band: string, payload: any, userId: string): Promise<any> {
+    const sc = await DB.query(
+      singleLineString`select uuid from exam_report_scheme where school_id = $1 and academic_year_id = $2 and band = $3 and status = 'active' limit 1`,
+      [schoolId, ayId, band],
+    );
+    if (!sc.length) throw new BusinessErrorResult(ErrorCode.BusinessError, "No scheme for that band");
+    const schemeId = sc[0].uuid;
+    const now = new Date();
+    for (const c of payload.components || []) {
+      if (!c.uuid) continue;
+      await DB.query(singleLineString`update exam_report_component set label = $2, max_marks = $3, updatedby_userid = $4, updated_at = $5 where uuid = $1 and scheme_id = $6 and status = 'active'`,
+        [c.uuid, String(c.label || "").slice(0, 64), Number(c.maxMarks) || 0, userId, now, schemeId]);
+    }
+    for (const s of payload.subjects || []) {
+      if (!s.uuid) continue;
+      await DB.query(singleLineString`update exam_report_subject set report_label = $2, syllabus_subject = $3, updatedby_userid = $4, updated_at = $5 where uuid = $1 and scheme_id = $6 and status = 'active'`,
+        [s.uuid, String(s.reportLabel || "").slice(0, 64), s.syllabusSubject ? String(s.syllabusSubject).slice(0, 128) : null, userId, now, schemeId]);
+    }
+    for (const a of payload.areas || []) {
+      if (!a.uuid) continue;
+      await DB.query(singleLineString`update exam_report_area set section = $2, label = $3, updatedby_userid = $4, updated_at = $5 where uuid = $1 and scheme_id = $6 and status = 'active'`,
+        [a.uuid, String(a.section || "").slice(0, 48), String(a.label || "").slice(0, 128), userId, now, schemeId]);
+    }
+    for (const g of payload.gradeScales || []) {
+      if (!g.uuid) continue;
+      const min = g.minPct === "" || g.minPct == null ? null : Number(g.minPct);
+      const max = g.maxPct === "" || g.maxPct == null ? null : Number(g.maxPct);
+      await DB.query(singleLineString`update exam_report_grade_scale set label = $2, min_pct = $3, max_pct = $4, updatedby_userid = $5, updated_at = $6 where uuid = $1 and scheme_id = $7 and status = 'active'`,
+        [g.uuid, String(g.label || "").slice(0, 64), min, max, userId, now, schemeId]);
+    }
+    if (payload.appliesToGrades !== undefined || payload.name !== undefined) {
+      await DB.query(singleLineString`update exam_report_scheme set applies_to_grades = coalesce($2, applies_to_grades), name = coalesce($3, name), updatedby_userid = $4, updated_at = $5 where uuid = $1`,
+        [schemeId, payload.appliesToGrades ?? null, payload.name ?? null, userId, now]);
+    }
+    return this.getScheme(schoolId, ayId, band, userId);
+  }
+
   // ── Printed report cards (Phase B) ──────────────────────────────────────────────────
   private matchScholastic(scale: any[], pct: number): string | null {
     const r = scale.find((s: any) => s.minPct != null && s.maxPct != null && pct >= Number(s.minPct) && pct <= Number(s.maxPct));
@@ -503,7 +561,6 @@ class ReportService {
     );
     const hMap = new Map<string, any>(headers.map((h: any) => [h.studentId, h]));
 
-    const needPhoto = scheme.band === "pre-primary";
     const outStudents: any[] = [];
     for (const s of students) {
       const h: any = hMap.get(s.studentId) || {};
@@ -531,7 +588,10 @@ class ReportService {
         house: h.house ?? s.houseName ?? null,
         attendancePresent: h.attendancePresent ?? null, attendanceTotal: h.attendanceTotal ?? null,
         remark: h.remark ?? null, promotedTo: h.promotedTo ?? null,
-        photoDataUri: needPhoto && s.photoFileId ? await (async () => { try { const f = await fileStorageService.getWithData(s.photoFileId, schoolId); return f ? `data:${f.mimeType};base64,${f.data}` : null; } catch { return null; } })() : null,
+        // Photos are NOT embedded here — a class of pre-primary photos (unresized, ~900KB each)
+        // blew past API Gateway's 10MB response limit. The id is returned; the print pass will
+        // fetch + resize per student. (photoFileId kept for that.)
+        photoFileId: s.photoFileId || null, photoDataUri: null,
         marks: subjects.reduce((acc: any, subj: any) => { acc[subj.code] = components.reduce((mm: any, c: any) => { const v = mMap.get(`${s.studentId}|${subj.code}|${c.code}`); mm[c.code] = v == null ? null : v; return mm; }, {}); return acc; }, {}),
         subjectTotals,
         overall: { total: overallTotal, max: overallMax, percentage: overallMax ? Math.round((overallTotal / overallMax) * 1000) / 10 : null },
