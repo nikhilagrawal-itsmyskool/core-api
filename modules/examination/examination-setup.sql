@@ -538,6 +538,12 @@ create table if not exists exam_report_area (
 );
 create index if not exists idx_exam_report_area_scheme
     on exam_report_area(scheme_id, status);
+-- Co-scholastic is MARKS-entered (value_type 'marks'): max_marks is the area's out-of (10 or 100),
+-- scale_kind picks the grading table ('coscholastic' = /100 bands, 'coscholastic10' = /10 bands),
+-- and denominator_editable=1 means the "out of" is entered per class at marking time (GA / Reasoning
+-- / Value Education, whose denominator differs by class) and marks are scaled to % before grading.
+alter table exam_report_area add column if not exists max_marks integer;
+alter table exam_report_area add column if not exists denominator_editable smallint;
 
 -- exam_report_grade_scale: the two legends (scholastic A1..E with % ranges; coscholastic A..D).
 -- Per scheme so a band can diverge (e.g. pre-primary A+..D). scholastic rows drive the computed
@@ -640,6 +646,8 @@ create unique index if not exists idx_exam_report_mark_cell
     on exam_report_mark(school_id, academic_year_id, term, student_id, subject_code, component_code);
 create index if not exists idx_exam_report_mark_class
     on exam_report_mark(school_id, academic_year_id, term, class_id, subject_code);
+-- absent=1 → the student was Absent for this component (entered as 'A'); prints as a red-circle A.
+alter table exam_report_mark add column if not exists absent smallint;
 
 -- exam_report_area_grade: one student's grade (or free text) for an area in a term. class_teacher-entered.
 create table if not exists exam_report_area_grade (
@@ -661,3 +669,10 @@ create unique index if not exists idx_exam_report_area_grade_cell
     on exam_report_area_grade(school_id, academic_year_id, term, student_id, area_id);
 create index if not exists idx_exam_report_area_grade_class
     on exam_report_area_grade(school_id, academic_year_id, term, class_id);
+-- Co-scholastic value_type 'marks': marks = the entered score, max_marks = the effective out-of
+-- (area.max_marks, or the per-class denominator for GA/Reasoning/Value Education); grade is computed
+-- at render, not stored. absent=1 → Absent (red-circle A). (grade/text_value stay for pre-primary
+-- direct-grade areas + text areas.)
+alter table exam_report_area_grade add column if not exists marks numeric(6,2);
+alter table exam_report_area_grade add column if not exists max_marks numeric(6,2);
+alter table exam_report_area_grade add column if not exists absent smallint;

@@ -761,18 +761,37 @@ describe("examination: report cards (service)", () => {
     expect(threw).toBe(true);
   });
 
-  reportIt("co-scholastic grid saves an area grade + the class-teacher header", async () => {
+  reportIt("co-scholastic grid saves marks (marks/absent) + the class-teacher header", async () => {
     const grid = await reportService.coscholasticGrid(schoolId, ayId, section!.sectionClassId, 1, "system");
     expect(grid.areas.length).toBeGreaterThan(0);
-    expect(grid.scale.length).toBeGreaterThan(0);
-    const area = grid.areas.find((a: any) => a.valueType === "grade");
+    expect(grid.scale.length).toBeGreaterThan(0); // the printed /100 legend
+    const marksArea = grid.areas.find((a: any) => a.valueType === "marks");
+    const gradeArea = grid.areas.find((a: any) => a.valueType === "grade"); // pre-primary
     const stu = grid.students[0];
+    const cells: any = {};
+    if (marksArea) cells[marksArea.id] = { marks: marksArea.max === 10 ? 8 : 82 }; // 8/10=B or 82/100=B
+    if (gradeArea) cells[gradeArea.id] = { grade: "A" };
     const saved = await reportService.saveCoscholastic(schoolId, ayId, section!.sectionClassId, 1,
-      [{ studentId: stu.studentId, grades: { [area.id]: "A" }, remark: "__test remark__", attendancePresent: 150, attendanceTotal: 180 }], "system", true);
+      [{ studentId: stu.studentId, cells, remark: "__test remark__", attendancePresent: 150, attendanceTotal: 180 }], "system", true);
     const back = saved.students.find((s: any) => s.studentId === stu.studentId);
-    expect(back.grades[area.id]).toBe("A");
+    if (marksArea) expect(Number(back.cells[marksArea.id].marks)).toBe(marksArea.max === 10 ? 8 : 82);
+    if (gradeArea) expect(back.cells[gradeArea.id].grade).toBe("A");
     expect(back.remark).toBe("__test remark__");
     expect(back.attendancePresent).toBe(150);
+  });
+
+  reportIt("co-scholastic grade is computed from marks; Absent surfaces on the card", async () => {
+    const grid = await reportService.coscholasticGrid(schoolId, ayId, section!.sectionClassId, 1, "system");
+    const area = grid.areas.find((a: any) => a.valueType === "marks" && a.scaleKind === "coscholastic10");
+    if (!area) return; // pre-primary sample has no /10 marks area
+    const stu = grid.students[0];
+    await reportService.saveCoscholastic(schoolId, ayId, section!.sectionClassId, 1, [{ studentId: stu.studentId, cells: { [area.id]: { marks: 8 } } }], "system", true);
+    let cards = await reportService.reportCards(schoolId, ayId, section!.sectionClassId, 1, "system");
+    expect(cards.students.find((s: any) => s.studentId === stu.studentId).areaGrades[area.id]).toBe("B"); // 8/10 → B
+    await reportService.saveCoscholastic(schoolId, ayId, section!.sectionClassId, 1, [{ studentId: stu.studentId, cells: { [area.id]: { absent: true } } }], "system", true);
+    cards = await reportService.reportCards(schoolId, ayId, section!.sectionClassId, 1, "system");
+    expect(cards.students.find((s: any) => s.studentId === stu.studentId).areaGrades[area.id]).toBe("ABSENT");
+    await cleanupReport(stu.studentId, ayId);
   });
 
   reportIt("progress dashboard reflects a fully-entered subject", async () => {

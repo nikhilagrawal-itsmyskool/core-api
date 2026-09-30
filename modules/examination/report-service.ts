@@ -8,7 +8,11 @@ const { generateShortUuid } = require("../../shared/util/generate-uuid.js");
 // ── Report cards (Term-1 marks + co-scholastic). Data-driven: a per-(school, AY, band)
 // scheme is the blueprint; student values reference it by stable codes. See examination-setup.sql.
 
-type AreaEntry = string | [string, "text"]; // a grade area (string) or a free-text area
+// A co-scholastic area entry: a pre-primary direct-grade area (string), a free-text area
+// ([label,"text"]), or a MARKS area (object) — max = out-of, scale = which grade table, denom =
+// the "out of" is entered per class at marking time (GA / Reasoning / Value Education).
+type MarksArea = { label: string; max: number; scale: "coscholastic" | "coscholastic10"; denom?: boolean };
+type AreaEntry = string | [string, "text"] | MarksArea;
 type Band = {
   band: string;
   name: string;
@@ -25,19 +29,44 @@ const SCHOLASTIC_SCALE: [string, string, number, number][] = [
   ["B2", "Good", 61, 70], ["C1", "Fair", 51, 60], ["C2", "Scope for Improvement", 41, 50],
   ["D", "Need to work very hard", 33, 40], ["E", "Should upgrade to meet the minimum requirement", 0, 32],
 ];
-const COSCHOLASTIC_SCALE: [string, string][] = [
-  ["A", "Excellent"], ["B", "Very Good"], ["C", "Good"], ["D", "Fair"],
+// Co-scholastic is marks-based. Two internal scales, both A/B/C/D:
+//   coscholastic   — used by the /100 areas (GA, Reasoning, Value Education, Art & Craft/Education);
+//                    grade from the PERCENT (marks ÷ max × 100). THIS is the legend printed on the card.
+//   coscholastic10 — used by the /10 areas (everything else); grade from the RAW mark (1–10).
+//                    Internal only — never printed on the card.
+const COSCHOLASTIC_SCALE: [string, string, number, number][] = [
+  ["A", "Excellent", 85, 100], ["B", "Very Good", 70, 84], ["C", "Good", 55, 69], ["D", "Fair", 0, 54],
+];
+const COSCHOLASTIC10_SCALE: [string, string, number, number][] = [
+  ["A", "Excellent", 9, 10], ["B", "Very Good", 7, 8], ["C", "Good", 5, 6], ["D", "Fair", 1, 4],
 ];
 // Pre-primary uses a finer grade scale (with +'s) and no numeric marks.
 const PREPRIMARY_SCALE: [string, string][] = [
   ["A+", "Outstanding"], ["A", "Excellent"], ["B+", "Very Good"], ["B", "Good"], ["C", "Fair"], ["D", "Scope of Improvement"],
 ];
 
-// Co-scholastic / personality / other areas shared by bands 1-3 and 4-5.
-const JUNIOR_AREAS: Record<string, string[]> = {
-  "Co-Scholastic": ["General Awareness and Reasoning", "Value Education", "Art and Craft", "Games", "Music", "Dance", "English Conversation"],
-  "Personality Development": ["Courteousness", "Confidence", "Sense of Responsibility", "Initiative", "Sharing & Caring", "Neatness"],
-  "Other Areas": ["Discipline", "Value Systems", "Social Skills", "Scientific Skills", "Thinking Skills", "Emotional Skills"],
+// Marks-area builders: m10 = out of 10 (10-point table); m100 = out of 100 (percent table, fixed);
+// mDen = out of 100 (percent table) but the denominator is entered per class at marking time.
+const m10 = (label: string): MarksArea => ({ label, max: 10, scale: "coscholastic10" });
+const m100 = (label: string): MarksArea => ({ label, max: 100, scale: "coscholastic" });
+const mDen = (label: string): MarksArea => ({ label, max: 100, scale: "coscholastic", denom: true });
+
+// Co-scholastic / personality / other areas shared by bands 1-2, 3 and 4-5. GA/Reasoning/Value
+// Education carry a per-class denominator; Art and Craft is /100 fixed; everything else is /10.
+const JUNIOR_AREAS: Record<string, AreaEntry[]> = {
+  "Co-Scholastic": [mDen("General Awareness"), mDen("Reasoning"), mDen("Value Education"), m100("Art and Craft"), m10("Games"), m10("Music"), m10("Dance"), m10("English Conversation")],
+  "Personality Development": [m10("Courteousness"), m10("Confidence"), m10("Sense of Responsibility"), m10("Initiative"), m10("Sharing & Caring"), m10("Neatness")],
+  "Other Areas": [m10("Discipline"), m10("Value Systems"), m10("Social Skills"), m10("Scientific Skills"), m10("Thinking Skills"), m10("Emotional Skills")],
+};
+// 6-8: Work Education/Physical Education /10, Art Education /100, GA/Reasoning/Value Education per-class.
+const SENIOR_AREAS_68: Record<string, AreaEntry[]> = {
+  "Co Scholastic Areas": [m10("Work Education"), mDen("Value Education"), mDen("General Awareness"), mDen("Reasoning"), m100("Art Education"), m10("Physical Education")],
+  "Other Areas": [m10("Discipline"), m10("English Conversation"), m10("Value System"), m10("Performing Art"), m10("Sports & Games")],
+};
+// 9: same as 6-8 but WITHOUT General Awareness/Reasoning and Value Education.
+const SENIOR_AREAS_9: Record<string, AreaEntry[]> = {
+  "Co Scholastic Areas": [m10("Work Education"), m100("Art Education"), m10("Physical Education")],
+  "Other Areas": [m10("Discipline"), m10("English Conversation"), m10("Value System"), m10("Performing Art"), m10("Sports & Games")],
 };
 
 // Grade-band structure (school-specific). Each scheme = one distinct (subjects × mark-columns)
@@ -52,11 +81,6 @@ const SENIOR_4COL = {
   2: [["PT2", "PT-II", 10], ["NB2", "NB-II", 5], ["SEA2", "SEA", 5], ["ANNUAL", "Annual Exam", 80]],
 } as Record<number, [string, string, number][]>;
 const MIDDLE_SUBJECTS: [string, string, string, string?][] = [["ENG", "English", "English,English I"], ["HIN", "Hindi", "Hindi,Hindi I"], ["MATH", "Mathematics", "Mathematics"], ["SCI", "Science", "Science"], ["SST", "Social Studies", "Social Studies"], ["COMP", "Computer Science", "Computer"]];
-const SENIOR_AREAS = {
-  "Co-Scholastic": ["Work Education", "Value Education", "General Awareness and Reasoning", "Art Education", "Physical Education"],
-  "Other Areas": ["Discipline", "English Conversation", "Value System", "Performing Art", "Sports & Games"],
-} as Record<string, AreaEntry[]>;
-
 const BANDS: Band[] = [
   {
     band: "1-2", name: "Achievement Record · 1-2", grades: "I,II",
@@ -85,13 +109,13 @@ const BANDS: Band[] = [
     band: "6-8", name: "Achievement Record · 6-8", grades: "VI,VII,VIII",
     components: SENIOR_4COL,
     subjects: [["ENG", "English", "English,English I"], ["HIN", "Hindi", "Hindi,Hindi I"], ["SANS", "Sanskrit", "Sanskrit"], ["MATH", "Mathematics", "Mathematics"], ["SCI", "Science", "Science"], ["SST", "Social Science", "Social Science,Social Science (Part 1),Social Studies"], ["COMP", "Computer Science", "Computer"]],
-    areas: SENIOR_AREAS,
+    areas: SENIOR_AREAS_68,
   },
   {
     band: "9", name: "Achievement Record · 9", grades: "IX",
     components: SENIOR_4COL,
     subjects: [["ENG", "English", "English,English I"], ["HIN", "Hindi", "Hindi,Hindi I"], ["MATH", "Mathematics", "Mathematics"], ["SCI", "Science", "Science"], ["SST", "Social Science", "Social Science,Social Science (Part 1),Social Studies"], ["COMP", "IT", "Computer"]],
-    areas: SENIOR_AREAS,
+    areas: SENIOR_AREAS_9,
   },
   {
     // Pre-primary "Progress Report": no numeric marks — everything is graded (A+..D). Its two
@@ -156,12 +180,14 @@ class ReportService {
       let asort = 0;
       for (const section of Object.keys(b.areas)) {
         for (const entry of b.areas[section]) {
-          const label = Array.isArray(entry) ? entry[0] : entry;
-          const valueType = Array.isArray(entry) ? entry[1] : "grade";
+          let label: string, valueType: string, scaleKind = "coscholastic", max: number | null = null, denom: number | null = null;
+          if (typeof entry === "string") { label = entry; valueType = "grade"; }            // pre-primary direct grade
+          else if (Array.isArray(entry)) { label = entry[0]; valueType = entry[1]; }         // free-text
+          else { label = entry.label; valueType = "marks"; scaleKind = entry.scale; max = entry.max; denom = entry.denom ? 1 : null; }
           await DB.query(
-            singleLineString`insert into exam_report_area (uuid, school_id, academic_year_id, scheme_id, section, label, scale_kind, value_type, sort_order, status, createdby_userid, created_at)
-              values ($1,$2,$3,$4,$5,$6,'coscholastic',$7,$8,'active',$9,$10)`,
-            [generateShortUuid(12), schoolId, ayId, schemeId, section, label, valueType, asort++, userId, now],
+            singleLineString`insert into exam_report_area (uuid, school_id, academic_year_id, scheme_id, section, label, scale_kind, value_type, max_marks, denominator_editable, sort_order, status, createdby_userid, created_at)
+              values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'active',$12,$13)`,
+            [generateShortUuid(12), schoolId, ayId, schemeId, section, label, scaleKind, valueType, max, denom, asort++, userId, now],
           );
         }
       }
@@ -173,13 +199,22 @@ class ReportService {
           [generateShortUuid(12), schoolId, ayId, schemeId, grade, label, min, max, gsort++, userId, now],
         );
       }
-      gsort = 0;
-      for (const [grade, label] of (b.coscholastic ?? COSCHOLASTIC_SCALE)) {
-        await DB.query(
+      const coschRow = async (kind: string, grade: string, label: string, min: number | null, max: number | null, sort: number) =>
+        DB.query(
           singleLineString`insert into exam_report_grade_scale (uuid, school_id, academic_year_id, scheme_id, kind, grade, label, min_pct, max_pct, sort_order, status, createdby_userid, created_at)
-            values ($1,$2,$3,$4,'coscholastic',$5,$6,null,null,$7,'active',$8,$9)`,
-          [generateShortUuid(12), schoolId, ayId, schemeId, grade, label, gsort++, userId, now],
+            values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'active',$11,$12)`,
+          [generateShortUuid(12), schoolId, ayId, schemeId, kind, grade, label, min, max, sort, userId, now],
         );
+      if (b.band === "pre-primary") {
+        // pre-primary areas are direct-grade (A+..D), no marks → one scale, no thresholds.
+        gsort = 0;
+        for (const [grade, label] of (b.coscholastic ?? PREPRIMARY_SCALE)) await coschRow("coscholastic", grade, label, null, null, gsort++);
+      } else {
+        // marks model: the /100 percent scale (printed on the card) + the internal /10 scale.
+        gsort = 0;
+        for (const [grade, label, min, max] of COSCHOLASTIC_SCALE) await coschRow("coscholastic", grade, label, min, max, gsort++);
+        gsort = 0;
+        for (const [grade, label, min, max] of COSCHOLASTIC10_SCALE) await coschRow("coscholastic10", grade, label, min, max, gsort++);
       }
     }
   }
@@ -498,7 +533,7 @@ class ReportService {
     const [components, subjects, areas, gradeScales] = await Promise.all([
       DB.query(singleLineString`select uuid, term, code, label, max_marks, sort_order from exam_report_component where scheme_id = $1 and status = 'active' order by term, sort_order asc nulls last`, [s.uuid]),
       DB.query(singleLineString`select uuid, code, report_label, syllabus_subject, applies_to_grades, sort_order from exam_report_subject where scheme_id = $1 and status = 'active' order by sort_order asc nulls last`, [s.uuid]),
-      DB.query(singleLineString`select uuid, section, label, value_type, scale_kind, sort_order from exam_report_area where scheme_id = $1 and status = 'active' order by sort_order asc nulls last`, [s.uuid]),
+      DB.query(singleLineString`select uuid, section, label, value_type, scale_kind, max_marks, denominator_editable, sort_order from exam_report_area where scheme_id = $1 and status = 'active' order by sort_order asc nulls last`, [s.uuid]),
       DB.query(singleLineString`select uuid, kind, grade, label, min_pct, max_pct, sort_order from exam_report_grade_scale where scheme_id = $1 and status = 'active' order by kind, sort_order asc nulls last`, [s.uuid]),
     ]);
     return { scheme: { uuid: s.uuid, band: s.band, name: s.name, appliesToGrades: s.appliesToGrades }, components, subjects, areas, gradeScales };
@@ -526,8 +561,10 @@ class ReportService {
     for (const a of payload.areas || []) {
       if (!a.uuid) continue;
       const asort = typeof a.sortOrder === "number" ? a.sortOrder : null; // reorder support
-      await DB.query(singleLineString`update exam_report_area set section = $2, label = $3, sort_order = coalesce($4, sort_order), updatedby_userid = $5, updated_at = $6 where uuid = $1 and scheme_id = $7 and status = 'active'`,
-        [a.uuid, String(a.section || "").slice(0, 48), String(a.label || "").slice(0, 128), asort, userId, now, schemeId]);
+      const amax = a.max === "" || a.max == null ? null : Number(a.max); // co-scholastic out-of
+      const adenom = a.denomEditable ? 1 : null;
+      await DB.query(singleLineString`update exam_report_area set section = $2, label = $3, max_marks = $4, denominator_editable = $5, sort_order = coalesce($6, sort_order), updatedby_userid = $7, updated_at = $8 where uuid = $1 and scheme_id = $9 and status = 'active'`,
+        [a.uuid, String(a.section || "").slice(0, 48), String(a.label || "").slice(0, 128), amax, adenom, asort, userId, now, schemeId]);
     }
     for (const g of payload.gradeScales || []) {
       if (!g.uuid) continue;
@@ -607,17 +644,15 @@ class ReportService {
     const cardGrade = gradeOf(scheme.className).toLowerCase();
     const subjects = (await this.schemeSubjects(scheme.uuid)).filter((s: any) => this.subjectInGrade(s, cardGrade));
     const areas = await DB.query(
-      singleLineString`select uuid, section, label, value_type from exam_report_area where scheme_id = $1 and status = 'active' order by sort_order asc nulls last`,
+      singleLineString`select uuid, section, label, value_type, scale_kind, max_marks from exam_report_area where scheme_id = $1 and status = 'active' order by sort_order asc nulls last`,
       [scheme.uuid],
     );
     const scholScale = await DB.query(
       singleLineString`select grade, label, min_pct, max_pct from exam_report_grade_scale where scheme_id = $1 and kind = 'scholastic' and status = 'active' order by sort_order asc nulls last`,
       [scheme.uuid],
     );
-    const coschScale = await DB.query(
-      singleLineString`select grade, label from exam_report_grade_scale where scheme_id = $1 and kind = 'coscholastic' and status = 'active' order by sort_order asc nulls last`,
-      [scheme.uuid],
-    );
+    const scales = await this.coschScales(scheme.uuid); // .cosch (printed /100 legend) + .cosch10 (internal)
+    const coschScale = scales.cosch;
     const branding = await this.brandingBlock(schoolId);
     const ayRow = await DB.query(singleLineString`select name from academic_year where uuid = $1`, [ayId]);
     const academicYear = ayRow[0]?.name || null;
@@ -635,14 +670,14 @@ class ReportService {
       [classId, ayId, schoolId],
     );
     const marks = await DB.query(
-      singleLineString`select student_id, subject_code, component_code, value from exam_report_mark
+      singleLineString`select student_id, subject_code, component_code, value, absent from exam_report_mark
         where school_id = $1 and academic_year_id = $2 and term = $3 and class_id = $4`,
       [schoolId, ayId, term, classId],
     );
-    const mMap = new Map<string, number>();
-    for (const m of marks) mMap.set(`${m.studentId}|${m.subjectCode}|${m.componentCode}`, Number(m.value));
+    const mMap = new Map<string, { value: number | null; absent: boolean }>();
+    for (const m of marks) mMap.set(`${m.studentId}|${m.subjectCode}|${m.componentCode}`, { value: m.value == null ? null : Number(m.value), absent: m.absent === 1 });
     const grades = await DB.query(
-      singleLineString`select student_id, area_id, grade, text_value from exam_report_area_grade
+      singleLineString`select student_id, area_id, grade, text_value, marks, max_marks, absent from exam_report_area_grade
         where school_id = $1 and academic_year_id = $2 and term = $3 and class_id = $4`,
       [schoolId, ayId, term, classId],
     );
@@ -665,16 +700,21 @@ class ReportService {
         for (const c of components) {
           max += Number(c.maxMarks);
           const v = mMap.get(`${s.studentId}|${subj.code}|${c.code}`);
-          if (v != null) { t += v; any = true; }
+          if (v) { if (v.absent) any = true; else if (v.value != null) { t += v.value; any = true; } } // absent counts as 0
         }
         const pct = max ? (t / max) * 100 : 0;
         subjectTotals[subj.code] = { total: any ? t : null, max, grade: any ? this.matchScholastic(scholScale, pct) : null };
         if (any) { overallTotal += t; overallMax += max; }
       }
+      // Co-scholastic areas: grade computed from marks (absent → 'ABSENT' sentinel = red-circle A).
       const areaGrades: Record<string, any> = {};
-      for (const a of areas) {
+      for (const a of areas as any[]) {
         const g: any = gMap.get(`${s.studentId}|${a.uuid}`);
-        areaGrades[a.uuid] = g ? (a.valueType === "text" ? g.textValue : g.grade) : null;
+        if (!g) { areaGrades[a.uuid] = null; continue; }
+        if (a.valueType === "text") areaGrades[a.uuid] = g.textValue;
+        else if (a.valueType === "grade") areaGrades[a.uuid] = g.grade; // pre-primary direct grade
+        else if (g.absent === 1) areaGrades[a.uuid] = "ABSENT";
+        else areaGrades[a.uuid] = this.coschGrade(a.scaleKind, g.marks != null ? Number(g.marks) : null, g.maxMarks != null ? Number(g.maxMarks) : a.maxMarks, scales);
       }
       outStudents.push({
         studentId: s.studentId, name: s.name, admissionNumber: s.admissionNumber, rollNumber: s.rollNumber,
@@ -686,7 +726,7 @@ class ReportService {
         // blew past API Gateway's 10MB response limit. The id is returned; the print pass will
         // fetch + resize per student. (photoFileId kept for that.)
         photoFileId: s.photoFileId || null, photoDataUri: null,
-        marks: subjects.reduce((acc: any, subj: any) => { acc[subj.code] = components.reduce((mm: any, c: any) => { const v = mMap.get(`${s.studentId}|${subj.code}|${c.code}`); mm[c.code] = v == null ? null : v; return mm; }, {}); return acc; }, {}),
+        marks: subjects.reduce((acc: any, subj: any) => { acc[subj.code] = components.reduce((mm: any, c: any) => { const v = mMap.get(`${s.studentId}|${subj.code}|${c.code}`); mm[c.code] = !v ? null : (v.absent ? "ABSENT" : v.value); return mm; }, {}); return acc; }, {}),
         subjectTotals,
         overall: { total: overallTotal, max: overallMax, percentage: overallMax ? Math.round((overallTotal / overallMax) * 1000) / 10 : null },
         areaGrades,
@@ -772,15 +812,16 @@ class ReportService {
     const components = await this.schemeComponents(scheme.uuid, term);
     const students = await this.classStudents(schoolId, ayId, classId);
     const marks = await DB.query(
-      singleLineString`select student_id, component_code, value from exam_report_mark
+      singleLineString`select student_id, component_code, value, absent from exam_report_mark
         where school_id = $1 and academic_year_id = $2 and term = $3 and class_id = $4 and subject_code = $5`,
       [schoolId, ayId, term, classId, subjectCode],
     );
-    const map = new Map<string, number>();
-    for (const m of marks) map.set(`${m.studentId}|${m.componentCode}`, m.value);
+    const map = new Map<string, { value: number | null; absent: boolean }>();
+    for (const m of marks) map.set(`${m.studentId}|${m.componentCode}`, { value: m.value == null ? null : Number(m.value), absent: m.absent === 1 });
     const rows = students.map((s: any) => ({
       studentId: s.studentId, name: s.name, admissionNumber: s.admissionNumber, rollNumber: s.rollNumber,
-      marks: Object.fromEntries(components.map((c: any) => [c.code, map.has(`${s.studentId}|${c.code}`) ? Number(map.get(`${s.studentId}|${c.code}`)) : null])),
+      // 'A' = Absent (entered as a/A); a number otherwise; null = not entered.
+      marks: Object.fromEntries(components.map((c: any) => { const v = map.get(`${s.studentId}|${c.code}`); return [c.code, !v ? null : (v.absent ? "A" : v.value)]; })),
     }));
     return {
       className: scheme.className, subject: { code: subject.code, label: subject.reportLabel }, term,
@@ -810,9 +851,11 @@ class ReportService {
       for (const code of Object.keys(e.marks)) {
         if (!maxByCode.has(code)) continue;
         const raw = e.marks[code];
-        const val = raw === "" || raw == null ? null : Number(raw);
+        const isAbsent = typeof raw === "string" && raw.trim().toUpperCase() === "A"; // a/A = Absent
+        const val = isAbsent || raw === "" || raw == null ? null : Number(raw);
+        const absent = isAbsent ? 1 : null;
         if (val != null && (isNaN(val) || val < 0 || val > (maxByCode.get(code) as number))) {
-          throw new BusinessErrorResult(ErrorCode.BusinessError, `Mark for ${code} must be 0–${maxByCode.get(code)}`);
+          throw new BusinessErrorResult(ErrorCode.BusinessError, `Mark for ${code} must be 0–${maxByCode.get(code)} (or A for Absent)`);
         }
         const ex = await DB.query(
           singleLineString`select uuid from exam_report_mark where school_id = $1 and academic_year_id = $2 and term = $3 and student_id = $4 and subject_code = $5 and component_code = $6`,
@@ -820,14 +863,14 @@ class ReportService {
         );
         if (ex.length) {
           await DB.query(
-            singleLineString`update exam_report_mark set value = $2, class_id = $3, updatedby_userid = $4, updated_at = $5 where uuid = $1`,
-            [ex[0].uuid, val, classId, employeeId, now],
+            singleLineString`update exam_report_mark set value = $2, absent = $3, class_id = $4, updatedby_userid = $5, updated_at = $6 where uuid = $1`,
+            [ex[0].uuid, val, absent, classId, employeeId, now],
           );
-        } else if (val != null) {
+        } else if (val != null || absent != null) {
           await DB.query(
-            singleLineString`insert into exam_report_mark (uuid, school_id, academic_year_id, term, student_id, class_id, subject_code, component_code, value, createdby_userid, created_at)
-              values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
-            [generateShortUuid(12), schoolId, ayId, term, studentId, classId, subjectCode, code, val, employeeId, now],
+            singleLineString`insert into exam_report_mark (uuid, school_id, academic_year_id, term, student_id, class_id, subject_code, component_code, value, absent, createdby_userid, created_at)
+              values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+            [generateShortUuid(12), schoolId, ayId, term, studentId, classId, subjectCode, code, val, absent, employeeId, now],
           );
         }
       }
@@ -836,20 +879,38 @@ class ReportService {
   }
 
   // ── Co-scholastic entry (class teacher) ─────────────────────────────────────────────
+  // Both co-scholastic grade tables for a scheme: cosch (/100 percent, printed) + cosch10 (/10 raw).
+  private async coschScales(schemeId: string): Promise<{ cosch: any[]; cosch10: any[] }> {
+    const rows = await DB.query(
+      singleLineString`select kind, grade, label, min_pct, max_pct, sort_order from exam_report_grade_scale where scheme_id = $1 and kind in ('coscholastic','coscholastic10') and status = 'active' order by sort_order asc nulls last`,
+      [schemeId],
+    );
+    return { cosch: rows.filter((r: any) => r.kind === "coscholastic"), cosch10: rows.filter((r: any) => r.kind === "coscholastic10") };
+  }
+
+  // Compute a co-scholastic grade from marks: /10 areas grade the raw mark, /100 areas grade the
+  // percent (marks ÷ effective-max × 100). Highest band the value meets, else the lowest grade.
+  private coschGrade(scaleKind: string, marks: number | null, effMax: number | null, scales: { cosch: any[]; cosch10: any[] }): string | null {
+    if (marks == null || isNaN(marks)) return null;
+    const table = scaleKind === "coscholastic10" ? scales.cosch10 : scales.cosch;
+    if (!table.length) return null;
+    const value = scaleKind === "coscholastic10" ? marks : (effMax ? (marks / effMax) * 100 : 0);
+    const sorted = [...table].sort((a, b) => (Number(b.minPct) || 0) - (Number(a.minPct) || 0));
+    const hit = sorted.find((r) => value >= (Number(r.minPct) || 0));
+    return (hit ?? sorted[sorted.length - 1]).grade;
+  }
+
   async coscholasticGrid(schoolId: string, ayId: string, classId: string, term: number, userId: string): Promise<any> {
     const scheme = await this.schemeForClass(schoolId, ayId, classId, userId);
     if (!scheme) throw new BusinessErrorResult(ErrorCode.BusinessError, "No report scheme for this class");
     const areas = await DB.query(
-      singleLineString`select uuid, section, label, scale_kind, value_type from exam_report_area where scheme_id = $1 and status = 'active' order by sort_order asc nulls last`,
+      singleLineString`select uuid, section, label, scale_kind, value_type, max_marks, denominator_editable from exam_report_area where scheme_id = $1 and status = 'active' order by sort_order asc nulls last`,
       [scheme.uuid],
     );
-    const scale = await DB.query(
-      singleLineString`select grade, label from exam_report_grade_scale where scheme_id = $1 and kind = 'coscholastic' and status = 'active' order by sort_order asc nulls last`,
-      [scheme.uuid],
-    );
+    const scales = await this.coschScales(scheme.uuid);
     const students = await this.classStudents(schoolId, ayId, classId);
     const grades = await DB.query(
-      singleLineString`select student_id, area_id, grade, text_value from exam_report_area_grade
+      singleLineString`select student_id, area_id, grade, text_value, marks, max_marks, absent from exam_report_area_grade
         where school_id = $1 and academic_year_id = $2 and term = $3 and class_id = $4`,
       [schoolId, ayId, term, classId],
     );
@@ -863,23 +924,32 @@ class ReportService {
     const hmap = new Map<string, any>(headers.map((h: any) => [h.studentId, h]));
     const houses = await DB.query(singleLineString`select name from house where school_id = $1 and status = 'active' order by name`, [schoolId]);
     const att = await this.attendanceSummary(schoolId, ayId, classId);
+    // Per-class denominator for the editable areas (GA/Reasoning/Value Education) — from any saved row.
+    const denominators: Record<string, any> = {};
+    for (const a of areas as any[]) if (a.denominatorEditable) {
+      const row = (grades as any[]).find((g) => g.areaId === a.uuid && g.maxMarks != null);
+      denominators[a.uuid] = row ? Number(row.maxMarks) : null;
+    }
     return {
       className: scheme.className, term,
-      scale: scale.map((s: any) => ({ grade: s.grade, label: s.label })),
+      scale: scales.cosch.map((s: any) => ({ grade: s.grade, label: s.label, minPct: s.minPct, maxPct: s.maxPct })),
+      scale10: scales.cosch10.map((s: any) => ({ grade: s.grade, label: s.label, minPct: s.minPct, maxPct: s.maxPct })),
       houses: houses.map((h: any) => h.name),
-      areas: areas.map((a: any) => ({ id: a.uuid, section: a.section, label: a.label, valueType: a.valueType })),
+      denominators,
+      areas: (areas as any[]).map((a) => ({ id: a.uuid, section: a.section, label: a.label, valueType: a.valueType, scaleKind: a.scaleKind, max: a.maxMarks, denomEditable: a.denominatorEditable === 1 })),
       students: students.map((s: any) => {
         const h: any = hmap.get(s.studentId) || {};
-        // Prefill house from the student's lifelong assignment and attendance live from records;
-        // a saved header value (the class teacher's own edit) always wins.
         return {
           studentId: s.studentId, name: s.name, admissionNumber: s.admissionNumber, rollNumber: s.rollNumber,
           attendancePresent: h.attendancePresent ?? (att.present.get(s.studentId) ?? 0),
           attendanceTotal: h.attendanceTotal ?? att.total,
           house: h.house ?? s.houseName ?? null, remark: h.remark ?? null,
-          grades: Object.fromEntries(areas.map((a: any) => {
+          cells: Object.fromEntries((areas as any[]).map((a) => {
             const g: any = gmap.get(`${s.studentId}|${a.uuid}`);
-            return [a.uuid, g ? (a.valueType === "text" ? g.textValue : g.grade) : null];
+            if (!g) return [a.uuid, {}];
+            if (a.valueType === "text") return [a.uuid, { text: g.textValue }];
+            if (a.valueType === "grade") return [a.uuid, { grade: g.grade }]; // pre-primary direct grade
+            return [a.uuid, { marks: g.marks != null ? Number(g.marks) : null, absent: g.absent === 1 }];
           })),
         };
       }),
@@ -893,10 +963,10 @@ class ReportService {
       throw new BusinessErrorResult(ErrorCode.BusinessError, "Only the class teacher can enter co-scholastic grades for this class");
     }
     const areas = await DB.query(
-      singleLineString`select uuid, value_type from exam_report_area where scheme_id = $1 and status = 'active'`,
+      singleLineString`select uuid, value_type, max_marks, denominator_editable from exam_report_area where scheme_id = $1 and status = 'active'`,
       [scheme.uuid],
     );
-    const typeByArea = new Map<string, string>(areas.map((a: any) => [a.uuid, a.valueType]));
+    const areaMap = new Map<string, any>((areas as any[]).map((a) => [a.uuid, a]));
     const now = new Date();
     for (const e of entries || []) {
       const studentId = (e.studentId || "").trim();
@@ -905,26 +975,37 @@ class ReportService {
       if (e.attendancePresent !== undefined || e.attendanceTotal !== undefined || e.house !== undefined || e.remark !== undefined) {
         await this.upsertHeader(schoolId, ayId, term, studentId, classId, e, employeeId, now);
       }
-      for (const areaId of Object.keys(e.grades || {})) {
-        if (!typeByArea.has(areaId)) continue;
-        const isText = typeByArea.get(areaId) === "text";
-        const raw = e.grades[areaId];
-        const grade = isText ? null : (raw || null);
-        const textValue = isText ? (raw || null) : null;
+      const denoms = e.denominators || {}; // per-class 'out of' for the editable areas
+      for (const areaId of Object.keys(e.cells || {})) {
+        const a = areaMap.get(areaId);
+        if (!a) continue;
+        const cell = e.cells[areaId] || {};
+        let grade: any = null, textValue: any = null, marks: any = null, maxMarks: any = null, absent: any = null;
+        if (a.valueType === "text") {
+          textValue = String(cell.text || "").trim() || null;
+        } else if (a.valueType === "grade") {
+          grade = cell.grade || null; // pre-primary direct grade
+        } else { // marks
+          absent = cell.absent ? 1 : null;
+          marks = absent || cell.marks === "" || cell.marks == null ? null : Number(cell.marks);
+          const d = denoms[areaId];
+          maxMarks = a.denominatorEditable ? (d === "" || d == null ? null : Number(d)) : a.maxMarks;
+        }
+        const has = grade != null || textValue != null || marks != null || absent != null;
         const ex = await DB.query(
           singleLineString`select uuid from exam_report_area_grade where school_id = $1 and academic_year_id = $2 and term = $3 and student_id = $4 and area_id = $5`,
           [schoolId, ayId, term, studentId, areaId],
         );
         if (ex.length) {
           await DB.query(
-            singleLineString`update exam_report_area_grade set grade = $2, text_value = $3, class_id = $4, updatedby_userid = $5, updated_at = $6 where uuid = $1`,
-            [ex[0].uuid, grade, textValue, classId, employeeId, now],
+            singleLineString`update exam_report_area_grade set grade = $2, text_value = $3, marks = $4, max_marks = $5, absent = $6, class_id = $7, updatedby_userid = $8, updated_at = $9 where uuid = $1`,
+            [ex[0].uuid, grade, textValue, marks, maxMarks, absent, classId, employeeId, now],
           );
-        } else if (grade != null || textValue != null) {
+        } else if (has) {
           await DB.query(
-            singleLineString`insert into exam_report_area_grade (uuid, school_id, academic_year_id, term, student_id, class_id, area_id, grade, text_value, createdby_userid, created_at)
-              values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
-            [generateShortUuid(12), schoolId, ayId, term, studentId, classId, areaId, grade, textValue, employeeId, now],
+            singleLineString`insert into exam_report_area_grade (uuid, school_id, academic_year_id, term, student_id, class_id, area_id, grade, text_value, marks, max_marks, absent, createdby_userid, created_at)
+              values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+            [generateShortUuid(12), schoolId, ayId, term, studentId, classId, areaId, grade, textValue, marks, maxMarks, absent, employeeId, now],
           );
         }
       }
@@ -1021,7 +1102,8 @@ class ReportService {
       const students = await this.classStudents(schoolId, ayId, c.classId);
       const grades = await DB.query(
         singleLineString`select student_id, area_id from exam_report_area_grade
-          where school_id = $1 and academic_year_id = $2 and term = $3 and class_id = $4`,
+          where school_id = $1 and academic_year_id = $2 and term = $3 and class_id = $4
+            and (marks is not null or absent = 1 or grade is not null or text_value is not null)`,
         [schoolId, ayId, term, c.classId],
       );
       const filled = new Set<string>(grades.map((g: any) => `${g.studentId}|${g.areaId}`));
