@@ -286,9 +286,9 @@ class ReportHandler {
       if (!auth) return;
       const ay = await this.ay(event, auth.schoolId);
       if (!ay) { ResponseBuilder.badRequest(ErrorCode.BusinessError, "No academic year", callback); return; }
-      const body = parseBody<{ term2StartsOn?: string | null }>(event, callback);
+      const body = parseBody<{ term2StartsOn?: string | null; remarkRequiredFinal?: boolean }>(event, callback);
       if (!body) return;
-      ResponseBuilder.ok(await reportService.setConfig(auth.schoolId, ay, body.term2StartsOn || null, auth.userId), callback);
+      ResponseBuilder.ok(await reportService.setConfig(auth.schoolId, ay, { term2StartsOn: body.term2StartsOn || null, remarkRequiredFinal: !!body.remarkRequiredFinal }, auth.userId), callback);
     } catch (err: any) { ResponseBuilder.handleError(err, callback); }
   };
 }

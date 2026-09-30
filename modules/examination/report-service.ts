@@ -581,12 +581,12 @@ class ReportService {
   }
 
   // ── Report config (term-2 start → default term) ─────────────────────────────────────
-  async getConfig(schoolId: string, ayId: string): Promise<{ term2StartsOn: string | null }> {
+  async getConfig(schoolId: string, ayId: string): Promise<{ term2StartsOn: string | null; remarkRequiredFinal: boolean }> {
     const r = await DB.query(
-      singleLineString`select to_char(term2_starts_on, 'YYYY-MM-DD') as term2_starts_on from exam_report_config where school_id = $1 and academic_year_id = $2`,
+      singleLineString`select to_char(term2_starts_on, 'YYYY-MM-DD') as term2_starts_on, remark_required_final from exam_report_config where school_id = $1 and academic_year_id = $2`,
       [schoolId, ayId],
     );
-    return { term2StartsOn: r.length ? r[0].term2StartsOn : null };
+    return { term2StartsOn: r.length ? r[0].term2StartsOn : null, remarkRequiredFinal: r.length ? r[0].remarkRequiredFinal === 1 : false };
   }
 
   // The default term for today: before term2_starts_on → 1, on/after → 2 (blank → 1). Not hard-coded.
@@ -597,16 +597,17 @@ class ReportService {
     return today >= term2StartsOn ? 2 : 1;
   }
 
-  async setConfig(schoolId: string, ayId: string, term2StartsOn: string | null, userId: string): Promise<any> {
-    const val = term2StartsOn && /^\d{4}-\d{2}-\d{2}$/.test(term2StartsOn) ? term2StartsOn : null;
+  async setConfig(schoolId: string, ayId: string, cfg: { term2StartsOn?: string | null; remarkRequiredFinal?: boolean }, userId: string): Promise<any> {
+    const val = cfg.term2StartsOn && /^\d{4}-\d{2}-\d{2}$/.test(cfg.term2StartsOn) ? cfg.term2StartsOn : null;
+    const rrf = cfg.remarkRequiredFinal ? 1 : null;
     const now = new Date();
     const ex = await DB.query(singleLineString`select 1 from exam_report_config where school_id = $1 and academic_year_id = $2`, [schoolId, ayId]);
     if (ex.length) {
-      await DB.query(singleLineString`update exam_report_config set term2_starts_on = $3, updatedby_userid = $4, updated_at = $5 where school_id = $1 and academic_year_id = $2`, [schoolId, ayId, val, userId, now]);
+      await DB.query(singleLineString`update exam_report_config set term2_starts_on = $3, remark_required_final = $4, updatedby_userid = $5, updated_at = $6 where school_id = $1 and academic_year_id = $2`, [schoolId, ayId, val, rrf, userId, now]);
     } else {
-      await DB.query(singleLineString`insert into exam_report_config (school_id, academic_year_id, term2_starts_on, updatedby_userid, updated_at) values ($1,$2,$3,$4,$5)`, [schoolId, ayId, val, userId, now]);
+      await DB.query(singleLineString`insert into exam_report_config (school_id, academic_year_id, term2_starts_on, remark_required_final, updatedby_userid, updated_at) values ($1,$2,$3,$4,$5,$6)`, [schoolId, ayId, val, rrf, userId, now]);
     }
-    return { term2StartsOn: val, currentTerm: await this.currentTerm(schoolId, ayId) };
+    return { term2StartsOn: val, remarkRequiredFinal: !!rrf, currentTerm: await this.currentTerm(schoolId, ayId) };
   }
 
   // ── Printed report cards (Phase B) ──────────────────────────────────────────────────
@@ -961,6 +962,15 @@ class ReportService {
     if (!scheme) throw new BusinessErrorResult(ErrorCode.BusinessError, "No report scheme for this class");
     if (!isOverride && !(await this.isClassTeacher(schoolId, ayId, classId, employeeId))) {
       throw new BusinessErrorResult(ErrorCode.BusinessError, "Only the class teacher can enter co-scholastic grades for this class");
+    }
+    // Class-teacher remark is required for the FINAL term (Term 2) when the school opts in; never Term 1.
+    if (term === 2) {
+      const { remarkRequiredFinal } = await this.getConfig(schoolId, ayId);
+      if (remarkRequiredFinal) {
+        for (const e of entries || []) {
+          if (!String(e.remark || "").trim()) throw new BusinessErrorResult(ErrorCode.BusinessError, "Class teacher remark is required for the final term");
+        }
+      }
     }
     const areas = await DB.query(
       singleLineString`select uuid, value_type, max_marks, denominator_editable from exam_report_area where scheme_id = $1 and status = 'active'`,

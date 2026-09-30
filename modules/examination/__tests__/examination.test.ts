@@ -881,8 +881,11 @@ describe("examination: report cards (service)", () => {
   });
 
   it("report config: term2_starts_on drives the current-term default (never hard-coded)", async () => {
-    expect((await reportService.setConfig(schoolId, ayId, "2099-01-01", "system")).currentTerm).toBe(1); // before → T1
-    expect((await reportService.setConfig(schoolId, ayId, "2000-01-01", "system")).currentTerm).toBe(2); // on/after → T2
-    expect((await reportService.setConfig(schoolId, ayId, null, "system")).currentTerm).toBe(1); // blank → T1 (also resets)
+    expect((await reportService.setConfig(schoolId, ayId, { term2StartsOn: "2099-01-01" }, "system")).currentTerm).toBe(1); // before → T1
+    expect((await reportService.setConfig(schoolId, ayId, { term2StartsOn: "2000-01-01" }, "system")).currentTerm).toBe(2); // on/after → T2
+    const reset = await reportService.setConfig(schoolId, ayId, { term2StartsOn: null, remarkRequiredFinal: true }, "system");
+    expect(reset.currentTerm).toBe(1); // blank → T1 (also resets)
+    expect(reset.remarkRequiredFinal).toBe(true);
+    await reportService.setConfig(schoolId, ayId, { term2StartsOn: null, remarkRequiredFinal: false }, "system"); // leave clean
   });
 });

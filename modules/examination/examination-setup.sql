@@ -605,6 +605,9 @@ create table if not exists exam_report_config (
     updated_at timestamp(0),
     primary key (school_id, academic_year_id)
 );
+-- remark_required_final=1 → the class-teacher remark is mandatory when saving co-scholastic for the
+-- FINAL term (Term 2); Term 1 is never required. Blank/0 = optional always.
+alter table exam_report_config add column if not exists remark_required_final smallint;
 
 -- exam_report_teacher: the exam-incharge's explicit teacher assignment for a (class, report
 -- subject). ONE teacher per subject. When set, it OVERRIDES the syllabus-derived access (so
