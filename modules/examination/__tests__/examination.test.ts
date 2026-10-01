@@ -877,7 +877,16 @@ describe("examination: report cards (service)", () => {
     expect(s9.subjects.find((s: any) => s.code === "COMP").reportLabel).toBe("IT");
     const s3 = await reportService.getScheme(schoolId, ayId, "3", "system");
     expect(s3.subjects.some((s: any) => s.code === "SCI")).toBe(true); // middle subjects
-    expect(s3.components.filter((c: any) => c.term === 1).length).toBe(7); // junior 7-column
+    expect(s3.components.filter((c: any) => c.term === 1 && c.subjectCode == null).length).toBe(7); // junior 7-column default
+  });
+
+  it("IX IT has its own Theory/Practical columns; other subjects keep Half Yearly", async () => {
+    const s9 = await reportService.getScheme(schoolId, ayId, "9", "system");
+    const it = s9.components.filter((c: any) => c.subjectCode === "COMP" && c.term === 1).map((c: any) => c.label);
+    expect(it).toEqual(expect.arrayContaining(["Theory", "Practical"]));
+    const def = s9.components.filter((c: any) => c.subjectCode == null && c.term === 1).map((c: any) => c.label);
+    expect(def).toContain("Half Yearly");
+    expect(def).not.toContain("Theory");
   });
 
   it("report config: term2_starts_on drives the current-term default (never hard-coded)", async () => {

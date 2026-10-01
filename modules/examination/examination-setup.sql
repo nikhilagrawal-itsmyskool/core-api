@@ -491,6 +491,10 @@ create table if not exists exam_report_component (
 );
 create index if not exists idx_exam_report_component_scheme
     on exam_report_component(scheme_id, term, status);
+-- subject_code null = the band-default columns (all subjects); set = columns that belong ONLY to
+-- that subject (e.g. IX IT splits the Half-Yearly into Theory + Practical). A subject uses its own
+-- columns if any exist, else the null defaults; the card shows the UNION (blank where N/A).
+alter table exam_report_component add column if not exists subject_code varchar(24);
 
 -- exam_report_subject: the subject ROWS of a scheme (NOT per term — same subjects both terms).
 -- report_label is the printed name (can differ per band); syllabus_subject is the name matched

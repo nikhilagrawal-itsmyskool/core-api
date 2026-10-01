@@ -17,7 +17,10 @@ type Band = {
   band: string;
   name: string;
   grades: string; // csv of grade prefixes
-  components: Record<number, [string, string, number][]>; // term -> [code, label, max][]
+  components: Record<number, [string, string, number][]>; // term -> [code, label, max][] (band default)
+  // Optional per-subject column overrides: subjectCode -> term -> [code,label,max][]. A subject with
+  // an override uses ONLY these columns (e.g. IX IT = PT/NB/SEA/Theory/Practical); others use the default.
+  subjectComponents?: Record<string, Record<number, [string, string, number][]>>;
   subjects: [string, string, string, string?][]; // [code, reportLabel, syllabusSubject, appliesToGrades?]
   areas: Record<string, AreaEntry[]>; // section -> entries[]
   scholastic?: [string, string, number, number][]; // default = SCHOLASTIC_SCALE; [] = none (pre-primary)
@@ -114,6 +117,13 @@ const BANDS: Band[] = [
   {
     band: "9", name: "Achievement Record · 9", grades: "IX",
     components: SENIOR_4COL,
+    // IT (COMP) splits the big exam into Theory (50) + Practical (30); other subjects keep Half Yearly (80).
+    subjectComponents: {
+      COMP: {
+        1: [["PT1", "PT-I", 10], ["NB1", "NB-I", 5], ["SEA1", "SEA", 5], ["THY1", "Theory", 50], ["PRA1", "Practical", 30]],
+        2: [["PT2", "PT-II", 10], ["NB2", "NB-II", 5], ["SEA2", "SEA", 5], ["THY2", "Annual Theory", 50], ["PRA2", "Annual Practical", 30]],
+      },
+    },
     subjects: [["ENG", "English", "English,English I"], ["HIN", "Hindi", "Hindi,Hindi I"], ["MATH", "Mathematics", "Mathematics"], ["SCI", "Science", "Science"], ["SST", "Social Science", "Social Science,Social Science (Part 1),Social Studies"], ["COMP", "IT", "Computer"]],
     areas: SENIOR_AREAS_9,
   },
@@ -157,14 +167,20 @@ class ReportService {
           values ($1,$2,$3,$4,$5,$6,'active',$7,$8)`,
         [schemeId, schoolId, ayId, b.band, b.name, b.grades, userId, now],
       );
+      const insertComp = (term: number, code: string, label: string, max: number, sort: number, subjectCode: string | null) =>
+        DB.query(
+          singleLineString`insert into exam_report_component (uuid, school_id, academic_year_id, scheme_id, term, code, label, max_marks, sort_order, subject_code, status, createdby_userid, created_at)
+            values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'active',$11,$12)`,
+          [generateShortUuid(12), schoolId, ayId, schemeId, term, code, label, max, sort, subjectCode, userId, now],
+        );
       for (const term of [1, 2]) {
         let sort = 0;
-        for (const [code, label, max] of b.components[term]) {
-          await DB.query(
-            singleLineString`insert into exam_report_component (uuid, school_id, academic_year_id, scheme_id, term, code, label, max_marks, sort_order, status, createdby_userid, created_at)
-              values ($1,$2,$3,$4,$5,$6,$7,$8,$9,'active',$10,$11)`,
-            [generateShortUuid(12), schoolId, ayId, schemeId, term, code, label, max, sort++, userId, now],
-          );
+        for (const [code, label, max] of b.components[term]) await insertComp(term, code, label, max, sort++, null);
+        // Per-subject column overrides (e.g. IX IT Theory/Practical); sort offset 10 so any NEW column
+        // (not shared with the default) sorts after the default ones in the card's union.
+        for (const [subjectCode, byTerm] of Object.entries(b.subjectComponents ?? {})) {
+          let ss = 10;
+          for (const [code, label, max] of (byTerm[term] ?? [])) await insertComp(term, code, label, max, ss++, subjectCode);
         }
       }
       let ssort = 0;
@@ -272,11 +288,20 @@ class ReportService {
     return { total: Number(totalRows[0]?.n || 0), present: new Map(presentRows.map((r: any) => [r.studentId, Number(r.n)])) };
   }
 
-  private async schemeComponents(schemeId: string, term: number): Promise<any[]> {
+  // All columns for (scheme, term) incl. subject_code (null = band default, set = subject-specific).
+  private async allComponents(schemeId: string, term: number): Promise<any[]> {
     return DB.query(
-      singleLineString`select code, label, max_marks from exam_report_component where scheme_id = $1 and term = $2 and status = 'active' order by sort_order asc nulls last`,
+      singleLineString`select code, label, max_marks, subject_code, sort_order from exam_report_component where scheme_id = $1 and term = $2 and status = 'active' order by sort_order asc nulls last`,
       [schemeId, term],
     );
+  }
+  private async schemeComponents(schemeId: string, term: number): Promise<any[]> {
+    return (await this.allComponents(schemeId, term)).filter((c: any) => c.subjectCode == null); // band default
+  }
+  // A subject's effective columns: its own if it has any override, else the band default.
+  private compsForSubject(all: any[], subjectCode: string): any[] {
+    const own = all.filter((c: any) => c.subjectCode === subjectCode);
+    return own.length ? own : all.filter((c: any) => c.subjectCode == null);
   }
 
   private async schemeSubjects(schemeId: string): Promise<any[]> {
@@ -531,7 +556,7 @@ class ReportService {
     if (!sc.length) throw new BusinessErrorResult(ErrorCode.BusinessError, "No scheme for that band");
     const s = sc[0];
     const [components, subjects, areas, gradeScales] = await Promise.all([
-      DB.query(singleLineString`select uuid, term, code, label, max_marks, sort_order from exam_report_component where scheme_id = $1 and status = 'active' order by term, sort_order asc nulls last`, [s.uuid]),
+      DB.query(singleLineString`select uuid, term, code, label, max_marks, subject_code, sort_order from exam_report_component where scheme_id = $1 and status = 'active' order by term, sort_order asc nulls last`, [s.uuid]),
       DB.query(singleLineString`select uuid, code, report_label, syllabus_subject, applies_to_grades, sort_order from exam_report_subject where scheme_id = $1 and status = 'active' order by sort_order asc nulls last`, [s.uuid]),
       DB.query(singleLineString`select uuid, section, label, value_type, scale_kind, max_marks, denominator_editable, sort_order from exam_report_area where scheme_id = $1 and status = 'active' order by sort_order asc nulls last`, [s.uuid]),
       DB.query(singleLineString`select uuid, kind, grade, label, min_pct, max_pct, sort_order from exam_report_grade_scale where scheme_id = $1 and status = 'active' order by kind, sort_order asc nulls last`, [s.uuid]),
@@ -641,9 +666,24 @@ class ReportService {
   async reportCards(schoolId: string, ayId: string, classId: string, term: number, userId: string): Promise<any> {
     const scheme = await this.schemeForClass(schoolId, ayId, classId, userId);
     if (!scheme) throw new BusinessErrorResult(ErrorCode.BusinessError, "No report scheme for this class");
-    const components = await this.schemeComponents(scheme.uuid, term);
+    const allComps = await this.allComponents(scheme.uuid, term);
+    // Card shows ONE set of columns — the band default (a single Half Yearly). A subject's extra
+    // columns (IX IT's Theory+Practical) are summed back into the default column they replace, so the
+    // card stays uniform; only the ENTRY screen splits them.
+    const components = allComps.filter((c: any) => c.subjectCode == null);
+    const defaultCodes = new Set<string>(components.map((c: any) => c.code));
     const cardGrade = gradeOf(scheme.className).toLowerCase();
     const subjects = (await this.schemeSubjects(scheme.uuid)).filter((s: any) => this.subjectInGrade(s, cardGrade));
+    const subjComps = new Map<string, any[]>(subjects.map((s: any) => [s.code, this.compsForSubject(allComps, s.code)])); // per-subject columns (for totals)
+    // For a subject with its own columns, where its extras roll up on the card (IT Theory+Practical → Half Yearly).
+    const rollup = new Map<string, { intoCode: string; extras: any[] }>();
+    for (const s of subjects) {
+      const eff = subjComps.get(s.code) || [];
+      const effCodes = new Set(eff.map((c: any) => c.code));
+      const extras = eff.filter((c: any) => !defaultCodes.has(c.code));
+      const missing = components.filter((c: any) => !effCodes.has(c.code));
+      if (extras.length && missing.length === 1) rollup.set(s.code, { intoCode: missing[0].code, extras });
+    }
     const areas = await DB.query(
       singleLineString`select uuid, section, label, value_type, scale_kind, max_marks from exam_report_area where scheme_id = $1 and status = 'active' order by sort_order asc nulls last`,
       [scheme.uuid],
@@ -698,7 +738,7 @@ class ReportService {
       let overallTotal = 0, overallMax = 0;
       for (const subj of subjects) {
         let t = 0, max = 0, any = false;
-        for (const c of components) {
+        for (const c of (subjComps.get(subj.code) || [])) { // this subject's OWN columns (out of its own 100)
           max += Number(c.maxMarks);
           const v = mMap.get(`${s.studentId}|${subj.code}|${c.code}`);
           if (v) { if (v.absent) any = true; else if (v.value != null) { t += v.value; any = true; } } // absent counts as 0
@@ -727,7 +767,22 @@ class ReportService {
         // blew past API Gateway's 10MB response limit. The id is returned; the print pass will
         // fetch + resize per student. (photoFileId kept for that.)
         photoFileId: s.photoFileId || null, photoDataUri: null,
-        marks: subjects.reduce((acc: any, subj: any) => { acc[subj.code] = components.reduce((mm: any, c: any) => { const v = mMap.get(`${s.studentId}|${subj.code}|${c.code}`); mm[c.code] = !v ? null : (v.absent ? "ABSENT" : v.value); return mm; }, {}); return acc; }, {}),
+        marks: subjects.reduce((acc: any, subj: any) => {
+          const effCodes = new Set((subjComps.get(subj.code) || []).map((c: any) => c.code));
+          const rb = rollup.get(subj.code);
+          acc[subj.code] = components.reduce((mm: any, c: any) => {
+            if (effCodes.has(c.code)) { // subject has this exact column
+              const v = mMap.get(`${s.studentId}|${subj.code}|${c.code}`);
+              mm[c.code] = !v ? null : (v.absent ? "ABSENT" : v.value);
+            } else if (rb && rb.intoCode === c.code) { // roll extras (IT Theory+Practical) into this column
+              let sum = 0, any = false;
+              for (const e of rb.extras) { const v = mMap.get(`${s.studentId}|${subj.code}|${e.code}`); if (v) { if (v.absent) any = true; else if (v.value != null) { sum += v.value; any = true; } } }
+              mm[c.code] = any ? sum : null;
+            } else mm[c.code] = null;
+            return mm;
+          }, {});
+          return acc;
+        }, {}),
         subjectTotals,
         overall: { total: overallTotal, max: overallMax, percentage: overallMax ? Math.round((overallTotal / overallMax) * 1000) / 10 : null },
         areaGrades,
@@ -810,7 +865,7 @@ class ReportService {
     const subjects = await this.schemeSubjects(scheme.uuid);
     const subject = subjects.find((s: any) => s.code === subjectCode);
     if (!subject) throw new BusinessErrorResult(ErrorCode.BusinessError, "Subject not in this class's scheme");
-    const components = await this.schemeComponents(scheme.uuid, term);
+    const components = this.compsForSubject(await this.allComponents(scheme.uuid, term), subjectCode); // this subject's own columns
     const students = await this.classStudents(schoolId, ayId, classId);
     const marks = await DB.query(
       singleLineString`select student_id, component_code, value, absent from exam_report_mark
@@ -842,7 +897,7 @@ class ReportService {
     if (!isOverride && !(await this.canTeach(schoolId, ayId, classId, subjectCode, subject.syllabusSubject, employeeId))) {
       throw new BusinessErrorResult(ErrorCode.BusinessError, "You are not the assigned teacher for this subject in this class");
     }
-    const components = await this.schemeComponents(scheme.uuid, term);
+    const components = this.compsForSubject(await this.allComponents(scheme.uuid, term), subjectCode); // this subject's own columns
     const maxByCode = new Map<string, number>(components.map((c: any) => [c.code, Number(c.maxMarks)]));
     if (!Array.isArray(entries)) throw new BusinessErrorResult(ErrorCode.BusinessError, "entries must be an array");
     const now = new Date();
@@ -1066,7 +1121,7 @@ class ReportService {
       const pgGrade = gradeOf(c.className).toLowerCase();
       const subjects = (await this.schemeSubjects(scheme.uuid)).filter((s: any) => this.subjectInGrade(s, pgGrade));
       if (!subjects.length) continue; // grade-only schemes (pre-primary) have no marks to track
-      const components = await this.schemeComponents(scheme.uuid, term);
+      const allComps = await this.allComponents(scheme.uuid, term);
       const students = await this.classStudents(schoolId, ayId, c.classId);
       const marks = await DB.query(
         singleLineString`select student_id, subject_code, component_code from exam_report_mark
@@ -1075,7 +1130,8 @@ class ReportService {
       );
       const filled = new Set<string>(marks.map((m: any) => `${m.studentId}|${m.subjectCode}|${m.componentCode}`));
       const subjRows = subjects.map((subj: any) => {
-        const complete = students.filter((s: any) => components.every((comp: any) => filled.has(`${s.studentId}|${subj.code}|${comp.code}`))).length;
+        const comps = this.compsForSubject(allComps, subj.code); // this subject's own columns
+        const complete = students.filter((s: any) => comps.every((comp: any) => filled.has(`${s.studentId}|${subj.code}|${comp.code}`))).length;
         const done = students.length > 0 && complete === students.length;
         totalSubjects++; if (done) doneSubjects++;
         return { subjectCode: subj.code, label: subj.reportLabel, complete, total: students.length, done };
