@@ -5,6 +5,9 @@ import { gradeOf } from "./examination-common";
 import { fileStorageService } from "../../shared/lib/file-storage";
 const { generateShortUuid } = require("../../shared/util/generate-uuid.js");
 const QRCode = require("qrcode");
+// Public base for the scan-to-verify page (same as the fee-receipt QR). The report-card QR encodes
+// a real URL so any phone camera opens the public verification page.
+const VERIFY_BASE = process.env.PORTAL_BASE_URL || "https://dbpasn.itsmyskool.com";
 
 // ── Report cards (Term-1 marks + co-scholastic). Data-driven: a per-(school, AY, band)
 // scheme is the blueprint; student values reference it by stable codes. See examination-setup.sql.
@@ -838,7 +841,7 @@ class ReportService {
   // All the data to render a class's report cards for a term: scheme (columns/subjects/areas/
   // scales), branding masthead, and each student's header + marks + area grades + computed
   // subject totals/grades. exam.manage-only (incharge/admin/god) — enforced at the handler.
-  async reportCards(schoolId: string, ayId: string, classId: string, term: number, userId: string): Promise<any> {
+  async reportCards(schoolId: string, ayId: string, classId: string, term: number, userId: string, skipQr = false): Promise<any> {
     const scheme = await this.schemeForClass(schoolId, ayId, classId, userId);
     if (!scheme) throw new BusinessErrorResult(ErrorCode.BusinessError, "No report scheme for this class");
     const allComps = await this.allComponents(scheme.uuid, term);
@@ -946,9 +949,12 @@ class ReportService {
         else if (g.absent === 1) areaGrades[a.uuid] = "ABSENT";
         else areaGrades[a.uuid] = this.coschGrade(a.scaleKind, g.marks != null ? Number(g.marks) : null, g.maxMarks != null ? Number(g.maxMarks) : a.maxMarks, scales);
       }
-      // Verification QR — encodes a stable reference to this card (scan → verify page, future).
+      // Verification QR — a public scan-to-verify URL (any camera opens it). Skipped when reportCards
+      // is called internally (e.g. by the verify endpoint itself) to avoid needless QR generation.
       let qrDataUri: string | null = null;
-      try { qrDataUri = await QRCode.toDataURL(`imsk:report:${s.studentId}:${ayId}:${term}`, { margin: 0, width: 160 }); } catch { qrDataUri = null; }
+      if (!skipQr) {
+        try { qrDataUri = await QRCode.toDataURL(`${VERIFY_BASE}/verify/report/${s.studentId}_${ayId}_${term}`, { margin: 0, width: 160 }); } catch { qrDataUri = null; }
+      }
       outStudents.push({
         studentId: s.studentId, name: s.name, admissionNumber: s.admissionNumber, rollNumber: s.rollNumber,
         dob: s.dob ? new Date(s.dob).toISOString().slice(0, 10) : null, fatherName: s.fatherName, motherName: s.motherName,
@@ -1053,6 +1059,40 @@ class ReportService {
       }
     }
     return this.reportCards(schoolId, ayId, classId, term, employeeId);
+  }
+
+  // PUBLIC scan-to-verify (no auth). token = `<studentId>_<ayId>_<term>` (from the card's QR URL).
+  // Returns ONLY the celebratory, non-sensitive summary that's already printed on the card:
+  // school identity + logos, student name + class, session/term, total + percentage. NEVER returns
+  // parents, DOB, admission no, house, contacts, attendance or the remark.
+  async verifyReportCard(token: string): Promise<any> {
+    const parts = String(token || "").split("_");
+    const studentId = (parts[0] || "").trim();
+    const ayId = (parts[1] || "").trim();
+    const term = Number(parts[2]) === 2 ? 2 : 1;
+    if (!studentId || !ayId) return { found: false };
+    const rows = await DB.query(
+      singleLineString`select s.school_id, sc.class_id from student s
+        join student_class sc on sc.student_id = s.uuid and sc.academic_year_id = $2 and (sc.status is null or sc.status <> 'deleted')
+        where s.uuid = $1 and s.status = 'active' limit 1`,
+      [studentId, ayId],
+    );
+    if (!rows.length) return { found: false };
+    const schoolId = rows[0].schoolId;
+    const classId = rows[0].classId;
+    let cards: any;
+    try { cards = await this.reportCards(schoolId, ayId, classId, term, "public-verify", true); } catch { return { found: false }; }
+    const stu = (cards.students || []).find((x: any) => x.studentId === studentId);
+    if (!stu) return { found: false };
+    const b = cards.branding || {};
+    return {
+      found: true, verified: true,
+      schoolName: b.schoolName || null, affiliationNo: b.affiliationNo || null,
+      logoDataUri: b.logoDataUri || null, boardLogoDataUri: b.boardLogoDataUri || null,
+      studentName: stu.name || null, className: cards.className || null,
+      academicYear: cards.academicYear || null, term,
+      total: stu.overall?.total ?? null, max: stu.overall?.max ?? null, percentage: stu.overall?.percentage ?? null,
+    };
   }
 
   // One student's latest photo as a data URI. Fetched ONE student at a time (not embedded in the

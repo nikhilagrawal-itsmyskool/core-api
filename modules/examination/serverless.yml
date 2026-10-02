@@ -10,6 +10,8 @@ custom:
   prefix: itsmyskool
   baseServiceName: examination-service
   fullServiceName: ${self:custom.prefix}-${self:custom.baseServiceName}
+  authorizerExtraExempt:
+    - 'verify/report/{token}'   # public report-card verification (QR scan) — no JWT
   customDomain:
    basePath: 'examination'
   # Nest each function into its own CloudFormation sub-stack so the module isn't capped at the

@@ -245,6 +245,16 @@ class ReportHandler {
     } catch (err: any) { ResponseBuilder.handleError(err, callback); }
   };
 
+  // GET /verify/report/{token} — PUBLIC scan-to-verify (no auth). token from the card's QR URL.
+  public verifyReport = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const token = requireParam(event, "token", callback);
+      if (!token) return;
+      ResponseBuilder.ok(await reportService.verifyReportCard(token), callback);
+    } catch { ResponseBuilder.ok({ found: false }, callback); }
+  };
+
   // GET /me/report/remark-templates — class-teacher remark suggestions (any teacher, for the picker).
   public getMyRemarkTemplates = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
     ctx.callbackWaitsForEmptyEventLoop = false;
@@ -434,6 +444,10 @@ function dispatch(routes: Record<string, any>) {
 }
 
 export const reportMe = dispatch(ME_ROUTES);
+
+// PUBLIC — authorizer-exempt (see serverless.yml authorizerExtraExempt). Mirrors the fee-receipt
+// public verify. Ungated: returns only the safe, celebratory summary already printed on the card.
+export const verifyReport = h.verifyReport;
 
 // /report — the exam-incharge surface (dashboard + subject mapping read/write). One guarded
 // dispatcher (exam.manage) so it stays a single Lambda under CloudFormation's 500-resource cap.

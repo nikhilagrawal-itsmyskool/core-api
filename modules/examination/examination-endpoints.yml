@@ -716,3 +716,13 @@
           path: report/config
           method: post
           cors: true
+
+  # PUBLIC scan-to-verify page target (authorizer-exempt via custom.authorizerExtraExempt).
+  verify-report:
+    handler: report-handler.verifyReport
+    name: ${self:service}-verify-report
+    events:
+      - http:
+          path: verify/report/{token}
+          method: get
+          cors: true
