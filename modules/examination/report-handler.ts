@@ -210,6 +210,41 @@ class ReportHandler {
     } catch (err: any) { ResponseBuilder.handleError(err, callback); }
   };
 
+  // GET /me/report/cards/{classId}/{term} — a class teacher views their class's report cards (to OK them).
+  public getMyReportCards = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const emp = resolveEmployee(event, callback);
+      if (!emp) return;
+      const classId = requireParam(event, "classId", callback);
+      if (!classId) return;
+      const term = this.term(event);
+      const ay = await this.ay(event, emp.schoolId);
+      if (!ay) { ResponseBuilder.badRequest(ErrorCode.BusinessError, "No academic year", callback); return; }
+      if (!callerIsExamOverride(event) && !(await reportService.canEnterCoscholastic(emp.schoolId, ay, classId, emp.employeeId))) {
+        ResponseBuilder.forbidden(ErrorCode.MissingPermission, "Only the class teacher can view this class's report cards", callback); return;
+      }
+      ResponseBuilder.ok(await reportService.reportCards(emp.schoolId, ay, classId, term, emp.employeeId), callback);
+    } catch (err: any) { ResponseBuilder.handleError(err, callback); }
+  };
+
+  // POST /me/report/approve { classId, term, studentIds, approve } — class-teacher sign-off.
+  public approveReportCards = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const emp = resolveEmployee(event, callback);
+      if (!emp) return;
+      const ay = await this.ay(event, emp.schoolId);
+      if (!ay) { ResponseBuilder.badRequest(ErrorCode.BusinessError, "No academic year", callback); return; }
+      const body = parseBody<{ classId?: string; term?: number; studentIds?: string[]; approve?: boolean }>(event, callback);
+      if (!body) return;
+      const classId = (body.classId || "").trim();
+      if (!classId) { ResponseBuilder.badRequest(ErrorCode.BusinessError, "classId is required", callback); return; }
+      const term = body.term === 2 ? 2 : 1;
+      ResponseBuilder.ok(await reportService.approveReportCards(emp.schoolId, ay, classId, term, body.studentIds || [], body.approve !== false, emp.employeeId, callerIsExamOverride(event)), callback);
+    } catch (err: any) { ResponseBuilder.handleError(err, callback); }
+  };
+
   // GET /me/report/remark-templates — class-teacher remark suggestions (any teacher, for the picker).
   public getMyRemarkTemplates = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
     ctx.callbackWaitsForEmptyEventLoop = false;
@@ -380,6 +415,8 @@ const ME_ROUTES: Record<string, any> = {
   "GET /me/report/coscholastic/{classId}/{term}": h.getMyCoscholastic,
   "POST /me/report/coscholastic/{classId}/{term}": h.saveMyCoscholastic,
   "GET /me/report/remark-templates": h.getMyRemarkTemplates,
+  "GET /me/report/cards/{classId}/{term}": h.getMyReportCards,
+  "POST /me/report/approve": h.approveReportCards,
 };
 // Resolve "METHOD /path" from an event, tolerating serverless-offline's /examination prefix.
 function routeKey(event: ApiEvent): string {

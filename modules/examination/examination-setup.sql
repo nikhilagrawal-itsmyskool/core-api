@@ -601,6 +601,11 @@ create table if not exists exam_report (
 );
 create unique index if not exists idx_exam_report_cell
     on exam_report(school_id, academic_year_id, term, student_id) where status = 'active';
+-- Class-teacher sign-off ("OK"): the class teacher reviews a student's card and approves it. Purely
+-- informational (never blocks printing); the admin Report Cards grid shows who OK'd it and when.
+-- null = not OK'd; flipping OK off clears both.
+alter table exam_report add column if not exists approved_by varchar(12);
+alter table exam_report add column if not exists approved_at timestamp(0);
 
 -- exam_report_config: per-(school, academic-year) report settings. `term2_starts_on` drives the
 -- default term on the entry/report screens — before it → Term 1, on/after → Term 2 (blank →

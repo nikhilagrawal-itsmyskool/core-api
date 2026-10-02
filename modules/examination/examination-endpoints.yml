@@ -639,6 +639,14 @@
           path: me/report/remark-templates
           method: get
           cors: true
+      - http:
+          path: me/report/cards/{classId}/{term}
+          method: get
+          cors: true
+      - http:
+          path: me/report/approve
+          method: post
+          cors: true
 
   report-admin:
     handler: report-handler.reportAdmin

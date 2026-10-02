@@ -906,11 +906,15 @@ class ReportService {
     const gMap = new Map<string, any>();
     for (const g of grades) gMap.set(`${g.studentId}|${g.areaId}`, g);
     const headers = await DB.query(
-      singleLineString`select student_id, attendance_present, attendance_total, house, remark, promoted_to, print_count, to_char(printed_at, 'YYYY-MM-DD HH24:MI') as printed_at
+      singleLineString`select student_id, attendance_present, attendance_total, house, remark, promoted_to, print_count, to_char(printed_at, 'YYYY-MM-DD HH24:MI') as printed_at,
+          approved_by, to_char(approved_at, 'YYYY-MM-DD HH24:MI') as approved_at
         from exam_report where school_id = $1 and academic_year_id = $2 and term = $3 and class_id = $4 and status = 'active'`,
       [schoolId, ayId, term, classId],
     );
     const hMap = new Map<string, any>(headers.map((h: any) => [h.studentId, h]));
+    // Resolve approver names once (class-teacher sign-off).
+    const approverNames = new Map<string, string | null>();
+    for (const id of new Set((headers as any[]).map((h) => h.approvedBy).filter(Boolean))) approverNames.set(id as string, await this.empName(schoolId, id as string));
     // Attendance on the card falls back to the live finalized-session summary (same source the
     // co-scholastic entry screen prefills) when the class teacher hasn't saved the header yet.
     const att = await this.attendanceSummary(schoolId, ayId, classId);
@@ -947,6 +951,7 @@ class ReportService {
         house: h.house ?? s.houseName ?? null,
         attendancePresent: h.attendancePresent ?? (att.present.get(s.studentId) ?? null), attendanceTotal: h.attendanceTotal ?? (att.total || null),
         remark: h.remark ?? null, promotedTo: h.promotedTo ?? null,
+        approvedAt: h.approvedAt ?? null, approvedBy: h.approvedBy ? (approverNames.get(h.approvedBy) ?? null) : null,
         // Photos are NOT embedded here — a class of pre-primary photos (unresized, ~900KB each)
         // blew past API Gateway's 10MB response limit. The id is returned; the print pass will
         // fetch + resize per student. (photoFileId kept for that.)
@@ -1011,6 +1016,39 @@ class ReportService {
       }
     }
     return { ok: true, printed: (studentIds || []).length };
+  }
+
+  // Class-teacher sign-off ("OK"): approve (or un-approve) a student's card for a (class, term).
+  // Scoped to the class teacher (primary or secondary) unless an exam-incharge/god override. Purely
+  // informational — never blocks printing. Returns the refreshed class card list.
+  async approveReportCards(schoolId: string, ayId: string, classId: string, term: number, studentIds: string[], approve: boolean, employeeId: string, isOverride: boolean): Promise<any> {
+    if (!isOverride && !(await this.canEnterCoscholastic(schoolId, ayId, classId, employeeId))) {
+      throw new BusinessErrorResult(ErrorCode.BusinessError, "Only the class teacher can OK report cards for this class");
+    }
+    const now = new Date();
+    const by = approve ? employeeId : null;
+    const at = approve ? now : null;
+    for (const sid of studentIds || []) {
+      const studentId = (sid || "").trim();
+      if (!studentId) continue;
+      const ex = await DB.query(
+        singleLineString`select uuid from exam_report where school_id = $1 and academic_year_id = $2 and term = $3 and student_id = $4 and status = 'active'`,
+        [schoolId, ayId, term, studentId],
+      );
+      if (ex.length) {
+        await DB.query(
+          singleLineString`update exam_report set approved_by = $2, approved_at = $3, updatedby_userid = $4, updated_at = $5 where uuid = $1`,
+          [ex[0].uuid, by, at, employeeId, now],
+        );
+      } else if (approve) {
+        await DB.query(
+          singleLineString`insert into exam_report (uuid, school_id, academic_year_id, term, student_id, class_id, approved_by, approved_at, status, createdby_userid, created_at)
+            values ($1,$2,$3,$4,$5,$6,$7,$8,'active',$9,$8)`,
+          [generateShortUuid(12), schoolId, ayId, term, studentId, classId, by, at, employeeId],
+        );
+      }
+    }
+    return this.reportCards(schoolId, ayId, classId, term, employeeId);
   }
 
   // One student's latest photo as a data URI. Fetched ONE student at a time (not embedded in the

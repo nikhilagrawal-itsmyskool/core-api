@@ -906,6 +906,27 @@ describe("examination: report cards (service)", () => {
     expect(again.templates.some((t: any) => t.text === "__test remark template__")).toBe(false);
   });
 
+  reportIt("class-teacher OK: approve stamps who/when, flip clears, non-class-teacher is blocked", async () => {
+    const cls = section!.sectionClassId;
+    const d = await reportService.reportCards(schoolId, ayId, cls, 1, "system");
+    const stu = d.students[0];
+    // A non-class-teacher cannot OK.
+    let threw = false;
+    try { await reportService.approveReportCards(schoolId, ayId, cls, 1, [stu.studentId], true, "teachertst9", false); } catch { threw = true; }
+    expect(threw).toBe(true);
+
+    // Override (incharge/god) can OK — stamps approver + timestamp.
+    let r = await reportService.approveReportCards(schoolId, ayId, cls, 1, [stu.studentId], true, "system", true);
+    let row = r.students.find((s: any) => s.studentId === stu.studentId);
+    expect(row.approvedAt).toBeTruthy();
+    // Flip off clears it.
+    r = await reportService.approveReportCards(schoolId, ayId, cls, 1, [stu.studentId], false, "system", true);
+    row = r.students.find((s: any) => s.studentId === stu.studentId);
+    expect(row.approvedAt).toBeFalsy();
+    expect(row.approvedBy).toBeFalsy();
+    await cleanupReport(stu.studentId, ayId);
+  });
+
   reportIt("report cards: assembles scheme + students + totals, and recordPrint stamps the count", async () => {
     const cls = section!.sectionClassId;
     const d = await reportService.reportCards(schoolId, ayId, cls, 1, "system");
