@@ -634,8 +634,30 @@ create table if not exists exam_report_teacher (
     updatedby_userid varchar(12),
     updated_at timestamp(0)
 );
-create unique index if not exists idx_exam_report_teacher_cell
-    on exam_report_teacher(school_id, academic_year_id, class_id, subject_code) where status = 'active';
+-- Was unique on (class, subject) = ONE teacher per subject. Now MULTIPLE teachers may enter a
+-- subject's marks (a colleague on the subject teacher's behalf), so uniqueness is per teacher.
+drop index if exists idx_exam_report_teacher_cell;
+create unique index if not exists idx_exam_report_teacher_cell2
+    on exam_report_teacher(school_id, academic_year_id, class_id, subject_code, teacher_id) where status = 'active';
+
+-- Secondary class teachers for the exam module (ADDITIONS to the primary class teacher, which comes
+-- from the timetable class_teacher). A secondary may always enter co-scholastic/attendance/remark;
+-- all_subjects=1 also grants marks-entry access to every subject of the class (acts as primary).
+create table if not exists exam_report_class_teacher (
+    uuid varchar(12) primary key,
+    school_id varchar(12) not null,
+    academic_year_id varchar(12) not null,
+    class_id varchar(12) not null,
+    teacher_id varchar(12) not null,
+    all_subjects smallint,                     -- 1 = also enters marks for every subject (like primary)
+    status varchar(16) not null check (status in ('active', 'deleted')),
+    createdby_userid varchar(12),
+    created_at timestamp(0),
+    updatedby_userid varchar(12),
+    updated_at timestamp(0)
+);
+create unique index if not exists idx_exam_report_class_teacher_cell
+    on exam_report_class_teacher(school_id, academic_year_id, class_id, teacher_id) where status = 'active';
 
 -- exam_report_mark: one student's mark for a (subject, component) in a term. subject_teacher-entered.
 create table if not exists exam_report_mark (

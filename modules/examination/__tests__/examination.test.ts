@@ -849,23 +849,45 @@ describe("examination: report cards (service)", () => {
     expect(cls.complete).toBeLessThanOrEqual(cls.total);
   });
 
-  reportIt("subject mapping: an explicit teacher assignment overrides access", async () => {
+  reportIt("subject mapping: an added teacher can enter marks (additive), removal revokes it", async () => {
     const cls = section!.sectionClassId;
     const before = await reportService.subjectMapping(schoolId, ayId, cls, "system");
     expect(before.subjects.find((s: any) => s.subjectCode === "ENG")).toBeTruthy();
 
-    const m = await reportService.assignSubjectTeacher(schoolId, ayId, cls, "ENG", "teachertst1", "system");
+    // Someone with no syllabus/class-teacher link can't enter until added.
+    expect(await reportService.canEnterSubject(schoolId, ayId, cls, "ENG", "teachertst1", false)).toBe(false);
+
+    const m = await reportService.setSubjectTeacher(schoolId, ayId, cls, "ENG", "teachertst1", "add", "system");
     const engAfter = m.subjects.find((s: any) => s.subjectCode === "ENG");
-    expect(engAfter.assignedTeacherId).toBe("teachertst1");
-    expect(engAfter.source).toBe("assigned");
-
-    // The assigned teacher can enter; anyone else cannot (explicit assignment is authoritative).
+    expect(engAfter.addedTeachers.some((t: any) => t.id === "teachertst1")).toBe(true);
     expect(await reportService.canEnterSubject(schoolId, ayId, cls, "ENG", "teachertst1", false)).toBe(true);
-    expect(await reportService.canEnterSubject(schoolId, ayId, cls, "ENG", "someoneelse", false)).toBe(false);
 
-    // Reverting clears the override (back to syllabus/none).
-    const rev = await reportService.assignSubjectTeacher(schoolId, ayId, cls, "ENG", "", "system");
-    expect(rev.subjects.find((s: any) => s.subjectCode === "ENG").source).not.toBe("assigned");
+    // Removing the added teacher revokes access.
+    const rev = await reportService.setSubjectTeacher(schoolId, ayId, cls, "ENG", "teachertst1", "remove", "system");
+    expect(rev.subjects.find((s: any) => s.subjectCode === "ENG").addedTeachers.some((t: any) => t.id === "teachertst1")).toBe(false);
+    expect(await reportService.canEnterSubject(schoolId, ayId, cls, "ENG", "teachertst1", false)).toBe(false);
+  });
+
+  reportIt("class-teacher mapping: a secondary class teacher gets co-scholastic (+ all subjects when flagged)", async () => {
+    const cls = section!.sectionClassId;
+    // Not a class teacher → no co-scholastic, no marks.
+    expect(await reportService.canEnterCoscholastic(schoolId, ayId, cls, "teachertst2")).toBe(false);
+
+    // Add as a secondary class teacher WITHOUT all-subjects → co-scholastic only.
+    let m = await reportService.setClassTeacher(schoolId, ayId, cls, "teachertst2", false, "add", "system");
+    expect(m.secondary.some((t: any) => t.id === "teachertst2" && !t.allSubjects)).toBe(true);
+    expect(await reportService.canEnterCoscholastic(schoolId, ayId, cls, "teachertst2")).toBe(true);
+    expect(await reportService.canEnterSubject(schoolId, ayId, cls, "ENG", "teachertst2", false)).toBe(false);
+
+    // Flag all-subjects → now also enters any subject.
+    m = await reportService.setClassTeacher(schoolId, ayId, cls, "teachertst2", true, "add", "system");
+    expect(m.secondary.some((t: any) => t.id === "teachertst2" && t.allSubjects)).toBe(true);
+    expect(await reportService.canEnterSubject(schoolId, ayId, cls, "ENG", "teachertst2", false)).toBe(true);
+
+    // Remove → access gone.
+    m = await reportService.setClassTeacher(schoolId, ayId, cls, "teachertst2", false, "remove", "system");
+    expect(m.secondary.some((t: any) => t.id === "teachertst2")).toBe(false);
+    expect(await reportService.canEnterCoscholastic(schoolId, ayId, cls, "teachertst2")).toBe(false);
   });
 
   reportIt("report cards: assembles scheme + students + totals, and recordPrint stamps the count", async () => {

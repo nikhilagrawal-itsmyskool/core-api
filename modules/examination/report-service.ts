@@ -348,21 +348,45 @@ class ReportService {
     return rows.length > 0;
   }
 
-  // The exam-incharge's explicit teacher for a (class, subject), or null (→ fall back to syllabus).
-  private async explicitTeacherId(schoolId: string, ayId: string, classId: string, subjectCode: string): Promise<string | null> {
+  // Teachers explicitly ADDED to a (class, subject) in subject mapping (additive — on top of the
+  // syllabus teacher, so a colleague can enter marks on the subject teacher's behalf).
+  private async addedSubjectTeacherIds(schoolId: string, ayId: string, classId: string, subjectCode: string): Promise<string[]> {
     const rows = await DB.query(
-      singleLineString`select teacher_id from exam_report_teacher where school_id = $1 and academic_year_id = $2 and class_id = $3 and subject_code = $4 and status = 'active' limit 1`,
+      singleLineString`select teacher_id from exam_report_teacher where school_id = $1 and academic_year_id = $2 and class_id = $3 and subject_code = $4 and status = 'active'`,
       [schoolId, ayId, classId, subjectCode],
     );
-    return rows.length ? rows[0].teacherId : null;
+    return rows.map((r: any) => r.teacherId);
   }
 
-  // Can this employee enter marks for (class, subject)? An explicit assignment wins outright;
-  // otherwise fall back to the syllabus offering.
+  // Secondary class teachers for a class (ADDITIONS to the timetable's primary class teacher).
+  private async secondaryClassTeachers(schoolId: string, ayId: string, classId: string): Promise<{ id: string; allSubjects: boolean }[]> {
+    const rows = await DB.query(
+      singleLineString`select teacher_id, all_subjects from exam_report_class_teacher where school_id = $1 and academic_year_id = $2 and class_id = $3 and status = 'active'`,
+      [schoolId, ayId, classId],
+    );
+    return rows.map((r: any) => ({ id: r.teacherId, allSubjects: r.allSubjects === 1 }));
+  }
+
+  // Does this employee get marks access to EVERY subject of a class? True for the primary class
+  // teacher (timetable) and any secondary class teacher flagged all_subjects (acts as primary).
+  private async isAllSubjectsClassTeacher(schoolId: string, ayId: string, classId: string, employeeId: string): Promise<boolean> {
+    if (await this.isClassTeacher(schoolId, ayId, classId, employeeId)) return true; // primary (timetable)
+    return (await this.secondaryClassTeachers(schoolId, ayId, classId)).some((t) => t.id === employeeId && t.allSubjects);
+  }
+
+  // Can this employee enter marks for (class, subject)? ADDITIVE: the live syllabus teacher, OR a
+  // teacher explicitly added to the subject, OR an all-subjects class teacher (primary/secondary).
   private async canTeach(schoolId: string, ayId: string, classId: string, subjectCode: string, syllabusSubjectList: string, employeeId: string): Promise<boolean> {
-    const explicit = await this.explicitTeacherId(schoolId, ayId, classId, subjectCode);
-    if (explicit) return explicit === employeeId;
-    return this.teachesSubject(schoolId, ayId, classId, syllabusSubjectList, employeeId);
+    if (await this.teachesSubject(schoolId, ayId, classId, syllabusSubjectList, employeeId)) return true;
+    if ((await this.addedSubjectTeacherIds(schoolId, ayId, classId, subjectCode)).includes(employeeId)) return true;
+    return this.isAllSubjectsClassTeacher(schoolId, ayId, classId, employeeId);
+  }
+
+  // Can this employee enter co-scholastic/attendance/remark for a class? The primary class teacher
+  // (timetable) or ANY secondary class teacher (regardless of the all_subjects flag).
+  async canEnterCoscholastic(schoolId: string, ayId: string, classId: string, employeeId: string): Promise<boolean> {
+    if (await this.isClassTeacher(schoolId, ayId, classId, employeeId)) return true;
+    return (await this.secondaryClassTeachers(schoolId, ayId, classId)).some((t) => t.id === employeeId);
   }
 
   // Distinct syllabus teachers pinned to a (class) for any of a subject's syllabus names.
@@ -400,9 +424,14 @@ class ReportService {
         [schoolId, ayId],
       )
       : await DB.query(
-        singleLineString`select ct.class_id, c.name as class_name, c.seq
-          from class_teacher ct join class c on c.uuid = ct.class_id and c.school_id = ct.school_id
-          where ct.school_id = $1 and ct.academic_year_id = $2 and ct.teacher_id = $3 and ct.status = 'active'
+        // Primary (timetable) class teacher OR a secondary class teacher added in the exam module.
+        singleLineString`select distinct cls.class_id, c.name as class_name, c.seq
+          from (
+            select class_id from class_teacher where school_id = $1 and academic_year_id = $2 and teacher_id = $3 and status = 'active'
+            union
+            select class_id from exam_report_class_teacher where school_id = $1 and academic_year_id = $2 and teacher_id = $3 and status = 'active'
+          ) cls
+          join class c on c.uuid = cls.class_id and c.school_id = $1
           order by c.seq asc nulls last, c.name`,
         [schoolId, ayId, employeeId],
       );
@@ -442,13 +471,6 @@ class ReportService {
   // The (class, subject) pairs a teacher may enter marks for — their syllabus offerings mapped
   // onto each class's report scheme.
   async mySubjects(schoolId: string, ayId: string, employeeId: string): Promise<any[]> {
-    // Every explicit assignment for the year: whichever (class, subject) are pinned, and to whom.
-    const explicit = await DB.query(
-      singleLineString`select class_id, subject_code, teacher_id from exam_report_teacher where school_id = $1 and academic_year_id = $2 and status = 'active'`,
-      [schoolId, ayId],
-    );
-    const explicitBy = new Map<string, string>(explicit.map((r: any) => [`${r.classId}|${r.subjectCode}`, r.teacherId]));
-
     const out: any[] = [];
     const seen = new Set<string>();
     const add = async (classId: string, subjectCode: string) => {
@@ -457,15 +479,25 @@ class ReportService {
       const scheme = await this.schemeForClass(schoolId, ayId, classId, employeeId);
       if (!scheme) return;
       const subj = (await this.schemeSubjects(scheme.uuid)).find((s: any) => s.code === subjectCode);
-      if (!subj) return;
+      if (!subj || !this.subjectInGrade(subj, gradeOf(scheme.className).toLowerCase())) return;
       seen.add(key);
       out.push({ classId, className: scheme.className, subjectCode, reportLabel: subj.reportLabel, schemeId: scheme.uuid, band: scheme.band });
     };
+    const addAllSubjects = async (classId: string) => {
+      const scheme = await this.schemeForClass(schoolId, ayId, classId, employeeId);
+      if (!scheme) return;
+      const grade = gradeOf(scheme.className).toLowerCase();
+      for (const s of await this.schemeSubjects(scheme.uuid)) if (this.subjectInGrade(s, grade)) await add(classId, s.code);
+    };
 
-    // 1) Subjects explicitly assigned to me — these hold even without a syllabus offering.
-    for (const r of explicit as any[]) if (r.teacherId === employeeId) await add(r.classId, r.subjectCode);
+    // 1) Subjects explicitly ADDED to me (additive — hold even without a syllabus offering).
+    const added = await DB.query(
+      singleLineString`select class_id, subject_code from exam_report_teacher where school_id = $1 and academic_year_id = $2 and teacher_id = $3 and status = 'active'`,
+      [schoolId, ayId, employeeId],
+    );
+    for (const r of added as any[]) await add(r.classId, r.subjectCode);
 
-    // 2) Syllabus-derived subjects — but skip any (class, subject) explicitly claimed by someone else.
+    // 2) Syllabus-derived subjects I teach (additive — never hidden by someone else's assignment).
     const syl = await DB.query(
       singleLineString`select distinct pt.class_id, c.name as class_name, ss.name as syllabus_subject
         from syllabus_plan_teacher pt
@@ -481,11 +513,17 @@ class ReportService {
       if (!scheme) continue;
       const target = String(r.syllabusSubject || "").trim().toLowerCase();
       const match = (await this.schemeSubjects(scheme.uuid)).find((s: any) => this.syllabusNames(s.syllabusSubject).includes(target));
-      if (!match) continue;
-      const claimed = explicitBy.get(`${r.classId}|${match.code}`);
-      if (claimed && claimed !== employeeId) continue; // someone else owns this subject explicitly
-      await add(r.classId, match.code);
+      if (match) await add(r.classId, match.code);
     }
+
+    // 3) Every subject of classes where I'm an all-subjects class teacher (primary timetable, or a
+    //    secondary flagged all_subjects).
+    const ctClasses = await DB.query(
+      singleLineString`select class_id from class_teacher where school_id = $1 and academic_year_id = $2 and teacher_id = $3 and status = 'active'
+        union select class_id from exam_report_class_teacher where school_id = $1 and academic_year_id = $2 and teacher_id = $3 and all_subjects = 1 and status = 'active'`,
+      [schoolId, ayId, employeeId],
+    );
+    for (const r of ctClasses as any[]) await addAllSubjects(r.classId);
     // Order by grade sequence (class.seq) — not class name, which sorts Roman numerals wrongly
     // (I, II, III, IV, IX, V, …). Fall back to name, then subject label.
     const seqRows = await DB.query(singleLineString`select uuid, seq from class where school_id = $1`, [schoolId]);
@@ -497,8 +535,8 @@ class ReportService {
   }
 
   // ── Subject mapping (exam-incharge) ─────────────────────────────────────────────────
-  // Per class: each report subject, the syllabus subjects it draws from, the syllabus-derived
-  // teacher(s), and the currently-effective teacher (an explicit assignment wins over syllabus).
+  // Per class: each report subject, the syllabus subjects it draws from, the live syllabus teacher(s),
+  // and any ADDED teachers (additive). The class teacher(s) who cover every subject are listed once.
   async subjectMapping(schoolId: string, ayId: string, classId: string, userId: string): Promise<any> {
     const scheme = await this.schemeForClass(schoolId, ayId, classId, userId);
     if (!scheme) throw new BusinessErrorResult(ErrorCode.BusinessError, "No report scheme for this class");
@@ -506,19 +544,33 @@ class ReportService {
     const subjects = (await this.schemeSubjects(scheme.uuid)).filter((s: any) => this.subjectInGrade(s, grade));
     const out: any[] = [];
     for (const subj of subjects) {
-      const assignedId = await this.explicitTeacherId(schoolId, ayId, classId, subj.code);
-      const assignedName = assignedId ? await this.empName(schoolId, assignedId) : null;
+      const addedIds = await this.addedSubjectTeacherIds(schoolId, ayId, classId, subj.code);
+      const added = await Promise.all(addedIds.map(async (id) => ({ id, name: await this.empName(schoolId, id) })));
       const sylTeachers = await this.syllabusTeachersFor(schoolId, ayId, classId, subj.syllabusSubject);
       out.push({
         subjectCode: subj.code, reportLabel: subj.reportLabel,
         syllabusSubjects: this.syllabusNames(subj.syllabusSubject).length ? String(subj.syllabusSubject) : null,
-        syllabusTeachers: sylTeachers,
-        assignedTeacherId: assignedId, assignedTeacherName: assignedName,
-        effectiveTeacher: assignedName || sylTeachers[0]?.name || null,
-        source: assignedId ? "assigned" : (sylTeachers.length ? "syllabus" : "none"),
+        syllabusTeachers: sylTeachers,   // live, non-removable
+        addedTeachers: added,            // additive, removable
       });
     }
-    return { className: scheme.className, band: scheme.band, subjects: out };
+    // Class teachers who implicitly cover every subject (primary from timetable + secondary all_subjects).
+    const allSubjTeachers = await this.allSubjectsClassTeacherList(schoolId, ayId, classId);
+    return { className: scheme.className, band: scheme.band, subjects: out, allSubjectsClassTeachers: allSubjTeachers };
+  }
+
+  // Names of the class teachers who get marks access to every subject (for the mapping banner).
+  private async allSubjectsClassTeacherList(schoolId: string, ayId: string, classId: string): Promise<{ id: string; name: string | null; role: string }[]> {
+    const out: { id: string; name: string | null; role: string }[] = [];
+    const prim = await DB.query(
+      singleLineString`select teacher_id from class_teacher where school_id = $1 and academic_year_id = $2 and class_id = $3 and status = 'active'`,
+      [schoolId, ayId, classId],
+    );
+    for (const r of prim as any[]) out.push({ id: r.teacherId, name: await this.empName(schoolId, r.teacherId), role: "primary" });
+    for (const t of await this.secondaryClassTeachers(schoolId, ayId, classId)) {
+      if (t.allSubjects) out.push({ id: t.id, name: await this.empName(schoolId, t.id), role: "secondary" });
+    }
+    return out;
   }
 
   private async empName(schoolId: string, employeeId: string): Promise<string | null> {
@@ -526,19 +578,21 @@ class ReportService {
     return r.length ? r[0].name : null;
   }
 
-  // Assign (or clear) the explicit teacher for a (class, subject). Empty teacherId reverts to syllabus.
-  async assignSubjectTeacher(schoolId: string, ayId: string, classId: string, subjectCode: string, teacherId: string, userId: string): Promise<any> {
+  // Add or remove an extra teacher for a (class, subject) — additive on top of the syllabus teacher.
+  async setSubjectTeacher(schoolId: string, ayId: string, classId: string, subjectCode: string, teacherId: string, action: string, userId: string): Promise<any> {
     const scheme = await this.schemeForClass(schoolId, ayId, classId, userId);
     if (!scheme) throw new BusinessErrorResult(ErrorCode.BusinessError, "No report scheme for this class");
     if (!(await this.schemeSubjects(scheme.uuid)).some((s: any) => s.code === subjectCode)) {
       throw new BusinessErrorResult(ErrorCode.BusinessError, "Subject not in this class's scheme");
     }
+    if (!teacherId || !teacherId.trim()) throw new BusinessErrorResult(ErrorCode.BusinessError, "teacherId is required");
     const now = new Date();
+    // Soft-delete any existing row for this teacher first (idempotent add; clean remove).
     await DB.query(
-      singleLineString`update exam_report_teacher set status = 'deleted', updatedby_userid = $4, updated_at = $5 where school_id = $1 and academic_year_id = $2 and class_id = $3 and subject_code = $6 and status = 'active'`,
-      [schoolId, ayId, classId, userId, now, subjectCode],
+      singleLineString`update exam_report_teacher set status = 'deleted', updatedby_userid = $5, updated_at = $6 where school_id = $1 and academic_year_id = $2 and class_id = $3 and subject_code = $4 and teacher_id = $7 and status = 'active'`,
+      [schoolId, ayId, classId, subjectCode, userId, now, teacherId.trim()],
     );
-    if (teacherId && teacherId.trim()) {
+    if (action !== "remove") {
       await DB.query(
         singleLineString`insert into exam_report_teacher (uuid, school_id, academic_year_id, class_id, subject_code, teacher_id, status, createdby_userid, created_at)
           values ($1,$2,$3,$4,$5,$6,'active',$7,$8)`,
@@ -546,6 +600,43 @@ class ReportService {
       );
     }
     return this.subjectMapping(schoolId, ayId, classId, userId);
+  }
+
+  // ── Class-teacher (co-scholastic) mapping ───────────────────────────────────────────
+  // Per class: the primary class teacher(s) from the timetable, plus any secondary class teachers
+  // added here (all_subjects=1 → also enters marks for every subject).
+  async classTeacherMapping(schoolId: string, ayId: string, classId: string, userId: string): Promise<any> {
+    const scheme = await this.schemeForClass(schoolId, ayId, classId, userId);
+    if (!scheme) throw new BusinessErrorResult(ErrorCode.BusinessError, "No report scheme for this class");
+    const prim = await DB.query(
+      singleLineString`select teacher_id from class_teacher where school_id = $1 and academic_year_id = $2 and class_id = $3 and status = 'active'`,
+      [schoolId, ayId, classId],
+    );
+    const primary = await Promise.all((prim as any[]).map(async (r) => ({ id: r.teacherId, name: await this.empName(schoolId, r.teacherId) })));
+    const secondary = await Promise.all(
+      (await this.secondaryClassTeachers(schoolId, ayId, classId)).map(async (t) => ({ id: t.id, name: await this.empName(schoolId, t.id), allSubjects: t.allSubjects })),
+    );
+    return { className: scheme.className, band: scheme.band, primary, secondary };
+  }
+
+  // Add/update or remove a secondary class teacher for a class.
+  async setClassTeacher(schoolId: string, ayId: string, classId: string, teacherId: string, allSubjects: boolean, action: string, userId: string): Promise<any> {
+    const scheme = await this.schemeForClass(schoolId, ayId, classId, userId);
+    if (!scheme) throw new BusinessErrorResult(ErrorCode.BusinessError, "No report scheme for this class");
+    if (!teacherId || !teacherId.trim()) throw new BusinessErrorResult(ErrorCode.BusinessError, "teacherId is required");
+    const now = new Date();
+    await DB.query(
+      singleLineString`update exam_report_class_teacher set status = 'deleted', updatedby_userid = $4, updated_at = $5 where school_id = $1 and academic_year_id = $2 and class_id = $3 and teacher_id = $6 and status = 'active'`,
+      [schoolId, ayId, classId, userId, now, teacherId.trim()],
+    );
+    if (action !== "remove") {
+      await DB.query(
+        singleLineString`insert into exam_report_class_teacher (uuid, school_id, academic_year_id, class_id, teacher_id, all_subjects, status, createdby_userid, created_at)
+          values ($1,$2,$3,$4,$5,$6,'active',$7,$8)`,
+        [generateShortUuid(12), schoolId, ayId, classId, teacherId.trim(), allSubjects ? 1 : null, userId, now],
+      );
+    }
+    return this.classTeacherMapping(schoolId, ayId, classId, userId);
   }
 
   // ── Format config (Phase B.2): edit a scheme's labels/columns/areas/scale ───────────
@@ -1046,7 +1137,7 @@ class ReportService {
   async saveCoscholastic(schoolId: string, ayId: string, classId: string, term: number, entries: any[], employeeId: string, isOverride: boolean): Promise<any> {
     const scheme = await this.schemeForClass(schoolId, ayId, classId, employeeId);
     if (!scheme) throw new BusinessErrorResult(ErrorCode.BusinessError, "No report scheme for this class");
-    if (!isOverride && !(await this.isClassTeacher(schoolId, ayId, classId, employeeId))) {
+    if (!isOverride && !(await this.canEnterCoscholastic(schoolId, ayId, classId, employeeId))) {
       throw new BusinessErrorResult(ErrorCode.BusinessError, "Only the class teacher can enter co-scholastic grades for this class");
     }
     // Class-teacher remark is required for the FINAL term (Term 2) when the school opts in; never Term 1.

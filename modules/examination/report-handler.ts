@@ -93,7 +93,7 @@ class ReportHandler {
       const term = this.term(event);
       const ay = await this.ay(event, emp.schoolId);
       if (!ay) { ResponseBuilder.badRequest(ErrorCode.BusinessError, "No academic year", callback); return; }
-      if (!callerIsExamOverride(event) && !(await reportService.isClassTeacher(emp.schoolId, ay, classId, emp.employeeId))) {
+      if (!callerIsExamOverride(event) && !(await reportService.canEnterCoscholastic(emp.schoolId, ay, classId, emp.employeeId))) {
         ResponseBuilder.forbidden(ErrorCode.MissingPermission, "Only the class teacher can enter co-scholastic grades", callback); return;
       }
       ResponseBuilder.ok(await reportService.coscholasticGrid(emp.schoolId, ay, classId, term, emp.employeeId), callback);
@@ -158,8 +158,8 @@ class ReportHandler {
     } catch (err: any) { ResponseBuilder.handleError(err, callback); }
   };
 
-  // POST /report/mapping/{classId} { subjectCode, teacherId } — assign/clear the subject teacher.
-  // subjectCode is in the body (not the path) so GET+POST share one API-Gateway resource.
+  // POST /report/mapping/{classId} { subjectCode, teacherId, action:'add'|'remove' } — add/remove an
+  // extra subject teacher (additive on top of the syllabus teacher). Body-keyed so GET+POST share a resource.
   public assignSubjectTeacher = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
     ctx.callbackWaitsForEmptyEventLoop = false;
     try {
@@ -170,11 +170,43 @@ class ReportHandler {
       if (!classId) return;
       const ay = await this.ay(event, auth.schoolId);
       if (!ay) { ResponseBuilder.badRequest(ErrorCode.BusinessError, "No academic year", callback); return; }
-      const body = parseBody<{ subjectCode?: string; teacherId?: string }>(event, callback);
+      const body = parseBody<{ subjectCode?: string; teacherId?: string; action?: string }>(event, callback);
       if (!body) return;
       const subjectCode = (body.subjectCode || "").trim();
       if (!subjectCode) { ResponseBuilder.badRequest(ErrorCode.BusinessError, "subjectCode is required", callback); return; }
-      ResponseBuilder.ok(await reportService.assignSubjectTeacher(auth.schoolId, ay, classId, subjectCode, body.teacherId || "", auth.userId), callback);
+      ResponseBuilder.ok(await reportService.setSubjectTeacher(auth.schoolId, ay, classId, subjectCode, body.teacherId || "", body.action || "add", auth.userId), callback);
+    } catch (err: any) { ResponseBuilder.handleError(err, callback); }
+  };
+
+  // GET /report/class-teachers/{classId} — primary (timetable) + secondary class teachers.
+  public getClassTeachers = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      if (!requireAction(event, ACTIONS.SUBJECT_MAPPING_MANAGE, callback)) return; // admin/god only
+      const auth = await resolveSchool(event, callback);
+      if (!auth) return;
+      const classId = requireParam(event, "classId", callback);
+      if (!classId) return;
+      const ay = await this.ay(event, auth.schoolId);
+      if (!ay) { ResponseBuilder.badRequest(ErrorCode.BusinessError, "No academic year", callback); return; }
+      ResponseBuilder.ok(await reportService.classTeacherMapping(auth.schoolId, ay, classId, auth.userId), callback);
+    } catch (err: any) { ResponseBuilder.handleError(err, callback); }
+  };
+
+  // POST /report/class-teachers/{classId} { teacherId, allSubjects, action:'add'|'remove' }
+  public setClassTeacher = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      if (!requireAction(event, ACTIONS.SUBJECT_MAPPING_MANAGE, callback)) return; // admin/god only
+      const auth = await resolveSchool(event, callback);
+      if (!auth) return;
+      const classId = requireParam(event, "classId", callback);
+      if (!classId) return;
+      const ay = await this.ay(event, auth.schoolId);
+      if (!ay) { ResponseBuilder.badRequest(ErrorCode.BusinessError, "No academic year", callback); return; }
+      const body = parseBody<{ teacherId?: string; allSubjects?: boolean; action?: string }>(event, callback);
+      if (!body) return;
+      ResponseBuilder.ok(await reportService.setClassTeacher(auth.schoolId, ay, classId, body.teacherId || "", !!body.allSubjects, body.action || "add", auth.userId), callback);
     } catch (err: any) { ResponseBuilder.handleError(err, callback); }
   };
 
@@ -335,6 +367,8 @@ export const reportAdmin = guard(ACTIONS.EXAM_MANAGE, dispatch({
   "GET /report/coscholastic-progress/{term}": h.getCoscholasticProgress,
   "GET /report/mapping/{classId}": h.getSubjectMapping,
   "POST /report/mapping/{classId}": h.assignSubjectTeacher,
+  "GET /report/class-teachers/{classId}": h.getClassTeachers,
+  "POST /report/class-teachers/{classId}": h.setClassTeacher,
   "GET /report/classes": h.getReportClasses,
   "GET /report/cards/{classId}/{term}": h.getReportCards,
   "POST /report/cards/{classId}/{term}": h.recordReportPrint,
