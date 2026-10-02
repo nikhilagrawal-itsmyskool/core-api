@@ -62,14 +62,15 @@ const JUNIOR_AREAS: Record<string, AreaEntry[]> = {
   "Other Areas": [m10("Discipline"), m10("Value Systems"), m10("Social Skills"), m10("Scientific Skills"), m10("Thinking Skills"), m10("Emotional Skills")],
 };
 // 6-8: Work Education/Physical Education /10, Art Education /100, GA/Reasoning/Value Education per-class.
+// (No "Sports & Games" — Physical Education already covers it.)
 const SENIOR_AREAS_68: Record<string, AreaEntry[]> = {
   "Co Scholastic Areas": [m10("Work Education"), mDen("Value Education"), mDen("General Awareness"), mDen("Reasoning"), m100("Art Education"), m10("Physical Education")],
-  "Other Areas": [m10("Discipline"), m10("English Conversation"), m10("Value System"), m10("Performing Art"), m10("Sports & Games")],
+  "Other Areas": [m10("Discipline"), m10("English Conversation"), m10("Value System"), m10("Performing Art")],
 };
 // 9: same as 6-8 but WITHOUT General Awareness/Reasoning and Value Education.
 const SENIOR_AREAS_9: Record<string, AreaEntry[]> = {
   "Co Scholastic Areas": [m10("Work Education"), m100("Art Education"), m10("Physical Education")],
-  "Other Areas": [m10("Discipline"), m10("English Conversation"), m10("Value System"), m10("Performing Art"), m10("Sports & Games")],
+  "Other Areas": [m10("Discipline"), m10("English Conversation"), m10("Value System"), m10("Performing Art")],
 };
 
 // Grade-band structure (school-specific). Each scheme = one distinct (subjects × mark-columns)
