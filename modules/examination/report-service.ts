@@ -4,6 +4,7 @@ import { ErrorCode } from "../../shared/lib/error-codes";
 import { gradeOf } from "./examination-common";
 import { fileStorageService } from "../../shared/lib/file-storage";
 const { generateShortUuid } = require("../../shared/util/generate-uuid.js");
+const QRCode = require("qrcode");
 
 // ── Report cards (Term-1 marks + co-scholastic). Data-driven: a per-(school, AY, band)
 // scheme is the blueprint; student values reference it by stable codes. See examination-setup.sql.
@@ -945,10 +946,13 @@ class ReportService {
         else if (g.absent === 1) areaGrades[a.uuid] = "ABSENT";
         else areaGrades[a.uuid] = this.coschGrade(a.scaleKind, g.marks != null ? Number(g.marks) : null, g.maxMarks != null ? Number(g.maxMarks) : a.maxMarks, scales);
       }
+      // Verification QR — encodes a stable reference to this card (scan → verify page, future).
+      let qrDataUri: string | null = null;
+      try { qrDataUri = await QRCode.toDataURL(`imsk:report:${s.studentId}:${ayId}:${term}`, { margin: 0, width: 160 }); } catch { qrDataUri = null; }
       outStudents.push({
         studentId: s.studentId, name: s.name, admissionNumber: s.admissionNumber, rollNumber: s.rollNumber,
         dob: s.dob ? new Date(s.dob).toISOString().slice(0, 10) : null, fatherName: s.fatherName, motherName: s.motherName,
-        house: h.house ?? s.houseName ?? null,
+        house: h.house ?? s.houseName ?? null, qrDataUri,
         attendancePresent: h.attendancePresent ?? (att.present.get(s.studentId) ?? null), attendanceTotal: h.attendanceTotal ?? (att.total || null),
         remark: h.remark ?? null, promotedTo: h.promotedTo ?? null,
         approvedAt: h.approvedAt ?? null, approvedBy: h.approvedBy ? (approverNames.get(h.approvedBy) ?? null) : null,
