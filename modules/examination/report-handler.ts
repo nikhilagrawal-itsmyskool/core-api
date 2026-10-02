@@ -62,7 +62,7 @@ class ReportHandler {
       const term = this.term(event);
       const ay = await this.ay(event, emp.schoolId);
       if (!ay) { ResponseBuilder.badRequest(ErrorCode.BusinessError, "No academic year", callback); return; }
-      const body = parseBody<{ entries: any[] }>(event, callback);
+      const body = parseBody<{ entries: any[] }>(event, callback); // each entry may carry per-student denominators for scalable columns
       if (!body) return;
       ResponseBuilder.ok(await reportService.saveMarks(emp.schoolId, ay, classId, subjectCode, term, body.entries || [], emp.employeeId, callerIsExamOverride(event)), callback);
     } catch (err: any) { ResponseBuilder.handleError(err, callback); }

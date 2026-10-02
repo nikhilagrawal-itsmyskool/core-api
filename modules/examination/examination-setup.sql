@@ -495,6 +495,10 @@ create index if not exists idx_exam_report_component_scheme
 -- that subject (e.g. IX IT splits the Half-Yearly into Theory + Practical). A subject uses its own
 -- columns if any exist, else the null defaults; the card shows the UNION (blank where N/A).
 alter table exam_report_component add column if not exists subject_code varchar(24);
+-- denominator_editable=1 → the teacher conducts this component out of a per-subject 'out of' they
+-- set at marking time (e.g. a Class Test run out of 20/30), and the raw mark is scaled to max_marks
+-- (round to nearest) for totals + the card. Used by the junior Class Test (CT1/CT2) columns.
+alter table exam_report_component add column if not exists denominator_editable smallint;
 
 -- exam_report_subject: the subject ROWS of a scheme (NOT per term — same subjects both terms).
 -- report_label is the printed name (can differ per band); syllabus_subject is the name matched
@@ -655,6 +659,10 @@ create index if not exists idx_exam_report_mark_class
     on exam_report_mark(school_id, academic_year_id, term, class_id, subject_code);
 -- absent=1 → the student was Absent for this component (entered as 'A'); prints as a red-circle A.
 alter table exam_report_mark add column if not exists absent smallint;
+-- max_marks = the per-subject 'out of' this mark was conducted against, for denominator-editable
+-- components (the Class Test). null → the component's fixed max (no scaling). Scaled on read to
+-- the component max: effective = round(value / max_marks * component.max_marks).
+alter table exam_report_mark add column if not exists max_marks numeric(6,2);
 
 -- exam_report_area_grade: one student's grade (or free text) for an area in a term. class_teacher-entered.
 create table if not exists exam_report_area_grade (

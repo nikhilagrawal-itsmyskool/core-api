@@ -79,6 +79,12 @@ const JUNIOR_7COL = {
   1: [["PT1", "PT-I", 10], ["CT1", "Class Test", 10], ["NB1", "NB-I", 5], ["SEA1", "SEA", 5], ["CP1", "Class Perf", 10], ["ORAL1", "Oral", 10], ["HY", "Half Yearly", 50]],
   2: [["PT2", "PT-II", 10], ["CT2", "Class Test", 10], ["NB2", "NB-II", 5], ["SEA2", "SEA", 5], ["CP2", "Class Perf", 10], ["ORAL2", "Oral", 10], ["ANNUAL", "Annual Exam", 50]],
 } as Record<number, [string, string, number][]>;
+// Bands 3 and 4-5: PT, a scalable Class Test (CT, denominator entered per subject), NB, SEA, and
+// the big exam out of 70. (CT1/CT2 are flagged denominator-editable in the seed.)
+const JUNIOR_5COL = {
+  1: [["PT1", "PT-I", 10], ["CT1", "Class Test", 10], ["NB1", "NB-I", 5], ["SEA1", "SEA", 5], ["HY", "Half Yearly", 70]],
+  2: [["PT2", "PT-II", 10], ["CT2", "Class Test", 10], ["NB2", "NB-II", 5], ["SEA2", "SEA", 5], ["ANNUAL", "Annual Exam", 70]],
+} as Record<number, [string, string, number][]>;
 const SENIOR_4COL = {
   1: [["PT1", "PT-I", 10], ["NB1", "NB-I", 5], ["SEA1", "SEA", 5], ["HY", "Half Yearly", 80]],
   2: [["PT2", "PT-II", 10], ["NB2", "NB-II", 5], ["SEA2", "SEA", 5], ["ANNUAL", "Annual Exam", 80]],
@@ -92,19 +98,16 @@ const BANDS: Band[] = [
     areas: JUNIOR_AREAS,
   },
   {
-    // Class 3 alone: the 4-5 subject set (Science + Social Studies) on the junior 7-column
-    // structure — fits neither 1-2 (different subjects) nor 4-5 (different columns).
+    // Class 3 alone: the 4-5 subject set (Science + Social Studies) on the 4-5 column structure
+    // (PT, Class Test, NB, SEA, Half-Yearly 70 — no Class Perf / Oral).
     band: "3", name: "Achievement Record · 3", grades: "III",
-    components: JUNIOR_7COL,
+    components: JUNIOR_5COL,
     subjects: MIDDLE_SUBJECTS,
     areas: JUNIOR_AREAS,
   },
   {
     band: "4-5", name: "Achievement Record · 4-5", grades: "IV,V",
-    components: {
-      1: [["PT1", "PT-I", 10], ["CT1", "Class Test", 10], ["NB1", "NB-I", 5], ["SEA1", "SEA", 5], ["HY", "Half Yearly", 70]],
-      2: [["PT2", "PT-II", 10], ["CT2", "Class Test", 10], ["NB2", "NB-II", 5], ["SEA2", "SEA", 5], ["ANNUAL", "Annual Exam", 70]],
-    },
+    components: JUNIOR_5COL,
     subjects: MIDDLE_SUBJECTS,
     areas: JUNIOR_AREAS,
   },
@@ -167,11 +170,12 @@ class ReportService {
           values ($1,$2,$3,$4,$5,$6,'active',$7,$8)`,
         [schemeId, schoolId, ayId, b.band, b.name, b.grades, userId, now],
       );
+      // The Class Test (CT1/CT2) is conducted out of a per-subject 'out of' and scaled to its max.
       const insertComp = (term: number, code: string, label: string, max: number, sort: number, subjectCode: string | null) =>
         DB.query(
-          singleLineString`insert into exam_report_component (uuid, school_id, academic_year_id, scheme_id, term, code, label, max_marks, sort_order, subject_code, status, createdby_userid, created_at)
-            values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'active',$11,$12)`,
-          [generateShortUuid(12), schoolId, ayId, schemeId, term, code, label, max, sort, subjectCode, userId, now],
+          singleLineString`insert into exam_report_component (uuid, school_id, academic_year_id, scheme_id, term, code, label, max_marks, sort_order, subject_code, denominator_editable, status, createdby_userid, created_at)
+            values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'active',$12,$13)`,
+          [generateShortUuid(12), schoolId, ayId, schemeId, term, code, label, max, sort, subjectCode, /^CT\d/.test(code) ? 1 : null, userId, now],
         );
       for (const term of [1, 2]) {
         let sort = 0;
@@ -291,7 +295,7 @@ class ReportService {
   // All columns for (scheme, term) incl. subject_code (null = band default, set = subject-specific).
   private async allComponents(schemeId: string, term: number): Promise<any[]> {
     return DB.query(
-      singleLineString`select code, label, max_marks, subject_code, sort_order from exam_report_component where scheme_id = $1 and term = $2 and status = 'active' order by sort_order asc nulls last`,
+      singleLineString`select code, label, max_marks, subject_code, denominator_editable, sort_order from exam_report_component where scheme_id = $1 and term = $2 and status = 'active' order by sort_order asc nulls last`,
       [schemeId, term],
     );
   }
@@ -556,7 +560,7 @@ class ReportService {
     if (!sc.length) throw new BusinessErrorResult(ErrorCode.BusinessError, "No scheme for that band");
     const s = sc[0];
     const [components, subjects, areas, gradeScales] = await Promise.all([
-      DB.query(singleLineString`select uuid, term, code, label, max_marks, subject_code, sort_order from exam_report_component where scheme_id = $1 and status = 'active' order by term, sort_order asc nulls last`, [s.uuid]),
+      DB.query(singleLineString`select uuid, term, code, label, max_marks, subject_code, denominator_editable, sort_order from exam_report_component where scheme_id = $1 and status = 'active' order by term, sort_order asc nulls last`, [s.uuid]),
       DB.query(singleLineString`select uuid, code, report_label, syllabus_subject, applies_to_grades, sort_order from exam_report_subject where scheme_id = $1 and status = 'active' order by sort_order asc nulls last`, [s.uuid]),
       DB.query(singleLineString`select uuid, section, label, value_type, scale_kind, max_marks, denominator_editable, sort_order from exam_report_area where scheme_id = $1 and status = 'active' order by sort_order asc nulls last`, [s.uuid]),
       DB.query(singleLineString`select uuid, kind, grade, label, min_pct, max_pct, sort_order from exam_report_grade_scale where scheme_id = $1 and status = 'active' order by kind, sort_order asc nulls last`, [s.uuid]),
@@ -711,12 +715,19 @@ class ReportService {
       [classId, ayId, schoolId],
     );
     const marks = await DB.query(
-      singleLineString`select student_id, subject_code, component_code, value, absent from exam_report_mark
+      singleLineString`select student_id, subject_code, component_code, value, absent, max_marks from exam_report_mark
         where school_id = $1 and academic_year_id = $2 and term = $3 and class_id = $4`,
       [schoolId, ayId, term, classId],
     );
-    const mMap = new Map<string, { value: number | null; absent: boolean }>();
-    for (const m of marks) mMap.set(`${m.studentId}|${m.subjectCode}|${m.componentCode}`, { value: m.value == null ? null : Number(m.value), absent: m.absent === 1 });
+    const mMap = new Map<string, { value: number | null; absent: boolean; rowMax: number | null }>();
+    for (const m of marks) mMap.set(`${m.studentId}|${m.subjectCode}|${m.componentCode}`, { value: m.value == null ? null : Number(m.value), absent: m.absent === 1, rowMax: m.maxMarks == null ? null : Number(m.maxMarks) });
+    // Effective mark for a denominator-editable component: the student's raw mark scaled from its
+    // own 'out of' (per-student rowMax) to the component max, rounded UP (ceiling).
+    const effCompMark = (v: { value: number | null; rowMax: number | null } | undefined, c: any): number | null => {
+      if (!v || v.value == null) return null;
+      if (!(c.denominatorEditable === 1) || !v.rowMax || v.rowMax === Number(c.maxMarks)) return v.value;
+      return Math.ceil((v.value / v.rowMax) * Number(c.maxMarks));
+    };
     const grades = await DB.query(
       singleLineString`select student_id, area_id, grade, text_value, marks, max_marks, absent from exam_report_area_grade
         where school_id = $1 and academic_year_id = $2 and term = $3 and class_id = $4`,
@@ -730,6 +741,9 @@ class ReportService {
       [schoolId, ayId, term, classId],
     );
     const hMap = new Map<string, any>(headers.map((h: any) => [h.studentId, h]));
+    // Attendance on the card falls back to the live finalized-session summary (same source the
+    // co-scholastic entry screen prefills) when the class teacher hasn't saved the header yet.
+    const att = await this.attendanceSummary(schoolId, ayId, classId);
 
     const outStudents: any[] = [];
     for (const s of students) {
@@ -741,7 +755,7 @@ class ReportService {
         for (const c of (subjComps.get(subj.code) || [])) { // this subject's OWN columns (out of its own 100)
           max += Number(c.maxMarks);
           const v = mMap.get(`${s.studentId}|${subj.code}|${c.code}`);
-          if (v) { if (v.absent) any = true; else if (v.value != null) { t += v.value; any = true; } } // absent counts as 0
+          if (v) { if (v.absent) any = true; else { const ev = effCompMark(v, c); if (ev != null) { t += ev; any = true; } } } // absent counts as 0; Class Test scaled to its max
         }
         const pct = max ? (t / max) * 100 : 0;
         subjectTotals[subj.code] = { total: any ? t : null, max, grade: any ? this.matchScholastic(scholScale, pct) : null };
@@ -761,7 +775,7 @@ class ReportService {
         studentId: s.studentId, name: s.name, admissionNumber: s.admissionNumber, rollNumber: s.rollNumber,
         dob: s.dob ? new Date(s.dob).toISOString().slice(0, 10) : null, fatherName: s.fatherName, motherName: s.motherName,
         house: h.house ?? s.houseName ?? null,
-        attendancePresent: h.attendancePresent ?? null, attendanceTotal: h.attendanceTotal ?? null,
+        attendancePresent: h.attendancePresent ?? (att.present.get(s.studentId) ?? null), attendanceTotal: h.attendanceTotal ?? (att.total || null),
         remark: h.remark ?? null, promotedTo: h.promotedTo ?? null,
         // Photos are NOT embedded here — a class of pre-primary photos (unresized, ~900KB each)
         // blew past API Gateway's 10MB response limit. The id is returned; the print pass will
@@ -773,7 +787,7 @@ class ReportService {
           acc[subj.code] = components.reduce((mm: any, c: any) => {
             if (effCodes.has(c.code)) { // subject has this exact column
               const v = mMap.get(`${s.studentId}|${subj.code}|${c.code}`);
-              mm[c.code] = !v ? null : (v.absent ? "ABSENT" : v.value);
+              mm[c.code] = !v ? null : (v.absent ? "ABSENT" : effCompMark(v, c)); // Class Test shown scaled to its max
             } else if (rb && rb.intoCode === c.code) { // roll extras (IT Theory+Practical) into this column
               let sum = 0, any = false;
               for (const e of rb.extras) { const v = mMap.get(`${s.studentId}|${subj.code}|${e.code}`); if (v) { if (v.absent) any = true; else if (v.value != null) { sum += v.value; any = true; } } }
@@ -868,20 +882,26 @@ class ReportService {
     const components = this.compsForSubject(await this.allComponents(scheme.uuid, term), subjectCode); // this subject's own columns
     const students = await this.classStudents(schoolId, ayId, classId);
     const marks = await DB.query(
-      singleLineString`select student_id, component_code, value, absent from exam_report_mark
+      singleLineString`select student_id, component_code, value, absent, max_marks from exam_report_mark
         where school_id = $1 and academic_year_id = $2 and term = $3 and class_id = $4 and subject_code = $5`,
       [schoolId, ayId, term, classId, subjectCode],
     );
-    const map = new Map<string, { value: number | null; absent: boolean }>();
-    for (const m of marks) map.set(`${m.studentId}|${m.componentCode}`, { value: m.value == null ? null : Number(m.value), absent: m.absent === 1 });
+    const map = new Map<string, { value: number | null; absent: boolean; rowMax: number | null }>();
+    for (const m of marks) map.set(`${m.studentId}|${m.componentCode}`, { value: m.value == null ? null : Number(m.value), absent: m.absent === 1, rowMax: m.maxMarks == null ? null : Number(m.maxMarks) });
+    const denomCodes = (components as any[]).filter((c: any) => c.denominatorEditable === 1);
+    const defDenom: Record<string, number> = {}; // per-column default 'out of' (= the component max)
+    for (const c of denomCodes) defDenom[c.code] = Number(c.maxMarks);
     const rows = students.map((s: any) => ({
       studentId: s.studentId, name: s.name, admissionNumber: s.admissionNumber, rollNumber: s.rollNumber,
-      // 'A' = Absent (entered as a/A); a number otherwise; null = not entered.
+      // 'A' = Absent (entered as a/A); a number otherwise; null = not entered. A scalable Class Test
+      // is the RAW mark; `denoms` carries each student's own 'out of' (default = the component max).
       marks: Object.fromEntries(components.map((c: any) => { const v = map.get(`${s.studentId}|${c.code}`); return [c.code, !v ? null : (v.absent ? "A" : v.value)]; })),
+      denoms: Object.fromEntries(denomCodes.map((c: any) => { const v = map.get(`${s.studentId}|${c.code}`); return [c.code, v && v.rowMax != null ? v.rowMax : defDenom[c.code]]; })),
     }));
     return {
       className: scheme.className, subject: { code: subject.code, label: subject.reportLabel }, term,
-      components: components.map((c: any) => ({ code: c.code, label: c.label, max: c.maxMarks })),
+      components: components.map((c: any) => ({ code: c.code, label: c.label, max: c.maxMarks, denomEditable: c.denominatorEditable === 1 })),
+      defaultDenominators: defDenom, // { CT1: 10 } — the per-column default 'out of' (the class-level pre-fill)
       students: rows,
       total: rows.length,
       entered: rows.filter((r: any) => components.every((c: any) => r.marks[c.code] != null)).length,
@@ -899,6 +919,7 @@ class ReportService {
     }
     const components = this.compsForSubject(await this.allComponents(scheme.uuid, term), subjectCode); // this subject's own columns
     const maxByCode = new Map<string, number>(components.map((c: any) => [c.code, Number(c.maxMarks)]));
+    const denomEditable = new Set<string>(components.filter((c: any) => c.denominatorEditable === 1).map((c: any) => c.code));
     if (!Array.isArray(entries)) throw new BusinessErrorResult(ErrorCode.BusinessError, "entries must be an array");
     const now = new Date();
     for (const e of entries) {
@@ -910,8 +931,16 @@ class ReportService {
         const isAbsent = typeof raw === "string" && raw.trim().toUpperCase() === "A"; // a/A = Absent
         const val = isAbsent || raw === "" || raw == null ? null : Number(raw);
         const absent = isAbsent ? 1 : null;
-        if (val != null && (isNaN(val) || val < 0 || val > (maxByCode.get(code) as number))) {
-          throw new BusinessErrorResult(ErrorCode.BusinessError, `Mark for ${code} must be 0–${maxByCode.get(code)} (or A for Absent)`);
+        // A scalable Class Test is conducted out of a PER-STUDENT 'out of' (e.denominators[code],
+        // default = the component max); it is stored and the mark validated against it.
+        let rowMax: number | null = null;
+        if (denomEditable.has(code)) {
+          const d = Number((e.denominators || {})[code]);
+          rowMax = d && d > 0 ? d : (maxByCode.get(code) as number);
+        }
+        const effMax = rowMax ?? (maxByCode.get(code) as number);
+        if (val != null && (isNaN(val) || val < 0 || val > effMax)) {
+          throw new BusinessErrorResult(ErrorCode.BusinessError, `Mark for ${code} must be 0–${effMax} (or A for Absent)`);
         }
         const ex = await DB.query(
           singleLineString`select uuid from exam_report_mark where school_id = $1 and academic_year_id = $2 and term = $3 and student_id = $4 and subject_code = $5 and component_code = $6`,
@@ -919,14 +948,14 @@ class ReportService {
         );
         if (ex.length) {
           await DB.query(
-            singleLineString`update exam_report_mark set value = $2, absent = $3, class_id = $4, updatedby_userid = $5, updated_at = $6 where uuid = $1`,
-            [ex[0].uuid, val, absent, classId, employeeId, now],
+            singleLineString`update exam_report_mark set value = $2, absent = $3, max_marks = $4, class_id = $5, updatedby_userid = $6, updated_at = $7 where uuid = $1`,
+            [ex[0].uuid, val, absent, rowMax, classId, employeeId, now],
           );
         } else if (val != null || absent != null) {
           await DB.query(
-            singleLineString`insert into exam_report_mark (uuid, school_id, academic_year_id, term, student_id, class_id, subject_code, component_code, value, absent, createdby_userid, created_at)
-              values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
-            [generateShortUuid(12), schoolId, ayId, term, studentId, classId, subjectCode, code, val, absent, employeeId, now],
+            singleLineString`insert into exam_report_mark (uuid, school_id, academic_year_id, term, student_id, class_id, subject_code, component_code, value, absent, max_marks, createdby_userid, created_at)
+              values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+            [generateShortUuid(12), schoolId, ayId, term, studentId, classId, subjectCode, code, val, absent, rowMax, employeeId, now],
           );
         }
       }

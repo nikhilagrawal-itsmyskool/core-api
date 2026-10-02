@@ -761,6 +761,36 @@ describe("examination: report cards (service)", () => {
     expect(threw).toBe(true);
   });
 
+  reportIt("scalable Class Test: per-student 'out of', scaled to the component max (ceiling) on the card", async () => {
+    const grid = await reportService.marksGrid(schoolId, ayId, section!.sectionClassId, "ENG", 1, "system");
+    const ct = grid.components.find((c: any) => c.denomEditable);
+    if (!ct) return; // 6-8/9 sample bands have no Class Test column
+    const a = grid.students[0];
+    // 25 out of 30 → 25/30 × 10 = 8.33 → ceil = 9. The RAW mark + that student's 'out of' are stored.
+    let saved = await reportService.saveMarks(schoolId, ayId, section!.sectionClassId, "ENG", 1,
+      [{ studentId: a.studentId, marks: { [ct.code]: 25 }, denominators: { [ct.code]: 30 } }], "system", true);
+    expect(Number(saved.students.find((s: any) => s.studentId === a.studentId).marks[ct.code])).toBe(25); // RAW preserved
+    expect(saved.students.find((s: any) => s.studentId === a.studentId).denoms[ct.code]).toBe(30); // per-student 'out of'
+    let cards = await reportService.reportCards(schoolId, ayId, section!.sectionClassId, 1, "system");
+    expect(cards.students.find((s: any) => s.studentId === a.studentId).marks.ENG[ct.code]).toBe(9); // ceil(8.33)
+
+    // Same student, a DIFFERENT 'out of' (a different class test): 15 out of 20 → ceil(7.5) = 8.
+    saved = await reportService.saveMarks(schoolId, ayId, section!.sectionClassId, "ENG", 1,
+      [{ studentId: a.studentId, marks: { [ct.code]: 15 }, denominators: { [ct.code]: 20 } }], "system", true);
+    expect(saved.students.find((s: any) => s.studentId === a.studentId).denoms[ct.code]).toBe(20);
+    cards = await reportService.reportCards(schoolId, ayId, section!.sectionClassId, 1, "system");
+    expect(cards.students.find((s: any) => s.studentId === a.studentId).marks.ENG[ct.code]).toBe(8); // ceil(7.5)
+
+    // Raw above that student's 'out of' is rejected (21 > 20).
+    let threw = false;
+    try {
+      await reportService.saveMarks(schoolId, ayId, section!.sectionClassId, "ENG", 1,
+        [{ studentId: a.studentId, marks: { [ct.code]: 21 }, denominators: { [ct.code]: 20 } }], "system", true);
+    } catch { threw = true; }
+    expect(threw).toBe(true);
+    await cleanupReport(a.studentId, ayId);
+  });
+
   reportIt("co-scholastic grid saves marks (marks/absent) + the class-teacher header", async () => {
     const grid = await reportService.coscholasticGrid(schoolId, ayId, section!.sectionClassId, 1, "system");
     expect(grid.areas.length).toBeGreaterThan(0);
@@ -869,7 +899,7 @@ describe("examination: report cards (service)", () => {
     expect(after.reportLabel).toBe("Environmental Studies");
   });
 
-  it("scheme structure: Sanskrit in 6-8, IT (not Sanskrit) in 9, junior 7-col for class 3", async () => {
+  it("scheme structure: Sanskrit in 6-8, IT (not Sanskrit) in 9, 5-col (scalable Class Test) for class 3", async () => {
     const s68 = await reportService.getScheme(schoolId, ayId, "6-8", "system");
     expect(s68.subjects.some((s: any) => s.code === "SANS")).toBe(true);
     const s9 = await reportService.getScheme(schoolId, ayId, "9", "system");
@@ -877,7 +907,11 @@ describe("examination: report cards (service)", () => {
     expect(s9.subjects.find((s: any) => s.code === "COMP").reportLabel).toBe("IT");
     const s3 = await reportService.getScheme(schoolId, ayId, "3", "system");
     expect(s3.subjects.some((s: any) => s.code === "SCI")).toBe(true); // middle subjects
-    expect(s3.components.filter((c: any) => c.term === 1 && c.subjectCode == null).length).toBe(7); // junior 7-column default
+    const t1 = s3.components.filter((c: any) => c.term === 1 && c.subjectCode == null);
+    expect(t1.length).toBe(5); // PT, Class Test, NB, SEA, Half-Yearly — matches 4-5 (no Class Perf/Oral)
+    const ct = t1.find((c: any) => c.code === "CT1");
+    expect(ct.denominatorEditable).toBe(1); // Class Test is scalable (per-subject 'out of')
+    expect(t1.find((c: any) => c.code === "HY").maxMarks).toBe(70); // Half-Yearly is 70
   });
 
   it("IX IT has its own Theory/Practical columns; other subjects keep Half Yearly", async () => {
