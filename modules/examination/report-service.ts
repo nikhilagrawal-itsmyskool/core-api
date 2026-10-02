@@ -55,21 +55,21 @@ const m100 = (label: string): MarksArea => ({ label, max: 100, scale: "coscholas
 const mDen = (label: string): MarksArea => ({ label, max: 100, scale: "coscholastic", denom: true });
 
 // Co-scholastic / personality / other areas shared by bands 1-2, 3 and 4-5. GA/Reasoning/Value
-// Education carry a per-class denominator; Art and Craft is /100 fixed; everything else is /10.
+// Education AND Art and Craft carry a per-class denominator (default 100, scaled to /100); rest /10.
 const JUNIOR_AREAS: Record<string, AreaEntry[]> = {
-  "Co-Scholastic": [mDen("General Awareness"), mDen("Reasoning"), mDen("Value Education"), m100("Art and Craft"), m10("Games"), m10("Music"), m10("Dance"), m10("English Conversation")],
+  "Co-Scholastic": [mDen("General Awareness"), mDen("Reasoning"), mDen("Value Education"), mDen("Art and Craft"), m10("Games"), m10("Music"), m10("Dance"), m10("English Conversation")],
   "Personality Development": [m10("Courteousness"), m10("Confidence"), m10("Sense of Responsibility"), m10("Initiative"), m10("Sharing & Caring"), m10("Neatness")],
   "Other Areas": [m10("Discipline"), m10("Value Systems"), m10("Social Skills"), m10("Scientific Skills"), m10("Thinking Skills"), m10("Emotional Skills")],
 };
-// 6-8: Work Education/Physical Education /10, Art Education /100, GA/Reasoning/Value Education per-class.
-// (No "Sports & Games" — Physical Education already covers it.)
+// 6-8: Work Education/Physical Education /10; Art Education + GA/Reasoning/Value Education carry a
+// per-class denominator (default 100, scaled to /100). (No "Sports & Games" — PE covers it.)
 const SENIOR_AREAS_68: Record<string, AreaEntry[]> = {
-  "Co Scholastic Areas": [m10("Work Education"), mDen("Value Education"), mDen("General Awareness"), mDen("Reasoning"), m100("Art Education"), m10("Physical Education")],
+  "Co Scholastic Areas": [m10("Work Education"), mDen("Value Education"), mDen("General Awareness"), mDen("Reasoning"), mDen("Art Education"), m10("Physical Education")],
   "Other Areas": [m10("Discipline"), m10("English Conversation"), m10("Value System"), m10("Performing Art")],
 };
 // 9: same as 6-8 but WITHOUT General Awareness/Reasoning and Value Education.
 const SENIOR_AREAS_9: Record<string, AreaEntry[]> = {
-  "Co Scholastic Areas": [m10("Work Education"), m100("Art Education"), m10("Physical Education")],
+  "Co Scholastic Areas": [m10("Work Education"), mDen("Art Education"), m10("Physical Education")],
   "Other Areas": [m10("Discipline"), m10("English Conversation"), m10("Value System"), m10("Performing Art")],
 };
 
@@ -1010,11 +1010,12 @@ class ReportService {
     const hmap = new Map<string, any>(headers.map((h: any) => [h.studentId, h]));
     const houses = await DB.query(singleLineString`select name from house where school_id = $1 and status = 'active' order by name`, [schoolId]);
     const att = await this.attendanceSummary(schoolId, ayId, classId);
-    // Per-class denominator for the editable areas (GA/Reasoning/Value Education) — from any saved row.
+    // Per-class denominator for the editable areas (GA/Reasoning/Value Education, Art) — from any
+    // saved row, defaulting to the area's max (100) so an unset 'out of' scales sensibly, not to 0.
     const denominators: Record<string, any> = {};
     for (const a of areas as any[]) if (a.denominatorEditable) {
       const row = (grades as any[]).find((g) => g.areaId === a.uuid && g.maxMarks != null);
-      denominators[a.uuid] = row ? Number(row.maxMarks) : null;
+      denominators[a.uuid] = row ? Number(row.maxMarks) : Number(a.maxMarks);
     }
     return {
       className: scheme.className, term,
