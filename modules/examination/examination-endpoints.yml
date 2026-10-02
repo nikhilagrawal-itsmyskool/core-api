@@ -635,6 +635,10 @@
           path: me/report/coscholastic/{classId}/{term}
           method: post
           cors: true
+      - http:
+          path: me/report/remark-templates
+          method: get
+          cors: true
 
   report-admin:
     handler: report-handler.reportAdmin
@@ -662,6 +666,14 @@
           cors: true
       - http:
           path: report/class-teachers/{classId}
+          method: post
+          cors: true
+      - http:
+          path: report/remark-templates
+          method: get
+          cors: true
+      - http:
+          path: report/remark-templates
           method: post
           cors: true
       - http:

@@ -890,6 +890,22 @@ describe("examination: report cards (service)", () => {
     expect(await reportService.canEnterCoscholastic(schoolId, ayId, cls, "teachertst2")).toBe(false);
   });
 
+  reportIt("remark templates: seeded on first use; add + delete; free-text remark untouched", async () => {
+    const seeded = await reportService.remarkTemplates(schoolId, "system");
+    expect(seeded.templates.length).toBeGreaterThanOrEqual(12); // 3 categories x 4 recommended comments
+    expect(seeded.templates.some((t: any) => t.category === "Good Performance")).toBe(true);
+
+    const added = await reportService.saveRemarkTemplate(schoolId, { category: "Good Performance", text: "__test remark template__" }, "system");
+    const row = added.templates.find((t: any) => t.text === "__test remark template__");
+    expect(row).toBeTruthy();
+
+    const afterDel = await reportService.deleteRemarkTemplate(schoolId, row.id, "system");
+    expect(afterDel.templates.some((t: any) => t.id === row.id)).toBe(false);
+    // Re-seed must NOT fire again (soft-deleted rows still count as "seeded").
+    const again = await reportService.remarkTemplates(schoolId, "system");
+    expect(again.templates.some((t: any) => t.text === "__test remark template__")).toBe(false);
+  });
+
   reportIt("report cards: assembles scheme + students + totals, and recordPrint stamps the count", async () => {
     const cls = section!.sectionClassId;
     const d = await reportService.reportCards(schoolId, ayId, cls, 1, "system");

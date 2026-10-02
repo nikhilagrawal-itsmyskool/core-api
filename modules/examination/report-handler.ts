@@ -210,6 +210,43 @@ class ReportHandler {
     } catch (err: any) { ResponseBuilder.handleError(err, callback); }
   };
 
+  // GET /me/report/remark-templates — class-teacher remark suggestions (any teacher, for the picker).
+  public getMyRemarkTemplates = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const emp = resolveEmployee(event, callback);
+      if (!emp) return;
+      ResponseBuilder.ok(await reportService.remarkTemplates(emp.schoolId, emp.employeeId), callback);
+    } catch (err: any) { ResponseBuilder.handleError(err, callback); }
+  };
+
+  // GET /report/remark-templates — the editable library (exam.manage).
+  public getRemarkTemplates = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const auth = await resolveSchool(event, callback);
+      if (!auth) return;
+      ResponseBuilder.ok(await reportService.remarkTemplates(auth.schoolId, auth.userId), callback);
+    } catch (err: any) { ResponseBuilder.handleError(err, callback); }
+  };
+
+  // POST /report/remark-templates { uuid?, category, text, sortOrder, action:'save'|'delete' }
+  public postRemarkTemplate = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const auth = await resolveSchool(event, callback);
+      if (!auth) return;
+      const body = parseBody<{ uuid?: string; category?: string; text?: string; sortOrder?: number; action?: string }>(event, callback);
+      if (!body) return;
+      if (body.action === "delete") {
+        if (!body.uuid) { ResponseBuilder.badRequest(ErrorCode.BusinessError, "uuid is required to delete", callback); return; }
+        ResponseBuilder.ok(await reportService.deleteRemarkTemplate(auth.schoolId, body.uuid, auth.userId), callback);
+      } else {
+        ResponseBuilder.ok(await reportService.saveRemarkTemplate(auth.schoolId, body, auth.userId), callback);
+      }
+    } catch (err: any) { ResponseBuilder.handleError(err, callback); }
+  };
+
   // GET /report/classes — every class that has a report scheme (for the Report Cards screen).
   // exam.manage (incharge/admin/god) — not scoped to class-teacher assignment.
   public getReportClasses = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
@@ -342,6 +379,7 @@ const ME_ROUTES: Record<string, any> = {
   "POST /me/report/marks/{classId}/{subjectCode}/{term}": h.saveMyMarks,
   "GET /me/report/coscholastic/{classId}/{term}": h.getMyCoscholastic,
   "POST /me/report/coscholastic/{classId}/{term}": h.saveMyCoscholastic,
+  "GET /me/report/remark-templates": h.getMyRemarkTemplates,
 };
 // Resolve "METHOD /path" from an event, tolerating serverless-offline's /examination prefix.
 function routeKey(event: ApiEvent): string {
@@ -369,6 +407,8 @@ export const reportAdmin = guard(ACTIONS.EXAM_MANAGE, dispatch({
   "POST /report/mapping/{classId}": h.assignSubjectTeacher,
   "GET /report/class-teachers/{classId}": h.getClassTeachers,
   "POST /report/class-teachers/{classId}": h.setClassTeacher,
+  "GET /report/remark-templates": h.getRemarkTemplates,
+  "POST /report/remark-templates": h.postRemarkTemplate,
   "GET /report/classes": h.getReportClasses,
   "GET /report/cards/{classId}/{term}": h.getReportCards,
   "POST /report/cards/{classId}/{term}": h.recordReportPrint,

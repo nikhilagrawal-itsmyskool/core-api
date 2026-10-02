@@ -659,6 +659,24 @@ create table if not exists exam_report_class_teacher (
 create unique index if not exists idx_exam_report_class_teacher_cell
     on exam_report_class_teacher(school_id, academic_year_id, class_id, teacher_id) where status = 'active';
 
+-- Reusable class-teacher-remark suggestions (school-level, across years), grouped by category
+-- (Good/Average/Low Performance + any the school adds). Seeded on first use; admin-editable. The
+-- remark itself stays free text on exam_report.remark — these only populate the "insert" picker.
+create table if not exists exam_report_remark_template (
+    uuid varchar(12) primary key,
+    school_id varchar(12) not null,
+    category varchar(48) not null,
+    remark_text varchar(1000) not null,
+    sort_order integer,
+    status varchar(16) not null check (status in ('active', 'deleted')),
+    createdby_userid varchar(12),
+    created_at timestamp(0),
+    updatedby_userid varchar(12),
+    updated_at timestamp(0)
+);
+create index if not exists idx_exam_report_remark_template_school
+    on exam_report_remark_template(school_id, status);
+
 -- exam_report_mark: one student's mark for a (subject, component) in a term. subject_teacher-entered.
 create table if not exists exam_report_mark (
     uuid varchar(12) primary key,

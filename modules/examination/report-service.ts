@@ -731,6 +731,84 @@ class ReportService {
     return { term2StartsOn: val, remarkRequiredFinal: !!rrf, currentTerm: await this.currentTerm(schoolId, ayId) };
   }
 
+  // ── Class-teacher remark suggestions (library) ──────────────────────────────────────
+  // Seeded ONCE per school (first use). Guarded on ANY row existing (incl. soft-deleted) so an
+  // admin who trims the list isn't re-seeded. Purely a picker source — the remark stays free text.
+  private readonly REMARK_SEED: [string, string[]][] = [
+    ["Good Performance", [
+      "Consistently produces high-quality work and approaches new challenges with enthusiasm.",
+      "Shows strong critical thinking skills and actively contributes to class discussions.",
+      "Demonstrates a solid understanding of all core concepts and serves as a positive role model for peers.",
+      "Manages time effectively and takes great pride in independent assignments.",
+    ]],
+    ["Average Performance", [
+      "Making steady, consistent progress and meets all grade-level expectations.",
+      "Shows good effort in class, though closer attention to detail will help improve accuracy.",
+      "Participates well during lessons; with a bit more practice at home, stronger mastery can be built in challenging areas.",
+      "Cooperative and focused, but would benefit from taking more initiative during group activities.",
+    ]],
+    ["Low Performance", [
+      "A kind and helpful class member who needs additional support with basic academic concepts.",
+      "Would benefit from more careful listening and more consistent completion of daily assignments.",
+      "Struggles to keep pace with independent tasks; extra focus and guided practice will aid improvement.",
+      "Encouraging regular review habits at home will help build confidence and a better grasp of core materials.",
+    ]],
+  ];
+
+  private async ensureRemarkTemplates(schoolId: string, userId: string): Promise<void> {
+    const any = await DB.query(singleLineString`select 1 from exam_report_remark_template where school_id = $1 limit 1`, [schoolId]);
+    if (any.length) return;
+    const now = new Date();
+    let sort = 0;
+    for (const [category, texts] of this.REMARK_SEED) {
+      for (const t of texts) {
+        await DB.query(
+          singleLineString`insert into exam_report_remark_template (uuid, school_id, category, remark_text, sort_order, status, createdby_userid, created_at)
+            values ($1,$2,$3,$4,$5,'active',$6,$7)`,
+          [generateShortUuid(12), schoolId, category, t, sort++, userId, now],
+        );
+      }
+    }
+  }
+
+  async remarkTemplates(schoolId: string, userId: string): Promise<any> {
+    await this.ensureRemarkTemplates(schoolId, userId);
+    const rows = await DB.query(
+      singleLineString`select uuid, category, remark_text, sort_order from exam_report_remark_template where school_id = $1 and status = 'active' order by sort_order asc nulls last, created_at`,
+      [schoolId],
+    );
+    return { templates: rows.map((r: any) => ({ id: r.uuid, category: r.category, text: r.remarkText })) };
+  }
+
+  async saveRemarkTemplate(schoolId: string, payload: { uuid?: string; category?: string; text?: string; sortOrder?: number }, userId: string): Promise<any> {
+    const category = String(payload.category || "").trim().slice(0, 48);
+    const text = String(payload.text || "").trim().slice(0, 1000);
+    if (!category) throw new BusinessErrorResult(ErrorCode.BusinessError, "category is required");
+    if (!text) throw new BusinessErrorResult(ErrorCode.BusinessError, "remark text is required");
+    const now = new Date();
+    if (payload.uuid) {
+      await DB.query(
+        singleLineString`update exam_report_remark_template set category = $3, remark_text = $4, sort_order = coalesce($5, sort_order), updatedby_userid = $6, updated_at = $7 where uuid = $1 and school_id = $2 and status = 'active'`,
+        [payload.uuid, schoolId, category, text, payload.sortOrder ?? null, userId, now],
+      );
+    } else {
+      await DB.query(
+        singleLineString`insert into exam_report_remark_template (uuid, school_id, category, remark_text, sort_order, status, createdby_userid, created_at)
+          values ($1,$2,$3,$4,$5,'active',$6,$7)`,
+        [generateShortUuid(12), schoolId, category, text, payload.sortOrder ?? 999, userId, now],
+      );
+    }
+    return this.remarkTemplates(schoolId, userId);
+  }
+
+  async deleteRemarkTemplate(schoolId: string, uuid: string, userId: string): Promise<any> {
+    await DB.query(
+      singleLineString`update exam_report_remark_template set status = 'deleted', updatedby_userid = $3, updated_at = $4 where uuid = $1 and school_id = $2 and status = 'active'`,
+      [uuid, schoolId, userId, new Date()],
+    );
+    return this.remarkTemplates(schoolId, userId);
+  }
+
   // ── Printed report cards (Phase B) ──────────────────────────────────────────────────
   private matchScholastic(scale: any[], pct: number): string | null {
     const r = scale.find((s: any) => s.minPct != null && s.maxPct != null && pct >= Number(s.minPct) && pct <= Number(s.maxPct));
