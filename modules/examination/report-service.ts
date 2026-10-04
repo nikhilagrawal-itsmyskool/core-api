@@ -442,8 +442,9 @@ class ReportService {
         [schoolId, ayId, employeeId],
       );
     // Drop classes whose grade has no report scheme (junk/placeholder classes). Case-insensitive
-    // so "NURSERY-A" matches a scheme listing "Nursery".
-    return rows.filter((r: any) => covered.has(gradeOf(r.className).toLowerCase()));
+    // so "NURSERY-A" matches a scheme listing "Nursery". Also drop exam-excluded classes.
+    const excluded = await this.excludedSet(schoolId, ayId);
+    return rows.filter((r: any) => covered.has(gradeOf(r.className).toLowerCase()) && !excluded.has(r.classId));
   }
 
   // Every class that has a report scheme (seq-ordered) — the Report Cards surface for the
@@ -463,7 +464,8 @@ class ReportService {
         order by c.seq asc nulls last, c.name`,
       [schoolId, ayId],
     );
-    return rows.filter((r: any) => covered.has(gradeOf(r.className).toLowerCase()));
+    const excluded = await this.excludedSet(schoolId, ayId);
+    return rows.filter((r: any) => covered.has(gradeOf(r.className).toLowerCase()) && !excluded.has(r.classId));
   }
 
   async isClassTeacher(schoolId: string, ayId: string, classId: string, employeeId: string): Promise<boolean> {
@@ -479,9 +481,10 @@ class ReportService {
   async mySubjects(schoolId: string, ayId: string, employeeId: string): Promise<any[]> {
     const out: any[] = [];
     const seen = new Set<string>();
+    const excluded = await this.excludedSet(schoolId, ayId);
     const add = async (classId: string, subjectCode: string) => {
       const key = `${classId}|${subjectCode}`;
-      if (seen.has(key)) return;
+      if (seen.has(key) || excluded.has(classId)) return;
       const scheme = await this.schemeForClass(schoolId, ayId, classId, employeeId);
       if (!scheme) return;
       const subj = (await this.schemeSubjects(scheme.uuid)).find((s: any) => s.code === subjectCode);
@@ -1524,8 +1527,23 @@ class ReportService {
     return this.classSubmission(schoolId, ayId, classId, term, employeeId);
   }
 
+  // Classes excluded from the exam module this year (hidden from cards/entry; shown on Progress).
+  private async excludedSet(schoolId: string, ayId: string): Promise<Set<string>> {
+    const rows = await DB.query(singleLineString`select class_id from exam_report_excluded_class where school_id = $1 and academic_year_id = $2 and status = 'active'`, [schoolId, ayId]);
+    return new Set<string>((rows as any[]).map((r) => r.classId));
+  }
+
+  async setClassExcluded(schoolId: string, ayId: string, classId: string, excluded: boolean, userId: string): Promise<any> {
+    const now = new Date();
+    const ex = await DB.query(singleLineString`select uuid from exam_report_excluded_class where school_id = $1 and academic_year_id = $2 and class_id = $3`, [schoolId, ayId, classId]);
+    if (ex.length) await DB.query(singleLineString`update exam_report_excluded_class set status = $2, updatedby_userid = $3, updated_at = $4 where uuid = $1`, [ex[0].uuid, excluded ? "active" : "deleted", userId, now]);
+    else if (excluded) await DB.query(singleLineString`insert into exam_report_excluded_class (uuid, school_id, academic_year_id, class_id, status, createdby_userid, created_at) values ($1,$2,$3,$4,'active',$5,$6)`, [generateShortUuid(12), schoolId, ayId, classId, userId, now]);
+    return { classId, excluded };
+  }
+
   async progress(schoolId: string, ayId: string, term: number, userId: string): Promise<any> {
     await this.ensureSchemes(schoolId, ayId, userId);
+    const excluded = await this.excludedSet(schoolId, ayId);
     // Classes that have a scheme = classes with an active student_class enrolment this year.
     const classes = await DB.query(
       singleLineString`select distinct sc.class_id, c.name as class_name, c.seq
@@ -1538,6 +1556,7 @@ class ReportService {
     const out: any[] = [];
     let doneSubjects = 0, totalSubjects = 0;
     for (const c of classes) {
+      if (excluded.has(c.classId)) { out.push({ classId: c.classId, className: c.className, excluded: true, subjects: [], cosch: null, subjectCount: 0, doneCount: 0, readyToPrint: false }); continue; }
       const scheme = await this.schemeForClass(schoolId, ayId, c.classId, userId);
       if (!scheme) continue;
       const pgGrade = gradeOf(c.className).toLowerCase();
@@ -1577,6 +1596,7 @@ class ReportService {
   // "done" when every student has a grade for every grade-type area.
   async coscholasticProgress(schoolId: string, ayId: string, term: number, userId: string): Promise<any> {
     await this.ensureSchemes(schoolId, ayId, userId);
+    const excluded = await this.excludedSet(schoolId, ayId);
     const classes = await DB.query(
       singleLineString`select distinct sc.class_id, c.name as class_name, c.seq
         from student_class sc join class c on c.uuid = sc.class_id and c.school_id = sc.school_id and c.base_class_id is null
@@ -1588,6 +1608,7 @@ class ReportService {
     const out: any[] = [];
     let doneClasses = 0, totalClasses = 0;
     for (const c of classes) {
+      if (excluded.has(c.classId)) { out.push({ classId: c.classId, className: c.className, excluded: true, total: 0, complete: 0, done: false }); continue; }
       const scheme = await this.schemeForClass(schoolId, ayId, c.classId, userId);
       if (!scheme) continue;
       const areas = await DB.query(

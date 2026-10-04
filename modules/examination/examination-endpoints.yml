@@ -697,6 +697,10 @@
           method: post
           cors: true
       - http:
+          path: report/exclude-class
+          method: post
+          cors: true
+      - http:
           path: report/classes
           method: get
           cors: true

@@ -120,6 +120,22 @@ class ReportHandler {
     } catch (err: any) { ResponseBuilder.handleError(err, callback); }
   };
 
+  // POST /report/exclude-class { classId, excluded } — exclude/include a class from the exam module.
+  public setClassExcluded = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const auth = await resolveSchool(event, callback);
+      if (!auth) return;
+      const ay = await this.ay(event, auth.schoolId);
+      if (!ay) { ResponseBuilder.badRequest(ErrorCode.BusinessError, "No academic year", callback); return; }
+      const body = parseBody<{ classId?: string; excluded?: boolean }>(event, callback);
+      if (!body) return;
+      const classId = (body.classId || "").trim();
+      if (!classId) { ResponseBuilder.badRequest(ErrorCode.BusinessError, "classId is required", callback); return; }
+      ResponseBuilder.ok(await reportService.setClassExcluded(auth.schoolId, ay, classId, !!body.excluded, auth.userId), callback);
+    } catch (err: any) { ResponseBuilder.handleError(err, callback); }
+  };
+
   // GET /me/report/classes — classes the caller may enter co-scholastic for.
   public getMyClasses = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
     ctx.callbackWaitsForEmptyEventLoop = false;
@@ -515,6 +531,7 @@ export const reportAdmin = guard(ACTIONS.EXAM_MANAGE, dispatch({
   "GET /report/remark-templates": h.getRemarkTemplates,
   "POST /report/remark-templates": h.postRemarkTemplate,
   "POST /report/lock": h.setLock,
+  "POST /report/exclude-class": h.setClassExcluded,
   "GET /report/classes": h.getReportClasses,
   "GET /report/cards/{classId}/{term}": h.getReportCards,
   "POST /report/cards/{classId}/{term}": h.recordReportPrint,

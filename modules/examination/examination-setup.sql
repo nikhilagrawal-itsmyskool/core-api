@@ -706,6 +706,23 @@ create table if not exists exam_report_submission (
 create unique index if not exists idx_exam_report_submission_cell
     on exam_report_submission(school_id, academic_year_id, term, class_id, subject_code);
 
+-- Classes excluded from the examination module for a year (e.g. a late-enrolment section that never
+-- sits exams). Hidden from Report Cards / Enter Marks / Co-Scholastic / progress counts; shown on
+-- Progress only so an admin can include them again.
+create table if not exists exam_report_excluded_class (
+    uuid varchar(12) primary key,
+    school_id varchar(12) not null,
+    academic_year_id varchar(12) not null,
+    class_id varchar(12) not null,
+    status varchar(16) not null check (status in ('active', 'deleted')),
+    createdby_userid varchar(12),
+    created_at timestamp(0),
+    updatedby_userid varchar(12),
+    updated_at timestamp(0)
+);
+create unique index if not exists idx_exam_report_excluded_class_cell
+    on exam_report_excluded_class(school_id, academic_year_id, class_id) where status = 'active';
+
 -- exam_report_mark: one student's mark for a (subject, component) in a term. subject_teacher-entered.
 create table if not exists exam_report_mark (
     uuid varchar(12) primary key,
