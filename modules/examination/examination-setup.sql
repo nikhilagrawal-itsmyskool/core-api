@@ -682,6 +682,30 @@ create table if not exists exam_report_remark_template (
 create index if not exists idx_exam_report_remark_template_school
     on exam_report_remark_template(school_id, status);
 
+-- Marks/co-scholastic lifecycle per (class, "subject", term): subject_code is a report subject code
+-- OR the sentinel '__cosch__' for the class-teacher co-scholastic part. submitted_at null = draft
+-- (Save only); set on Submit (validated complete). locked=1 freezes all further edits (Save/Submit)
+-- until an admin unlocks. A class is print-ready only when every grade-subject + '__cosch__' is submitted.
+create table if not exists exam_report_submission (
+    uuid varchar(12) primary key,
+    school_id varchar(12) not null,
+    academic_year_id varchar(12) not null,
+    term smallint not null,
+    class_id varchar(12) not null,
+    subject_code varchar(24) not null,
+    submitted_by varchar(12),
+    submitted_at timestamp(0),
+    locked smallint,
+    locked_by varchar(12),
+    locked_at timestamp(0),
+    createdby_userid varchar(12),
+    created_at timestamp(0),
+    updatedby_userid varchar(12),
+    updated_at timestamp(0)
+);
+create unique index if not exists idx_exam_report_submission_cell
+    on exam_report_submission(school_id, academic_year_id, term, class_id, subject_code);
+
 -- exam_report_mark: one student's mark for a (subject, component) in a term. subject_teacher-entered.
 create table if not exists exam_report_mark (
     uuid varchar(12) primary key,

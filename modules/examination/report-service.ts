@@ -8,6 +8,8 @@ const QRCode = require("qrcode");
 // Public base for the scan-to-verify page (same as the fee-receipt QR). The report-card QR encodes
 // a real URL so any phone camera opens the public verification page.
 const VERIFY_BASE = process.env.PORTAL_BASE_URL || "https://dbpasn.itsmyskool.com";
+// Sentinel subject_code for the co-scholastic part in exam_report_submission (lock/submit lifecycle).
+const COSCH = "__cosch__";
 
 // ── Report cards (Term-1 marks + co-scholastic). Data-driven: a per-(school, AY, band)
 // scheme is the blueprint; student values reference it by stable codes. See examination-setup.sql.
@@ -988,6 +990,12 @@ class ReportService {
         printCount: h.printCount ?? 0, printedAt: h.printedAt ?? null,
       });
     }
+    // Submission/lock status → print gate: the class is printable only when every grade-subject +
+    // co-scholastic is submitted. The Report Cards screen shows this and disables Print until ready.
+    const sm = await this.submissionMap(schoolId, ayId, classId, term);
+    const subItem = (code: string, label: string) => { const st = sm.get(code) || {}; return { subjectCode: code, label, submitted: !!st.submittedAt, submittedAt: st.submittedAt || null, locked: !!st.locked, lockedAt: st.lockedAt || null }; };
+    const subItems = subjects.map((s: any) => subItem(s.code, s.reportLabel));
+    if (areas.length) subItems.push(subItem(COSCH, "Co-Scholastic"));
     return {
       className: scheme.className, band: scheme.band, term, branding, academicYear,
       scheme: {
@@ -998,6 +1006,7 @@ class ReportService {
         coscholasticScale: coschScale.map((s: any) => ({ grade: s.grade, label: s.label })),
       },
       students: outStudents,
+      submission: { items: subItems, readyToPrint: subItems.length > 0 && subItems.every((i: any) => i.submitted) },
     };
   }
 
@@ -1150,6 +1159,7 @@ class ReportService {
       marks: Object.fromEntries(components.map((c: any) => { const v = map.get(`${s.studentId}|${c.code}`); return [c.code, !v ? null : (v.absent ? "A" : v.value)]; })),
       denoms: Object.fromEntries(denomCodes.map((c: any) => { const v = map.get(`${s.studentId}|${c.code}`); return [c.code, v && v.rowMax != null ? v.rowMax : defDenom[c.code]]; })),
     }));
+    const st = (await this.submissionMap(schoolId, ayId, classId, term)).get(subjectCode) || {};
     return {
       className: scheme.className, subject: { code: subject.code, label: subject.reportLabel }, term,
       components: components.map((c: any) => ({ code: c.code, label: c.label, max: c.maxMarks, denomEditable: c.denominatorEditable === 1 })),
@@ -1157,6 +1167,7 @@ class ReportService {
       students: rows,
       total: rows.length,
       entered: rows.filter((r: any) => components.every((c: any) => r.marks[c.code] != null)).length,
+      submitted: !!st.submittedAt, submittedAt: st.submittedAt || null, locked: !!st.locked,
     };
   }
 
@@ -1166,6 +1177,7 @@ class ReportService {
     const subjects = await this.schemeSubjects(scheme.uuid);
     const subject = subjects.find((s: any) => s.code === subjectCode);
     if (!subject) throw new BusinessErrorResult(ErrorCode.BusinessError, "Subject not in this class's scheme");
+    if (await this.isLocked(schoolId, ayId, classId, term, subjectCode)) throw new BusinessErrorResult(ErrorCode.BusinessError, "This subject is locked — ask an admin to unlock it before editing marks");
     if (!isOverride && !(await this.canTeach(schoolId, ayId, classId, subjectCode, subject.syllabusSubject, employeeId))) {
       throw new BusinessErrorResult(ErrorCode.BusinessError, "You are not the assigned teacher for this subject in this class");
     }
@@ -1212,6 +1224,9 @@ class ReportService {
         }
       }
     }
+    // Editing after submission reverts it to draft — the teacher must re-Submit (so "submitted"
+    // always reflects the final, print-ready state). Only clears if it was submitted.
+    await DB.query(singleLineString`update exam_report_submission set submitted_at = null, submitted_by = null, updatedby_userid = $5, updated_at = $6 where school_id = $1 and academic_year_id = $2 and term = $3 and class_id = $4 and subject_code = $7 and submitted_at is not null`, [schoolId, ayId, term, classId, employeeId, now, subjectCode]);
     return this.marksGrid(schoolId, ayId, classId, subjectCode, term, employeeId);
   }
 
@@ -1268,8 +1283,10 @@ class ReportService {
       const row = (grades as any[]).find((g) => g.areaId === a.uuid && g.maxMarks != null);
       denominators[a.uuid] = row ? Number(row.maxMarks) : Number(a.maxMarks);
     }
+    const st = (await this.submissionMap(schoolId, ayId, classId, term)).get(COSCH) || {};
     return {
       className: scheme.className, term,
+      submitted: !!st.submittedAt, submittedAt: st.submittedAt || null, locked: !!st.locked,
       scale: scales.cosch.map((s: any) => ({ grade: s.grade, label: s.label, minPct: s.minPct, maxPct: s.maxPct })),
       scale10: scales.cosch10.map((s: any) => ({ grade: s.grade, label: s.label, minPct: s.minPct, maxPct: s.maxPct })),
       houses: houses.map((h: any) => h.name),
@@ -1297,6 +1314,7 @@ class ReportService {
   async saveCoscholastic(schoolId: string, ayId: string, classId: string, term: number, entries: any[], employeeId: string, isOverride: boolean): Promise<any> {
     const scheme = await this.schemeForClass(schoolId, ayId, classId, employeeId);
     if (!scheme) throw new BusinessErrorResult(ErrorCode.BusinessError, "No report scheme for this class");
+    if (await this.isLocked(schoolId, ayId, classId, term, COSCH)) throw new BusinessErrorResult(ErrorCode.BusinessError, "Co-scholastic is locked — ask an admin to unlock it before editing");
     if (!isOverride && !(await this.canEnterCoscholastic(schoolId, ayId, classId, employeeId))) {
       throw new BusinessErrorResult(ErrorCode.BusinessError, "Only the class teacher can enter co-scholastic grades for this class");
     }
@@ -1357,6 +1375,8 @@ class ReportService {
         }
       }
     }
+    // Editing after submission reverts the co-scholastic to draft (re-Submit required).
+    await DB.query(singleLineString`update exam_report_submission set submitted_at = null, submitted_by = null, updatedby_userid = $5, updated_at = $6 where school_id = $1 and academic_year_id = $2 and term = $3 and class_id = $4 and subject_code = $7 and submitted_at is not null`, [schoolId, ayId, term, classId, employeeId, now, COSCH]);
     return this.coscholasticGrid(schoolId, ayId, classId, term, employeeId);
   }
 
@@ -1384,6 +1404,126 @@ class ReportService {
   // ── Incharge progress dashboard ─────────────────────────────────────────────────────
   // Per class × subject: how many students have all of that subject's components filled, out
   // of the class roster. Drives the "chase list" before the entry deadline.
+  // ── Submission + lock lifecycle (Save → Submit → Lock) ──────────────────────────────
+  // All submission/lock rows for a (class, term), keyed by subject_code (incl. COSCH).
+  private async submissionMap(schoolId: string, ayId: string, classId: string, term: number): Promise<Map<string, any>> {
+    const rows = await DB.query(
+      singleLineString`select subject_code, to_char(submitted_at, 'YYYY-MM-DD HH24:MI') as submitted_at, submitted_by,
+          locked, to_char(locked_at, 'YYYY-MM-DD HH24:MI') as locked_at
+        from exam_report_submission where school_id = $1 and academic_year_id = $2 and term = $3 and class_id = $4`,
+      [schoolId, ayId, term, classId],
+    );
+    const m = new Map<string, any>();
+    for (const r of rows as any[]) m.set(r.subjectCode, { submittedAt: r.submittedAt || null, submittedBy: r.submittedBy || null, locked: r.locked === 1, lockedAt: r.lockedAt || null });
+    return m;
+  }
+
+  async isLocked(schoolId: string, ayId: string, classId: string, term: number, subjectCode: string): Promise<boolean> {
+    const r = await DB.query(
+      singleLineString`select locked from exam_report_submission where school_id = $1 and academic_year_id = $2 and term = $3 and class_id = $4 and subject_code = $5`,
+      [schoolId, ayId, term, classId, subjectCode],
+    );
+    return r.length ? r[0].locked === 1 : false;
+  }
+
+  // Upsert the submission row: stamp submitted (Submit) or set/clear the lock (admin Lock/Unlock).
+  private async writeSubmission(schoolId: string, ayId: string, classId: string, term: number, subjectCode: string, change: { submit?: boolean; locked?: boolean }, userId: string): Promise<void> {
+    const now = new Date();
+    const ex = await DB.query(
+      singleLineString`select uuid from exam_report_submission where school_id = $1 and academic_year_id = $2 and term = $3 and class_id = $4 and subject_code = $5`,
+      [schoolId, ayId, term, classId, subjectCode],
+    );
+    if (ex.length) {
+      if (change.submit) await DB.query(singleLineString`update exam_report_submission set submitted_at = $2, submitted_by = $3, updatedby_userid = $3, updated_at = $2 where uuid = $1`, [ex[0].uuid, now, userId]);
+      if (change.locked !== undefined) await DB.query(singleLineString`update exam_report_submission set locked = $2, locked_by = $3, locked_at = $4, updatedby_userid = $3, updated_at = $4 where uuid = $1`, [ex[0].uuid, change.locked ? 1 : null, userId, now]);
+    } else {
+      await DB.query(
+        singleLineString`insert into exam_report_submission (uuid, school_id, academic_year_id, term, class_id, subject_code, submitted_at, submitted_by, locked, locked_by, locked_at, createdby_userid, created_at)
+          values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+        [generateShortUuid(12), schoolId, ayId, term, classId, subjectCode,
+          change.submit ? now : null, change.submit ? userId : null,
+          change.locked ? 1 : null, change.locked !== undefined ? userId : null, change.locked !== undefined ? now : null,
+          userId, now],
+      );
+    }
+  }
+
+  // Per-(class, term) submission + lock status for every grade-subject + co-scholastic, plus the
+  // readyToPrint gate (all submitted). Drives Progress (detail + times), Report Cards (gate) and lock.
+  async classSubmission(schoolId: string, ayId: string, classId: string, term: number, userId: string): Promise<any> {
+    const scheme = await this.schemeForClass(schoolId, ayId, classId, userId);
+    if (!scheme) return { items: [], readyToPrint: false };
+    const grade = gradeOf(scheme.className).toLowerCase();
+    const subjects = (await this.schemeSubjects(scheme.uuid)).filter((s: any) => this.subjectInGrade(s, grade));
+    const sm = await this.submissionMap(schoolId, ayId, classId, term);
+    const hasCosch = (await DB.query(singleLineString`select 1 from exam_report_area where scheme_id = $1 and status = 'active' limit 1`, [scheme.uuid])).length > 0;
+    const row = (code: string, label: string) => { const st = sm.get(code) || {}; return { subjectCode: code, label, submitted: !!st.submittedAt, submittedAt: st.submittedAt || null, locked: !!st.locked, lockedAt: st.lockedAt || null }; };
+    const items = subjects.map((s: any) => row(s.code, s.reportLabel));
+    if (hasCosch) items.push(row(COSCH, "Co-Scholastic"));
+    return { className: scheme.className, band: scheme.band, items, readyToPrint: items.length > 0 && items.every((i: any) => i.submitted) };
+  }
+
+  // Lock/unlock a subject ('CODE'), the co-scholastic (COSCH), or the whole class ('__all__').
+  async setLock(schoolId: string, ayId: string, classId: string, term: number, target: string, locked: boolean, userId: string): Promise<any> {
+    const scheme = await this.schemeForClass(schoolId, ayId, classId, userId);
+    if (!scheme) throw new BusinessErrorResult(ErrorCode.BusinessError, "No report scheme for this class");
+    let codes: string[];
+    if (target === "__all__") {
+      const grade = gradeOf(scheme.className).toLowerCase();
+      codes = (await this.schemeSubjects(scheme.uuid)).filter((s: any) => this.subjectInGrade(s, grade)).map((s: any) => s.code);
+      if ((await DB.query(singleLineString`select 1 from exam_report_area where scheme_id = $1 and status = 'active' limit 1`, [scheme.uuid])).length) codes.push(COSCH);
+    } else codes = [target];
+    for (const code of codes) await this.writeSubmission(schoolId, ayId, classId, term, code, { locked }, userId);
+    return this.classSubmission(schoolId, ayId, classId, term, userId);
+  }
+
+  // Submit a (class, subject): every active student must have a value or 'A' for every component.
+  async submitMarks(schoolId: string, ayId: string, classId: string, subjectCode: string, term: number, employeeId: string, isOverride: boolean): Promise<any> {
+    const scheme = await this.schemeForClass(schoolId, ayId, classId, employeeId);
+    if (!scheme) throw new BusinessErrorResult(ErrorCode.BusinessError, "No report scheme for this class");
+    const subject = (await this.schemeSubjects(scheme.uuid)).find((s: any) => s.code === subjectCode);
+    if (!subject) throw new BusinessErrorResult(ErrorCode.BusinessError, "Subject not in this class's scheme");
+    if (await this.isLocked(schoolId, ayId, classId, term, subjectCode)) throw new BusinessErrorResult(ErrorCode.BusinessError, "This subject is locked — ask an admin to unlock it first");
+    if (!isOverride && !(await this.canTeach(schoolId, ayId, classId, subjectCode, subject.syllabusSubject, employeeId))) throw new BusinessErrorResult(ErrorCode.BusinessError, "You are not the assigned teacher for this subject");
+    const comps = this.compsForSubject(await this.allComponents(scheme.uuid, term), subjectCode);
+    const students = await this.classStudents(schoolId, ayId, classId);
+    if (!students.length) throw new BusinessErrorResult(ErrorCode.BusinessError, "No students in this class");
+    const marks = await DB.query(singleLineString`select student_id, component_code, value, absent from exam_report_mark where school_id = $1 and academic_year_id = $2 and term = $3 and class_id = $4 and subject_code = $5`, [schoolId, ayId, term, classId, subjectCode]);
+    const filled = new Set<string>((marks as any[]).filter((m) => m.value != null || m.absent === 1).map((m) => `${m.studentId}|${m.componentCode}`));
+    const blankStudents = students.filter((s: any) => comps.some((c: any) => !filled.has(`${s.studentId}|${c.code}`)));
+    if (blankStudents.length) {
+      const names = blankStudents.slice(0, 3).map((s: any) => s.name).join(", ");
+      throw new BusinessErrorResult(ErrorCode.BusinessError, `Cannot submit — ${blankStudents.length} student(s) have blank marks (e.g. ${names}). Enter a mark or A for every student before submitting.`);
+    }
+    await this.writeSubmission(schoolId, ayId, classId, term, subjectCode, { submit: true }, employeeId);
+    return this.classSubmission(schoolId, ayId, classId, term, employeeId);
+  }
+
+  // Submit the co-scholastic: every student must have a grade/mark/absent for every gradeable area
+  // (+ a remark when the school requires one for the final term).
+  async submitCoscholastic(schoolId: string, ayId: string, classId: string, term: number, employeeId: string, isOverride: boolean): Promise<any> {
+    const scheme = await this.schemeForClass(schoolId, ayId, classId, employeeId);
+    if (!scheme) throw new BusinessErrorResult(ErrorCode.BusinessError, "No report scheme for this class");
+    if (await this.isLocked(schoolId, ayId, classId, term, COSCH)) throw new BusinessErrorResult(ErrorCode.BusinessError, "Co-scholastic is locked — ask an admin to unlock it first");
+    if (!isOverride && !(await this.canEnterCoscholastic(schoolId, ayId, classId, employeeId))) throw new BusinessErrorResult(ErrorCode.BusinessError, "Only the class teacher can submit co-scholastic for this class");
+    const areas = await DB.query(singleLineString`select uuid from exam_report_area where scheme_id = $1 and status = 'active' and (value_type is null or value_type <> 'text')`, [scheme.uuid]);
+    const students = await this.classStudents(schoolId, ayId, classId);
+    if (!students.length) throw new BusinessErrorResult(ErrorCode.BusinessError, "No students in this class");
+    const grades = await DB.query(singleLineString`select student_id, area_id from exam_report_area_grade where school_id = $1 and academic_year_id = $2 and term = $3 and class_id = $4 and (marks is not null or absent = 1 or grade is not null or text_value is not null)`, [schoolId, ayId, term, classId]);
+    const filled = new Set<string>((grades as any[]).map((g) => `${g.studentId}|${g.areaId}`));
+    const blank = students.filter((s: any) => (areas as any[]).some((a) => !filled.has(`${s.studentId}|${a.uuid}`)));
+    if (blank.length) {
+      const names = blank.slice(0, 3).map((s: any) => s.name).join(", ");
+      throw new BusinessErrorResult(ErrorCode.BusinessError, `Cannot submit co-scholastic — ${blank.length} student(s) have blank grades (e.g. ${names}).`);
+    }
+    if (term === 2 && (await this.getConfig(schoolId, ayId)).remarkRequiredFinal) {
+      const noRemark = await DB.query(singleLineString`select s.uuid from student_class sc join student s on s.uuid = sc.student_id and s.status = 'active' where sc.class_id = $3 and sc.academic_year_id = $2 and sc.school_id = $1 and (sc.status is null or sc.status <> 'deleted') and not exists (select 1 from exam_report r where r.school_id = $1 and r.academic_year_id = $2 and r.term = $4 and r.class_id = $3 and r.student_id = s.uuid and r.status = 'active' and r.remark is not null and trim(r.remark) <> '')`, [schoolId, ayId, classId, term]);
+      if (noRemark.length) throw new BusinessErrorResult(ErrorCode.BusinessError, `Cannot submit — a class-teacher remark is required for the final term and ${noRemark.length} student(s) have none.`);
+    }
+    await this.writeSubmission(schoolId, ayId, classId, term, COSCH, { submit: true }, employeeId);
+    return this.classSubmission(schoolId, ayId, classId, term, employeeId);
+  }
+
   async progress(schoolId: string, ayId: string, term: number, userId: string): Promise<any> {
     await this.ensureSchemes(schoolId, ayId, userId);
     // Classes that have a scheme = classes with an active student_class enrolment this year.
@@ -1411,15 +1551,23 @@ class ReportService {
         [schoolId, ayId, term, c.classId],
       );
       const filled = new Set<string>(marks.map((m: any) => `${m.studentId}|${m.subjectCode}|${m.componentCode}`));
+      const sm = await this.submissionMap(schoolId, ayId, c.classId, term);
+      // "done"/green now means SUBMITTED (not just all-cells-saved); complete/total is the entry count.
       const subjRows = subjects.map((subj: any) => {
         const comps = this.compsForSubject(allComps, subj.code); // this subject's own columns
         const complete = students.filter((s: any) => comps.every((comp: any) => filled.has(`${s.studentId}|${subj.code}|${comp.code}`))).length;
-        const done = students.length > 0 && complete === students.length;
+        const st = sm.get(subj.code) || {};
+        const done = !!st.submittedAt;
         totalSubjects++; if (done) doneSubjects++;
-        return { subjectCode: subj.code, label: subj.reportLabel, complete, total: students.length, done };
+        return { subjectCode: subj.code, label: subj.reportLabel, complete, total: students.length, done, submitted: done, submittedAt: st.submittedAt || null, locked: !!st.locked, lockedAt: st.lockedAt || null };
       });
-      out.push({ classId: c.classId, className: c.className, band: scheme.band, total: students.length, subjects: subjRows,
-        doneCount: subjRows.filter((x: any) => x.done).length, subjectCount: subjRows.length });
+      // Co-scholastic row (submission/lock only — completeness lives on the Co-Scholastic tab).
+      const hasCosch = (await DB.query(singleLineString`select 1 from exam_report_area where scheme_id = $1 and status = 'active' limit 1`, [scheme.uuid])).length > 0;
+      let cosch: any = null;
+      if (hasCosch) { const st = sm.get(COSCH) || {}; cosch = { submitted: !!st.submittedAt, submittedAt: st.submittedAt || null, locked: !!st.locked, lockedAt: st.lockedAt || null }; }
+      const readyToPrint = subjRows.every((x: any) => x.submitted) && (!hasCosch || (cosch && cosch.submitted));
+      out.push({ classId: c.classId, className: c.className, band: scheme.band, total: students.length, subjects: subjRows, cosch,
+        doneCount: subjRows.filter((x: any) => x.done).length, subjectCount: subjRows.length, readyToPrint });
     }
     return { term, classes: out, pctEntered: totalSubjects ? Math.round((doneSubjects / totalSubjects) * 100) : 0, pendingSubjects: totalSubjects - doneSubjects };
   }
@@ -1456,9 +1604,10 @@ class ReportService {
       );
       const filled = new Set<string>(grades.map((g: any) => `${g.studentId}|${g.areaId}`));
       const complete = students.filter((s: any) => areas.every((a: any) => filled.has(`${s.studentId}|${a.uuid}`))).length;
-      const done = students.length > 0 && complete === students.length;
+      const st = (await this.submissionMap(schoolId, ayId, c.classId, term)).get(COSCH) || {};
+      const done = !!st.submittedAt; // green = submitted
       totalClasses++; if (done) doneClasses++;
-      out.push({ classId: c.classId, className: c.className, band: scheme.band, total: students.length, complete, done });
+      out.push({ classId: c.classId, className: c.className, band: scheme.band, total: students.length, complete, done, submitted: done, submittedAt: st.submittedAt || null, locked: !!st.locked, lockedAt: st.lockedAt || null });
     }
     return { term, classes: out, pctEntered: totalClasses ? Math.round((doneClasses / totalClasses) * 100) : 0, pendingClasses: totalClasses - doneClasses };
   }

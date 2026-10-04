@@ -68,6 +68,58 @@ class ReportHandler {
     } catch (err: any) { ResponseBuilder.handleError(err, callback); }
   };
 
+  // POST /me/report/submit-marks { classId, subjectCode, term } — validate complete + mark submitted.
+  public submitMyMarks = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const emp = resolveEmployee(event, callback);
+      if (!emp) return;
+      const ay = await this.ay(event, emp.schoolId);
+      if (!ay) { ResponseBuilder.badRequest(ErrorCode.BusinessError, "No academic year", callback); return; }
+      const body = parseBody<{ classId?: string; subjectCode?: string; term?: number }>(event, callback);
+      if (!body) return;
+      const classId = (body.classId || "").trim(); const subjectCode = (body.subjectCode || "").trim();
+      if (!classId || !subjectCode) { ResponseBuilder.badRequest(ErrorCode.BusinessError, "classId and subjectCode are required", callback); return; }
+      const term = body.term === 2 ? 2 : 1;
+      ResponseBuilder.ok(await reportService.submitMarks(emp.schoolId, ay, classId, subjectCode, term, emp.employeeId, callerIsExamOverride(event)), callback);
+    } catch (err: any) { ResponseBuilder.handleError(err, callback); }
+  };
+
+  // POST /me/report/submit-coscholastic { classId, term } — validate complete + mark submitted.
+  public submitMyCoscholastic = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const emp = resolveEmployee(event, callback);
+      if (!emp) return;
+      const ay = await this.ay(event, emp.schoolId);
+      if (!ay) { ResponseBuilder.badRequest(ErrorCode.BusinessError, "No academic year", callback); return; }
+      const body = parseBody<{ classId?: string; term?: number }>(event, callback);
+      if (!body) return;
+      const classId = (body.classId || "").trim();
+      if (!classId) { ResponseBuilder.badRequest(ErrorCode.BusinessError, "classId is required", callback); return; }
+      const term = body.term === 2 ? 2 : 1;
+      ResponseBuilder.ok(await reportService.submitCoscholastic(emp.schoolId, ay, classId, term, emp.employeeId, callerIsExamOverride(event)), callback);
+    } catch (err: any) { ResponseBuilder.handleError(err, callback); }
+  };
+
+  // POST /report/lock { classId, term, target, locked } — admin lock/unlock a subject, co-scholastic
+  // (target='__cosch__'), or the whole class (target='__all__'). Guarded exam.manage by the dispatcher.
+  public setLock = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const auth = await resolveSchool(event, callback);
+      if (!auth) return;
+      const ay = await this.ay(event, auth.schoolId);
+      if (!ay) { ResponseBuilder.badRequest(ErrorCode.BusinessError, "No academic year", callback); return; }
+      const body = parseBody<{ classId?: string; term?: number; target?: string; locked?: boolean }>(event, callback);
+      if (!body) return;
+      const classId = (body.classId || "").trim(); const target = (body.target || "").trim();
+      if (!classId || !target) { ResponseBuilder.badRequest(ErrorCode.BusinessError, "classId and target are required", callback); return; }
+      const term = body.term === 2 ? 2 : 1;
+      ResponseBuilder.ok(await reportService.setLock(auth.schoolId, ay, classId, term, target, !!body.locked, auth.userId), callback);
+    } catch (err: any) { ResponseBuilder.handleError(err, callback); }
+  };
+
   // GET /me/report/classes — classes the caller may enter co-scholastic for.
   public getMyClasses = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
     ctx.callbackWaitsForEmptyEventLoop = false;
@@ -427,6 +479,8 @@ const ME_ROUTES: Record<string, any> = {
   "GET /me/report/remark-templates": h.getMyRemarkTemplates,
   "GET /me/report/cards/{classId}/{term}": h.getMyReportCards,
   "POST /me/report/approve": h.approveReportCards,
+  "POST /me/report/submit-marks": h.submitMyMarks,
+  "POST /me/report/submit-coscholastic": h.submitMyCoscholastic,
 };
 // Resolve "METHOD /path" from an event, tolerating serverless-offline's /examination prefix.
 function routeKey(event: ApiEvent): string {
@@ -460,6 +514,7 @@ export const reportAdmin = guard(ACTIONS.EXAM_MANAGE, dispatch({
   "POST /report/class-teachers/{classId}": h.setClassTeacher,
   "GET /report/remark-templates": h.getRemarkTemplates,
   "POST /report/remark-templates": h.postRemarkTemplate,
+  "POST /report/lock": h.setLock,
   "GET /report/classes": h.getReportClasses,
   "GET /report/cards/{classId}/{term}": h.getReportCards,
   "POST /report/cards/{classId}/{term}": h.recordReportPrint,

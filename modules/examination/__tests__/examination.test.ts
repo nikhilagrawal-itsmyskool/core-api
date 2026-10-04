@@ -829,11 +829,14 @@ describe("examination: report cards (service)", () => {
     const grid = await reportService.marksGrid(schoolId, ayId, section!.sectionClassId, "ENG", 1, "system");
     const entries = grid.students.map((s: any) => ({ studentId: s.studentId, marks: Object.fromEntries(grid.components.map((c: any) => [c.code, 1])) }));
     await reportService.saveMarks(schoolId, ayId, section!.sectionClassId, "ENG", 1, entries, "system", true);
-    const p = await reportService.progress(schoolId, ayId, 1, "system");
-    const cls = p.classes.find((c: any) => c.classId === section!.sectionClassId);
-    expect(cls).toBeTruthy();
-    const eng = cls.subjects.find((x: any) => x.subjectCode === "ENG");
-    expect(eng.complete).toBe(eng.total);
+    let p = await reportService.progress(schoolId, ayId, 1, "system");
+    let eng = p.classes.find((c: any) => c.classId === section!.sectionClassId).subjects.find((x: any) => x.subjectCode === "ENG");
+    expect(eng.complete).toBe(eng.total); // fully entered…
+    expect(eng.done).toBe(false);         // …but green/done now means SUBMITTED, not just entered
+    await reportService.submitMarks(schoolId, ayId, section!.sectionClassId, "ENG", 1, "system", true);
+    p = await reportService.progress(schoolId, ayId, 1, "system");
+    eng = p.classes.find((c: any) => c.classId === section!.sectionClassId).subjects.find((x: any) => x.subjectCode === "ENG");
+    expect(eng.submitted).toBe(true);
     expect(eng.done).toBe(true);
     // Clean the marks we just wrote for the whole class (not only the sample student).
     for (const s of grid.students) await cleanupReport(s.studentId, ayId);
@@ -925,6 +928,41 @@ describe("examination: report cards (service)", () => {
     expect(row.approvedAt).toBeFalsy();
     expect(row.approvedBy).toBeFalsy();
     await cleanupReport(stu.studentId, ayId);
+  });
+
+  reportIt("lifecycle: submit needs complete marks; edit reverts; lock blocks save; print gated", async () => {
+    const cls = section!.sectionClassId;
+    const grid = await reportService.marksGrid(schoolId, ayId, cls, "ENG", 1, "system");
+    const comps = grid.components;
+
+    // Submit with blanks is rejected.
+    let threw = false;
+    try { await reportService.submitMarks(schoolId, ayId, cls, "ENG", 1, "system", true); } catch { threw = true; }
+    expect(threw).toBe(true);
+
+    // Fill every student's ENG cells, then submit succeeds and ENG shows submitted.
+    const entries = grid.students.map((s: any) => ({ studentId: s.studentId, marks: Object.fromEntries(comps.map((c: any) => [c.code, 1])) }));
+    await reportService.saveMarks(schoolId, ayId, cls, "ENG", 1, entries, "system", true);
+    let sub = await reportService.submitMarks(schoolId, ayId, cls, "ENG", 1, "system", true);
+    expect(sub.items.find((i: any) => i.subjectCode === "ENG").submitted).toBe(true);
+
+    // Editing after submit reverts ENG to draft (must re-submit).
+    await reportService.saveMarks(schoolId, ayId, cls, "ENG", 1, [{ studentId: grid.students[0].studentId, marks: { [comps[0].code]: 2 } }], "system", true);
+    const back = await reportService.marksGrid(schoolId, ayId, cls, "ENG", 1, "system");
+    expect(back.submitted).toBe(false);
+
+    // Lock ENG → save is blocked; unlock → save works again.
+    await reportService.setLock(schoolId, ayId, cls, 1, "ENG", true, "system");
+    let lockedThrew = false;
+    try { await reportService.saveMarks(schoolId, ayId, cls, "ENG", 1, entries, "system", true); } catch { lockedThrew = true; }
+    expect(lockedThrew).toBe(true);
+    const relocked = await reportService.setLock(schoolId, ayId, cls, 1, "ENG", false, "system");
+    expect(relocked.items.find((i: any) => i.subjectCode === "ENG").locked).toBe(false);
+    await reportService.saveMarks(schoolId, ayId, cls, "ENG", 1, entries, "system", true); // no throw now
+
+    // A class with un-submitted subjects is not print-ready.
+    const cards = await reportService.reportCards(schoolId, ayId, cls, 1, "system");
+    expect(cards.submission.readyToPrint).toBe(false);
   });
 
   reportIt("report cards: assembles scheme + students + totals, and recordPrint stamps the count", async () => {

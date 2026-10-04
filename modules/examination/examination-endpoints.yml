@@ -647,6 +647,14 @@
           path: me/report/approve
           method: post
           cors: true
+      - http:
+          path: me/report/submit-marks
+          method: post
+          cors: true
+      - http:
+          path: me/report/submit-coscholastic
+          method: post
+          cors: true
 
   report-admin:
     handler: report-handler.reportAdmin
@@ -682,6 +690,10 @@
           cors: true
       - http:
           path: report/remark-templates
+          method: post
+          cors: true
+      - http:
+          path: report/lock
           method: post
           cors: true
       - http:
