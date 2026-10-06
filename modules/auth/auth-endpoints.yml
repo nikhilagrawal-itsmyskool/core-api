@@ -108,3 +108,30 @@
           path: recover/set-password
           method: post
           cors: true
+
+  permissions-list:
+    handler: permissions-handler.list
+    name: ${self:service}-permissions-list
+    events:
+      - http:
+          path: permissions
+          method: get
+          cors: true
+
+  permissions-effective:
+    handler: permissions-handler.effective
+    name: ${self:service}-permissions-effective
+    events:
+      - http:
+          path: permissions/effective
+          method: get
+          cors: true
+
+  permissions-toggle:
+    handler: permissions-handler.toggle
+    name: ${self:service}-permissions-toggle
+    events:
+      - http:
+          path: permissions/toggle
+          method: post
+          cors: true

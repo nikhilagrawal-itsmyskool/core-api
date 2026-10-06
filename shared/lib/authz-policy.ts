@@ -80,6 +80,9 @@ export const ACTIONS = {
   // Report-card subject→teacher mapping. Deliberately OUTSIDE the exam.* namespace so the
   // exam-incharge (who holds exam.*) does NOT get it — mapping is an admin/god config task.
   SUBJECT_MAPPING_MANAGE: 'subject-mapping.manage',
+  // God-only: edit the role→permission overrides from the Permissions grid. No role but god
+  // (via '*') holds it, so requireAction('authz.manage') is effectively god-only.
+  AUTHZ_MANAGE: 'authz.manage',
   // Developmental programmes (Spoken English & Life Communication, …). view = the
   // teacher Class->Month->Theme reader + catalog (teacher/admin); manage = author
   // units + re-upload source docs (admin/god/programme-incharge).
@@ -216,11 +219,53 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
   ],
 };
 
-// True if any of `roles` grants `action`. Supports '*' and 'module.*' wildcards.
-// Verbatim port of admin-portal/src/permissions/can.js — DO NOT refactor.
-export function can(roles: string[] | undefined, action: string): boolean {
-  const perms = (roles || []).flatMap((r) => ROLE_PERMISSIONS[r] || []);
-  return perms.some(
+// ── God's live overrides (DB) layered on the file defaults above ──────────────────────
+// Loaded into a per-Lambda cache, refreshed in the background (fire-and-forget, short TTL). can()
+// stays SYNC and FAIL-SAFE: an empty/stale/unavailable cache falls back to the file defaults, and
+// with no overrides this is byte-for-byte the old behaviour. GLOBAL (deployment-wide, not per-school).
+type Override = { role: string; action: string; effect: 'grant' | 'revoke' };
+let OVERRIDES: Override[] = [];
+let overridesLoadedAt = 0;
+let overridesLoading = false;
+const OVERRIDE_TTL_MS = 60_000;
+
+async function loadOverridesNow(): Promise<void> {
+  try {
+    // lazy require — merely importing this policy file must NOT create a DB pool (authorizer safety)
+    const { DB } = require('./db');
+    const rows = await DB.query('select role, action, effect from authz_permission_override');
+    OVERRIDES = (rows || []).map((r: any) => ({ role: r.role, action: r.action, effect: r.effect }));
+  } catch { /* keep current cache → file defaults on any failure */ }
+  overridesLoadedAt = Date.now();
+}
+
+function maybeRefreshOverrides(): void {
+  // Skip the background DB refresh under the jest unit harness (no DB server) to avoid noise and
+  // open handles; real Lambdas (NODE_ENV unset/'production') refresh normally.
+  if (process.env.NODE_ENV === 'test') return;
+  if (overridesLoading || Date.now() - overridesLoadedAt < OVERRIDE_TTL_MS) return;
+  overridesLoading = true;
+  loadOverridesNow().finally(() => { overridesLoading = false; });
+}
+
+// Force a reload now — called right after god writes a toggle so the same warm container is fresh.
+export async function reloadPermissionOverrides(): Promise<void> { await loadOverridesNow(); }
+export function getPermissionOverrides(): Override[] { return OVERRIDES; }
+
+// Does the FILE default (ignoring overrides) grant this action to this single role?
+export function baseGrants(role: string, action: string): boolean {
+  return (ROLE_PERMISSIONS[role] || []).some(
     (p) => p === '*' || p === action || (p.endsWith('.*') && action.startsWith(p.slice(0, -1)))
   );
+}
+const hasOverride = (role: string, action: string, effect: 'grant' | 'revoke') =>
+  OVERRIDES.some((o) => o.role === role && o.action === action && o.effect === effect);
+
+// True if any of `roles` grants `action`. File defaults + god's grant/revoke overrides.
+export function can(roles: string[] | undefined, action: string): boolean {
+  maybeRefreshOverrides();
+  const rs = roles || [];
+  if (rs.some((r) => (ROLE_PERMISSIONS[r] || []).includes('*'))) return true;         // god — never overridable
+  if (rs.some((r) => hasOverride(r, action, 'grant'))) return true;                    // explicit grant wins
+  return rs.some((r) => !hasOverride(r, action, 'revoke') && baseGrants(r, action));   // default, unless revoked
 }

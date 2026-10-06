@@ -81,3 +81,18 @@ create table if not exists device_session (
 );
 
 create index if not exists idx_device_session_school on device_session (school_id, status, last_seen_at);
+
+-- God's live overrides to the static role→permission policy (shared/lib/authz-policy.ts). The file
+-- stays the factory default; this table stores ONLY the diffs god toggles from the Permissions grid.
+-- Effective: fileDefaults(role) + grants − revokes. A cell matching the default stores no row.
+-- GLOBAL (deployment-wide, not per-school). god ('*') is never editable and never stored here.
+create table if not exists authz_permission_override (
+  uuid varchar(12) primary key,
+  role varchar(48) not null,
+  action varchar(64) not null,
+  effect varchar(8) not null check (effect in ('grant', 'revoke')),
+  setby_userid varchar(12),
+  set_at timestamp(0),
+  reason varchar(255)
+);
+create unique index if not exists idx_authz_override_cell on authz_permission_override(role, action);
