@@ -1,9 +1,9 @@
 import { ApiCallback, ApiContext, ApiEvent } from "../../shared/lib/api.interfaces";
 import { ResponseBuilder } from "../../shared/lib/response-builder";
 import { ErrorCode } from "../../shared/lib/error-codes";
-import { guard, requireAction } from "../auth/authz";
+import { requireAction } from "../auth/authz";
 import { ACTIONS } from "../../shared/lib/authz-policy";
-import { resolveSchool, resolveEmployee, parseBody, requireParam, callerIsExamOverride } from "./handler-util";
+import { resolveSchool, resolveEmployee, parseBody, requireParam, callerCan } from "./handler-util";
 import { getCurrentAcademicYearId } from "./examination-common";
 import { reportService } from "./report-service";
 
@@ -43,7 +43,7 @@ class ReportHandler {
       const term = this.term(event);
       const ay = await this.ay(event, emp.schoolId);
       if (!ay) { ResponseBuilder.badRequest(ErrorCode.BusinessError, "No academic year", callback); return; }
-      if (!(await reportService.canEnterSubject(emp.schoolId, ay, classId, subjectCode, emp.employeeId, callerIsExamOverride(event)))) {
+      if (!(await reportService.canEnterSubject(emp.schoolId, ay, classId, subjectCode, emp.employeeId, callerCan(event, ACTIONS.EXAM_MARKS_OVERRIDE)))) {
         ResponseBuilder.forbidden(ErrorCode.MissingPermission, "You are not the assigned teacher for this subject", callback); return;
       }
       ResponseBuilder.ok(await reportService.marksGrid(emp.schoolId, ay, classId, subjectCode, term, emp.employeeId), callback);
@@ -64,7 +64,7 @@ class ReportHandler {
       if (!ay) { ResponseBuilder.badRequest(ErrorCode.BusinessError, "No academic year", callback); return; }
       const body = parseBody<{ entries: any[] }>(event, callback); // each entry may carry per-student denominators for scalable columns
       if (!body) return;
-      ResponseBuilder.ok(await reportService.saveMarks(emp.schoolId, ay, classId, subjectCode, term, body.entries || [], emp.employeeId, callerIsExamOverride(event)), callback);
+      ResponseBuilder.ok(await reportService.saveMarks(emp.schoolId, ay, classId, subjectCode, term, body.entries || [], emp.employeeId, callerCan(event, ACTIONS.EXAM_MARKS_OVERRIDE)), callback);
     } catch (err: any) { ResponseBuilder.handleError(err, callback); }
   };
 
@@ -81,7 +81,7 @@ class ReportHandler {
       const classId = (body.classId || "").trim(); const subjectCode = (body.subjectCode || "").trim();
       if (!classId || !subjectCode) { ResponseBuilder.badRequest(ErrorCode.BusinessError, "classId and subjectCode are required", callback); return; }
       const term = body.term === 2 ? 2 : 1;
-      ResponseBuilder.ok(await reportService.submitMarks(emp.schoolId, ay, classId, subjectCode, term, emp.employeeId, callerIsExamOverride(event)), callback);
+      ResponseBuilder.ok(await reportService.submitMarks(emp.schoolId, ay, classId, subjectCode, term, emp.employeeId, callerCan(event, ACTIONS.EXAM_MARKS_OVERRIDE)), callback);
     } catch (err: any) { ResponseBuilder.handleError(err, callback); }
   };
 
@@ -98,7 +98,7 @@ class ReportHandler {
       const classId = (body.classId || "").trim();
       if (!classId) { ResponseBuilder.badRequest(ErrorCode.BusinessError, "classId is required", callback); return; }
       const term = body.term === 2 ? 2 : 1;
-      ResponseBuilder.ok(await reportService.submitCoscholastic(emp.schoolId, ay, classId, term, emp.employeeId, callerIsExamOverride(event)), callback);
+      ResponseBuilder.ok(await reportService.submitCoscholastic(emp.schoolId, ay, classId, term, emp.employeeId, callerCan(event, ACTIONS.EXAM_MARKS_OVERRIDE)), callback);
     } catch (err: any) { ResponseBuilder.handleError(err, callback); }
   };
 
@@ -161,7 +161,7 @@ class ReportHandler {
       const term = this.term(event);
       const ay = await this.ay(event, emp.schoolId);
       if (!ay) { ResponseBuilder.badRequest(ErrorCode.BusinessError, "No academic year", callback); return; }
-      if (!callerIsExamOverride(event) && !(await reportService.canEnterCoscholastic(emp.schoolId, ay, classId, emp.employeeId))) {
+      if (!callerCan(event, ACTIONS.EXAM_MARKS_OVERRIDE) && !(await reportService.canEnterCoscholastic(emp.schoolId, ay, classId, emp.employeeId))) {
         ResponseBuilder.forbidden(ErrorCode.MissingPermission, "Only the class teacher can enter co-scholastic grades", callback); return;
       }
       ResponseBuilder.ok(await reportService.coscholasticGrid(emp.schoolId, ay, classId, term, emp.employeeId), callback);
@@ -181,7 +181,7 @@ class ReportHandler {
       if (!ay) { ResponseBuilder.badRequest(ErrorCode.BusinessError, "No academic year", callback); return; }
       const body = parseBody<{ entries: any[] }>(event, callback);
       if (!body) return;
-      ResponseBuilder.ok(await reportService.saveCoscholastic(emp.schoolId, ay, classId, term, body.entries || [], emp.employeeId, callerIsExamOverride(event)), callback);
+      ResponseBuilder.ok(await reportService.saveCoscholastic(emp.schoolId, ay, classId, term, body.entries || [], emp.employeeId, callerCan(event, ACTIONS.EXAM_MARKS_OVERRIDE)), callback);
     } catch (err: any) { ResponseBuilder.handleError(err, callback); }
   };
 
@@ -215,7 +215,7 @@ class ReportHandler {
   public getSubjectMapping = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
     ctx.callbackWaitsForEmptyEventLoop = false;
     try {
-      if (!requireAction(event, ACTIONS.SUBJECT_MAPPING_MANAGE, callback)) return; // admin/god only, not exam-incharge
+      if (!requireAction(event, ACTIONS.EXAM_MAPPING_MANAGE, callback)) return; // admin/god only, not exam-incharge
       const auth = await resolveSchool(event, callback);
       if (!auth) return;
       const classId = requireParam(event, "classId", callback);
@@ -231,7 +231,7 @@ class ReportHandler {
   public assignSubjectTeacher = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
     ctx.callbackWaitsForEmptyEventLoop = false;
     try {
-      if (!requireAction(event, ACTIONS.SUBJECT_MAPPING_MANAGE, callback)) return; // admin/god only, not exam-incharge
+      if (!requireAction(event, ACTIONS.EXAM_MAPPING_MANAGE, callback)) return; // admin/god only, not exam-incharge
       const auth = await resolveSchool(event, callback);
       if (!auth) return;
       const classId = requireParam(event, "classId", callback);
@@ -250,7 +250,7 @@ class ReportHandler {
   public getClassTeachers = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
     ctx.callbackWaitsForEmptyEventLoop = false;
     try {
-      if (!requireAction(event, ACTIONS.SUBJECT_MAPPING_MANAGE, callback)) return; // admin/god only
+      if (!requireAction(event, ACTIONS.EXAM_MAPPING_MANAGE, callback)) return; // admin/god only
       const auth = await resolveSchool(event, callback);
       if (!auth) return;
       const classId = requireParam(event, "classId", callback);
@@ -265,7 +265,7 @@ class ReportHandler {
   public setClassTeacher = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
     ctx.callbackWaitsForEmptyEventLoop = false;
     try {
-      if (!requireAction(event, ACTIONS.SUBJECT_MAPPING_MANAGE, callback)) return; // admin/god only
+      if (!requireAction(event, ACTIONS.EXAM_MAPPING_MANAGE, callback)) return; // admin/god only
       const auth = await resolveSchool(event, callback);
       if (!auth) return;
       const classId = requireParam(event, "classId", callback);
@@ -289,7 +289,7 @@ class ReportHandler {
       const term = this.term(event);
       const ay = await this.ay(event, emp.schoolId);
       if (!ay) { ResponseBuilder.badRequest(ErrorCode.BusinessError, "No academic year", callback); return; }
-      if (!callerIsExamOverride(event) && !(await reportService.canEnterCoscholastic(emp.schoolId, ay, classId, emp.employeeId))) {
+      if (!callerCan(event, ACTIONS.EXAM_MARKS_OVERRIDE) && !(await reportService.canEnterCoscholastic(emp.schoolId, ay, classId, emp.employeeId))) {
         ResponseBuilder.forbidden(ErrorCode.MissingPermission, "Only the class teacher can view this class's report cards", callback); return;
       }
       ResponseBuilder.ok(await reportService.reportCards(emp.schoolId, ay, classId, term, emp.employeeId), callback);
@@ -309,7 +309,7 @@ class ReportHandler {
       const classId = (body.classId || "").trim();
       if (!classId) { ResponseBuilder.badRequest(ErrorCode.BusinessError, "classId is required", callback); return; }
       const term = body.term === 2 ? 2 : 1;
-      ResponseBuilder.ok(await reportService.approveReportCards(emp.schoolId, ay, classId, term, body.studentIds || [], body.approve !== false, emp.employeeId, callerIsExamOverride(event)), callback);
+      ResponseBuilder.ok(await reportService.approveReportCards(emp.schoolId, ay, classId, term, body.studentIds || [], body.approve !== false, emp.employeeId, callerCan(event, ACTIONS.EXAM_MARKS_OVERRIDE)), callback);
     } catch (err: any) { ResponseBuilder.handleError(err, callback); }
   };
 
@@ -519,25 +519,34 @@ export const reportMe = dispatch(ME_ROUTES);
 // public verify. Ungated: returns only the safe, celebratory summary already printed on the card.
 export const verifyReport = h.verifyReport;
 
-// /report — the exam-incharge surface (dashboard + subject mapping read/write). One guarded
-// dispatcher (exam.manage) so it stays a single Lambda under CloudFormation's 500-resource cap.
-export const reportAdmin = guard(ACTIONS.EXAM_MANAGE, dispatch({
-  "GET /report/progress/{term}": h.getProgress,
-  "GET /report/coscholastic-progress/{term}": h.getCoscholasticProgress,
-  "GET /report/mapping/{classId}": h.getSubjectMapping,
-  "POST /report/mapping/{classId}": h.assignSubjectTeacher,
-  "GET /report/class-teachers/{classId}": h.getClassTeachers,
-  "POST /report/class-teachers/{classId}": h.setClassTeacher,
-  "GET /report/remark-templates": h.getRemarkTemplates,
-  "POST /report/remark-templates": h.postRemarkTemplate,
-  "POST /report/lock": h.setLock,
-  "POST /report/exclude-class": h.setClassExcluded,
-  "GET /report/classes": h.getReportClasses,
-  "GET /report/cards/{classId}/{term}": h.getReportCards,
-  "POST /report/cards/{classId}/{term}": h.recordReportPrint,
-  "GET /report/photo/{studentId}": h.getReportPhoto,
-  "GET /report/scheme/{band}": h.getScheme,
-  "POST /report/scheme/{band}": h.saveScheme,
-  "GET /report/config": h.getReportConfig,
-  "POST /report/config": h.setReportConfig,
-}));
+// /report — the admin/exam surface. PER-ROUTE authorization (the single coarse exam.manage guard is
+// gone): each route names the exact action it needs, so e.g. report cards = exam.reportcard.manage
+// (god+admin), format/scheme = exam.format.manage (god), lock = exam.marks.lock (god), etc. Still one
+// Lambda (CloudFormation 500-resource cap). The mapping handlers also re-check inside (defence-in-depth).
+const REPORT_ROUTES: Record<string, [string, any]> = {
+  "GET /report/progress/{term}": [ACTIONS.EXAM_PROGRESS_VIEW, h.getProgress],
+  "GET /report/coscholastic-progress/{term}": [ACTIONS.EXAM_PROGRESS_VIEW, h.getCoscholasticProgress],
+  "GET /report/mapping/{classId}": [ACTIONS.EXAM_MAPPING_MANAGE, h.getSubjectMapping],
+  "POST /report/mapping/{classId}": [ACTIONS.EXAM_MAPPING_MANAGE, h.assignSubjectTeacher],
+  "GET /report/class-teachers/{classId}": [ACTIONS.EXAM_MAPPING_MANAGE, h.getClassTeachers],
+  "POST /report/class-teachers/{classId}": [ACTIONS.EXAM_MAPPING_MANAGE, h.setClassTeacher],
+  "GET /report/remark-templates": [ACTIONS.EXAM_REMARK_MANAGE, h.getRemarkTemplates],
+  "POST /report/remark-templates": [ACTIONS.EXAM_REMARK_MANAGE, h.postRemarkTemplate],
+  "POST /report/lock": [ACTIONS.EXAM_MARKS_LOCK, h.setLock],
+  "POST /report/exclude-class": [ACTIONS.EXAM_CLASS_EXCLUDE, h.setClassExcluded],
+  "GET /report/classes": [ACTIONS.EXAM_VIEW, h.getReportClasses],
+  "GET /report/cards/{classId}/{term}": [ACTIONS.EXAM_REPORTCARD_MANAGE, h.getReportCards],
+  "POST /report/cards/{classId}/{term}": [ACTIONS.EXAM_REPORTCARD_MANAGE, h.recordReportPrint],
+  "GET /report/photo/{studentId}": [ACTIONS.EXAM_REPORTCARD_MANAGE, h.getReportPhoto],
+  "GET /report/scheme/{band}": [ACTIONS.EXAM_FORMAT_MANAGE, h.getScheme],
+  "POST /report/scheme/{band}": [ACTIONS.EXAM_FORMAT_MANAGE, h.saveScheme],
+  "GET /report/config": [ACTIONS.EXAM_FORMAT_MANAGE, h.getReportConfig],
+  "POST /report/config": [ACTIONS.EXAM_FORMAT_MANAGE, h.setReportConfig],
+};
+export const reportAdmin = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+  const route = REPORT_ROUTES[routeKey(event)];
+  if (!route) { ResponseBuilder.notFound(ErrorCode.GeneralError, "Not found", callback); return; }
+  const [action, fn] = route;
+  if (!requireAction(event, action, callback)) return; // per-route authz (writes response on fail)
+  return fn(event, ctx, callback);
+};

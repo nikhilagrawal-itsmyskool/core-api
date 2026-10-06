@@ -75,11 +75,21 @@ export const ACTIONS = {
   HOMEWORK_MANAGE: 'homework.manage',
   ACADEMIC_CALENDAR_VIEW: 'academic-calendar.view',
   ACADEMIC_CALENDAR_MANAGE: 'academic-calendar.manage',
-  EXAM_VIEW: 'exam.view',
-  EXAM_MANAGE: 'exam.manage',
-  // Report-card subject→teacher mapping. Deliberately OUTSIDE the exam.* namespace so the
-  // exam-incharge (who holds exam.*) does NOT get it — mapping is an admin/god config task.
-  SUBJECT_MAPPING_MANAGE: 'subject-mapping.manage',
+  // Examination — strict `module.resource.action` convention. NOTE: no role carries an `exam.*`
+  // wildcard anymore (admin/exam-incharge get explicit lists below), so every leaf is independently
+  // grantable and the god-only ones are NOT swallowed by a wildcard. (EXAM_VIEW/EXAM_MANAGE keep
+  // their constant NAMES so the ~90 existing guard() call-sites don't change — only the values move.)
+  EXAM_VIEW: 'exam.schedule.view',
+  EXAM_MANAGE: 'exam.schedule.manage',
+  EXAM_PROGRESS_VIEW: 'exam.progress.view',
+  EXAM_REPORTCARD_MANAGE: 'exam.reportcard.manage',
+  EXAM_FORMAT_MANAGE: 'exam.format.manage',
+  EXAM_REMARK_MANAGE: 'exam.remark.manage',
+  EXAM_MAPPING_MANAGE: 'exam.mapping.manage',
+  EXAM_MARKS_OVERRIDE: 'exam.marks.override',
+  EXAM_MARKS_LOCK: 'exam.marks.lock',
+  EXAM_CLASS_EXCLUDE: 'exam.class.exclude',
+  EXAM_DUES_OVERRIDE: 'exam.dues.override',
   // God-only: edit the role→permission overrides from the Permissions grid. No role but god
   // (via '*') holds it, so requireAction('authz.manage') is effectively god-only.
   AUTHZ_MANAGE: 'authz.manage',
@@ -148,11 +158,17 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
     'homework.manage',
     'academic-calendar.view',
     'academic-calendar.manage',
-    'exam.*',
-    'subject-mapping.manage', // report-card subject→teacher mapping (admin + god only, NOT exam-incharge)
+    // Examination (explicit, no wildcard): admin runs exams + report cards, views progress.
+    // NOT config/scheme/remark/mapping, NOT marks-override/lock/class-exclude, NOT dues-override (god-only).
+    'exam.schedule.view',
+    'exam.schedule.manage',
+    'exam.progress.view',
+    'exam.reportcard.manage',
     'receipt.verify', // Scan & Verify (admin + god only; NOT fee incharges)
     'leave.apply', // Self-service leave only; oversight (leave.manage) is god-only for now
     'documents.sign', // Read & sign own documents; authoring (documents.manage) is god-only
+    // Clubs & Activities: NONE by default (locked to god). god grants admin what it needs via
+    // the Permissions grid. No club.* here on purpose.
   ],
   // Standard teaching staff: view-only across the modules they can reach.
   teacher: [
@@ -192,7 +208,9 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
   'programme-incharge': ['programme.*'],
   'assembly-incharge': ['assembly.*'],
   // Exam incharge === admin, but scoped to the examination module.
-  'exam-incharge': ['exam.*'],
+  // Exam office: run exams + view progress, but NOT report cards, config, mapping, or the god-only
+  // overrides (enter-on-behalf, lock, class-exclude, dues-override).
+  'exam-incharge': ['exam.schedule.view', 'exam.schedule.manage', 'exam.progress.view'],
   // Route-scoped teacher: reach bus-attendance screens + mark, but only on routes
   // they staff (route filtering enforced in the transport handlers); finalize stays
   // admin/god/transport-incharge only.

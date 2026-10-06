@@ -4,6 +4,7 @@ import { ErrorCode } from "../../shared/lib/error-codes";
 import { validateSchoolCodeHeader, getAuthorizationHeader } from "../auth/auth-utils";
 import { extractAndVerifyToken } from "../auth/token-utils";
 import { getCaller } from "../auth/authz";
+import { can } from "../../shared/lib/authz-policy";
 import { getSchoolIdByCode } from "./examination-common";
 
 export interface RequestContext {
@@ -78,4 +79,13 @@ export function callerHasRole(event: ApiEvent, role: string): boolean {
 // (Financial gates — dues thresholds + dues overrides — stay god-only.)
 export function callerIsExamOverride(event: ApiEvent): boolean {
   return callerHasRole(event, "god") || callerHasRole(event, "exam-incharge");
+}
+
+// Does the caller hold a specific permission (via the central, override-aware can())? Returns a
+// boolean (does NOT write a response) — for in-handler branches like "may act on another teacher's
+// behalf" (exam.marks.override) or "may change the dues gate" (exam.dues.override), both god-only
+// by default but delegable from the Permissions grid.
+export function callerCan(event: ApiEvent, action: string): boolean {
+  const caller = getCaller(event);
+  return !!caller && can(caller.roles, action);
 }

@@ -7,7 +7,7 @@ import { ResponseBuilder } from "../../shared/lib/response-builder";
 import { ErrorCode } from "../../shared/lib/error-codes";
 import { guard } from "../auth/authz";
 import { ACTIONS } from "../../shared/lib/authz-policy";
-import { resolveSchool, resolveEmployee, parseBody, requireParam, callerHasRole, callerIsExamOverride } from "./handler-util";
+import { resolveSchool, resolveEmployee, parseBody, requireParam, callerHasRole, callerIsExamOverride, callerCan } from "./handler-util";
 import { getCurrentAcademicYearId } from "./examination-common";
 import { examinationService } from "./examination-service";
 import {
@@ -81,7 +81,9 @@ class ExaminationHandler {
       if (!id) return;
       const body = parseBody<UpdateExamRequest>(event, callback);
       if (!body) return;
-      const isGod = callerHasRole(event, "god");
+      // The dues-threshold field is governed by exam.dues.override (god-only by default); the service
+      // ignores the threshold change unless this is true. Other exam fields need only exam.schedule.manage.
+      const isGod = callerCan(event, ACTIONS.EXAM_DUES_OVERRIDE);
       const result = await examinationService.updateExam(auth.schoolId, id, body, auth.userId, isGod);
       if (!result) return ResponseBuilder.notFound(ErrorCode.InvalidId, "Examination not found", callback);
       ResponseBuilder.ok(result, callback);
@@ -320,12 +322,12 @@ class ExaminationHandler {
     }
   };
 
-  // POST /examinations/{id}/dues-overrides { studentIds: [], reason } — GOD ONLY
+  // POST /examinations/{id}/dues-overrides { studentIds: [], reason } — exam.dues.override (god-only default)
   public createOverrides = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
     ctx.callbackWaitsForEmptyEventLoop = false;
     try {
-      if (!callerHasRole(event, "god")) {
-        return ResponseBuilder.forbidden(ErrorCode.MissingPermission, "Only a god user can override dues", callback);
+      if (!callerCan(event, ACTIONS.EXAM_DUES_OVERRIDE)) {
+        return ResponseBuilder.forbidden(ErrorCode.MissingPermission, "You are not allowed to override admit-card dues", callback);
       }
       const auth = await resolveSchool(event, callback);
       if (!auth) return;
@@ -340,12 +342,12 @@ class ExaminationHandler {
     }
   };
 
-  // DELETE /examinations/{id}/dues-overrides/{studentId} — GOD ONLY
+  // DELETE /examinations/{id}/dues-overrides/{studentId} — exam.dues.override (god-only default)
   public revokeOverride = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
     ctx.callbackWaitsForEmptyEventLoop = false;
     try {
-      if (!callerHasRole(event, "god")) {
-        return ResponseBuilder.forbidden(ErrorCode.MissingPermission, "Only a god user can revoke overrides", callback);
+      if (!callerCan(event, ACTIONS.EXAM_DUES_OVERRIDE)) {
+        return ResponseBuilder.forbidden(ErrorCode.MissingPermission, "You are not allowed to revoke admit-card dues overrides", callback);
       }
       const auth = await resolveSchool(event, callback);
       if (!auth) return;
@@ -1064,8 +1066,8 @@ export const recordPrint = guard(ACTIONS.EXAM_MANAGE, h.recordPrint);
 export const getFeeCycles = guard(ACTIONS.EXAM_VIEW, h.getFeeCycles);
 export const getPrintLog = guard(ACTIONS.EXAM_VIEW, h.getPrintLog);
 export const listOverrides = guard(ACTIONS.EXAM_VIEW, h.listOverrides);
-export const createOverrides = guard(ACTIONS.EXAM_MANAGE, h.createOverrides);
-export const revokeOverride = guard(ACTIONS.EXAM_MANAGE, h.revokeOverride);
+export const createOverrides = guard(ACTIONS.EXAM_DUES_OVERRIDE, h.createOverrides);
+export const revokeOverride = guard(ACTIONS.EXAM_DUES_OVERRIDE, h.revokeOverride);
 export const getBranding = guard(ACTIONS.EXAM_VIEW, h.getBranding);
 export const setBranding = guard(ACTIONS.EXAM_MANAGE, h.setBranding);
 export const setBrandingText = guard(ACTIONS.EXAM_MANAGE, h.setBrandingText);
