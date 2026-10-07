@@ -44,6 +44,19 @@ const CATALOGS: Record<string, Catalog> = {
       { action: ACTIONS.EXAM_DUES_OVERRIDE, label: 'Admit-card dues override & threshold' },
     ],
   },
+  attendance: {
+    module: 'attendance',
+    roles: [
+      { role: 'admin', label: 'Admin' },
+      { role: 'class-teacher', label: 'Class Teacher' },
+      { role: 'teacher', label: 'Teacher' },
+    ],
+    actions: [
+      { action: ACTIONS.ATTENDANCE_MARK, label: 'Take roll-call: roster, sessions & save marks' },
+      { action: ACTIONS.ATTENDANCE_FINALIZE, label: 'Finalize sessions & edit records' },
+      { action: ACTIONS.ATTENDANCE_CONFIG_MANAGE, label: 'Manage attendance config (half-day policy)' },
+    ],
+  },
   club: {
     module: 'club',
     roles: [

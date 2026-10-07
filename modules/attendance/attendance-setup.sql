@@ -35,7 +35,7 @@ create table if not exists attendance_record (
     school_id varchar(12) not null,
     session_id varchar(12) not null,
     student_id varchar(12) not null,
-    status varchar(16) not null check (status in ('present', 'absent', 'late', 'leave')),
+    status varchar(16) not null check (status in ('present', 'absent', 'late', 'leave', 'half_day')),
     remark text,
     createdby_userid varchar(12),
     created_at timestamp(0),
@@ -63,3 +63,22 @@ create table if not exists attendance_audit (
 
 create index if not exists idx_attendance_audit_session on attendance_audit(session_id);
 create index if not exists idx_attendance_audit_record on attendance_audit(record_id);
+
+-- Widen the status CHECK on existing (already-created) attendance_record tables to allow
+-- 'half_day'. The create-table above already has the new list for fresh installs; this
+-- drop-then-add keeps the setup file re-runnable (idempotent) for upgrades.
+alter table attendance_record drop constraint if exists attendance_record_status_check;
+alter table attendance_record add constraint attendance_record_status_check
+    check (status in ('present', 'absent', 'late', 'leave', 'half_day'));
+
+-- Table 4: attendance_config (per-school attendance settings; one row per school).
+-- Currently just the half-day policy: whether the Half-day status is offered, and how it
+-- counts toward the attendance % (half | full | excluded). No DDL defaults — the service
+-- falls back to the factory defaults (enabled, 'half') when a school has no row.
+create table if not exists attendance_config (
+    school_id varchar(12) primary key,
+    half_day_enabled boolean,
+    half_day_weight varchar(16) check (half_day_weight in ('half', 'full', 'excluded')),
+    updatedby_userid varchar(12),
+    updated_at timestamp(0)
+);

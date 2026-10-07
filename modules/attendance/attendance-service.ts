@@ -1,7 +1,7 @@
 import { DB, singleLineString } from '../../shared/lib/db';
 import { BusinessErrorResult } from '../../shared/lib/errors';
 import { ErrorCode } from '../../shared/lib/error-codes';
-import { ATTENDANCE_STATUS_VALUES, DEFAULTS } from './attendance-constants';
+import { ATTENDANCE_STATUS_VALUES, DEFAULTS, HALF_DAY_WEIGHTS, HalfDayWeight } from './attendance-constants';
 import {
   AttendanceSession, AttendanceRecord, RosterEntry, MarkEntry, EditRecordRequest,
 } from './attendance-interfaces';
@@ -374,16 +374,24 @@ class AttendanceService {
       ntSet = await nonTeachingDateSet(schoolId, filters.academicYearId, from, to);
     }
 
-    const summary: Record<string, number> = { present: 0, absent: 0, late: 0, leave: 0, total: 0, percent: 0 };
+    const summary: Record<string, number> = { present: 0, absent: 0, late: 0, leave: 0, half_day: 0, total: 0, percent: 0 };
     for (const d of days) {
       d.nonTeaching = ntSet.has(d.date);
       if (d.nonTeaching) continue; // holiday/weekly-off: not part of the working denominator
       if (summary[d.status] !== undefined) summary[d.status]++;
       summary.total++;
     }
-    summary.percent = summary.total > 0
-      ? Math.round(((summary.present + summary.late) / summary.total) * 100)
-      : 0;
+    // Half-day counts per the school's config: 'half' = 0.5 credit (kept in the denominator),
+    // 'full' = a full present, 'excluded' = dropped from working days entirely.
+    const { halfDayWeight } = await this.getConfig(schoolId);
+    const half = summary.half_day;
+    let denom = summary.total;            // already includes half-days (and leave)
+    let numer = summary.present + summary.late;
+    if (halfDayWeight === 'full') numer += half;
+    else if (halfDayWeight === 'half') numer += half * 0.5;
+    else if (halfDayWeight === 'excluded') denom -= half;
+    summary.total = denom;
+    summary.percent = denom > 0 ? Math.round((numer / denom) * 100) : 0;
 
     return { summary, days };
   }
@@ -441,10 +449,11 @@ class AttendanceService {
     // Non-teaching days (full holidays + weekly-off) don't count toward working days,
     // so the percentage is correct even if a session was created on such a day.
     const ntSet = await nonTeachingDateSet(schoolId, academicYearId, from, to);
+    const { halfDayWeight } = await this.getConfig(schoolId);
 
     const students = roster.map((st: any) => {
       const map = byStudent.get(st.studentId) || {};
-      let present = 0, absent = 0, leave = 0, late = 0;
+      let present = 0, absent = 0, leave = 0, late = 0, halfDay = 0;
       for (const d of dates) {
         if (ntSet.has(d)) continue; // holiday / weekly-off — excluded from working days
         const s = map[d];
@@ -452,17 +461,83 @@ class AttendanceService {
         else if (s === 'absent') absent++;
         else if (s === 'leave') leave++;
         else if (s === 'late') late++;
+        else if (s === 'half_day') halfDay++;
       }
-      const working = present + absent + late; // leave excluded, matching the source
+      // leave excluded from working days (matching the source). Half-day per config:
+      // 'half'/'full' add it to working days (0.5 / full credit); 'excluded' drops it.
+      let working = present + absent + late;
+      let numer = present + late;
+      if (halfDayWeight === 'full') { working += halfDay; numer += halfDay; }
+      else if (halfDayWeight === 'half') { working += halfDay; numer += halfDay * 0.5; }
+      // 'excluded': half-day not counted toward working days or the numerator
       return {
         studentId: st.studentId, name: st.name, admissionNumber: st.admissionNumber,
         rollNumber: st.rollNumber, marks: map,
-        present, absent, leave, late, working,
-        percent: working > 0 ? Math.round(((present + late) / working) * 100) : 0,
+        present, absent, leave, late, halfDay, working,
+        percent: working > 0 ? Math.round((numer / working) * 100) : 0,
       };
     });
 
     return { dates, students };
+  }
+
+  // Per-school attendance config. Returns the factory defaults when the school has no row,
+  // so callers never special-case "unconfigured". Defensive: a missing table (pre-migration)
+  // falls back to defaults too, so this never breaks marking/registers.
+  public async getConfig(schoolId: string): Promise<{ halfDayEnabled: boolean; halfDayWeight: HalfDayWeight }> {
+    try {
+      const rows = await DB.query(
+        singleLineString`select half_day_enabled, half_day_weight from attendance_config where school_id = $1`,
+        [schoolId],
+      );
+      if (!rows.length) {
+        return { halfDayEnabled: DEFAULTS.HALF_DAY_ENABLED, halfDayWeight: DEFAULTS.HALF_DAY_WEIGHT };
+      }
+      const r = rows[0];
+      return {
+        halfDayEnabled: r.halfDayEnabled == null ? DEFAULTS.HALF_DAY_ENABLED : Boolean(r.halfDayEnabled),
+        halfDayWeight: (HALF_DAY_WEIGHTS as readonly string[]).includes(r.halfDayWeight)
+          ? (r.halfDayWeight as HalfDayWeight)
+          : DEFAULTS.HALF_DAY_WEIGHT,
+      };
+    } catch {
+      return { halfDayEnabled: DEFAULTS.HALF_DAY_ENABLED, halfDayWeight: DEFAULTS.HALF_DAY_WEIGHT };
+    }
+  }
+
+  // Upsert the per-school attendance config (one row per school). Validates the weight.
+  public async updateConfig(
+    schoolId: string,
+    data: { halfDayEnabled?: boolean; halfDayWeight?: string },
+    userId: string,
+  ): Promise<{ halfDayEnabled: boolean; halfDayWeight: HalfDayWeight }> {
+    const current = await this.getConfig(schoolId);
+    const halfDayEnabled = data.halfDayEnabled == null ? current.halfDayEnabled : Boolean(data.halfDayEnabled);
+    let halfDayWeight = current.halfDayWeight;
+    if (data.halfDayWeight != null) {
+      if (!(HALF_DAY_WEIGHTS as readonly string[]).includes(data.halfDayWeight)) {
+        throw new BusinessErrorResult(ErrorCode.BusinessError, `Invalid halfDayWeight "${data.halfDayWeight}"`);
+      }
+      halfDayWeight = data.halfDayWeight as HalfDayWeight;
+    }
+
+    const now = new Date();
+    const existing = await DB.query(
+      singleLineString`select school_id from attendance_config where school_id = $1`,
+      [schoolId],
+    );
+    if (existing.length) {
+      await DB.query(
+        singleLineString`update attendance_config set half_day_enabled = $1, half_day_weight = $2, updatedby_userid = $3, updated_at = $4 where school_id = $5`,
+        [halfDayEnabled, halfDayWeight, userId, now, schoolId],
+      );
+    } else {
+      await DB.query(
+        singleLineString`insert into attendance_config (school_id, half_day_enabled, half_day_weight, updatedby_userid, updated_at) values ($1, $2, $3, $4, $5)`,
+        [schoolId, halfDayEnabled, halfDayWeight, userId, now],
+      );
+    }
+    return { halfDayEnabled, halfDayWeight };
   }
 }
 

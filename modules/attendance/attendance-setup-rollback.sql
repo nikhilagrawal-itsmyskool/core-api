@@ -1,6 +1,8 @@
 -- Attendance Module Rollback Script
 -- Drops all attendance tables and indexes.
 
+drop table if exists attendance_config;
+
 drop index if exists idx_attendance_audit_record;
 drop index if exists idx_attendance_audit_session;
 drop table if exists attendance_audit;

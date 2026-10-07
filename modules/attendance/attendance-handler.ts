@@ -28,6 +28,35 @@ class AttendanceHandler {
     }
   };
 
+  // GET /config — per-school attendance config (half-day policy). Readable by anyone who can
+  // mark, so the marking screen knows whether to offer Half-day and how it's weighted.
+  public getConfig = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
+    _context.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const ctx = await resolveSchool(event, callback);
+      if (!ctx) return;
+      const config = await attendanceService.getConfig(ctx.schoolId);
+      ResponseBuilder.ok({ config }, callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
+  // PUT /config — update the half-day policy (admin + god, via attendance.config.manage).
+  public updateConfig = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
+    _context.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const ctx = await resolveSchool(event, callback);
+      if (!ctx) return;
+      const body = parseBody<{ halfDayEnabled?: boolean; halfDayWeight?: string }>(event, callback);
+      if (!body) return;
+      const config = await attendanceService.updateConfig(ctx.schoolId, body, ctx.userId);
+      ResponseBuilder.ok({ config }, callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
   // GET /roster?classId=&academicYearId=&date=
   public getRoster = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
     _context.callbackWaitsForEmptyEventLoop = false;
@@ -195,6 +224,8 @@ class AttendanceHandler {
 
 const handler = new AttendanceHandler();
 export const getDayInfo = guard(ATTENDANCE_ACTIONS['attendance-handler.getDayInfo'], handler.getDayInfo);
+export const getConfig = guard(ATTENDANCE_ACTIONS['attendance-handler.getConfig'], handler.getConfig);
+export const updateConfig = guard(ATTENDANCE_ACTIONS['attendance-handler.updateConfig'], handler.updateConfig);
 export const getStudentAttendance = guard(ATTENDANCE_ACTIONS['attendance-handler.getStudentAttendance'], handler.getStudentAttendance);
 export const getRegister = guard(ATTENDANCE_ACTIONS['attendance-handler.getRegister'], handler.getRegister);
 export const getRoster = guard(ATTENDANCE_ACTIONS['attendance-handler.getRoster'], handler.getRoster);

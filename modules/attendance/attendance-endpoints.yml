@@ -17,6 +17,25 @@
           method: get
           cors: true
 
+  # Per-school attendance config (half-day policy). GET readable by markers; PUT = admin/god.
+  get-config:
+    handler: attendance-handler.getConfig
+    name: ${self:service}-get-config
+    events:
+      - http:
+          path: config
+          method: get
+          cors: true
+
+  update-config:
+    handler: attendance-handler.updateConfig
+    name: ${self:service}-update-config
+    events:
+      - http:
+          path: config
+          method: put
+          cors: true
+
   # Holiday / weekly-off flags for a date (no class needed) — lets the marking
   # screen warn as soon as a date is picked, before a class is selected.
   get-day-info:

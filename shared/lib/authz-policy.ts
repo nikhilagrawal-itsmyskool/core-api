@@ -54,7 +54,12 @@ export const ACTIONS = {
   STUDENT_VIEW: 'student.view',
   STUDENT_MANAGE: 'student.manage',
   STUDENT_VIEW_CONTACTS: 'student.contacts.view',
+  // Attendance. mark = take roll-call (roster/sessions/save + read config); finalize = finalize
+  // sessions & edit records after finalize; config.manage = the per-school Attendance Config screen
+  // (half-day policy) — god + admin only. mark/finalize are granted below; config.manage to admin.
+  ATTENDANCE_MARK: 'attendance.mark',
   ATTENDANCE_FINALIZE: 'attendance.finalize',
+  ATTENDANCE_CONFIG_MANAGE: 'attendance.config.manage',
   COMMUNICATION_SEND: 'communication.send',
   COMMUNICATION_TEMPLATE_MANAGE: 'communication.template.manage',
   COMMUNICATION_TEMPLATE_DELETE: 'communication.template.delete',
@@ -156,6 +161,7 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
     'student.contacts.view',
     'attendance.mark',
     'attendance.finalize',
+    'attendance.config.manage', // Attendance Config screen (half-day policy) — admin + god
     'communication.send',
     'communication.template.manage',
     'hiring.view',

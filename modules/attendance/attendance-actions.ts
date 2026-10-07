@@ -5,10 +5,14 @@ import { ACTIONS } from '../../shared/lib/authz-policy';
 // the 360 student view) = attendance.mark (admin + class-teacher, per the menu gating);
 // finalizing a session and editing records after finalize = attendance.finalize (admin).
 const MARK = 'attendance.mark'; // not in ACTIONS catalog (no UI branch), but a real policy grant
-const { ATTENDANCE_FINALIZE } = ACTIONS;
+const { ATTENDANCE_FINALIZE, ATTENDANCE_CONFIG_MANAGE } = ACTIONS;
 
 export const ATTENDANCE_ACTIONS: Record<string, string> = {
   'attendance-handler.getDayInfo': MARK,
+  // Reading config is open to markers (so the marking screen can offer Half-day); only
+  // admin + god (attendance.config.manage) may change it.
+  'attendance-handler.getConfig': MARK,
+  'attendance-handler.updateConfig': ATTENDANCE_CONFIG_MANAGE,
   'attendance-handler.getRoster': MARK,
   'attendance-handler.getRegister': MARK,
   'attendance-handler.getStudentAttendance': MARK,
