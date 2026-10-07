@@ -37,7 +37,7 @@ class ClubPlanService {
     if (q.from) { params.push(q.from); where.push(`p.plan_date >= $${params.length}`); }
     if (q.to) { params.push(q.to); where.push(`p.plan_date <= $${params.length}`); }
     return DB.query(
-      `select p.uuid, p.plan_date, p.title, p.participation_scope, p.coverage, p.status, p.row_version,
+      `select p.uuid, p.plan_date::text as plan_date, p.title, p.participation_scope, p.coverage, p.status, p.row_version,
               (select count(*) from club_plan_assignment a where a.plan_id = p.uuid and a.state = 'scheduled') as assignment_count
          from club_plan p
         where ${where.join(" and ")}
@@ -48,7 +48,7 @@ class ClubPlanService {
 
   async getPlan(schoolId: string, planId: string): Promise<any | null> {
     const p = await DB.query(
-      singleLineString`select uuid, academic_year_id, plan_date, title, participation_scope, coverage,
+      singleLineString`select uuid, academic_year_id, plan_date::text as plan_date, title, participation_scope, coverage,
           status, row_version, note, published_at, closed_at, cancel_reason
         from club_plan where uuid = $1 and school_id = $2`,
       [planId, schoolId],
@@ -455,7 +455,7 @@ class ClubPlanService {
   async myAssignments(schoolId: string, employeeId: string, date: string): Promise<any[]> {
     return DB.query(
       singleLineString`select a.uuid, a.slot_id, a.venue_name_snapshot, a.venue_ref,
-          p.plan_date, p.uuid as plan_id,
+          p.plan_date::text as plan_date, p.uuid as plan_id,
           s.start_time, s.end_time, s.label as slot_label,
           g.label_snapshot as group_label,
           v.title as activity_title, cl.name as club_name,

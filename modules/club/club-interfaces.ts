@@ -111,6 +111,7 @@ export interface ActivityDetail {
   clubId: string;
   availability: ActivityAvailability;
   currentVersion?: VersionView;
+  draftVersion?: VersionView;
   versions: VersionSummary[];
 }
 

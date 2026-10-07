@@ -85,12 +85,17 @@ class ClubActivityService {
     );
     const currentId = a[0].currentVersionId;
     const current = currentId ? await this._versionView(currentId) : undefined;
+    // A pending draft (e.g. after Create revision) that isn't the current version — surfaced so
+    // the UI can open/edit/release it instead of getting stuck on the approved "current".
+    const draftSummary = versions.find((v: any) => v.status === "draft" && v.uuid !== currentId);
+    const draftVersion = draftSummary ? await this._versionView(draftSummary.uuid) : undefined;
     return {
       uuid: a[0].uuid,
       activityCode: a[0].activityCode,
       clubId: a[0].clubId,
       availability: a[0].availability,
       currentVersion: current || undefined,
+      draftVersion: draftVersion || undefined,
       versions: versions.map((v: any) => ({
         uuid: v.uuid, versionNo: v.versionNo, status: v.status, title: v.title,
         approvedAt: v.approvedAt || null,
