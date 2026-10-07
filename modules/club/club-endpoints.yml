@@ -71,6 +71,15 @@
           method: get
           cors: true
 
+  list-grades:
+    handler: club-handler.listGrades
+    name: ${self:service}-list-grades
+    events:
+      - http:
+          path: grades
+          method: get
+          cors: true
+
   update-settings:
     handler: club-handler.updateSettings
     name: ${self:service}-update-settings

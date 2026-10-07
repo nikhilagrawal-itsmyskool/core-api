@@ -207,6 +207,20 @@ class ClubService {
     return this.getConfig(schoolId, clubId);
   }
 
+  // Distinct grade labels for THIS school, derived from its own class master (the grade is
+  // the part of the class name before the section, e.g. "VI-A" -> "VI", "NURSERY-A" ->
+  // "NURSERY"). Data-driven per school — no hardcoded grade ladder. Suggestions only; the
+  // UI stays free-entry.
+  async listGrades(schoolId: string): Promise<string[]> {
+    const rows = await DB.query(
+      singleLineString`select distinct split_part(name, '-', 1) as grade
+        from class where school_id = $1 and class_group_id is null and split_part(name, '-', 1) <> ''
+        order by 1`,
+      [schoolId],
+    );
+    return rows.map((r: any) => r.grade);
+  }
+
   // ── Programme settings (1 row per school) ─────────────────────────────────────
 
   async getSettings(schoolId: string): Promise<any> {

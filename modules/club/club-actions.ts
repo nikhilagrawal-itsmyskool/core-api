@@ -27,6 +27,7 @@ export const CLUB_ACTIONS: Record<string, string> = {
   "club-handler.updateConfig": CLUB_SETUP_MANAGE,
   "club-handler.getSettings": CLUB_SETUP_VIEW,
   "club-handler.updateSettings": CLUB_SETUP_MANAGE,
+  "club-handler.listGrades": CLUB_SETUP_VIEW,
 
   // Activity bank (identity + versioned content + materials)
   "club-activity-handler.listActivities": CLUB_ACTIVITY_VIEW,
