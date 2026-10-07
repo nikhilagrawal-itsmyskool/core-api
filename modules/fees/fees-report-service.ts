@@ -127,6 +127,7 @@ class FeesReportService {
         join student s on s.uuid = sc.student_id and s.school_id = sc.school_id
         left join class c on c.uuid = sc.class_id
         where sc.school_id = $1 and sc.academic_year_id = $2
+          and coalesce(s.exam_only, false) = false
           and not exists (
             select 1 from student_ledger_entry le
             where le.school_id = sc.school_id and le.student_id = sc.student_id
