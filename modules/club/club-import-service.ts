@@ -213,6 +213,18 @@ class ClubImportService {
     return { total: rows.length, added, updated, importId };
   }
 
+  // Fetch a previously-uploaded import file (the stored original) for download.
+  async getImportFile(schoolId: string, importId: string): Promise<{ fileName: string; dataUri: string } | null> {
+    const rows = await DB.query(
+      singleLineString`select file_storage_ref, file_name from club_import where uuid = $1 and school_id = $2`,
+      [importId, schoolId],
+    );
+    if (!rows.length || !rows[0].fileStorageRef) return null;
+    const stored = await fileStorageService.getWithData(rows[0].fileStorageRef, schoolId);
+    if (!stored) return null;
+    return { fileName: rows[0].fileName || stored.fileName || "import.xlsx", dataUri: `data:${stored.mimeType};base64,${stored.data}` };
+  }
+
   async listImports(schoolId: string, clubId: string): Promise<any[]> {
     return DB.query(
       singleLineString`select uuid, file_name, row_count, added_count, updated_count, status, created_at, createdby_userid

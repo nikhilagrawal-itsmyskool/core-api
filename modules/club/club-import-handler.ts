@@ -60,6 +60,22 @@ class ClubImportHandler {
     }
   };
 
+  // GET /club/imports/{importId}/file — download the stored original upload
+  public downloadImport = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const auth = await resolveSchool(event, callback);
+      if (!auth) return;
+      const importId = requireParam(event, "importId", callback);
+      if (!importId) return;
+      const out = await clubImportService.getImportFile(auth.schoolId, importId);
+      if (!out) return ResponseBuilder.notFound(ErrorCode.InvalidId, "Import file not found", callback);
+      ResponseBuilder.ok(out, callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
   // GET /club/clubs/{id}/imports
   public listImports = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
     ctx.callbackWaitsForEmptyEventLoop = false;
@@ -80,3 +96,4 @@ export const exportBank = guard(CLUB_ACTIONS["club-import-handler.exportBank"], 
 export const preview = guard(CLUB_ACTIONS["club-import-handler.preview"], h.preview);
 export const commit = guard(CLUB_ACTIONS["club-import-handler.commit"], h.commit);
 export const listImports = guard(CLUB_ACTIONS["club-import-handler.listImports"], h.listImports);
+export const downloadImport = guard(CLUB_ACTIONS["club-import-handler.downloadImport"], h.downloadImport);

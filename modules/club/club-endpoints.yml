@@ -406,6 +406,17 @@
           method: get
           cors: true
 
+  download-import:
+    handler: club-import-handler.downloadImport
+    name: ${self:service}-download-import
+    memorySize: 512
+    timeout: 20
+    events:
+      - http:
+          path: imports/{importId}/file
+          method: get
+          cors: true
+
   # ── Teacher PWA conduct surface ──────────────────────────────────────────────────
   me-plan:
     handler: club-me-handler.mySaturday

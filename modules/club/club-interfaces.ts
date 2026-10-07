@@ -103,6 +103,7 @@ export interface ActivityListItem {
   currentVersionId?: string;
   currentVersionNo?: number;
   currentVersionStatus?: VersionStatus;
+  pendingDraftNo?: number;
 }
 
 export interface ActivityDetail {

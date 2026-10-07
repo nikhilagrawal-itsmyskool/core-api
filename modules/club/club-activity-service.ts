@@ -50,7 +50,10 @@ class ClubActivityService {
     const rows = await DB.query(
       `select a.uuid, a.activity_code, a.club_id, a.availability, a.current_version_id,
               v.version_no as current_version_no, v.status as current_version_status,
-              v.title, v.grade_level, v.category
+              v.title, v.grade_level, v.category,
+              (select dv.version_no from club_activity_version dv
+                 where dv.activity_id = a.uuid and dv.status = 'draft' and dv.uuid <> a.current_version_id
+                 order by dv.version_no desc limit 1) as pending_draft_no
          from club_activity a
          left join club_activity_version v on v.uuid = a.current_version_id
         where ${where.join(" and ")}
@@ -68,6 +71,7 @@ class ClubActivityService {
       currentVersionId: r.currentVersionId || undefined,
       currentVersionNo: r.currentVersionNo ?? undefined,
       currentVersionStatus: r.currentVersionStatus || undefined,
+      pendingDraftNo: r.pendingDraftNo ?? undefined,
     }));
   }
 

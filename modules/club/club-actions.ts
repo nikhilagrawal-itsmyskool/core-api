@@ -44,6 +44,7 @@ export const CLUB_ACTIONS: Record<string, string> = {
   "club-import-handler.preview": CLUB_ACTIVITY_MANAGE,
   "club-import-handler.commit": CLUB_ACTIVITY_MANAGE,
   "club-import-handler.listImports": CLUB_ACTIVITY_VIEW,
+  "club-import-handler.downloadImport": CLUB_ACTIVITY_VIEW,
 
   // Review queue (activity improvement)
   "club-activity-handler.listReviews": CLUB_ACTIVITY_REVIEW,
