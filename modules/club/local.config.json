@@ -1,0 +1,5 @@
+{
+  "httpPort": 3059,
+  "lambdaPort": 3060,
+  "prefix": "club"
+}

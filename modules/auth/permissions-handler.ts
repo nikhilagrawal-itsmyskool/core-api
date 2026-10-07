@@ -44,6 +44,26 @@ const CATALOGS: Record<string, Catalog> = {
       { action: ACTIONS.EXAM_DUES_OVERRIDE, label: 'Admit-card dues override & threshold' },
     ],
   },
+  club: {
+    module: 'club',
+    roles: [
+      { role: 'admin', label: 'Admin' },
+      { role: 'club-incharge', label: 'Club In-charge' },
+      { role: 'teacher', label: 'Teacher' },
+    ],
+    actions: [
+      { action: ACTIONS.CLUB_SETUP_VIEW, label: 'View clubs & programme settings' },
+      { action: ACTIONS.CLUB_SETUP_MANAGE, label: 'Manage clubs, config & programme settings' },
+      { action: ACTIONS.CLUB_ACTIVITY_VIEW, label: 'View the activity bank' },
+      { action: ACTIONS.CLUB_ACTIVITY_MANAGE, label: 'Edit activity content, materials & import' },
+      { action: ACTIONS.CLUB_ACTIVITY_APPROVE, label: 'Release / suspend / archive activities' },
+      { action: ACTIONS.CLUB_ACTIVITY_REVIEW, label: 'Work the activity review queue' },
+      { action: ACTIONS.CLUB_PLAN_VIEW, label: 'View the weekly plan board' },
+      { action: ACTIONS.CLUB_PLAN_MANAGE, label: 'Build & edit a draft weekly plan' },
+      { action: ACTIONS.CLUB_PLAN_PUBLISH, label: 'Publish · after-publish change · close/reopen' },
+      { action: ACTIONS.CLUB_PLAN_CONDUCT, label: 'Conduct guide + quick closure (teacher)' },
+    ],
+  },
 };
 
 const DEFAULT_MODULE = 'examination';

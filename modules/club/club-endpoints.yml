@@ -1,0 +1,437 @@
+  # Health check
+  health:
+    handler: health-handler.health
+    events:
+      - http:
+          path: health
+          method: get
+          cors: true
+
+  # ── Clubs ──────────────────────────────────────────────────────────────────
+  list-clubs:
+    handler: club-handler.listClubs
+    name: ${self:service}-list-clubs
+    events:
+      - http:
+          path: clubs
+          method: get
+          cors: true
+
+  get-club:
+    handler: club-handler.getClub
+    name: ${self:service}-get-club
+    events:
+      - http:
+          path: clubs/{id}
+          method: get
+          cors: true
+
+  create-club:
+    handler: club-handler.createClub
+    name: ${self:service}-create-club
+    events:
+      - http:
+          path: clubs
+          method: post
+          cors: true
+
+  update-club:
+    handler: club-handler.updateClub
+    name: ${self:service}-update-club
+    events:
+      - http:
+          path: clubs/{id}
+          method: put
+          cors: true
+
+  get-club-config:
+    handler: club-handler.getConfig
+    name: ${self:service}-get-club-config
+    events:
+      - http:
+          path: clubs/{id}/config
+          method: get
+          cors: true
+
+  update-club-config:
+    handler: club-handler.updateConfig
+    name: ${self:service}-update-club-config
+    events:
+      - http:
+          path: clubs/{id}/config
+          method: put
+          cors: true
+
+  get-settings:
+    handler: club-handler.getSettings
+    name: ${self:service}-get-settings
+    events:
+      - http:
+          path: settings
+          method: get
+          cors: true
+
+  update-settings:
+    handler: club-handler.updateSettings
+    name: ${self:service}-update-settings
+    events:
+      - http:
+          path: settings
+          method: put
+          cors: true
+
+  # ── Activity bank ────────────────────────────────────────────────────────────
+  list-activities:
+    handler: club-activity-handler.listActivities
+    name: ${self:service}-list-activities
+    memorySize: 512
+    timeout: 20
+    events:
+      - http:
+          path: activities
+          method: get
+          cors: true
+
+  get-activity:
+    handler: club-activity-handler.getActivity
+    name: ${self:service}-get-activity
+    events:
+      - http:
+          path: activities/{id}
+          method: get
+          cors: true
+
+  create-activity:
+    handler: club-activity-handler.createActivity
+    name: ${self:service}-create-activity
+    events:
+      - http:
+          path: activities
+          method: post
+          cors: true
+
+  update-activity-draft:
+    handler: club-activity-handler.updateDraft
+    name: ${self:service}-update-activity-draft
+    events:
+      - http:
+          path: activities/{id}/draft
+          method: put
+          cors: true
+
+  revise-activity:
+    handler: club-activity-handler.createRevision
+    name: ${self:service}-revise-activity
+    events:
+      - http:
+          path: activities/{id}/revise
+          method: post
+          cors: true
+
+  replace-activity-materials:
+    handler: club-activity-handler.replaceMaterials
+    name: ${self:service}-replace-activity-materials
+    events:
+      - http:
+          path: activities/{id}/materials
+          method: put
+          cors: true
+
+  approve-activity:
+    handler: club-activity-handler.approve
+    name: ${self:service}-approve-activity
+    events:
+      - http:
+          path: activities/{id}/approve
+          method: post
+          cors: true
+
+  set-activity-availability:
+    handler: club-activity-handler.setAvailability
+    name: ${self:service}-set-activity-availability
+    events:
+      - http:
+          path: activities/{id}/availability
+          method: post
+          cors: true
+
+  flag-activity:
+    handler: club-activity-handler.flagReview
+    name: ${self:service}-flag-activity
+    events:
+      - http:
+          path: activities/{id}/flag
+          method: post
+          cors: true
+
+  # ── Review queue ─────────────────────────────────────────────────────────────
+  list-reviews:
+    handler: club-activity-handler.listReviews
+    name: ${self:service}-list-reviews
+    events:
+      - http:
+          path: reviews
+          method: get
+          cors: true
+
+  decide-review:
+    handler: club-activity-handler.decideReview
+    name: ${self:service}-decide-review
+    events:
+      - http:
+          path: reviews/{id}/decide
+          method: post
+          cors: true
+
+  # ── Planning board ─────────────────────────────────────────────────────────────
+  list-plans:
+    handler: club-plan-handler.listPlans
+    name: ${self:service}-list-plans
+    events:
+      - http:
+          path: plans
+          method: get
+          cors: true
+
+  get-plan:
+    handler: club-plan-handler.getPlan
+    name: ${self:service}-get-plan
+    memorySize: 512
+    timeout: 20
+    events:
+      - http:
+          path: plans/{id}
+          method: get
+          cors: true
+
+  validate-plan:
+    handler: club-plan-handler.validate
+    name: ${self:service}-validate-plan
+    memorySize: 512
+    timeout: 20
+    events:
+      - http:
+          path: plans/{id}/validate
+          method: get
+          cors: true
+
+  create-plan:
+    handler: club-plan-handler.createPlan
+    name: ${self:service}-create-plan
+    events:
+      - http:
+          path: plans
+          method: post
+          cors: true
+
+  update-plan:
+    handler: club-plan-handler.updatePlan
+    name: ${self:service}-update-plan
+    events:
+      - http:
+          path: plans/{id}
+          method: put
+          cors: true
+
+  cancel-plan:
+    handler: club-plan-handler.cancelPlan
+    name: ${self:service}-cancel-plan
+    events:
+      - http:
+          path: plans/{id}/cancel
+          method: post
+          cors: true
+
+  add-slot:
+    handler: club-plan-handler.addSlot
+    name: ${self:service}-add-slot
+    events:
+      - http:
+          path: plans/{id}/slots
+          method: post
+          cors: true
+
+  remove-slot:
+    handler: club-plan-handler.removeSlot
+    name: ${self:service}-remove-slot
+    events:
+      - http:
+          path: plans/{id}/slots/{slotId}
+          method: delete
+          cors: true
+
+  add-group:
+    handler: club-plan-handler.addGroup
+    name: ${self:service}-add-group
+    events:
+      - http:
+          path: plans/{id}/groups
+          method: post
+          cors: true
+
+  remove-group:
+    handler: club-plan-handler.removeGroup
+    name: ${self:service}-remove-group
+    events:
+      - http:
+          path: plans/{id}/groups/{groupId}
+          method: delete
+          cors: true
+
+  generate-groups:
+    handler: club-plan-handler.generateGroups
+    name: ${self:service}-generate-groups
+    memorySize: 512
+    timeout: 20
+    events:
+      - http:
+          path: plans/{id}/groups/generate
+          method: post
+          cors: true
+
+  save-assignment:
+    handler: club-plan-handler.saveAssignment
+    name: ${self:service}-save-assignment
+    events:
+      - http:
+          path: plans/{id}/assignments
+          method: post
+          cors: true
+
+  change-assignment:
+    handler: club-plan-handler.changeAssignment
+    name: ${self:service}-change-assignment
+    events:
+      - http:
+          path: plans/{id}/assignments/change
+          method: post
+          cors: true
+
+  cancel-assignment:
+    handler: club-plan-handler.cancelAssignment
+    name: ${self:service}-cancel-assignment
+    events:
+      - http:
+          path: assignments/{assignmentId}/cancel
+          method: post
+          cors: true
+
+  admin-complete:
+    handler: club-plan-handler.adminComplete
+    name: ${self:service}-admin-complete
+    events:
+      - http:
+          path: assignments/{assignmentId}/complete
+          method: post
+          cors: true
+
+  publish-plan:
+    handler: club-plan-handler.publish
+    name: ${self:service}-publish-plan
+    memorySize: 512
+    timeout: 20
+    events:
+      - http:
+          path: plans/{id}/publish
+          method: post
+          cors: true
+
+  close-plan:
+    handler: club-plan-handler.close
+    name: ${self:service}-close-plan
+    events:
+      - http:
+          path: plans/{id}/close
+          method: post
+          cors: true
+
+  reopen-plan:
+    handler: club-plan-handler.reopen
+    name: ${self:service}-reopen-plan
+    events:
+      - http:
+          path: plans/{id}/reopen
+          method: post
+          cors: true
+
+  # ── Bulk import / export round-trip ──────────────────────────────────────────────
+  export-bank:
+    handler: club-import-handler.exportBank
+    name: ${self:service}-export-bank
+    memorySize: 1024
+    timeout: 29
+    events:
+      - http:
+          path: clubs/{id}/activities/export
+          method: get
+          cors: true
+
+  import-preview:
+    handler: club-import-handler.preview
+    name: ${self:service}-import-preview
+    memorySize: 1024
+    timeout: 29
+    events:
+      - http:
+          path: clubs/{id}/activities/import/preview
+          method: post
+          cors: true
+
+  import-commit:
+    handler: club-import-handler.commit
+    name: ${self:service}-import-commit
+    memorySize: 1024
+    timeout: 29
+    events:
+      - http:
+          path: clubs/{id}/activities/import
+          method: post
+          cors: true
+
+  list-imports:
+    handler: club-import-handler.listImports
+    name: ${self:service}-list-imports
+    events:
+      - http:
+          path: clubs/{id}/imports
+          method: get
+          cors: true
+
+  # ── Teacher PWA conduct surface ──────────────────────────────────────────────────
+  me-plan:
+    handler: club-me-handler.mySaturday
+    name: ${self:service}-me-plan
+    events:
+      - http:
+          path: me/plan
+          method: get
+          cors: true
+
+  me-guide:
+    handler: club-me-handler.guide
+    name: ${self:service}-me-guide
+    memorySize: 512
+    timeout: 20
+    events:
+      - http:
+          path: me/assignments/{id}/guide
+          method: get
+          cors: true
+
+  me-close:
+    handler: club-me-handler.close
+    name: ${self:service}-me-close
+    events:
+      - http:
+          path: me/assignments/{id}/close
+          method: post
+          cors: true
+
+  me-report-safety:
+    handler: club-me-handler.reportSafety
+    name: ${self:service}-me-report-safety
+    events:
+      - http:
+          path: me/assignments/{id}/report-safety
+          method: post
+          cors: true

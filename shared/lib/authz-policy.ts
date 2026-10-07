@@ -113,6 +113,24 @@ export const ACTIONS = {
   FEEDBACK_REVIEW: 'feedback.review',
   // Director's Cockpit / School Pulse landing (director + god). Read-only heartbeat.
   COCKPIT_VIEW: 'cockpit.view',
+  // Clubs & Activities (per-school display name e.g. "Saturday Activities"). A day-neutral
+  // engine: a club's versioned activity bank, the weekly plan board, and quick closure. Strict
+  // `module.resource.action` across THREE resources (setup | activity | plan); NO `club.*`
+  // wildcard anywhere, so every leaf is independently grantable and god-only leaves aren't
+  // swallowed. Locked default: everything is god-first; god opens the rest up via the grid.
+  //   setup.*     = clubs, config, enabled blocks & programme settings
+  //   activity.*  = the versioned bank (view / author content / release / review queue)
+  //   plan.*      = the weekly board (view / build draft / publish+change+close / teacher conduct)
+  CLUB_SETUP_VIEW: 'club.setup.view',
+  CLUB_SETUP_MANAGE: 'club.setup.manage',
+  CLUB_ACTIVITY_VIEW: 'club.activity.view',
+  CLUB_ACTIVITY_MANAGE: 'club.activity.manage',
+  CLUB_ACTIVITY_APPROVE: 'club.activity.approve',
+  CLUB_ACTIVITY_REVIEW: 'club.activity.review',
+  CLUB_PLAN_VIEW: 'club.plan.view',
+  CLUB_PLAN_MANAGE: 'club.plan.manage',
+  CLUB_PLAN_PUBLISH: 'club.plan.publish',
+  CLUB_PLAN_CONDUCT: 'club.plan.conduct',
 } as const;
 
 // Role -> allowed actions. Mirror of policy.js ROLE_PERMISSIONS (order preserved).
@@ -191,9 +209,14 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
     'feedback.view',
     'feedback.record',
     'feedback.respond',
+    'club.plan.conduct', // Run own club assignment (guide) + quick closure on the PWA
   ],
   // Class teacher: additive to `teacher` — may MARK attendance and POST homework.
   'class-teacher': ['attendance.mark', 'homework.post'],
+  // Club in-charge: READ-ONLY by default across the three club resources (see clubs, the
+  // activity bank, and the plan board). Authoring/approve/review/planning are god-first;
+  // god grants this role more via the Permissions grid as each school decides.
+  'club-incharge': ['club.setup.view', 'club.activity.view', 'club.plan.view'],
   // Each in-charge === admin, but scoped to its own module.
   'medical-incharge': ['medical.*'],
   'lab-incharge': ['lab.*'],
