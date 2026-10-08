@@ -258,6 +258,12 @@ class FeesReportService {
     const currentAyId = q?.academicYearId || null;
     const limit = Math.min(Math.max(Number(q?.limit) || 5000, 1), 5000);
 
+    // optional single-student filter — lets the Dues-report slider reuse this engine for one student
+    // (same shape as a report row) instead of scanning the whole school.
+    const params: any[] = [schoolId, bkt.endOfMonth];
+    let chFilter = '', pdFilter = '';
+    if (q?.studentId) { params.push(q.studentId); chFilter = ` and e.student_id = $3`; pdFilter = ` and student_id = $3`; }
+
     const perYear: any[] = await DB.query(
       singleLineString`
         with charges as (
@@ -265,11 +271,11 @@ class FeesReportService {
             (fc.due_date is null or fc.due_date <= $2) as due_now
           from student_ledger_entry e
           left join fee_cycle fc on fc.uuid = e.cycle_id and fc.status = 'active'
-          where e.school_id = $1 and e.kind = 'charge' and e.status = 'active' and e.student_id is not null
+          where e.school_id = $1 and e.kind = 'charge' and e.status = 'active' and e.student_id is not null${chFilter}
         ),
         paid as (
           select settles_entry_id, sum(credit) as c from student_ledger_entry
-          where school_id = $1 and status = 'active' and settles_entry_id is not null group by settles_entry_id
+          where school_id = $1 and status = 'active' and settles_entry_id is not null${pdFilter} group by settles_entry_id
         ),
         per_charge as (
           select c.student_id, c.academic_year_id, greatest(0, c.debit - coalesce(p.c, 0)) as remaining, c.due_now
@@ -278,7 +284,7 @@ class FeesReportService {
         select student_id, academic_year_id, coalesce(sum(remaining) filter (where due_now), 0) as due_now
         from per_charge group by student_id, academic_year_id
         having coalesce(sum(remaining) filter (where due_now), 0) > 0.5`,
-      [schoolId, bkt.endOfMonth]
+      params
     );
 
     const byStudent: Record<string, any> = {};
