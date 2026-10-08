@@ -120,15 +120,35 @@ class ClubPlanService {
     const plan = await this._plan(schoolId, planId);
     if (!plan) return null;
     this._assertRowVersion(plan, body.rowVersion);
-    if (plan.status !== "draft") throw new BusinessErrorResult(ErrorCode.BusinessError, "Only a draft plan can be edited here");
+    if (!["draft", "published"].includes(plan.status)) {
+      throw new BusinessErrorResult(ErrorCode.BusinessError, "This plan can no longer be edited");
+    }
+    // Scope/coverage are structural → draft-only. Title can be renamed any time.
+    const changingStructure = body.participationScope != null || body.coverage != null;
+    if (changingStructure && plan.status !== "draft") {
+      throw new BusinessErrorResult(ErrorCode.BusinessError, "Scope / coverage can only change while the plan is a draft");
+    }
+    // Date change: draft only + not already taken by another plan that date.
+    let newDate: string | null = null;
+    if (body.planDate && body.planDate !== plan.planDate) {
+      if (plan.status !== "draft") throw new BusinessErrorResult(ErrorCode.BusinessError, "The date can't change after a plan is published");
+      if (!DATE_RE.test(body.planDate)) throw new BusinessErrorResult(ErrorCode.InvalidInput, "planDate must be YYYY-MM-DD");
+      const dup = await DB.query(
+        singleLineString`select uuid from club_plan where school_id = $1 and academic_year_id = $2 and plan_date = $3 and status <> 'cancelled' and uuid <> $4`,
+        [schoolId, plan.academicYearId, body.planDate, planId],
+      );
+      if (dup.length) throw new BusinessErrorResult(ErrorCode.BusinessError, "A plan already exists for that date");
+      newDate = body.planDate;
+    }
     await DB.query(
       singleLineString`update club_plan set
           title = coalesce($3, title),
           participation_scope = coalesce($4, participation_scope),
           coverage = coalesce($5, coverage),
-          row_version = row_version + 1, updatedby_userid = $6, updated_at = now()
+          plan_date = coalesce($6, plan_date),
+          row_version = row_version + 1, updatedby_userid = $7, updated_at = now()
         where uuid = $1 and school_id = $2`,
-      [planId, schoolId, body.title ?? null, body.participationScope ?? null, body.coverage ?? null, userId],
+      [planId, schoolId, body.title ?? null, body.participationScope ?? null, body.coverage ?? null, newDate, userId],
     );
     return this.getPlan(schoolId, planId);
   }
@@ -188,23 +208,27 @@ class ClubPlanService {
   async generateGroups(schoolId: string, planId: string, _userId: string): Promise<any> {
     const plan = await this._requireDraft(schoolId, planId);
     const classes = await DB.query(
-      singleLineString`select c.uuid, c.name,
+      singleLineString`select c.uuid, c.name, c.seq,
           (select count(*) from student_class sc where sc.class_id = c.uuid and sc.academic_year_id = $2 and sc.status = 'active') as strength
         from class c
         where c.school_id = $1 and c.class_group_id is null and c.base_class_id is null
-        order by c.name`,
+        order by c.seq asc nulls last, c.name`,
       [schoolId, plan.academicYearId],
     );
+    // Stamp the plan-group seq from the class seq so the board lists classes in school order
+    // (Nursery, LKG, …, XII) — not alphabetically — and keeps all class groups together.
+    let idx = 0;
     for (const c of classes) {
+      idx++;
       const exists = await DB.query(
         singleLineString`select uuid from club_plan_group where plan_id = $1 and source_type = 'class' and source_ref = $2`,
         [planId, c.uuid],
       );
       if (exists.length) continue;
       await DB.query(
-        singleLineString`insert into club_plan_group (uuid, school_id, plan_id, source_type, source_ref, label_snapshot, strength_snapshot)
-          values ($1,$2,$3,'class',$4,$5,$6)`,
-        [generateShortUuid(12), schoolId, planId, c.uuid, c.name, c.strength != null ? Number(c.strength) : null],
+        singleLineString`insert into club_plan_group (uuid, school_id, plan_id, source_type, source_ref, label_snapshot, strength_snapshot, seq)
+          values ($1,$2,$3,'class',$4,$5,$6,$7)`,
+        [generateShortUuid(12), schoolId, planId, c.uuid, c.name, c.strength != null ? Number(c.strength) : null, c.seq != null ? Number(c.seq) : idx],
       );
     }
     return this.getPlan(schoolId, planId);
@@ -221,16 +245,20 @@ class ClubPlanService {
         from house h where h.school_id = $1 and h.status = 'active' order by h.name`,
       [schoolId, plan.academicYearId],
     );
+    // House groups sit in a seq block (900000+) after all class groups, so houses stay
+    // together and never interleave with classes on the board.
+    let hidx = 0;
     for (const hs of houses) {
+      hidx++;
       const exists = await DB.query(
         singleLineString`select uuid from club_plan_group where plan_id = $1 and source_type = 'house' and source_ref = $2`,
         [planId, hs.uuid],
       );
       if (exists.length) continue;
       await DB.query(
-        singleLineString`insert into club_plan_group (uuid, school_id, plan_id, source_type, source_ref, label_snapshot, strength_snapshot)
-          values ($1,$2,$3,'house',$4,$5,$6)`,
-        [generateShortUuid(12), schoolId, planId, hs.uuid, hs.name, hs.strength != null ? Number(hs.strength) : null],
+        singleLineString`insert into club_plan_group (uuid, school_id, plan_id, source_type, source_ref, label_snapshot, strength_snapshot, seq)
+          values ($1,$2,$3,'house',$4,$5,$6,$7)`,
+        [generateShortUuid(12), schoolId, planId, hs.uuid, hs.name, hs.strength != null ? Number(hs.strength) : null, 900000 + hidx],
       );
     }
     return this.getPlan(schoolId, planId);
@@ -242,7 +270,7 @@ class ClubPlanService {
       singleLineString`select c.uuid, c.name,
           (select count(*) from student_class sc where sc.class_id = c.uuid and sc.academic_year_id = $2 and sc.status = 'active') as strength
         from class c where c.school_id = $1 and c.class_group_id is null and c.base_class_id is null
-        order by c.name`,
+        order by c.seq asc nulls last, c.name`,
       [schoolId, ay],
     );
   }
@@ -591,7 +619,7 @@ class ClubPlanService {
   // ── private ─────────────────────────────────────────────────────────────────
   private async _plan(schoolId: string, planId: string): Promise<any | null> {
     const r = await DB.query(
-      singleLineString`select uuid, academic_year_id, status, row_version from club_plan where uuid = $1 and school_id = $2`,
+      singleLineString`select uuid, academic_year_id, status, row_version, plan_date::text as plan_date from club_plan where uuid = $1 and school_id = $2`,
       [planId, schoolId],
     );
     return r.length ? r[0] : null;

@@ -212,10 +212,13 @@ class ClubService {
   // "NURSERY"). Data-driven per school — no hardcoded grade ladder. Suggestions only; the
   // UI stays free-entry.
   async listGrades(schoolId: string): Promise<string[]> {
+    // Order grades by the minimum class seq so they follow school order (Nursery, LKG, …, XII),
+    // not alphabetical. seq is the canonical class ordering column.
     const rows = await DB.query(
-      singleLineString`select distinct split_part(name, '-', 1) as grade
+      singleLineString`select split_part(name, '-', 1) as grade, min(seq) as s
         from class where school_id = $1 and class_group_id is null and split_part(name, '-', 1) <> ''
-        order by 1`,
+        group by split_part(name, '-', 1)
+        order by s asc nulls last, grade`,
       [schoolId],
     );
     return rows.map((r: any) => r.grade);

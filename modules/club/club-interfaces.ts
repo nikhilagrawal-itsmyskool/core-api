@@ -141,6 +141,7 @@ export interface CreatePlanRequest {
 }
 export interface UpdatePlanRequest {
   title?: string;
+  planDate?: string; // YYYY-MM-DD (draft only)
   participationScope?: "whole" | "grades" | "groups";
   coverage?: "complete" | "selective";
   rowVersion: number; // optimistic lock
