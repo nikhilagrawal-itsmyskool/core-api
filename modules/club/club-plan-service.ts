@@ -56,7 +56,7 @@ class ClubPlanService {
     if (!p.length) return null;
     const [slots, groups, assignments] = await Promise.all([
       DB.query(singleLineString`select uuid, start_time, end_time, label, seq from club_plan_slot where plan_id = $1 order by seq nulls last, start_time`, [planId]),
-      DB.query(singleLineString`select uuid, source_type, source_ref, label_snapshot, strength_snapshot, seq from club_plan_group where plan_id = $1 order by seq nulls last, label_snapshot`, [planId]),
+      DB.query(singleLineString`select uuid, source_type, source_ref, label_snapshot, strength_snapshot, seq, saved_group_id, edited from club_plan_group where plan_id = $1 order by seq nulls last, label_snapshot`, [planId]),
       DB.query(
         singleLineString`select a.uuid, a.slot_id, a.group_id, a.activity_version_id, a.club_id, a.teacher_employee_id,
             a.venue_ref, a.venue_name_snapshot, a.state, a.cancel_reason,

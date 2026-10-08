@@ -4,6 +4,7 @@ import { ErrorCode } from "../../shared/lib/error-codes";
 import { guard } from "../auth/authz";
 import { resolveSchool, parseBody, requireParam } from "./handler-util";
 import { clubPlanService } from "./club-plan-service";
+import { clubGroupService } from "./club-group-service";
 import { getCurrentAcademicYearId } from "./club-common";
 import { CLUB_ACTIONS } from "./club-actions";
 import {
@@ -143,6 +144,23 @@ class ClubPlanHandler {
     const body = JSON.parse(event.body || "{}");
     return clubPlanService.cancelPlan(schoolId, event.pathParameters?.id!, body.reason || "", userId);
   });
+
+  // ── Reusable saved groups ──────────────────────────────────────────────────────
+  listSaved = run(async (schoolId) => clubGroupService.listSaved(schoolId));
+  deleteSaved = run(async (schoolId, userId, event) => {
+    await clubGroupService.deleteSaved(schoolId, event.pathParameters?.id!, userId);
+    return { ok: true };
+  });
+  promoteGroup = run(async (schoolId, userId, event) => clubGroupService.promotePlanGroup(schoolId, event.pathParameters?.id!, userId));
+  addSaved = run(async (schoolId, userId, event) => {
+    const b = JSON.parse(event.body || "{}");
+    return clubGroupService.addSavedToPlan(schoolId, event.pathParameters?.id!, b.savedGroupId, userId);
+  });
+  editPlanGroup = run(async (schoolId, userId, event) => {
+    const b = JSON.parse(event.body || "{}");
+    return clubGroupService.editPlanGroup(schoolId, event.pathParameters?.id!, b, userId);
+  });
+  pushSaved = run(async (schoolId, userId, event) => clubGroupService.pushToSaved(schoolId, event.pathParameters?.id!, userId));
 }
 
 const h = new ClubPlanHandler();
@@ -168,3 +186,9 @@ export const publish = guard(A["club-plan-handler.publish"], h.publish);
 export const close = guard(A["club-plan-handler.close"], h.close);
 export const reopen = guard(A["club-plan-handler.reopen"], h.reopen);
 export const cancelPlan = guard(A["club-plan-handler.cancelPlan"], h.cancelPlan);
+export const listSaved = guard(A["club-plan-handler.listSaved"], h.listSaved);
+export const deleteSaved = guard(A["club-plan-handler.deleteSaved"], h.deleteSaved);
+export const promoteGroup = guard(A["club-plan-handler.promoteGroup"], h.promoteGroup);
+export const addSaved = guard(A["club-plan-handler.addSaved"], h.addSaved);
+export const editPlanGroup = guard(A["club-plan-handler.editPlanGroup"], h.editPlanGroup);
+export const pushSaved = guard(A["club-plan-handler.pushSaved"], h.pushSaved);

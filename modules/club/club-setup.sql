@@ -258,6 +258,37 @@ create table if not exists club_plan_group_member (
 );
 create index if not exists idx_club_plan_group_member_group on club_plan_group_member(plan_group_id);
 
+-- club_group / club_group_member: SCHOOL-LEVEL reusable "saved groups" (independent of any
+-- plan). A plan group can be promoted into one, and plans can add from saved groups.
+create table if not exists club_group (
+    uuid varchar(12) primary key,
+    school_id varchar(12) not null,
+    name varchar(128) not null,
+    source_type varchar(16) check (source_type in ('class', 'house', 'club', 'mixed', 'selected')),
+    source_ref varchar(12),
+    strength_snapshot integer,
+    status varchar(16) not null check (status in ('active', 'deleted')),
+    createdby_userid varchar(12),
+    created_at timestamp(0),
+    updatedby_userid varchar(12),
+    updated_at timestamp(0)
+);
+create index if not exists idx_club_group_school on club_group(school_id, status);
+
+create table if not exists club_group_member (
+    uuid varchar(12) primary key,
+    school_id varchar(12) not null,
+    group_id varchar(12) not null,
+    student_id varchar(12) not null,
+    student_name_snapshot varchar(128)
+);
+create index if not exists idx_club_group_member_group on club_group_member(group_id);
+
+-- A plan group may be linked to a saved group (saved_group_id) and flagged `edited` once it
+-- diverges from its source/saved snapshot.
+alter table club_plan_group add column if not exists saved_group_id varchar(12);
+alter table club_plan_group add column if not exists edited boolean;
+
 -- club_plan_assignment: the operational transaction — group + activity version + teacher +
 -- venue + slot. An individual assignment can be Cancelled with reason, history retained.
 create table if not exists club_plan_assignment (

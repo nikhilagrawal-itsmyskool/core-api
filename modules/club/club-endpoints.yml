@@ -394,6 +394,61 @@
           method: post
           cors: true
 
+  # ── Reusable saved groups ──────────────────────────────────────────────────────
+  list-saved-groups:
+    handler: club-plan-handler.listSaved
+    name: ${self:service}-list-saved-groups
+    events:
+      - http:
+          path: saved-groups
+          method: get
+          cors: true
+
+  delete-saved-group:
+    handler: club-plan-handler.deleteSaved
+    name: ${self:service}-delete-saved-group
+    events:
+      - http:
+          path: saved-groups/{id}
+          method: delete
+          cors: true
+
+  promote-group:
+    handler: club-plan-handler.promoteGroup
+    name: ${self:service}-promote-group
+    events:
+      - http:
+          path: plan-groups/{id}/promote
+          method: post
+          cors: true
+
+  edit-plan-group:
+    handler: club-plan-handler.editPlanGroup
+    name: ${self:service}-edit-plan-group
+    events:
+      - http:
+          path: plan-groups/{id}
+          method: put
+          cors: true
+
+  push-saved-group:
+    handler: club-plan-handler.pushSaved
+    name: ${self:service}-push-saved-group
+    events:
+      - http:
+          path: plan-groups/{id}/push-saved
+          method: post
+          cors: true
+
+  add-saved-to-plan:
+    handler: club-plan-handler.addSaved
+    name: ${self:service}-add-saved-to-plan
+    events:
+      - http:
+          path: plans/{id}/groups/add-saved
+          method: post
+          cors: true
+
   # ── Bulk import / export round-trip ──────────────────────────────────────────────
   export-bank:
     handler: club-import-handler.exportBank

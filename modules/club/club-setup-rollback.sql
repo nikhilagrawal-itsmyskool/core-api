@@ -1,6 +1,8 @@
 -- Club module rollback — drops all club_* tables. Does NOT touch authz_permission_override
 -- (central, owned by the auth module).
 drop table if exists club_audit;
+drop table if exists club_group_member;
+drop table if exists club_group;
 drop table if exists club_plan_completion;
 drop table if exists club_plan_assignment;
 drop table if exists club_plan_group_member;
