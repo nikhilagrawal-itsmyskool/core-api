@@ -4,6 +4,7 @@ import { ErrorCode } from "../../shared/lib/error-codes";
 import { guard } from "../auth/authz";
 import { resolveSchool, parseBody, requireParam } from "./handler-util";
 import { clubPlanService } from "./club-plan-service";
+import { getCurrentAcademicYearId } from "./club-common";
 import { CLUB_ACTIONS } from "./club-actions";
 import {
   AssignmentRequest,
@@ -84,6 +85,22 @@ class ClubPlanHandler {
     const id = event.pathParameters?.id!;
     return clubPlanService.generateGroups(schoolId, id, userId);
   });
+  generateHouses = run(async (schoolId, userId, event) => {
+    const id = event.pathParameters?.id!;
+    return clubPlanService.generateGroupsFromHouses(schoolId, id, userId);
+  });
+  // Custom-group picker data
+  listClasses = run(async (schoolId, _u, event) => {
+    const q = event.queryStringParameters || {};
+    const ay = q.academicYearId || (await getCurrentAcademicYearId(schoolId));
+    return ay ? clubPlanService.listPickerClasses(schoolId, ay) : [];
+  });
+  listClassStudents = run(async (schoolId, _u, event) => {
+    const classId = event.pathParameters?.classId!;
+    const q = event.queryStringParameters || {};
+    const ay = q.academicYearId || (await getCurrentAcademicYearId(schoolId));
+    return ay ? clubPlanService.listClassStudents(schoolId, classId, ay) : [];
+  });
 
   // Draft-only assignment editing (manage). Rejects a published plan (use change).
   saveAssignment = run(async (schoolId, userId, event) => {
@@ -140,6 +157,9 @@ export const removeSlot = guard(A["club-plan-handler.removeSlot"], h.removeSlot)
 export const addGroup = guard(A["club-plan-handler.addGroup"], h.addGroup);
 export const removeGroup = guard(A["club-plan-handler.removeGroup"], h.removeGroup);
 export const generateGroups = guard(A["club-plan-handler.generateGroups"], h.generateGroups);
+export const generateHouses = guard(A["club-plan-handler.generateHouses"], h.generateHouses);
+export const listClasses = guard(A["club-plan-handler.listClasses"], h.listClasses);
+export const listClassStudents = guard(A["club-plan-handler.listClassStudents"], h.listClassStudents);
 export const saveAssignment = guard(A["club-plan-handler.saveAssignment"], h.saveAssignment);
 export const changeAssignment = guard(A["club-plan-handler.changeAssignment"], h.changeAssignment);
 export const cancelAssignment = guard(A["club-plan-handler.cancelAssignment"], h.cancelAssignment);

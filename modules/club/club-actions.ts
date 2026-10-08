@@ -63,6 +63,9 @@ export const CLUB_ACTIONS: Record<string, string> = {
   "club-plan-handler.addGroup": CLUB_PLAN_MANAGE,
   "club-plan-handler.removeGroup": CLUB_PLAN_MANAGE,
   "club-plan-handler.generateGroups": CLUB_PLAN_MANAGE,
+  "club-plan-handler.generateHouses": CLUB_PLAN_MANAGE,
+  "club-plan-handler.listClasses": CLUB_PLAN_MANAGE,
+  "club-plan-handler.listClassStudents": CLUB_PLAN_MANAGE,
   "club-plan-handler.saveAssignment": CLUB_PLAN_MANAGE,
   // Planning board — publish & after-publish operations (publish)
   "club-plan-handler.publish": CLUB_PLAN_PUBLISH,

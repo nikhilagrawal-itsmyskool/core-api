@@ -97,6 +97,21 @@ class ClubPlanService {
         body.participationScope || "whole", body.coverage || "selective", userId,
       ],
     );
+    // Programme setting: auto-add the school's default slots so the planner doesn't re-enter
+    // them every week. Best-effort — a malformed setting never blocks plan creation.
+    try {
+      const setting = await DB.query(singleLineString`select default_slots from club_setting where school_id = $1`, [schoolId]);
+      const slots = (setting[0]?.defaultSlots as Array<{ start?: string; end?: string; label?: string }>) || [];
+      let seq = 1;
+      for (const s of slots) {
+        if (!s || !TIME_RE.test(s.start || "") || !TIME_RE.test(s.end || "")) continue;
+        await DB.query(
+          singleLineString`insert into club_plan_slot (uuid, school_id, plan_id, start_time, end_time, label, seq)
+            values ($1,$2,$3,$4,$5,$6,$7)`,
+          [generateShortUuid(12), schoolId, uuid, s.start, s.end, s.label || null, seq++],
+        );
+      }
+    } catch { /* default slots are a convenience; never fail plan creation on them */ }
     await writeAudit(schoolId, userId, "plan.create", "plan", uuid, { after: { planDate: body.planDate } });
     return this.getPlan(schoolId, uuid);
   }
@@ -193,6 +208,54 @@ class ClubPlanService {
       );
     }
     return this.getPlan(schoolId, planId);
+  }
+
+  // Generate one group per house, with a this-year student-count snapshot.
+  async generateGroupsFromHouses(schoolId: string, planId: string, _userId: string): Promise<any> {
+    const plan = await this._requireDraft(schoolId, planId);
+    const houses = await DB.query(
+      singleLineString`select h.uuid, h.name,
+          (select count(distinct sc.student_id) from student s
+             join student_class sc on sc.student_id = s.uuid and sc.academic_year_id = $2 and sc.status = 'active'
+             where s.house_id = h.uuid and s.status <> 'deleted') as strength
+        from house h where h.school_id = $1 and h.status = 'active' order by h.name`,
+      [schoolId, plan.academicYearId],
+    );
+    for (const hs of houses) {
+      const exists = await DB.query(
+        singleLineString`select uuid from club_plan_group where plan_id = $1 and source_type = 'house' and source_ref = $2`,
+        [planId, hs.uuid],
+      );
+      if (exists.length) continue;
+      await DB.query(
+        singleLineString`insert into club_plan_group (uuid, school_id, plan_id, source_type, source_ref, label_snapshot, strength_snapshot)
+          values ($1,$2,$3,'house',$4,$5,$6)`,
+        [generateShortUuid(12), schoolId, planId, hs.uuid, hs.name, hs.strength != null ? Number(hs.strength) : null],
+      );
+    }
+    return this.getPlan(schoolId, planId);
+  }
+
+  // Picker data for building a Custom group: base classes, and the students in a class (this year).
+  async listPickerClasses(schoolId: string, ay: string): Promise<any[]> {
+    return DB.query(
+      singleLineString`select c.uuid, c.name,
+          (select count(*) from student_class sc where sc.class_id = c.uuid and sc.academic_year_id = $2 and sc.status = 'active') as strength
+        from class c where c.school_id = $1 and c.class_group_id is null and c.base_class_id is null
+        order by c.name`,
+      [schoolId, ay],
+    );
+  }
+
+  async listClassStudents(schoolId: string, classId: string, ay: string): Promise<any[]> {
+    return DB.query(
+      singleLineString`select s.uuid, s.name, s.admission_number
+        from student s join student_class sc on sc.student_id = s.uuid
+        where sc.class_id = $1 and sc.academic_year_id = $3 and sc.status = 'active'
+          and s.school_id = $2 and s.status <> 'deleted'
+        order by s.name`,
+      [classId, schoolId, ay],
+    );
   }
 
   // ── Assignments ─────────────────────────────────────────────────────────────
@@ -332,6 +395,20 @@ class ClubPlanService {
     }
 
     if (!plan.slots.length) warnings.push({ severity: "warning", code: "no-slots", message: "The plan has no time slots yet" });
+
+    // Programme setting: soft warning if more than N activities run at once in a slot.
+    const setRows = await DB.query(singleLineString`select parallel_club_limit from club_setting where school_id = $1`, [schoolId]);
+    const limit = setRows[0]?.parallelClubLimit;
+    if (limit != null && Number(limit) > 0) {
+      const perSlot = new Map<string, number>();
+      for (const a of live) perSlot.set(a.slotId, (perSlot.get(a.slotId) || 0) + 1);
+      for (const s of plan.slots) {
+        const n = perSlot.get(s.uuid) || 0;
+        if (n > Number(limit)) {
+          warnings.push({ severity: "warning", code: "parallel-limit", message: `${n} activities run at ${s.label || s.startTime} — above the limit of ${limit}` });
+        }
+      }
+    }
     return { blockers, warnings, info, coverage, ready: blockers.length === 0 };
   }
 

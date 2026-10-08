@@ -298,6 +298,37 @@
           method: post
           cors: true
 
+  generate-houses:
+    handler: club-plan-handler.generateHouses
+    name: ${self:service}-generate-houses
+    memorySize: 512
+    timeout: 20
+    events:
+      - http:
+          path: plans/{id}/groups/generate-houses
+          method: post
+          cors: true
+
+  picker-classes:
+    handler: club-plan-handler.listClasses
+    name: ${self:service}-picker-classes
+    events:
+      - http:
+          path: picker/classes
+          method: get
+          cors: true
+
+  picker-class-students:
+    handler: club-plan-handler.listClassStudents
+    name: ${self:service}-picker-class-students
+    memorySize: 512
+    timeout: 20
+    events:
+      - http:
+          path: picker/classes/{classId}/students
+          method: get
+          cors: true
+
   save-assignment:
     handler: club-plan-handler.saveAssignment
     name: ${self:service}-save-assignment
