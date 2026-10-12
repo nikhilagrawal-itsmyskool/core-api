@@ -7,6 +7,9 @@ export interface EmployeeLogin {
   displayName: string;
   roles: string[];
   mustChangePassword: boolean;
+  // The login's current session version — stamped into the JWT so a later bump (Force re-login)
+  // invalidates this token. Defaults to 1 for rows predating the column.
+  sessionVersion: number;
 }
 
 export class EmployeeAuthService {
@@ -41,7 +44,7 @@ export class EmployeeAuthService {
   }
 
   public async validateUsernameAndPassword(username: string, password: string, schoolId: string): Promise<EmployeeLogin | null> {
-    const loginQuery = singleLineString`select uuid, password, display_name, must_change_password from employee_login where username = $1 and school_id = $2`;
+    const loginQuery = singleLineString`select uuid, password, display_name, must_change_password, session_version from employee_login where username = $1 and school_id = $2`;
     const loginResults = await DB.query(loginQuery, [username, schoolId]);
 
     if (loginResults.length === 0) {
@@ -56,6 +59,7 @@ export class EmployeeAuthService {
     const employeeUuid = loginResults[0].uuid;
     const displayName = loginResults[0].displayName;
     const mustChangePassword = loginResults[0].mustChangePassword === true;
+    const sessionVersion = Number(loginResults[0].sessionVersion) || 1;
 
     // The login links to the employee via username = family_unique_number.
     // Resolve the employee uuid (used as the actor id for audit columns) and
@@ -82,7 +86,8 @@ export class EmployeeAuthService {
       employeeId: employeeId,
       displayName: displayName,
       roles: roles,
-      mustChangePassword: mustChangePassword
+      mustChangePassword: mustChangePassword,
+      sessionVersion: sessionVersion
     };
   }
   public async changePassword(loginId: string, currentPassword: string, newPassword: string, schoolId: string): Promise<{ success: boolean; message: string }> {

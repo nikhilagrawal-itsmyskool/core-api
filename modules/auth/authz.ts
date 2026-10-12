@@ -2,6 +2,7 @@ import { ApiCallback, ApiContext, ApiEvent } from '../../shared/lib/api.interfac
 import { ErrorCode } from '../../shared/lib/error-codes';
 import { ResponseBuilder } from '../../shared/lib/response-builder';
 import { can } from '../../shared/lib/authz-policy';
+import { isSessionStale } from '../../shared/lib/session-version';
 import { extractAndVerifyToken } from './token-utils';
 import { getAuthorizationHeader, getSchoolCodeFromHeader } from './auth-utils';
 
@@ -19,6 +20,8 @@ export interface Caller {
   schoolId: string;
   schoolCode: string;
   roles: string[]; // [] for student tokens
+  sessionVersion?: number; // employee tokens: login version at mint time (force-relogin check)
+  synthetic?: boolean; // true for the local offline god-fallback (no real login/session)
   students?: Array<{ id: string; name: string }>;
 }
 
@@ -61,6 +64,7 @@ function offlineFallbackCaller(event: ApiEvent): Caller | null {
     schoolId: '',
     schoolCode: getSchoolCodeFromHeader(event) || '',
     roles,
+    synthetic: true,
     students: undefined,
   };
 }
@@ -78,6 +82,7 @@ export function getCaller(event: ApiEvent): Caller | null {
     schoolId: token.school_id,
     schoolCode: token.school_code,
     roles: Array.isArray(token.roles) ? token.roles : [],
+    sessionVersion: token.session_version,
     students: token.students,
   };
 }
@@ -102,6 +107,15 @@ export function requireAction(event: ApiEvent, action: string, callback: ApiCall
   }
   if (!sameSchool(event, caller)) {
     ResponseBuilder.forbidden(ErrorCode.MissingPermission, 'School mismatch', callback);
+    return null;
+  }
+  // Force-relogin kill-switch: reject an employee token whose session version is older than the
+  // login's current version (god bumped it via "Force re-login"). 401 so the portal's existing
+  // 401->/login interceptor signs them out; re-login mints a token with the new version + roles.
+  // Checked behind a per-Lambda cache, so it lands within ~60s. Skipped for service/student tokens
+  // and the local offline god-fallback (synthetic, no real login row to version against).
+  if (caller.type === 'employee' && !caller.synthetic && isSessionStale(caller.loginId, caller.sessionVersion)) {
+    ResponseBuilder.unauthorizedRequest(ErrorCode.GeneralError, 'Your session has ended. Please sign in again.', callback);
     return null;
   }
   // First-party machine trust: a 'service' token is minted only by our own Lambdas

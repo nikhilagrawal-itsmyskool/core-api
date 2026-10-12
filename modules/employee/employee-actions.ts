@@ -5,7 +5,7 @@ import { ACTIONS } from '../../shared/lib/authz-policy';
 // (create/update/delete, credential view + reset) = employee.manage; restore = the
 // god-only employee.restore. Contact unmasking on search/detail stays row-level
 // (revealEmployee in auth-utils) on top of the employee.view gate.
-const { EMPLOYEE_VIEW, EMPLOYEE_MANAGE, EMPLOYEE_RESTORE } = ACTIONS;
+const { EMPLOYEE_VIEW, EMPLOYEE_MANAGE, EMPLOYEE_RESTORE, EMPLOYEE_SESSION_RESET } = ACTIONS;
 
 export const EMPLOYEE_ACTIONS: Record<string, string> = {
   'employee-handler.search': EMPLOYEE_VIEW,
@@ -17,6 +17,8 @@ export const EMPLOYEE_ACTIONS: Record<string, string> = {
   'employee-handler.restore': EMPLOYEE_RESTORE,
   'employee-handler.getCredentials': EMPLOYEE_MANAGE,
   'employee-handler.resetPassword': EMPLOYEE_MANAGE,
+  // Force re-login is a stronger, god-only control (NOT part of employee.manage).
+  'employee-handler.forceReLogin': EMPLOYEE_SESSION_RESET,
 };
 
 export const EMPLOYEE_PUBLIC: string[] = ['health-handler.health'];

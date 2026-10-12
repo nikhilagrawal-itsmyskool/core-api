@@ -389,6 +389,32 @@ class EmployeeService {
     return true;
   }
 
+  // Force this employee to sign out and back in: bump the login's session_version so every live
+  // token they hold (which carries the old version) is rejected by the authz layer within ~60s.
+  // Used after a role change so the new roles take effect on the next login. Resolves the login the
+  // same way resetPassword does (employee.family_unique_number = employee_login.username).
+  public async forceReLogin(id: string, schoolId: string, userId: string): Promise<boolean> {
+    const employees = await DB.query(
+      singleLineString`select family_unique_number from employee where uuid = $1 and school_id = $2 and status = 'active'`,
+      [id, schoolId]
+    );
+    if (employees.length === 0) {
+      return false;
+    }
+    const familyNumber = employees[0].familyUniqueNumber;
+
+    const updated = await DB.query(
+      singleLineString`
+        update employee_login
+        set session_version = coalesce(session_version, 1) + 1, updatedby_userid = $1, updated_at = $2
+        where username = $3 and school_id = $4
+        returning uuid
+      `,
+      [userId, new Date(), familyNumber, schoolId]
+    );
+    return updated.length > 0;
+  }
+
   public async listRoles(schoolId: string): Promise<EmployeeRole[]> {
     const query = singleLineString`
       select uuid, code, name from role where school_id = $1 order by name

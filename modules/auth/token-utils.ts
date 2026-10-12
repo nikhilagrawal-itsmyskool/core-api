@@ -8,6 +8,9 @@ export interface DecodedToken {
   school_code: string;
   type: string;
   roles: string[];
+  // Employee tokens only: the login's session version at mint time. Compared against the DB
+  // value by the authz layer to force a re-login after a version bump. Absent on older tokens.
+  session_version?: number;
   // Family login only: the sibling id/name allowlist embedded at login time.
   // Absent on employee tokens.
   students?: Array<{ id: string; name: string }>;
@@ -37,6 +40,7 @@ export function extractAndVerifyToken(authorizationHeader: string | undefined): 
       school_code: decoded.school_code,
       type: decoded.type,
       roles: decoded.roles,
+      session_version: decoded.session_version,
       students: decoded.students,
     };
   } catch (err) {

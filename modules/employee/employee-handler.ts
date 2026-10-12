@@ -231,6 +231,30 @@ class EmployeeHandler {
     }
   };
 
+  public forceReLogin = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
+    _context.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const schoolId = await this.resolveSchoolId(event, callback);
+      if (!schoolId) return;
+
+      const id = event.pathParameters?.id;
+      if (!id) {
+        ResponseBuilder.badRequest(ErrorCode.MissingId, 'Employee ID is required', callback);
+        return;
+      }
+
+      const userId = this.getUserId(event);
+      const done = await employeeService.forceReLogin(id, schoolId, userId);
+      if (!done) {
+        ResponseBuilder.notFound(ErrorCode.InvalidId, 'No login found for this employee', callback);
+        return;
+      }
+      ResponseBuilder.ok({ message: 'The employee will be signed out within a minute and must log in again.' }, callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
   private async resolveSchoolId(event: ApiEvent, callback: ApiCallback): Promise<string | null> {
     const schoolCode = validateSchoolCodeHeader(event);
     const schoolId = await employeeService.getSchoolIdByCode(schoolCode);
@@ -256,3 +280,4 @@ export const remove = guard(EMPLOYEE_ACTIONS['employee-handler.remove'], handler
 export const restore = guard(EMPLOYEE_ACTIONS['employee-handler.restore'], handler.restore);
 export const getCredentials = guard(EMPLOYEE_ACTIONS['employee-handler.getCredentials'], handler.getCredentials);
 export const resetPassword = guard(EMPLOYEE_ACTIONS['employee-handler.resetPassword'], handler.resetPassword);
+export const forceReLogin = guard(EMPLOYEE_ACTIONS['employee-handler.forceReLogin'], handler.forceReLogin);

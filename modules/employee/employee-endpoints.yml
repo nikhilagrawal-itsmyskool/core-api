@@ -243,3 +243,12 @@
           path: '{id}/reset-password'
           method: post
           cors: true
+
+  force-employee-relogin:
+    handler: employee-handler.forceReLogin
+    name: ${self:service}-force-employee-relogin
+    events:
+      - http:
+          path: '{id}/force-logout'
+          method: post
+          cors: true

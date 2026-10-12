@@ -49,6 +49,10 @@ export const ACTIONS = {
   EMPLOYEE_VIEW: 'employee.view',
   EMPLOYEE_MANAGE: 'employee.manage',
   EMPLOYEE_RESTORE: 'employee.restore',
+  // Force an employee to sign out and back in (bumps employee_login.session_version). God-only by
+  // default — NOT under any wildcard admin holds and listed on no role, so only god ('*') has it;
+  // god can grant it to admin from the Permissions grid.
+  EMPLOYEE_SESSION_RESET: 'employee.session.reset',
   PURCHASE_LOG_EDIT: 'purchaseLog.edit',
   PURCHASE_LOG_RESTORE: 'purchaseLog.restore',
   STUDENT_VIEW: 'student.view',

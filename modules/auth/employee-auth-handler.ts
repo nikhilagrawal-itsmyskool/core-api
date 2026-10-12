@@ -72,6 +72,7 @@ class EmployeeAuthHandler {
         school_code: schoolCode,
         type: 'employee',
         roles: employeeLogin.roles,
+        session_version: employeeLogin.sessionVersion,
       };
       let token: string;
       if (deviceId) {
@@ -138,6 +139,9 @@ class EmployeeAuthHandler {
           school_code: decoded.school_code,
           type: 'employee',
           roles: decoded.roles || [],
+          // Carry the version forward unchanged: a device token that was minted before a bump
+          // stays stale and the authz layer will reject it; a device also has its own revoke path.
+          session_version: decoded.session_version,
           device_id: deviceId,
         },
         DEVICE_TOKEN_TTL,

@@ -96,3 +96,14 @@ create table if not exists authz_permission_override (
   reason varchar(255)
 );
 create unique index if not exists idx_authz_override_cell on authz_permission_override(role, action);
+
+-- Session version — the "force re-login" kill-switch for employee logins. Every employee JWT
+-- carries the login's session_version at mint time; the authz layer rejects (401) any token whose
+-- version is LOWER than the row here (checked behind a short per-Lambda cache, so ≤~60s to take
+-- effect). Bumping this number (from the portal's Force re-login) invalidates all of that person's
+-- live tokens without tracking JWTs or rotating the shared secret, and without touching anyone else.
+-- Backfill existing rows to 1 so every token minted after deploy carries a version >= 1; a pre-feature
+-- token (no version claim, treated as 0) is < 1 and gets re-login once, which is intended.
+-- employee_login is created in modules/db/db-create-1.sql; this is an additive, idempotent alter.
+alter table employee_login add column if not exists session_version integer;
+update employee_login set session_version = 1 where session_version is null;
