@@ -77,11 +77,14 @@ export const CLUB_ACTIONS: Record<string, string> = {
   "club-plan-handler.cancelPlan": CLUB_PLAN_PUBLISH,
   // Reusable saved groups
   "club-plan-handler.listSaved": CLUB_PLAN_VIEW,
+  "club-plan-handler.getSavedOne": CLUB_PLAN_VIEW,
+  "club-plan-handler.createSaved": CLUB_PLAN_MANAGE,
+  "club-plan-handler.updateSaved": CLUB_PLAN_MANAGE,
   "club-plan-handler.deleteSaved": CLUB_PLAN_MANAGE,
   "club-plan-handler.promoteGroup": CLUB_PLAN_MANAGE,
   "club-plan-handler.addSaved": CLUB_PLAN_MANAGE,
   "club-plan-handler.editPlanGroup": CLUB_PLAN_MANAGE,
-  "club-plan-handler.pushSaved": CLUB_PLAN_MANAGE,
+  "club-plan-handler.cloneGroup": CLUB_PLAN_MANAGE,
 
   // Teacher PWA conduct surface
   "club-me-handler.mySaturday": CLUB_PLAN_CONDUCT,

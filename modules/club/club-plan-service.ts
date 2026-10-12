@@ -71,7 +71,41 @@ class ClubPlanService {
         [planId],
       ),
     ]);
+    // Live membership: class/house/saved groups resolve their current strength on read (not a
+    // stale snapshot). Custom (materialised) groups count their stored members.
+    const ay = p[0].academicYearId;
+    for (const g of groups) {
+      g.liveStrength = await this._liveStrength(schoolId, ay, g);
+      // Custom (editable) groups carry their stored members so the edit dialog can prefill.
+      if (!g.savedGroupId && (g.sourceType === "selected" || g.sourceType === "mixed")) {
+        const mm = await DB.query(
+          singleLineString`select student_id, student_name_snapshot from club_plan_group_member where plan_group_id = $1 order by student_name_snapshot`,
+          [g.uuid],
+        );
+        g.members = mm.map((m: any) => ({ studentId: m.studentId, name: m.studentNameSnapshot }));
+      }
+    }
     return { ...p[0], slots, groups, assignments };
+  }
+
+  // Current student-count for a plan group, resolved live by kind.
+  private async _liveStrength(schoolId: string, ay: string, g: any): Promise<number | null> {
+    let rows;
+    if (g.savedGroupId) {
+      rows = await DB.query(singleLineString`select count(*) as n from club_group_member where group_id = $1`, [g.savedGroupId]);
+    } else if (g.sourceType === "class" && g.sourceRef) {
+      rows = await DB.query(singleLineString`select count(*) as n from student_class where class_id = $1 and academic_year_id = $2 and status = 'active'`, [g.sourceRef, ay]);
+    } else if (g.sourceType === "house" && g.sourceRef) {
+      rows = await DB.query(
+        singleLineString`select count(distinct sc.student_id) as n from student s
+          join student_class sc on sc.student_id = s.uuid and sc.academic_year_id = $2 and sc.status = 'active'
+          where s.house_id = $1 and s.status <> 'deleted'`,
+        [g.sourceRef, ay],
+      );
+    } else {
+      rows = await DB.query(singleLineString`select count(*) as n from club_plan_group_member where plan_group_id = $1`, [g.uuid]);
+    }
+    return rows.length ? Number(rows[0].n) : null;
   }
 
   async createPlan(schoolId: string, body: CreatePlanRequest, userId: string): Promise<any> {
@@ -386,11 +420,21 @@ class ClubPlanService {
     }
 
     // Roster-backed duplicate-student across overlapping slots (mixed/selected groups).
-    const memberRows = await DB.query(
-      singleLineString`select m.student_id, m.plan_group_id, m.student_name_snapshot
-        from club_plan_group_member m join club_plan_group g on g.uuid = m.plan_group_id where g.plan_id = $1`,
-      [planId],
-    );
+    // Resolve explicit members for roster-backed groups: custom (stored plan members) + saved
+    // (live from the saved group). Class/house are mutually exclusive, so they're skipped.
+    const [customMembers, savedMembers] = await Promise.all([
+      DB.query(
+        singleLineString`select m.student_id, m.plan_group_id, m.student_name_snapshot
+          from club_plan_group_member m join club_plan_group g on g.uuid = m.plan_group_id where g.plan_id = $1`,
+        [planId],
+      ),
+      DB.query(
+        singleLineString`select gm.student_id, pg.uuid as plan_group_id, gm.student_name_snapshot
+          from club_group_member gm join club_plan_group pg on pg.saved_group_id = gm.group_id where pg.plan_id = $1`,
+        [planId],
+      ),
+    ]);
+    const memberRows = [...customMembers, ...savedMembers];
     if (memberRows.length) {
       const byGroup = new Map<string, Array<{ id: string; name: string }>>();
       for (const m of memberRows) {

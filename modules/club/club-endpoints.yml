@@ -404,6 +404,33 @@
           method: get
           cors: true
 
+  get-saved-group:
+    handler: club-plan-handler.getSavedOne
+    name: ${self:service}-get-saved-group
+    events:
+      - http:
+          path: saved-groups/{id}
+          method: get
+          cors: true
+
+  create-saved-group:
+    handler: club-plan-handler.createSaved
+    name: ${self:service}-create-saved-group
+    events:
+      - http:
+          path: saved-groups
+          method: post
+          cors: true
+
+  update-saved-group:
+    handler: club-plan-handler.updateSaved
+    name: ${self:service}-update-saved-group
+    events:
+      - http:
+          path: saved-groups/{id}
+          method: put
+          cors: true
+
   delete-saved-group:
     handler: club-plan-handler.deleteSaved
     name: ${self:service}-delete-saved-group
@@ -431,12 +458,12 @@
           method: put
           cors: true
 
-  push-saved-group:
-    handler: club-plan-handler.pushSaved
-    name: ${self:service}-push-saved-group
+  clone-plan-group:
+    handler: club-plan-handler.cloneGroup
+    name: ${self:service}-clone-plan-group
     events:
       - http:
-          path: plan-groups/{id}/push-saved
+          path: plan-groups/{id}/clone
           method: post
           cors: true
 

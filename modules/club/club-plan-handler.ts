@@ -147,6 +147,7 @@ class ClubPlanHandler {
 
   // ── Reusable saved groups ──────────────────────────────────────────────────────
   listSaved = run(async (schoolId) => clubGroupService.listSaved(schoolId));
+  getSavedOne = run(async (schoolId, _u, event) => clubGroupService.getSaved(schoolId, event.pathParameters?.id!));
   deleteSaved = run(async (schoolId, userId, event) => {
     await clubGroupService.deleteSaved(schoolId, event.pathParameters?.id!, userId);
     return { ok: true };
@@ -160,7 +161,15 @@ class ClubPlanHandler {
     const b = JSON.parse(event.body || "{}");
     return clubGroupService.editPlanGroup(schoolId, event.pathParameters?.id!, b, userId);
   });
-  pushSaved = run(async (schoolId, userId, event) => clubGroupService.pushToSaved(schoolId, event.pathParameters?.id!, userId));
+  cloneGroup = run(async (schoolId, userId, event) => clubGroupService.cloneGroup(schoolId, event.pathParameters?.id!, userId));
+  createSaved = run(async (schoolId, userId, event) => {
+    const b = JSON.parse(event.body || "{}");
+    return clubGroupService.createSaved(schoolId, b, userId);
+  });
+  updateSaved = run(async (schoolId, userId, event) => {
+    const b = JSON.parse(event.body || "{}");
+    return clubGroupService.updateSaved(schoolId, event.pathParameters?.id!, b, userId);
+  });
 }
 
 const h = new ClubPlanHandler();
@@ -187,8 +196,11 @@ export const close = guard(A["club-plan-handler.close"], h.close);
 export const reopen = guard(A["club-plan-handler.reopen"], h.reopen);
 export const cancelPlan = guard(A["club-plan-handler.cancelPlan"], h.cancelPlan);
 export const listSaved = guard(A["club-plan-handler.listSaved"], h.listSaved);
+export const getSavedOne = guard(A["club-plan-handler.getSavedOne"], h.getSavedOne);
 export const deleteSaved = guard(A["club-plan-handler.deleteSaved"], h.deleteSaved);
 export const promoteGroup = guard(A["club-plan-handler.promoteGroup"], h.promoteGroup);
 export const addSaved = guard(A["club-plan-handler.addSaved"], h.addSaved);
 export const editPlanGroup = guard(A["club-plan-handler.editPlanGroup"], h.editPlanGroup);
-export const pushSaved = guard(A["club-plan-handler.pushSaved"], h.pushSaved);
+export const cloneGroup = guard(A["club-plan-handler.cloneGroup"], h.cloneGroup);
+export const createSaved = guard(A["club-plan-handler.createSaved"], h.createSaved);
+export const updateSaved = guard(A["club-plan-handler.updateSaved"], h.updateSaved);
