@@ -268,21 +268,24 @@ class FeesManagerService {
       [schoolId, studentId, eom]
     );
 
-    // outstanding Late Fee Fine for the CURRENT academic year only — drives the manager's one-tap
-    // exempt button. Scoped to the current year on purpose: the counter deals with this year's fine;
-    // old historical fines (migrated, ₹1,010-capped) are NOT swept up by a single tap.
-    const [lf] = await DB.query(
+    // outstanding Late Fee Fine for the CURRENT academic year, PER CYCLE — the manager/god can exempt
+    // a specific cycle's fine (not all at once). Scoped to the current year on purpose; old historical
+    // fines (migrated, ₹1,010-capped) are not exposed here.
+    const fineRows: any[] = await DB.query(
       singleLineString`
-        select coalesce(sum(greatest(0, ch.debit - coalesce(cr.credited, 0))), 0) as late_fine
+        select ch.uuid as charge_id, ch.cycle_label,
+          greatest(0, ch.debit - coalesce((select sum(cr.credit) from student_ledger_entry cr
+            where cr.school_id = $1 and cr.settles_entry_id = ch.uuid and cr.status = 'active'), 0)) as amount
         from student_ledger_entry ch
-        left join (
-          select settles_entry_id, sum(credit) as credited from student_ledger_entry
-          where school_id = $1 and student_id = $2 and status = 'active' and settles_entry_id is not null group by settles_entry_id
-        ) cr on cr.settles_entry_id = ch.uuid
+        left join fee_cycle fc on fc.uuid = ch.cycle_id and fc.status = 'active'
         where ch.school_id = $1 and ch.student_id = $2 and ch.kind = 'charge' and ch.status = 'active' and ch.head_label = 'Late Fee Fine'
-          and ch.academic_year_id = (select uuid from academic_year where school_id = $1 order by start_date desc nulls last limit 1)`,
+          and ch.academic_year_id = (select uuid from academic_year where school_id = $1 order by start_date desc nulls last limit 1)
+        order by fc.sort_order nulls last, ch.cycle_label`,
       [schoolId, studentId]
     );
+    const lateFines = fineRows
+      .filter((r) => Number(r.amount) > 0.5)
+      .map((r) => ({ chargeId: r.chargeId, cycleLabel: r.cycleLabel || '—', amount: Number(r.amount) }));
 
     const yearRows = years.map((y) => ({
       academicYearId: y.academicYearId,
@@ -291,7 +294,8 @@ class FeesManagerService {
       fullYear: Number(y.fullYear || 0),
     }));
     return {
-      lateFine: Number(lf?.lateFine || 0),
+      lateFines,
+      lateFine: lateFines.reduce((a, f) => a + f.amount, 0),
       student: header ? {
         studentId: header.studentId,
         name: header.name,
@@ -307,35 +311,30 @@ class FeesManagerService {
     };
   }
 
-  // Manager/god one-tap exempt: waive ALL of a student's outstanding Late Fee Fine (every year).
-  // Writes a kind='waiver' per fine charge (same shape collect() uses), auditable + reversible.
-  // Gated latefine.exempt (manager + god only). Returns how many lines + total waived.
-  public async exemptLateFines(schoolId: string, studentId: string, userId: string): Promise<any> {
-    if (!studentId) return { exempted: 0, amount: 0 };
-    const fines: any[] = await DB.query(
+  // Manager/god exempt of ONE cycle's late fine (by charge id). Waives the remaining on that Late Fee
+  // Fine charge (kind='waiver', same shape collect() uses) — auditable + reversible. Gated
+  // latefine.exempt (manager + god only). Validates the charge is this student's active late fine.
+  public async exemptLateFine(schoolId: string, studentId: string, chargeId: string, userId: string): Promise<any> {
+    if (!studentId || !chargeId) return { exempted: 0, amount: 0 };
+    const [f] = await DB.query(
       singleLineString`
         select ch.uuid, ch.academic_year_id, ch.category, ch.fee_head_id, ch.cycle_id, ch.head_label, ch.cycle_label,
           greatest(0, ch.debit - coalesce((select sum(cr.credit) from student_ledger_entry cr
             where cr.school_id = $1 and cr.settles_entry_id = ch.uuid and cr.status = 'active'), 0)) as remaining
         from student_ledger_entry ch
-        where ch.school_id = $1 and ch.student_id = $2 and ch.kind = 'charge' and ch.status = 'active' and ch.head_label = 'Late Fee Fine'
-          and ch.academic_year_id = (select uuid from academic_year where school_id = $1 order by start_date desc nulls last limit 1)`,
-      [schoolId, studentId]
+        where ch.school_id = $1 and ch.uuid = $2 and ch.student_id = $3 and ch.kind = 'charge' and ch.status = 'active' and ch.head_label = 'Late Fee Fine'`,
+      [schoolId, chargeId, studentId]
     );
-    const toWaive = fines.filter((f) => Number(f.remaining) > 0.5);
-    if (!toWaive.length) return { exempted: 0, amount: 0 };
+    if (!f || Number(f.remaining) <= 0.5) return { exempted: 0, amount: 0 };
 
-    const queries: string[] = []; const params: any[][] = []; const now = new Date(); const today = istToday();
-    let amount = 0;
-    for (const f of toWaive) {
-      queries.push(singleLineString`
+    const now = new Date(); const today = istToday();
+    await DB.queriesInTransaction(
+      [singleLineString`
         insert into student_ledger_entry (uuid, school_id, student_id, academic_year_id, entry_date, category, fee_head_id, cycle_id, head_label, cycle_label, kind, credit, settles_entry_id, source_module, source_ref, remarks, allocation, status, createdby_userid, created_at)
-        values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'waiver',$11,$12,'fees',null,$13,'explicit','active',$14,$15)`);
-      params.push([generateShortUuid(12), schoolId, studentId, f.academicYearId, today, f.category, f.feeHeadId, f.cycleId, f.headLabel, f.cycleLabel, Number(f.remaining), f.uuid, 'Late fine exempted (manager)', userId, now]);
-      amount += Number(f.remaining);
-    }
-    await DB.queriesInTransaction(queries, params);
-    return { exempted: toWaive.length, amount: Math.round(amount) };
+        values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'waiver',$11,$12,'fees',null,$13,'explicit','active',$14,$15)`],
+      [[generateShortUuid(12), schoolId, studentId, f.academicYearId, today, f.category, f.feeHeadId, f.cycleId, f.headLabel, f.cycleLabel, Number(f.remaining), f.uuid, 'Late fine exempted (manager)', userId, now]]
+    );
+    return { exempted: 1, amount: Math.round(Number(f.remaining)), cycle: f.cycleLabel };
   }
 }
 

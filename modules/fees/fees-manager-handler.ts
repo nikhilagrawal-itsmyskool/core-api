@@ -58,16 +58,16 @@ class FeesManagerHandler {
     }
   };
 
-  // POST /fees/manager/exempt-fine — one-tap: waive all of a student's outstanding late fines (manager/god)
+  // POST /fees/manager/exempt-fine — waive ONE cycle's late fine (by chargeId) for a student (manager/god)
   public exemptFine = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
     _context.callbackWaitsForEmptyEventLoop = false;
     try {
       const ctx = await resolveSchool(event, callback);
       if (!ctx) return;
       const body = JSON.parse(event.body || '{}');
-      const studentId = body.studentId;
-      if (!studentId) { ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'studentId is required', callback); return; }
-      ResponseBuilder.ok(await feesManagerService.exemptLateFines(ctx.schoolId, studentId, ctx.userId), callback);
+      const { studentId, chargeId } = body;
+      if (!studentId || !chargeId) { ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'studentId and chargeId are required', callback); return; }
+      ResponseBuilder.ok(await feesManagerService.exemptLateFine(ctx.schoolId, studentId, chargeId, ctx.userId), callback);
     } catch (err: any) {
       ResponseBuilder.handleError(err, callback);
     }
