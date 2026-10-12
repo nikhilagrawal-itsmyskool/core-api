@@ -197,6 +197,11 @@
     timeout: 60
     events:
       - http: { path: 'manager/top-dues', method: get, cors: true }
+  manager-exempt-fine:
+    handler: fees-manager-handler.exemptFine
+    name: ${self:service}-manager-exempt-fine
+    events:
+      - http: { path: 'manager/exempt-fine', method: post, cors: true }
 
   # ---- Concessions ----
   create-concession:

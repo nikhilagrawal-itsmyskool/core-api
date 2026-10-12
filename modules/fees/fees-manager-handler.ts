@@ -58,6 +58,21 @@ class FeesManagerHandler {
     }
   };
 
+  // POST /fees/manager/exempt-fine — one-tap: waive all of a student's outstanding late fines (manager/god)
+  public exemptFine = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
+    _context.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const ctx = await resolveSchool(event, callback);
+      if (!ctx) return;
+      const body = JSON.parse(event.body || '{}');
+      const studentId = body.studentId;
+      if (!studentId) { ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'studentId is required', callback); return; }
+      ResponseBuilder.ok(await feesManagerService.exemptLateFines(ctx.schoolId, studentId, ctx.userId), callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
   // GET /fees/manager/top-dues — cross-year accumulated-dues report (shares the admin report engine)
   public topDues = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
     _context.callbackWaitsForEmptyEventLoop = false;
@@ -92,3 +107,4 @@ export const dayCollection = guard(FEE_ACTIONS['fees-manager-handler.dayCollecti
 export const search = guard(FEE_ACTIONS['fees-manager-handler.search'], handler.search);
 export const studentDues = guard(FEE_ACTIONS['fees-manager-handler.studentDues'], handler.studentDues);
 export const topDues = guard(FEE_ACTIONS['fees-manager-handler.topDues'], handler.topDues);
+export const exemptFine = guard(FEE_ACTIONS['fees-manager-handler.exemptFine'], handler.exemptFine);

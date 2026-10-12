@@ -31,6 +31,10 @@ export const ACTIONS = {
   // Outside the fee.* namespace on purpose -> fee incharges/clerks DON'T inherit it;
   // only the admin role (explicit grant) + god ('*'). Powers the Scan & Verify tile.
   RECEIPT_VERIFY: 'receipt.verify',
+  // Exempt (waive) a student's late fines. Outside BOTH fee.* and fine.* on purpose so
+  // admins/clerks do NOT inherit it — granted only to the `manager` role + god ('*').
+  // Powers the one-tap exempt on the Collection Desk.
+  LATEFINE_EXEMPT: 'latefine.exempt',
   UNIFORM_VIEW: 'uniform.view',
   UNIFORM_MANAGE: 'uniform.manage',
   SHOP_VIEW: 'shop.view',
@@ -249,8 +253,9 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
   // they staff (route filtering enforced in the transport handlers); finalize stays
   // admin/god/transport-incharge only.
   'transport-attendance': ['transport.attendance.mark'],
-  // Collection-desk manager: a locked, read-only fee-collection view and nothing else.
-  manager: ['fee.manager.view'],
+  // Collection-desk manager: a locked, read-only fee-collection view, plus the one-tap
+  // late-fine exemption (the counter escape hatch — clerks can't skip/forgive fines).
+  manager: ['fee.manager.view', 'latefine.exempt'],
   // Education director: lands on the Cockpit / School Pulse and reviews the school's
   // heartbeat. Read-oriented oversight across the pulse domains. Additive — a person can
   // also hold `god`. Mirrors admin-portal/src/permissions/policy.js.

@@ -7,7 +7,7 @@ import { ACTIONS } from '../../shared/lib/authz-policy';
 //
 // Rule of thumb: reads = fee.view, config writes = fee.manage, taking money =
 // fee.collect, Scan & Verify = receipt.verify (admin/god only, NOT fee incharges).
-const { FEE_VIEW, FEE_MANAGE, FEE_COLLECT, RECEIPT_VERIFY, FEE_MANAGER_VIEW } = ACTIONS;
+const { FEE_VIEW, FEE_MANAGE, FEE_COLLECT, RECEIPT_VERIFY, FEE_MANAGER_VIEW, LATEFINE_EXEMPT } = ACTIONS;
 
 // God-only: bulk historical import must never be reachable by an ordinary admin. No
 // role grants this string, so only god ('*') passes.
@@ -53,6 +53,7 @@ export const FEE_ACTIONS: Record<string, string> = {
   'fees-manager-handler.search': FEE_MANAGER_VIEW,
   'fees-manager-handler.studentDues': FEE_MANAGER_VIEW,
   'fees-manager-handler.topDues': FEE_MANAGER_VIEW,
+  'fees-manager-handler.exemptFine': LATEFINE_EXEMPT,
   'fees-late-fee-rule-handler.create': FEE_MANAGE,
   'fees-late-fee-rule-handler.update': FEE_MANAGE,
   'fees-late-fee-rule-handler.remove': FEE_MANAGE,
