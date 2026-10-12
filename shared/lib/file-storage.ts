@@ -185,7 +185,14 @@ class S3FileStorageService implements IFileStorageService {
       [uuid, schoolId],
     );
     if (meta.length > 0 && meta[0].storageKey) {
-      await s3.send(new DeleteObjectCommand({ Bucket: FILE_STORAGE_BUCKET, Key: meta[0].storageKey }));
+      // Best-effort: a storage-delete failure (e.g. a missing IAM action, or an
+      // already-gone object) must not block the logical delete. Log and carry on;
+      // an orphaned object is harmless and can be swept later.
+      try {
+        await s3.send(new DeleteObjectCommand({ Bucket: FILE_STORAGE_BUCKET, Key: meta[0].storageKey }));
+      } catch (err) {
+        console.error(`file-storage: failed to delete S3 object ${meta[0].storageKey}; removing the DB row anyway`, err);
+      }
     }
     await DB.query(
       singleLineString`delete from file_storage where uuid = $1 and school_id = $2`,
