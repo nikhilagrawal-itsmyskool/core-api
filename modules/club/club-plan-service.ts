@@ -561,6 +561,29 @@ class ClubPlanService {
     return this.getPlan(schoolId, planId);
   }
 
+  // Hard-delete a plan (+ all its slots/groups/assignments). Only a draft or already-cancelled
+  // plan can be deleted; a published/closed plan must be Cancelled (keeps history) first.
+  async deletePlan(schoolId: string, planId: string, userId: string): Promise<any | null> {
+    const plan = await this._plan(schoolId, planId);
+    if (!plan) return null;
+    if (!["draft", "cancelled"].includes(plan.status)) {
+      throw new BusinessErrorResult(ErrorCode.BusinessError, "Only a draft or cancelled plan can be deleted — cancel a published plan first");
+    }
+    await DB.queriesInTransaction(
+      [
+        `delete from club_plan_completion where plan_id = $1`,
+        `delete from club_plan_assignment where plan_id = $1`,
+        `delete from club_plan_group_member where plan_group_id in (select uuid from club_plan_group where plan_id = $1)`,
+        `delete from club_plan_group where plan_id = $1`,
+        `delete from club_plan_slot where plan_id = $1`,
+        `delete from club_plan where uuid = $1 and school_id = $2`,
+      ],
+      [[planId], [planId], [planId], [planId], [planId], [planId, schoolId]],
+    );
+    await writeAudit(schoolId, userId, "plan.delete", "plan", planId, { before: { status: plan.status } });
+    return { ok: true };
+  }
+
   // ── Completion (used by admin close-on-behalf and the teacher /me surface) ──────
   async upsertCompletion(schoolId: string, assignmentId: string, body: CompletionRequest, userId: string): Promise<any> {
     const a = await DB.query(

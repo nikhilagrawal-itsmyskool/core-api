@@ -144,6 +144,7 @@ class ClubPlanHandler {
     const body = JSON.parse(event.body || "{}");
     return clubPlanService.cancelPlan(schoolId, event.pathParameters?.id!, body.reason || "", userId);
   });
+  deletePlan = run(async (schoolId, userId, event) => clubPlanService.deletePlan(schoolId, event.pathParameters?.id!, userId));
 
   // ── Reusable saved groups ──────────────────────────────────────────────────────
   listSaved = run(async (schoolId) => clubGroupService.listSaved(schoolId));
@@ -195,6 +196,7 @@ export const publish = guard(A["club-plan-handler.publish"], h.publish);
 export const close = guard(A["club-plan-handler.close"], h.close);
 export const reopen = guard(A["club-plan-handler.reopen"], h.reopen);
 export const cancelPlan = guard(A["club-plan-handler.cancelPlan"], h.cancelPlan);
+export const deletePlan = guard(A["club-plan-handler.deletePlan"], h.deletePlan);
 export const listSaved = guard(A["club-plan-handler.listSaved"], h.listSaved);
 export const getSavedOne = guard(A["club-plan-handler.getSavedOne"], h.getSavedOne);
 export const deleteSaved = guard(A["club-plan-handler.deleteSaved"], h.deleteSaved);

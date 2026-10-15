@@ -251,6 +251,15 @@
           method: post
           cors: true
 
+  delete-plan:
+    handler: club-plan-handler.deletePlan
+    name: ${self:service}-delete-plan
+    events:
+      - http:
+          path: plans/{id}
+          method: delete
+          cors: true
+
   add-slot:
     handler: club-plan-handler.addSlot
     name: ${self:service}-add-slot

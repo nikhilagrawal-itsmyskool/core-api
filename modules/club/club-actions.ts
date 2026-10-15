@@ -75,6 +75,7 @@ export const CLUB_ACTIONS: Record<string, string> = {
   "club-plan-handler.close": CLUB_PLAN_PUBLISH,
   "club-plan-handler.reopen": CLUB_PLAN_PUBLISH,
   "club-plan-handler.cancelPlan": CLUB_PLAN_PUBLISH,
+  "club-plan-handler.deletePlan": CLUB_PLAN_MANAGE,
   // Reusable saved groups
   "club-plan-handler.listSaved": CLUB_PLAN_VIEW,
   "club-plan-handler.getSavedOne": CLUB_PLAN_VIEW,
