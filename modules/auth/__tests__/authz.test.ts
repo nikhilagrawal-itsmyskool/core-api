@@ -48,14 +48,14 @@ describe('getCaller', () => {
 describe('requireAction', () => {
   it('returns the caller when the role grants the action', () => {
     const cap = capture();
-    const caller = requireAction(event(`Bearer ${empToken(['fees-incharge'])}`), 'fee.collect', cap.cb);
+    const caller = requireAction(event(`Bearer ${empToken(['fees-incharge'])}`), 'fee.collect.collect', cap.cb);
     expect(caller).not.toBeNull();
     expect(cap.status()).toBeUndefined(); // no error response written
   });
 
   it('403 MISSING_PERMISSION when the role lacks the action', () => {
     const cap = capture();
-    const caller = requireAction(event(`Bearer ${empToken(['teacher'])}`), 'fee.collect', cap.cb);
+    const caller = requireAction(event(`Bearer ${empToken(['teacher'])}`), 'fee.collect.collect', cap.cb);
     expect(caller).toBeNull();
     expect(cap.status()).toBe(403);
     expect(cap.code()).toBe('MISSING_PERMISSION');
@@ -63,14 +63,14 @@ describe('requireAction', () => {
 
   it('401 when there is no valid token (deployed stage)', () => {
     const cap = capture();
-    const caller = requireAction(event(undefined), 'fee.view', cap.cb);
+    const caller = requireAction(event(undefined), 'fee.report.view', cap.cb);
     expect(caller).toBeNull();
     expect(cap.status()).toBe(401);
   });
 
   it('403 for a student token on an employee action (no roles)', () => {
     const cap = capture();
-    const caller = requireAction(event(`Bearer ${studentToken()}`), 'fee.view', cap.cb);
+    const caller = requireAction(event(`Bearer ${studentToken()}`), 'fee.report.view', cap.cb);
     expect(caller).toBeNull();
     expect(cap.status()).toBe(403);
   });
@@ -95,7 +95,7 @@ describe('requireAction', () => {
 
     it('defaults to a god caller when no token and no override roles (existing tests keep passing)', () => {
       const cap = capture();
-      const caller = requireAction(event(undefined), 'fee.collect', cap.cb);
+      const caller = requireAction(event(undefined), 'fee.collect.collect', cap.cb);
       expect(caller).not.toBeNull();
       expect(caller!.roles).toEqual(['god']);
     });
@@ -106,7 +106,7 @@ describe('requireAction', () => {
       const cap = capture();
       const caller = requireAction(
         event(undefined, 'DBPASN', { principalId: '123', context: { type: 'employee', roles: 'teacher' } }),
-        'fee.collect',
+        'fee.collect.collect',
         cap.cb
       );
       expect(caller).toBeNull();
@@ -115,7 +115,7 @@ describe('requireAction', () => {
 
     it('also honors a flattened override shape (roles directly on authorizer)', () => {
       const cap = capture();
-      const caller = requireAction(event(undefined, 'DBPASN', { principalId: '123', roles: 'teacher' }), 'fee.collect', cap.cb);
+      const caller = requireAction(event(undefined, 'DBPASN', { principalId: '123', roles: 'teacher' }), 'fee.collect.collect', cap.cb);
       expect(caller).toBeNull();
       expect(cap.status()).toBe(403);
     });

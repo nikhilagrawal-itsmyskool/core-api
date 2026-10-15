@@ -77,6 +77,29 @@ const CATALOGS: Record<string, Catalog> = {
       { action: ACTIONS.CLUB_PLAN_CONDUCT, label: 'Conduct guide + quick closure (teacher)' },
     ],
   },
+  fees: {
+    module: 'fees',
+    roles: [
+      { role: 'admin', label: 'Admin' },
+      { role: 'fees-incharge', label: 'Fees In-charge' },
+      { role: 'manager', label: 'Manager' },
+    ],
+    actions: [
+      { action: ACTIONS.FEE_REPORT_VIEW, label: 'View dues, reports, receipts & student ledgers' },
+      { action: ACTIONS.FEE_COLLECT, label: 'Collect fees, refunds & cancel receipts' },
+      { action: ACTIONS.FEE_STRUCTURE_MANAGE, label: 'Fee structure, heads, cycles & charge-run' },
+      { action: ACTIONS.FEE_CONCESSION_ASSIGN, label: 'Add / remove students to a concession' },
+      { action: ACTIONS.FEE_CONCESSION_MANAGE, label: 'Create / edit / delete concession schemes' },
+      { action: ACTIONS.FEE_WAIVER_MANAGE, label: 'Waivers & the Collect write-off' },
+      { action: ACTIONS.FEE_LATEFEE_MANAGE, label: 'Late-fee rules & apply fines' },
+      { action: ACTIONS.FEE_TRANSPORT_MANAGE, label: 'Transport fee slabs' },
+      { action: ACTIONS.FEE_STUDENT_MANAGE, label: 'Withdraw a student & mark exam-only' },
+      { action: ACTIONS.FEE_MANAGER_VIEW, label: 'Collection Desk (read-only)' },
+      { action: ACTIONS.FEE_FINE_EXEMPT, label: 'Exempt a late fine' },
+      { action: ACTIONS.FEE_RECEIPT_VERIFY, label: 'Scan & Verify receipts' },
+      { action: ACTIONS.FEE_MIGRATION_IMPORT, label: 'Bulk historical import' },
+    ],
+  },
 };
 
 const DEFAULT_MODULE = 'examination';

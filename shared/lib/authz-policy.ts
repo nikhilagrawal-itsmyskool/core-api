@@ -22,19 +22,20 @@ export const ACTIONS = {
   LAB_MANAGE: 'lab.manage',
   FINE_VIEW: 'fine.view',
   FINE_MANAGE: 'fine.manage',
-  FEE_VIEW: 'fee.view',
-  FEE_MANAGE: 'fee.manage',
-  FEE_COLLECT: 'fee.collect',
-  // Read-only "Collection Desk" (simplified manager view). Under fee.* so admin/god/fees-incharge
-  // inherit it; the locked `manager` role gets ONLY this.
-  FEE_MANAGER_VIEW: 'fee.manager.view',
-  // Outside the fee.* namespace on purpose -> fee incharges/clerks DON'T inherit it;
-  // only the admin role (explicit grant) + god ('*'). Powers the Scan & Verify tile.
-  RECEIPT_VERIFY: 'receipt.verify',
-  // Exempt (waive) a student's late fines. Outside BOTH fee.* and fine.* on purpose so
-  // admins/clerks do NOT inherit it — granted only to the `manager` role + god ('*').
-  // Powers the one-tap exempt on the Collection Desk.
-  LATEFINE_EXEMPT: 'latefine.exempt',
+  // Fees — module.resource.action, NO fee.* wildcard (every role lists exactly what it holds).
+  FEE_REPORT_VIEW: 'fee.report.view',           // all fee reads: dues, reports, receipts, ledger, lists
+  FEE_COLLECT: 'fee.collect.collect',           // take payments / refunds / cancel receipts
+  FEE_STRUCTURE_MANAGE: 'fee.structure.manage', // fee structure, heads, cycles, setup, charge-run
+  FEE_CONCESSION_MANAGE: 'fee.concession.manage', // create/edit/delete concession SCHEMES (god-only default)
+  FEE_CONCESSION_ASSIGN: 'fee.concession.assign', // add/remove students to a concession, mid-year change
+  FEE_WAIVER_MANAGE: 'fee.waiver.manage',       // waivers incl. Collect "waive remaining" write-off (god-only)
+  FEE_LATEFEE_MANAGE: 'fee.latefee.manage',     // late-fee rules & apply (god-only)
+  FEE_TRANSPORT_MANAGE: 'fee.transport.manage', // transport slabs (god-only)
+  FEE_STUDENT_MANAGE: 'fee.student.manage',     // withdraw student, exam-only flag
+  FEE_MANAGER_VIEW: 'fee.manager.view',         // read-only Collection Desk (manager gets ONLY this + exempt)
+  FEE_FINE_EXEMPT: 'fee.fine.exempt',           // exempt a late fine (manager + god only)
+  FEE_RECEIPT_VERIFY: 'fee.receipt.verify',     // Scan & Verify (admin + god only)
+  FEE_MIGRATION_IMPORT: 'fee.migration.import', // bulk historical import (god-only)
   UNIFORM_VIEW: 'uniform.view',
   UNIFORM_MANAGE: 'uniform.manage',
   SHOP_VIEW: 'shop.view',
@@ -153,7 +154,14 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
     'medical.*',
     'lab.*',
     'fine.*',
-    'fee.*',
+    // Fees (explicit, no wildcard). Admin does NOT get: concession.manage (create schemes),
+    // waiver.manage, latefee.manage, transport.manage, fine.exempt, migration.import — all god-only.
+    'fee.report.view',
+    'fee.collect.collect',
+    'fee.structure.manage',
+    'fee.concession.assign',
+    'fee.student.manage',
+    'fee.manager.view',
     'uniform.*',
     'shop.*',
     'sports.*',
@@ -197,7 +205,7 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
     'exam.schedule.manage',
     'exam.progress.view',
     'exam.reportcard.manage',
-    'receipt.verify', // Scan & Verify (admin + god only; NOT fee incharges)
+    'fee.receipt.verify', // Scan & Verify (admin + god only; NOT fee incharges)
     'leave.apply', // Self-service leave only; oversight (leave.manage) is god-only for now
     'documents.sign', // Read & sign own documents; authoring (documents.manage) is god-only
     // Clubs & Activities: NONE by default (locked to god). god grants admin what it needs via
@@ -235,7 +243,9 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
   // Each in-charge === admin, but scoped to its own module.
   'medical-incharge': ['medical.*'],
   'lab-incharge': ['lab.*'],
-  'fees-incharge': ['fee.*'],
+  // Fees in-charge: like admin for fees, but NOT the god-only money-rule actions (concession.manage,
+  // waiver.manage, latefee.manage, transport.manage, fine.exempt) and NOT receipt.verify.
+  'fees-incharge': ['fee.report.view', 'fee.collect.collect', 'fee.structure.manage', 'fee.concession.assign', 'fee.student.manage', 'fee.manager.view'],
   'sports-incharge': ['sports.*'],
   'assets-incharge': ['asset.*'],
   'library-incharge': ['library.*'],
@@ -255,7 +265,7 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
   'transport-attendance': ['transport.attendance.mark'],
   // Collection-desk manager: a locked, read-only fee-collection view, plus the one-tap
   // late-fine exemption (the counter escape hatch — clerks can't skip/forgive fines).
-  manager: ['fee.manager.view', 'latefine.exempt'],
+  manager: ['fee.manager.view', 'fee.fine.exempt'],
   // Education director: lands on the Cockpit / School Pulse and reviews the school's
   // heartbeat. Read-oriented oversight across the pulse domains. Additive — a person can
   // also hold `god`. Mirrors admin-portal/src/permissions/policy.js.
