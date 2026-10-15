@@ -46,6 +46,9 @@ export interface SettingsRequest {
   displayName?: string;
   defaultSlots?: Array<{ start: string; end: string; label?: string }>;
   parallelClubLimit?: number | null;
+  activityDays?: number[]; // 0=Sun .. 6=Sat
+  defaultScope?: "whole" | "grades" | "groups";
+  defaultCoverage?: "complete" | "selective";
 }
 
 // ── Activity (identity + versioned content) ───────────────────────────────────

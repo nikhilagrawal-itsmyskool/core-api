@@ -121,20 +121,24 @@ class ClubPlanService {
     );
     if (dup.length) throw new BusinessErrorResult(ErrorCode.BusinessError, "A plan already exists for this date");
 
+    // Programme settings supply the defaults (scope/coverage/slots) when the request omits them.
+    const setting = await DB.query(
+      singleLineString`select default_slots, default_scope, default_coverage from club_setting where school_id = $1`,
+      [schoolId],
+    );
+    const scope = body.participationScope || setting[0]?.defaultScope || "whole";
+    const coverage = body.coverage || setting[0]?.defaultCoverage || "selective";
+
     const uuid = generateShortUuid(12);
     await DB.query(
       singleLineString`insert into club_plan
           (uuid, school_id, academic_year_id, plan_date, title, participation_scope, coverage, status, row_version, createdby_userid, created_at)
         values ($1,$2,$3,$4,$5,$6,$7,'draft',1,$8,now())`,
-      [
-        uuid, schoolId, ay, body.planDate, body.title || null,
-        body.participationScope || "whole", body.coverage || "selective", userId,
-      ],
+      [uuid, schoolId, ay, body.planDate, body.title || null, scope, coverage, userId],
     );
-    // Programme setting: auto-add the school's default slots so the planner doesn't re-enter
-    // them every week. Best-effort — a malformed setting never blocks plan creation.
+    // Auto-add the school's default slots so the planner doesn't re-enter them every week.
+    // Best-effort — a malformed setting never blocks plan creation.
     try {
-      const setting = await DB.query(singleLineString`select default_slots from club_setting where school_id = $1`, [schoolId]);
       const slots = (setting[0]?.defaultSlots as Array<{ start?: string; end?: string; label?: string }>) || [];
       let seq = 1;
       for (const s of slots) {

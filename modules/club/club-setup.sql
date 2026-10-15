@@ -59,6 +59,11 @@ create table if not exists club_setting (
     updated_at timestamp(0)
 );
 create unique index if not exists idx_club_setting_school on club_setting(school_id);
+-- Programme defaults: the weekday(s) activities run on (jsonb array of 0=Sun..6=Sat, drives the
+-- new-plan date default + off-day warning), and the default scope/coverage for a new plan.
+alter table club_setting add column if not exists activity_days jsonb;
+alter table club_setting add column if not exists default_scope varchar(16);
+alter table club_setting add column if not exists default_coverage varchar(16);
 
 -- ── ACTIVITY aggregate (the bank) ───────────────────────────────────────────────
 

@@ -228,16 +228,19 @@ class ClubService {
 
   async getSettings(schoolId: string): Promise<any> {
     const rows = await DB.query(
-      singleLineString`select display_name, default_slots, parallel_club_limit
+      singleLineString`select display_name, default_slots, parallel_club_limit, activity_days, default_scope, default_coverage
         from club_setting where school_id = $1`,
       [schoolId],
     );
-    if (!rows.length) return { displayName: null, defaultSlots: [], parallelClubLimit: null };
+    if (!rows.length) return { displayName: null, defaultSlots: [], parallelClubLimit: null, activityDays: [], defaultScope: null, defaultCoverage: null };
     const r = rows[0];
     return {
       displayName: r.displayName || null,
       defaultSlots: r.defaultSlots || [],
       parallelClubLimit: r.parallelClubLimit ?? null,
+      activityDays: r.activityDays || [],
+      defaultScope: r.defaultScope || null,
+      defaultCoverage: r.defaultCoverage || null,
     };
   }
 
@@ -249,22 +252,28 @@ class ClubService {
             display_name = coalesce($2, display_name),
             default_slots = coalesce($3::jsonb, default_slots),
             parallel_club_limit = $4,
+            activity_days = coalesce($6::jsonb, activity_days),
+            default_scope = coalesce($7, default_scope),
+            default_coverage = coalesce($8, default_coverage),
             updatedby_userid = $5, updated_at = now()
           where school_id = $1`,
         [
           schoolId, body.displayName ?? null,
           body.defaultSlots ? JSON.stringify(body.defaultSlots) : null,
           body.parallelClubLimit ?? null, userId,
+          body.activityDays ? JSON.stringify(body.activityDays) : null,
+          body.defaultScope ?? null, body.defaultCoverage ?? null,
         ],
       );
     } else {
       await DB.query(
         singleLineString`insert into club_setting
-            (uuid, school_id, display_name, default_slots, parallel_club_limit, updatedby_userid, updated_at)
-          values ($1,$2,$3,$4::jsonb,$5,$6,now())`,
+            (uuid, school_id, display_name, default_slots, parallel_club_limit, activity_days, default_scope, default_coverage, updatedby_userid, updated_at)
+          values ($1,$2,$3,$4::jsonb,$5,$6::jsonb,$7,$8,$9,now())`,
         [
           generateShortUuid(12), schoolId, body.displayName ?? null,
-          JSON.stringify(body.defaultSlots || []), body.parallelClubLimit ?? null, userId,
+          JSON.stringify(body.defaultSlots || []), body.parallelClubLimit ?? null,
+          JSON.stringify(body.activityDays || []), body.defaultScope ?? null, body.defaultCoverage ?? null, userId,
         ],
       );
     }
