@@ -727,6 +727,21 @@ class ReportService {
     return today >= term2StartsOn ? 2 : 1;
   }
 
+  // Hard gate: Term 2 mark/co-scholastic entry + submit is blocked until term2_starts_on. An override
+  // (exam.marks.override — god-only by default, delegable via the grid) may enter early. Term 1 is
+  // always open. Keeps teachers from filling Term 2 before the school opens it.
+  private async assertTermOpen(schoolId: string, ayId: string, term: number, isOverride: boolean): Promise<void> {
+    if (term !== 2 || isOverride) return;
+    const { term2StartsOn } = await this.getConfig(schoolId, ayId);
+    const today = new Date().toISOString().slice(0, 10);
+    if (!term2StartsOn || today < term2StartsOn) {
+      throw new BusinessErrorResult(
+        ErrorCode.BusinessError,
+        term2StartsOn ? `Term 2 is not open yet — it opens on ${term2StartsOn}.` : "Term 2 is not open for mark entry yet.",
+      );
+    }
+  }
+
   async setConfig(schoolId: string, ayId: string, cfg: { term2StartsOn?: string | null; remarkRequiredFinal?: boolean }, userId: string): Promise<any> {
     const val = cfg.term2StartsOn && /^\d{4}-\d{2}-\d{2}$/.test(cfg.term2StartsOn) ? cfg.term2StartsOn : null;
     const rrf = cfg.remarkRequiredFinal ? 1 : null;
@@ -1175,6 +1190,7 @@ class ReportService {
   }
 
   async saveMarks(schoolId: string, ayId: string, classId: string, subjectCode: string, term: number, entries: any[], employeeId: string, isOverride: boolean): Promise<any> {
+    await this.assertTermOpen(schoolId, ayId, term, isOverride);
     const scheme = await this.schemeForClass(schoolId, ayId, classId, employeeId);
     if (!scheme) throw new BusinessErrorResult(ErrorCode.BusinessError, "No report scheme for this class");
     const subjects = await this.schemeSubjects(scheme.uuid);
@@ -1315,6 +1331,7 @@ class ReportService {
   }
 
   async saveCoscholastic(schoolId: string, ayId: string, classId: string, term: number, entries: any[], employeeId: string, isOverride: boolean): Promise<any> {
+    await this.assertTermOpen(schoolId, ayId, term, isOverride);
     const scheme = await this.schemeForClass(schoolId, ayId, classId, employeeId);
     if (!scheme) throw new BusinessErrorResult(ErrorCode.BusinessError, "No report scheme for this class");
     if (await this.isLocked(schoolId, ayId, classId, term, COSCH)) throw new BusinessErrorResult(ErrorCode.BusinessError, "Co-scholastic is locked — ask an admin to unlock it before editing");
@@ -1482,6 +1499,7 @@ class ReportService {
 
   // Submit a (class, subject): every active student must have a value or 'A' for every component.
   async submitMarks(schoolId: string, ayId: string, classId: string, subjectCode: string, term: number, employeeId: string, isOverride: boolean): Promise<any> {
+    await this.assertTermOpen(schoolId, ayId, term, isOverride);
     const scheme = await this.schemeForClass(schoolId, ayId, classId, employeeId);
     if (!scheme) throw new BusinessErrorResult(ErrorCode.BusinessError, "No report scheme for this class");
     const subject = (await this.schemeSubjects(scheme.uuid)).find((s: any) => s.code === subjectCode);
@@ -1505,6 +1523,7 @@ class ReportService {
   // Submit the co-scholastic: every student must have a grade/mark/absent for every gradeable area
   // (+ a remark when the school requires one for the final term).
   async submitCoscholastic(schoolId: string, ayId: string, classId: string, term: number, employeeId: string, isOverride: boolean): Promise<any> {
+    await this.assertTermOpen(schoolId, ayId, term, isOverride);
     const scheme = await this.schemeForClass(schoolId, ayId, classId, employeeId);
     if (!scheme) throw new BusinessErrorResult(ErrorCode.BusinessError, "No report scheme for this class");
     if (await this.isLocked(schoolId, ayId, classId, term, COSCH)) throw new BusinessErrorResult(ErrorCode.BusinessError, "Co-scholastic is locked — ask an admin to unlock it first");
