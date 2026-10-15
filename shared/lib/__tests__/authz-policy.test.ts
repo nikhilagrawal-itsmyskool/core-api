@@ -5,7 +5,16 @@ import { can, ROLE_PERMISSIONS, ACTIONS } from '../authz-policy';
 describe('can()', () => {
   it('allows an exact action granted to a role', () => {
     expect(can(['admin'], 'student.manage')).toBe(true);
-    expect(can(['class-teacher'], 'attendance.mark')).toBe(true);
+    expect(can(['class-teacher'], 'attendance.session.mark')).toBe(true);
+  });
+
+  it('attendance uses module.resource.action; teachers read, not mark', () => {
+    expect(can(['teacher'], 'attendance.record.view')).toBe(true); // 360 card
+    expect(can(['teacher'], 'attendance.session.mark')).toBe(false); // not a marker
+    expect(can(['class-teacher'], 'attendance.session.mark')).toBe(true);
+    expect(can(['admin'], 'attendance.record.view')).toBe(true);
+    expect(can(['admin'], 'attendance.session.finalize')).toBe(true);
+    expect(can(['teacher'], 'attendance.mark')).toBe(false); // old name gone
   });
 
   it('resolves module.* wildcards (modules that still use them)', () => {
@@ -48,7 +57,7 @@ describe('can()', () => {
   });
 
   it('is additive across multiple roles', () => {
-    expect(can(['teacher', 'class-teacher'], 'attendance.mark')).toBe(true);
+    expect(can(['teacher', 'class-teacher'], 'attendance.session.mark')).toBe(true);
     expect(can(['teacher', 'class-teacher'], 'homework.post')).toBe(true);
     // teacher gives the reads, class-teacher the two writes; neither gives fee.collect
     expect(can(['teacher', 'class-teacher'], 'fee.collect.collect')).toBe(false);
@@ -65,6 +74,22 @@ describe('can()', () => {
     expect(can(['admin'], 'employee.restore')).toBe(false);
     expect(can(['admin'], 'assistant.use')).toBe(false);
     expect(can(['god'], 'timetable.manage')).toBe(true);
+  });
+
+  it('leave: teachers get the shared calendar + self-service; oversight is god-only', () => {
+    // Teacher/admin hold the shared who's-on-leave calendar and self-service apply.
+    expect(can(['teacher'], 'leave.calendar.view')).toBe(true);
+    expect(can(['teacher'], 'leave.application.apply')).toBe(true);
+    expect(can(['admin'], 'leave.calendar.view')).toBe(true);
+    expect(can(['admin'], 'leave.application.apply')).toBe(true);
+    // Oversight / config / biometric / deduction are god-only (not even admin) for now.
+    expect(can(['teacher'], 'leave.application.approve')).toBe(false);
+    expect(can(['admin'], 'leave.application.approve')).toBe(false);
+    expect(can(['admin'], 'leave.application.view')).toBe(false);
+    expect(can(['admin'], 'leave.config.manage')).toBe(false);
+    expect(can(['admin'], 'leave.attendance.manage')).toBe(false);
+    expect(can(['admin'], 'leave.deduction.manage')).toBe(false);
+    expect(can(['god'], 'leave.deduction.manage')).toBe(true);
   });
 
   it('exposes ACTIONS constants that match their string values', () => {

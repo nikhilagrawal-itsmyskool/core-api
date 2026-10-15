@@ -3,6 +3,8 @@ import { ResponseBuilder } from "../../shared/lib/response-builder";
 import { ErrorCode } from "../../shared/lib/error-codes";
 import { resolveSchool, requireApprover, parseBody, requireParam } from "./handler-util";
 import { leaveDeductionService } from "./leave-deduction-service";
+import { guard } from "../auth/authz";
+import { LEAVE_ACTIONS } from "./leave-actions";
 
 const MONTH_RE = /^\d{4}-\d{2}$/;
 function thisMonth(): string {
@@ -77,7 +79,8 @@ class LeaveDeductionHandler {
 }
 
 const h = new LeaveDeductionHandler();
-export const run = h.run;
-export const list = h.list;
-export const finalize = h.finalize;
-export const employeeDeduction = h.employeeDeduction;
+const g = (ref: string, fn: any) => guard(LEAVE_ACTIONS[ref], fn);
+export const run = g("leave-deduction-handler.run", h.run);
+export const list = g("leave-deduction-handler.list", h.list);
+export const finalize = g("leave-deduction-handler.finalize", h.finalize);
+export const employeeDeduction = g("leave-deduction-handler.employeeDeduction", h.employeeDeduction);

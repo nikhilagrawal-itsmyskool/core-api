@@ -7,6 +7,8 @@ import { leaveAttendanceService } from "./leave-attendance-service";
 import { leaveDeductionService } from "./leave-deduction-service";
 import { leaveHandoverService } from "./leave-handover-service";
 import { ApplyLeaveRequest } from "./leave-interfaces";
+import { guard } from "../auth/authz";
+import { LEAVE_ACTIONS } from "./leave-actions";
 
 const DATE_RE2 = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -222,15 +224,16 @@ class LeaveMeHandler {
 }
 
 const h = new LeaveMeHandler();
-export const listTypes = h.listTypes;
-export const handoverPreview = h.handoverPreview;
-export const summary = h.summary;
-export const listApplications = h.listApplications;
-export const apply = h.apply;
-export const cancel = h.cancel;
-export const attendance = h.attendance;
-export const deductions = h.deductions;
-export const getAttachment = h.getAttachment;
-export const covering = h.covering;
-export const getCovering = h.getCovering;
-export const getCoveringFile = h.getCoveringFile;
+const g = (ref: string, fn: any) => guard(LEAVE_ACTIONS[ref], fn);
+export const listTypes = g("leave-me-handler.listTypes", h.listTypes);
+export const handoverPreview = g("leave-me-handler.handoverPreview", h.handoverPreview);
+export const summary = g("leave-me-handler.summary", h.summary);
+export const listApplications = g("leave-me-handler.listApplications", h.listApplications);
+export const apply = g("leave-me-handler.apply", h.apply);
+export const cancel = g("leave-me-handler.cancel", h.cancel);
+export const attendance = g("leave-me-handler.attendance", h.attendance);
+export const deductions = g("leave-me-handler.deductions", h.deductions);
+export const getAttachment = g("leave-me-handler.getAttachment", h.getAttachment);
+export const covering = g("leave-me-handler.covering", h.covering);
+export const getCovering = g("leave-me-handler.getCovering", h.getCovering);
+export const getCoveringFile = g("leave-me-handler.getCoveringFile", h.getCoveringFile);

@@ -5,6 +5,8 @@ import { resolveSchool, requireApprover, parseBody, requireParam } from "./handl
 import { leaveService } from "./leave-service";
 import { leaveHandoverService } from "./leave-handover-service";
 import { DecisionRequest } from "./leave-interfaces";
+import { guard } from "../auth/authz";
+import { LEAVE_ACTIONS } from "./leave-actions";
 
 const MONTH_RE = /^\d{4}-\d{2}$/;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -238,17 +240,18 @@ class LeaveHandler {
 }
 
 const h = new LeaveHandler();
-export const getConfig = h.getConfig;
-export const updateConfig = h.updateConfig;
-export const getHandover = h.getHandover;
-export const getHandoverFile = h.getHandoverFile;
-export const listTypes = h.listTypes;
-export const updateType = h.updateType;
-export const listApplications = h.listApplications;
-export const getApplication = h.getApplication;
-export const approve = h.approve;
-export const reject = h.reject;
-export const getAttachment = h.getAttachment;
-export const getAudit = h.getAudit;
-export const summary = h.summary;
-export const balance = h.balance;
+const g = (ref: string, fn: any) => guard(LEAVE_ACTIONS[ref], fn);
+export const getConfig = g("leave-handler.getConfig", h.getConfig);
+export const updateConfig = g("leave-handler.updateConfig", h.updateConfig);
+export const getHandover = g("leave-handler.getHandover", h.getHandover);
+export const getHandoverFile = g("leave-handler.getHandoverFile", h.getHandoverFile);
+export const listTypes = g("leave-handler.listTypes", h.listTypes);
+export const updateType = g("leave-handler.updateType", h.updateType);
+export const listApplications = g("leave-handler.listApplications", h.listApplications);
+export const getApplication = g("leave-handler.getApplication", h.getApplication);
+export const approve = g("leave-handler.approve", h.approve);
+export const reject = g("leave-handler.reject", h.reject);
+export const getAttachment = g("leave-handler.getAttachment", h.getAttachment);
+export const getAudit = g("leave-handler.getAudit", h.getAudit);
+export const summary = g("leave-handler.summary", h.summary);
+export const balance = g("leave-handler.balance", h.balance);

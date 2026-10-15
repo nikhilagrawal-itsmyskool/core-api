@@ -4,7 +4,6 @@ import { ErrorCode } from "../../shared/lib/error-codes";
 import { validateSchoolCodeHeader, getAuthorizationHeader } from "../auth/auth-utils";
 import { extractAndVerifyToken } from "../auth/token-utils";
 import { getSchoolIdByCode } from "./leave-common";
-import { APPROVER_ROLES } from "./leave-constants";
 
 export interface RequestContext {
   schoolId: string;
@@ -28,22 +27,15 @@ export async function resolveSchool(
   return { schoolId, schoolCode, userId };
 }
 
-// Resolve the school AND require an approver (god/admin) employee token. Used to
-// gate approve/reject. There is no Director/Principal role yet — see DESIGN.md §5.
+// Oversight endpoints are now gated CENTRALLY by guard(<leave.*>) at each handler's
+// export site (see leave-actions.ts + shared/lib/authz-policy.ts). This helper no longer
+// re-checks roles — doing so would defeat god's per-role grants from the Permissions grid.
+// It just resolves the school context (kept as a named wrapper so call sites read clearly).
 export async function requireApprover(
   event: ApiEvent,
   callback: ApiCallback,
 ): Promise<RequestContext | null> {
-  const ctx = await resolveSchool(event, callback);
-  if (!ctx) return null;
-  const token = extractAndVerifyToken(getAuthorizationHeader(event));
-  const roles = token && Array.isArray(token.roles) ? token.roles : [];
-  const isApprover = !!token && token.type === "employee" && roles.some((r) => (APPROVER_ROLES as readonly string[]).includes(r));
-  if (!isApprover) {
-    ResponseBuilder.forbidden(ErrorCode.MissingPermission, "Only an admin/god user can decide leave", callback);
-    return null;
-  }
-  return ctx;
+  return resolveSchool(event, callback);
 }
 
 // Resolve the logged-in employee from the bearer token (teacher /me surface).

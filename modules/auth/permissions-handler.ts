@@ -52,6 +52,7 @@ const CATALOGS: Record<string, Catalog> = {
       { role: 'teacher', label: 'Teacher' },
     ],
     actions: [
+      { action: ACTIONS.ATTENDANCE_RECORD_VIEW, label: "View a student's attendance (360 view)" },
       { action: ACTIONS.ATTENDANCE_MARK, label: 'Take roll-call: roster, sessions & save marks' },
       { action: ACTIONS.ATTENDANCE_FINALIZE, label: 'Finalize sessions & edit records' },
       { action: ACTIONS.ATTENDANCE_CONFIG_MANAGE, label: 'Manage attendance config (half-day policy)' },
@@ -98,6 +99,25 @@ const CATALOGS: Record<string, Catalog> = {
       { action: ACTIONS.FEE_FINE_EXEMPT, label: 'Exempt a late fine' },
       { action: ACTIONS.FEE_RECEIPT_VERIFY, label: 'Scan & Verify receipts' },
       { action: ACTIONS.FEE_MIGRATION_IMPORT, label: 'Bulk historical import' },
+    ],
+  },
+  leave: {
+    module: 'leave',
+    roles: [
+      { role: 'admin', label: 'Admin' },
+      { role: 'teacher', label: 'Teacher' },
+    ],
+    actions: [
+      { action: ACTIONS.LEAVE_CALENDAR_VIEW, label: "Shared who's-on-leave calendar + coverage handover" },
+      { action: ACTIONS.LEAVE_APPLICATION_APPLY, label: 'Apply for / cancel own leave (self-service)' },
+      { action: ACTIONS.LEAVE_APPLICATION_VIEW, label: "View an application's detail, audit, attachment, balance" },
+      { action: ACTIONS.LEAVE_APPLICATION_APPROVE, label: 'Approve / reject leave applications' },
+      { action: ACTIONS.LEAVE_CONFIG_VIEW, label: 'View leave policy config & leave types' },
+      { action: ACTIONS.LEAVE_CONFIG_MANAGE, label: 'Edit leave policy config & leave types' },
+      { action: ACTIONS.LEAVE_ATTENDANCE_VIEW, label: 'View biometric attendance, day view & mapping' },
+      { action: ACTIONS.LEAVE_ATTENDANCE_MANAGE, label: 'Mark & import biometric attendance, enroll mappings' },
+      { action: ACTIONS.LEAVE_DEDUCTION_VIEW, label: 'View deduction (LOP) runs & an employee’s deductions' },
+      { action: ACTIONS.LEAVE_DEDUCTION_MANAGE, label: 'Run / finalize deduction (LOP) batches' },
     ],
   },
 };

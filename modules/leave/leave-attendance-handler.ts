@@ -5,6 +5,8 @@ import { resolveSchool, requireApprover, parseBody, requireParam } from "./handl
 import { leaveAttendanceService } from "./leave-attendance-service";
 import { importBiometric, ImportMapping } from "./leave-attendance-import";
 import { importTimewatchReport } from "./leave-timewatch-import";
+import { guard } from "../auth/authz";
+import { LEAVE_ACTIONS } from "./leave-actions";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const MONTH_RE = /^\d{4}-\d{2}$/;
@@ -149,10 +151,11 @@ class LeaveAttendanceHandler {
 }
 
 const h = new LeaveAttendanceHandler();
-export const mark = h.mark;
-export const importFile = h.importFile;
-export const importTimewatch = h.importTimewatch;
-export const listMap = h.listMap;
-export const mapEnroll = h.mapEnroll;
-export const employeeAttendance = h.employeeAttendance;
-export const dayView = h.dayView;
+const g = (ref: string, fn: any) => guard(LEAVE_ACTIONS[ref], fn);
+export const mark = g("leave-attendance-handler.mark", h.mark);
+export const importFile = g("leave-attendance-handler.importFile", h.importFile);
+export const importTimewatch = g("leave-attendance-handler.importTimewatch", h.importTimewatch);
+export const listMap = g("leave-attendance-handler.listMap", h.listMap);
+export const mapEnroll = g("leave-attendance-handler.mapEnroll", h.mapEnroll);
+export const employeeAttendance = g("leave-attendance-handler.employeeAttendance", h.employeeAttendance);
+export const dayView = g("leave-attendance-handler.dayView", h.dayView);

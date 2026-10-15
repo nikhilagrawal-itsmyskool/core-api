@@ -63,11 +63,14 @@ export const ACTIONS = {
   STUDENT_VIEW: 'student.view',
   STUDENT_MANAGE: 'student.manage',
   STUDENT_VIEW_CONTACTS: 'student.contacts.view',
-  // Attendance. mark = take roll-call (roster/sessions/save + read config); finalize = finalize
-  // sessions & edit records after finalize; config.manage = the per-school Attendance Config screen
-  // (half-day policy) — GOD-ONLY by default (god grants admin via the Permissions grid if wanted).
-  ATTENDANCE_MARK: 'attendance.mark',
-  ATTENDANCE_FINALIZE: 'attendance.finalize',
+  // Attendance (module.resource.action). session.mark = take roll-call (roster/sessions/save +
+  // read config); session.finalize = finalize sessions & edit records after finalize;
+  // record.view = read a student's own attendance history (the 360 card — teachers + admin);
+  // config.manage = the per-school Attendance Config screen (half-day policy), GOD-ONLY by
+  // default (god grants admin via the Permissions grid if wanted).
+  ATTENDANCE_MARK: 'attendance.session.mark',
+  ATTENDANCE_FINALIZE: 'attendance.session.finalize',
+  ATTENDANCE_RECORD_VIEW: 'attendance.record.view',
   ATTENDANCE_CONFIG_MANAGE: 'attendance.config.manage',
   COMMUNICATION_SEND: 'communication.send',
   COMMUNICATION_TEMPLATE_MANAGE: 'communication.template.manage',
@@ -113,9 +116,19 @@ export const ACTIONS = {
   PROGRAMME_VIEW: 'programme.view',
   PROGRAMME_MANAGE: 'programme.manage',
   ASSISTANT_USE: 'assistant.use',
-  // Staff leave. apply = self-service (teacher/admin); manage = oversight (god-only for now).
-  LEAVE_APPLY: 'leave.apply',
-  LEAVE_MANAGE: 'leave.manage',
+  // Staff leave (strict module.resource.action). Self-service + the shared "who's on leave"
+  // calendar are teacher/admin; all oversight/config/biometric/deduction writes are god-only
+  // for now (god opens cells per-role via the Permissions grid — no live "director" role yet).
+  LEAVE_CALENDAR_VIEW: 'leave.calendar.view', // shared who's-on-leave calendar + coverage handover
+  LEAVE_APPLICATION_APPLY: 'leave.application.apply', // self-service: apply/cancel own leave + /me/*
+  LEAVE_APPLICATION_VIEW: 'leave.application.view', // oversight read: one application's detail, audit, attachment, balance, summary
+  LEAVE_APPLICATION_APPROVE: 'leave.application.approve', // approve / reject applications
+  LEAVE_CONFIG_VIEW: 'leave.config.view', // read leave policy config + leave-type master
+  LEAVE_CONFIG_MANAGE: 'leave.config.manage', // edit leave policy config + leave types
+  LEAVE_ATTENDANCE_VIEW: 'leave.attendance.view', // view biometric attendance, day view, device mapping
+  LEAVE_ATTENDANCE_MANAGE: 'leave.attendance.manage', // mark, import (file/TimeWatch), enroll mappings
+  LEAVE_DEDUCTION_VIEW: 'leave.deduction.view', // view deduction (LOP) runs + an employee's deductions
+  LEAVE_DEDUCTION_MANAGE: 'leave.deduction.manage', // run / finalize deduction batches
   // Home-visit feedback / complaints. view = read category lookup (teachers, to record);
   // record = log + assign to a teacher (teachers); respond = the assigned teacher's reply
   // (teachers, own items only); review = director dashboard + complete/reopen. `review` is
@@ -175,8 +188,9 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
     'student.view',
     'student.manage',
     'student.contacts.view',
-    'attendance.mark',
-    'attendance.finalize',
+    'attendance.session.mark',
+    'attendance.session.finalize',
+    'attendance.record.view',
     // attendance.config.manage is god-only by default (not here); god grants admin via the
     // Permissions grid if a school wants it. Mirrors the god-first convention.
     'communication.send',
@@ -206,7 +220,8 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
     'exam.progress.view',
     'exam.reportcard.manage',
     'fee.receipt.verify', // Scan & Verify (admin + god only; NOT fee incharges)
-    'leave.apply', // Self-service leave only; oversight (leave.manage) is god-only for now
+    'leave.calendar.view', // See the shared who's-on-leave calendar
+    'leave.application.apply', // Self-service own leave; oversight/config/biometric/deduction are god-only for now
     'documents.sign', // Read & sign own documents; authoring (documents.manage) is god-only
     // Clubs & Activities: NONE by default (locked to god). god grants admin what it needs via
     // the Permissions grid. No club.* here on purpose.
@@ -219,13 +234,15 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
     'timetable.view',
     'student.view',
     'student.contacts.view',
+    'attendance.record.view', // read a student's attendance history on the 360 view
     'employee.view',
     'syllabus.view',
     'syllabus.progress.mark',
     'programme.view',
     'assembly.view',
     'academic-calendar.view',
-    'leave.apply',
+    'leave.calendar.view', // See the shared who's-on-leave calendar
+    'leave.application.apply', // Apply for own leave
     'documents.sign',
     // Feedback/complaints: any teacher may record + assign, and respond to items
     // assigned to them. Reviewing/completing (feedback.review) is god-only.
@@ -235,7 +252,7 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
     'club.plan.conduct', // Run own club assignment (guide) + quick closure on the PWA
   ],
   // Class teacher: additive to `teacher` — may MARK attendance and POST homework.
-  'class-teacher': ['attendance.mark', 'homework.post'],
+  'class-teacher': ['attendance.session.mark', 'homework.post'],
   // Club in-charge: READ-ONLY by default across the three club resources (see clubs, the
   // activity bank, and the plan board). Authoring/approve/review/planning are god-first;
   // god grants this role more via the Permissions grid as each school decides.
@@ -281,8 +298,8 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
     'academic-calendar.view',
     'timetable.view',
     'transport.view',
-    'leave.apply',
-    'leave.manage',
+    'leave.calendar.view',
+    'leave.application.apply',
   ],
 };
 
