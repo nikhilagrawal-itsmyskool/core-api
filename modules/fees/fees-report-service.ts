@@ -128,6 +128,7 @@ class FeesReportService {
         left join class c on c.uuid = sc.class_id
         where sc.school_id = $1 and sc.academic_year_id = $2
           and coalesce(s.exam_only, false) = false
+          and coalesce(s.rte, false) = false
           and s.status = 'active'
           and not exists (
             select 1 from student_ledger_entry le
@@ -428,6 +429,7 @@ class FeesReportService {
     if (!ay) throw new BadRequestResult(ErrorCode.InvalidInput, 'academicYearId is required');
     const rows = await DB.query(singleLineString`
       select s.uuid as student_id, s.name, s.admission_number, s.exam_only_reason,
+        coalesce(s.exam_only, false) as exam_only, coalesce(s.rte, false) as rte,
         sc.class_id, c.name as class_name,
         coalesce((select sum(l.debit) from student_ledger_entry l
            where l.school_id = s.school_id and l.student_id = s.uuid and l.academic_year_id = $2
@@ -447,17 +449,20 @@ class FeesReportService {
       left join student_class sc on sc.student_id = s.uuid and sc.school_id = s.school_id
         and sc.academic_year_id = $2 and (sc.status is null or sc.status <> 'deleted')
       left join class c on c.uuid = sc.class_id
-      where s.school_id = $1 and coalesce(s.exam_only, false) = true and s.status <> 'deleted'
+      where s.school_id = $1 and (coalesce(s.exam_only, false) = true or coalesce(s.rte, false) = true) and s.status <> 'deleted'
       order by c.name nulls last, s.name`, [schoolId, ay]);
     const students = rows.map((r: any) => ({
       studentId: r.studentId, name: r.name, admissionNumber: r.admissionNumber,
       className: r.className || null, reason: r.examOnlyReason || null,
+      type: r.rte ? 'rte' : 'exam_only', // RTE students never carry exam_only, so this is unambiguous
       openDemand: Math.max(0, Math.round(Number(r.charged) - Number(r.credited))),
       openCharges: Number(r.openCharges), paid: Math.round(Number(r.paid)),
     }));
     return {
       students,
       totalStudents: students.length,
+      examOnlyCount: students.filter((r: any) => r.type === 'exam_only').length,
+      rteCount: students.filter((r: any) => r.type === 'rte').length,
       totalOpenDemand: students.reduce((s: number, r: any) => s + r.openDemand, 0),
       totalOpenCharges: students.reduce((s: number, r: any) => s + r.openCharges, 0),
     };
@@ -485,7 +490,7 @@ class FeesReportService {
       from student_ledger_entry l
       join student s on s.uuid = l.student_id and s.school_id = l.school_id
       where l.school_id = $1 and l.academic_year_id = $2 and l.kind = 'charge' and l.status = 'active'
-        and coalesce(s.exam_only, false) = true ${subsetWhere}`, params);
+        and (coalesce(s.exam_only, false) = true or coalesce(s.rte, false) = true) ${subsetWhere}`, params);
 
     const toVoid = charges.filter((c: any) => Number(c.pay) < 0.5); // never void a paid charge
     const skippedPaid = charges.length - toVoid.length;
@@ -500,9 +505,9 @@ class FeesReportService {
     const queries: string[] = [];
     const qParams: any[][] = [];
     for (const c of toVoid) {
-      queries.push(singleLineString`update student_ledger_entry set status = 'cancelled', remarks = coalesce(remarks, '') || ' [exam-only-cancel]', updated_at = now(), updatedby_userid = $2 where uuid = $1 and status = 'active'`);
+      queries.push(singleLineString`update student_ledger_entry set status = 'cancelled', remarks = coalesce(remarks, '') || ' [fee-exempt-cancel]', updated_at = now(), updatedby_userid = $2 where uuid = $1 and status = 'active'`);
       qParams.push([c.uuid, userId]);
-      queries.push(singleLineString`update student_ledger_entry set status = 'cancelled', remarks = coalesce(remarks, '') || ' [exam-only-cancel]', updated_at = now() where school_id = $1 and settles_entry_id = $2 and status = 'active' and kind in ('concession', 'waiver')`);
+      queries.push(singleLineString`update student_ledger_entry set status = 'cancelled', remarks = coalesce(remarks, '') || ' [fee-exempt-cancel]', updated_at = now() where school_id = $1 and settles_entry_id = $2 and status = 'active' and kind in ('concession', 'waiver')`);
       qParams.push([schoolId, c.uuid]);
     }
     if (queries.length) await DB.queriesInTransaction(queries, qParams);

@@ -187,12 +187,12 @@ class FeesLedgerService {
       enrolWhere += ` and sc.student_id in (${ph})`;
       enrolParams.push(...opts.studentIds);
     }
-    // exam-only students (enrolled here, studying elsewhere) never accrue demands; nor do
-    // withdrawn/inactive students (left the school) even if a class enrolment still lingers.
+    // exam-only students (studying elsewhere) and RTE students (govt-funded, no fee) never accrue
+    // demands; nor do withdrawn/inactive students (left) even if a class enrolment still lingers.
     const students: any[] = await DB.query(
       singleLineString`select sc.student_id, sc.class_id from student_class sc
         join student s on s.uuid = sc.student_id and s.school_id = sc.school_id
-        where ${enrolWhere} and coalesce(s.exam_only, false) = false and s.status = 'active'`,
+        where ${enrolWhere} and coalesce(s.exam_only, false) = false and coalesce(s.rte, false) = false and s.status = 'active'`,
       enrolParams
     );
     if (!students.length) return { posted: 0, students: 0 };
