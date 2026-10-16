@@ -6,6 +6,8 @@ import { medicalPurchaseService } from './medical-purchase-service';
 import { medicalItemService } from './medical-item-service';
 import { CreatePurchaseLogRequest, UpdatePurchaseLogRequest } from './medical-interfaces';
 import { getDefaultStartDate, getDefaultEndDate, isValidDate } from '../../shared/util/datetime';
+import { guard } from '../auth/authz';
+import { MEDICAL_ACTIONS } from './medical-actions';
 
 class MedicalPurchaseHandler {
   public create = async (
@@ -224,8 +226,9 @@ class MedicalPurchaseHandler {
 }
 
 const handler = new MedicalPurchaseHandler();
-export const create = handler.create;
-export const update = handler.update;
-export const remove = handler.remove;
-export const getById = handler.getById;
-export const list = handler.list;
+const g = (ref: string, fn: any) => guard(MEDICAL_ACTIONS[ref], fn);
+export const create = g('medical-purchase-handler.create', handler.create);
+export const update = g('medical-purchase-handler.update', handler.update);
+export const remove = g('medical-purchase-handler.remove', handler.remove);
+export const getById = g('medical-purchase-handler.getById', handler.getById);
+export const list = g('medical-purchase-handler.list', handler.list);

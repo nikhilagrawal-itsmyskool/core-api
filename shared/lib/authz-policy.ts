@@ -16,8 +16,14 @@
 // Canonical action catalog (mirror of actions.js ACTIONS). Handlers/manifests should
 // reference these constants rather than raw strings so a typo is a compile error.
 export const ACTIONS = {
-  MEDICAL_VIEW: 'medical.view',
-  MEDICAL_MANAGE: 'medical.manage',
+  // Medical inventory (strict module.resource.action). admin + medical-incharge hold the
+  // medical.* wildcard (everything); teachers get the two read leaves (see stock + issues).
+  MEDICAL_INVENTORY_VIEW: 'medical.inventory.view',
+  MEDICAL_INVENTORY_MANAGE: 'medical.inventory.manage',
+  MEDICAL_PURCHASE_VIEW: 'medical.purchase.view',
+  MEDICAL_PURCHASE_MANAGE: 'medical.purchase.manage',
+  MEDICAL_ISSUE_VIEW: 'medical.issue.view',
+  MEDICAL_ISSUE_MANAGE: 'medical.issue.manage',
   LAB_VIEW: 'lab.view',
   LAB_MANAGE: 'lab.manage',
   FINE_VIEW: 'fine.view',
@@ -228,6 +234,8 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
   ],
   // Standard teaching staff: view-only across the modules they can reach.
   teacher: [
+    'medical.inventory.view', // See medicine stock
+    'medical.issue.view', // See what has been issued
     'sports.view',
     'library.view',
     'supplies.view',

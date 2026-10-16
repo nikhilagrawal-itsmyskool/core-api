@@ -7,6 +7,8 @@ import { medicalItemService } from './medical-item-service';
 import { CreateIssueLogRequest, UpdateIssueLogRequest } from './medical-interfaces';
 import { ENTITY_TYPES } from './medical-constants';
 import { getDefaultStartDate, getDefaultEndDate, isValidDate } from '../../shared/util/datetime';
+import { guard } from '../auth/authz';
+import { MEDICAL_ACTIONS } from './medical-actions';
 
 class MedicalIssueHandler {
   public create = async (
@@ -261,8 +263,9 @@ class MedicalIssueHandler {
 }
 
 const handler = new MedicalIssueHandler();
-export const create = handler.create;
-export const update = handler.update;
-export const remove = handler.remove;
-export const getById = handler.getById;
-export const list = handler.list;
+const g = (ref: string, fn: any) => guard(MEDICAL_ACTIONS[ref], fn);
+export const create = g('medical-issue-handler.create', handler.create);
+export const update = g('medical-issue-handler.update', handler.update);
+export const remove = g('medical-issue-handler.remove', handler.remove);
+export const getById = g('medical-issue-handler.getById', handler.getById);
+export const list = g('medical-issue-handler.list', handler.list);

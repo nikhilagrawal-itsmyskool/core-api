@@ -120,6 +120,22 @@ const CATALOGS: Record<string, Catalog> = {
       { action: ACTIONS.LEAVE_DEDUCTION_MANAGE, label: 'Run / finalize deduction (LOP) batches' },
     ],
   },
+  medical: {
+    module: 'medical',
+    roles: [
+      { role: 'admin', label: 'Admin' },
+      { role: 'medical-incharge', label: 'Medical In-charge' },
+      { role: 'teacher', label: 'Teacher' },
+    ],
+    actions: [
+      { action: ACTIONS.MEDICAL_INVENTORY_VIEW, label: 'View inventory items & stock' },
+      { action: ACTIONS.MEDICAL_INVENTORY_MANAGE, label: 'Add / edit / delete inventory items' },
+      { action: ACTIONS.MEDICAL_PURCHASE_VIEW, label: 'View purchases, batches, expiring stock & bills' },
+      { action: ACTIONS.MEDICAL_PURCHASE_MANAGE, label: 'Record / edit / delete purchases, batches & bills' },
+      { action: ACTIONS.MEDICAL_ISSUE_VIEW, label: 'View the issue log (what has been issued)' },
+      { action: ACTIONS.MEDICAL_ISSUE_MANAGE, label: 'Record / edit / delete issues' },
+    ],
+  },
 };
 
 const DEFAULT_MODULE = 'examination';

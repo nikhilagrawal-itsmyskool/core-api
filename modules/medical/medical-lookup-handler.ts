@@ -1,6 +1,8 @@
 import { ApiCallback, ApiContext, ApiEvent } from '../../shared/lib/api.interfaces';
 import { ResponseBuilder } from '../../shared/lib/response-builder';
 import { MEDICAL_UNITS, ENTITY_TYPES } from './medical-constants';
+import { guard } from '../auth/authz';
+import { MEDICAL_ACTIONS } from './medical-actions';
 
 class MedicalLookupHandler {
   public getUnits = (
@@ -14,4 +16,4 @@ class MedicalLookupHandler {
 }
 
 const handler = new MedicalLookupHandler();
-export const getUnits = handler.getUnits;
+export const getUnits = guard(MEDICAL_ACTIONS['medical-lookup-handler.getUnits'], handler.getUnits);

@@ -11,6 +11,8 @@ import {
   ExpiringPurchase,
 } from './medical-interfaces';
 import { isValidDate, getDefaultStartDate, getDefaultEndDate } from '../../shared/util/datetime';
+import { guard } from '../auth/authz';
+import { MEDICAL_ACTIONS } from './medical-actions';
 
 const ALLOWED_BILL_MIME_TYPES = ['application/pdf', 'image/jpeg', 'image/png'];
 
@@ -412,13 +414,14 @@ class MedicalPurchaseBatchHandler {
 }
 
 const handler = new MedicalPurchaseBatchHandler();
-export const createBulk = handler.createBulk;
-export const list = handler.list;
-export const getById = handler.getById;
-export const update = handler.update;
-export const remove = handler.remove;
-export const restore = handler.restore;
-export const uploadBill = handler.uploadBill;
-export const getBill = handler.getBill;
-export const deleteBill = handler.deleteBill;
-export const listExpiring = handler.listExpiring;
+const g = (ref: string, fn: any) => guard(MEDICAL_ACTIONS[ref], fn);
+export const createBulk = g('medical-purchase-batch-handler.createBulk', handler.createBulk);
+export const list = g('medical-purchase-batch-handler.list', handler.list);
+export const getById = g('medical-purchase-batch-handler.getById', handler.getById);
+export const update = g('medical-purchase-batch-handler.update', handler.update);
+export const remove = g('medical-purchase-batch-handler.remove', handler.remove);
+export const restore = g('medical-purchase-batch-handler.restore', handler.restore);
+export const uploadBill = g('medical-purchase-batch-handler.uploadBill', handler.uploadBill);
+export const getBill = g('medical-purchase-batch-handler.getBill', handler.getBill);
+export const deleteBill = g('medical-purchase-batch-handler.deleteBill', handler.deleteBill);
+export const listExpiring = g('medical-purchase-batch-handler.listExpiring', handler.listExpiring);

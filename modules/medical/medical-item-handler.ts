@@ -6,6 +6,8 @@ import { validateSchoolCodeHeader } from '../auth/auth-utils';
 import { medicalItemService } from './medical-item-service';
 import { CreateMedicalItemRequest, UpdateMedicalItemRequest } from './medical-interfaces';
 import { MEDICAL_UNITS } from './medical-constants';
+import { guard } from '../auth/authz';
+import { MEDICAL_ACTIONS } from './medical-actions';
 
 class MedicalItemHandler {
   public create = async (
@@ -210,8 +212,9 @@ class MedicalItemHandler {
 }
 
 const handler = new MedicalItemHandler();
-export const create = handler.create;
-export const update = handler.update;
-export const remove = handler.remove;
-export const getById = handler.getById;
-export const search = handler.search;
+const g = (ref: string, fn: any) => guard(MEDICAL_ACTIONS[ref], fn);
+export const create = g('medical-item-handler.create', handler.create);
+export const update = g('medical-item-handler.update', handler.update);
+export const remove = g('medical-item-handler.remove', handler.remove);
+export const getById = g('medical-item-handler.getById', handler.getById);
+export const search = g('medical-item-handler.search', handler.search);
