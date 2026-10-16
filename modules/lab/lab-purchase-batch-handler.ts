@@ -10,6 +10,8 @@ import {
   LabAlertItem,
 } from './lab-interfaces';
 import { isValidDate } from '../../shared/util/datetime';
+import { guard } from '../auth/authz';
+import { LAB_ACTIONS } from './lab-actions';
 
 class LabPurchaseBatchHandler {
   public createBulk = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
@@ -346,13 +348,14 @@ class LabPurchaseBatchHandler {
 }
 
 const handler = new LabPurchaseBatchHandler();
-export const createBulk = handler.createBulk;
-export const list = handler.list;
-export const getById = handler.getById;
-export const update = handler.update;
-export const remove = handler.remove;
-export const restore = handler.restore;
-export const listAlerts = handler.listAlerts;
-export const uploadBill = handler.uploadBill;
-export const getBill = handler.getBill;
-export const deleteBill = handler.deleteBill;
+const g = (ref: string, fn: any) => guard(LAB_ACTIONS[ref], fn);
+export const createBulk = g('lab-purchase-batch-handler.createBulk', handler.createBulk);
+export const list = g('lab-purchase-batch-handler.list', handler.list);
+export const getById = g('lab-purchase-batch-handler.getById', handler.getById);
+export const update = g('lab-purchase-batch-handler.update', handler.update);
+export const remove = g('lab-purchase-batch-handler.remove', handler.remove);
+export const restore = g('lab-purchase-batch-handler.restore', handler.restore);
+export const listAlerts = g('lab-purchase-batch-handler.listAlerts', handler.listAlerts);
+export const uploadBill = g('lab-purchase-batch-handler.uploadBill', handler.uploadBill);
+export const getBill = g('lab-purchase-batch-handler.getBill', handler.getBill);
+export const deleteBill = g('lab-purchase-batch-handler.deleteBill', handler.deleteBill);

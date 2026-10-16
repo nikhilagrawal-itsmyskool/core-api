@@ -6,6 +6,8 @@ import { labItemService } from './lab-item-service';
 import { labService } from './lab-service';
 import { CreateLabItemRequest, UpdateLabItemRequest, CreateLabItemBulkRequest } from './lab-interfaces';
 import { LAB_UNITS, ITEM_TYPES, ITEM_CONDITIONS } from './lab-constants';
+import { guard } from '../auth/authz';
+import { LAB_ACTIONS } from './lab-actions';
 
 class LabItemHandler {
   public create = async (
@@ -321,9 +323,10 @@ class LabItemHandler {
 }
 
 const handler = new LabItemHandler();
-export const create = handler.create;
-export const createBulk = handler.createBulk;
-export const update = handler.update;
-export const remove = handler.remove;
-export const getById = handler.getById;
-export const search = handler.search;
+const g = (ref: string, fn: any) => guard(LAB_ACTIONS[ref], fn);
+export const create = g('lab-item-handler.create', handler.create);
+export const createBulk = g('lab-item-handler.createBulk', handler.createBulk);
+export const update = g('lab-item-handler.update', handler.update);
+export const remove = g('lab-item-handler.remove', handler.remove);
+export const getById = g('lab-item-handler.getById', handler.getById);
+export const search = g('lab-item-handler.search', handler.search);

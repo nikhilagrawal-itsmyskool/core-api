@@ -11,6 +11,7 @@ import { TRANSPORT_ACTIONS, TRANSPORT_PUBLIC } from '../../../modules/transport/
 import { TIMETABLE_ACTIONS, TIMETABLE_PUBLIC } from '../../../modules/timetable/timetable-actions';
 import { LEAVE_ACTIONS, LEAVE_PUBLIC } from '../../../modules/leave/leave-actions';
 import { MEDICAL_ACTIONS, MEDICAL_PUBLIC } from '../../../modules/medical/medical-actions';
+import { LAB_ACTIONS, LAB_PUBLIC } from '../../../modules/lab/lab-actions';
 
 // One coverage guard for every gated module: each `handler:` in the module's
 // *-endpoints.yml must have an explicit authorization decision — gated (in the
@@ -29,6 +30,7 @@ const MODULES: Array<{ name: string; yml: string; actions: Record<string, string
   { name: 'timetable', yml: 'modules/timetable/timetable-endpoints.yml', actions: TIMETABLE_ACTIONS, pub: TIMETABLE_PUBLIC },
   { name: 'leave', yml: 'modules/leave/leave-endpoints.yml', actions: LEAVE_ACTIONS, pub: LEAVE_PUBLIC },
   { name: 'medical', yml: 'modules/medical/medical-endpoints.yml', actions: MEDICAL_ACTIONS, pub: MEDICAL_PUBLIC },
+  { name: 'lab', yml: 'modules/lab/lab-endpoints.yml', actions: LAB_ACTIONS, pub: LAB_PUBLIC },
 ];
 
 function handlerRefs(ymlRel: string): string[] {

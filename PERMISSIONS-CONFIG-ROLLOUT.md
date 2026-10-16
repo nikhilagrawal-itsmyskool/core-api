@@ -53,9 +53,9 @@ POST). On `main` today → `authz-coverage` fails for communication regardless o
 
 Unguarded modules (any logged-in employee has full access today) — do first:
 
-- [x] leave — 10 actions `leave.{calendar.view, application.(apply|view|approve), config.(view|manage), attendance.(view|manage), deduction.(view|manage)}`; teacher/admin hold calendar.view+application.apply, rest god-first. Backend guarded (all 37 endpoints) + `CATALOGS['leave']` + coverage test + frontend Permissions.jsx + Config menu + guard end-to-end test. tsc ✓, authz tests ✓, both builds ✓, 9/9 leave integration ✓. NOT committed/deployed.
-- [ ] medical
-- [ ] lab
+- [x] leave — 10 actions `leave.{calendar.view, application.(apply|view|approve), config.(view|manage), attendance.(view|manage), deduction.(view|manage)}`; teacher/admin hold calendar.view+application.apply, rest god-first. Backend guarded (all 37 endpoints) + `CATALOGS['leave']` + coverage test + frontend Permissions.jsx + Config menu + guard end-to-end test. tsc ✓, authz tests ✓, both builds ✓, 9/9 leave integration ✓. committed 4bd211b/9aaa991, PROD 2026-10-16.
+- [x] medical — 6 actions `medical.{inventory,purchase,issue}.{view,manage}`; admin+medical-incharge keep `medical.*`, **teacher gets inventory.view + issue.view**, god via `*`. All 27 endpoints guarded + `CATALOGS['medical']` + coverage + guard test; frontend Permissions menu + teacher-safe ItemList/IssueList (write controls hidden). committed + PROD 2026-10-16 (core-api eef78a8 auth+leave+medical deployed; admin-portal 59413b1 pushed→Amplify). (medical-issue.test.ts 9 failures are PRE-EXISTING — fail identically with guards stashed.)
+- [x] lab — 10 actions `lab.{setup,inventory,purchase,issue,breakage}.{view,manage}`; admin+lab-incharge keep `lab.*`, **teacher gets inventory.view + issue.view** (lookups ride inventory.view), god via `*`. All 43 endpoints guarded + `CATALOGS['lab']` + coverage + guard test; frontend Permissions menu + teacher-safe LabItemList/LabIssueList. tsc ✓, authz+parity ✓, builds ✓, 82/82 lab integration ✓. committed + PROD 2026-10-16.
 - [ ] sports
 - [ ] asset
 - [ ] library

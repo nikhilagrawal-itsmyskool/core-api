@@ -5,6 +5,8 @@ import { validateSchoolCodeHeader } from '../auth/auth-utils';
 import { labService } from './lab-service';
 import { CreateLabRequest, UpdateLabRequest } from './lab-interfaces';
 import { LAB_TYPES, LAB_STATUS_VALUES } from './lab-constants';
+import { guard } from '../auth/authz';
+import { LAB_ACTIONS } from './lab-actions';
 
 class LabHandler {
   public create = async (
@@ -205,8 +207,9 @@ class LabHandler {
 }
 
 const handler = new LabHandler();
-export const create = handler.create;
-export const update = handler.update;
-export const remove = handler.remove;
-export const getById = handler.getById;
-export const list = handler.list;
+const g = (ref: string, fn: any) => guard(LAB_ACTIONS[ref], fn);
+export const create = g('lab-handler.create', handler.create);
+export const update = g('lab-handler.update', handler.update);
+export const remove = g('lab-handler.remove', handler.remove);
+export const getById = g('lab-handler.getById', handler.getById);
+export const list = g('lab-handler.list', handler.list);

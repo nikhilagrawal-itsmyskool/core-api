@@ -136,6 +136,26 @@ const CATALOGS: Record<string, Catalog> = {
       { action: ACTIONS.MEDICAL_ISSUE_MANAGE, label: 'Record / edit / delete issues' },
     ],
   },
+  lab: {
+    module: 'lab',
+    roles: [
+      { role: 'admin', label: 'Admin' },
+      { role: 'lab-incharge', label: 'Lab In-charge' },
+      { role: 'teacher', label: 'Teacher' },
+    ],
+    actions: [
+      { action: ACTIONS.LAB_SETUP_VIEW, label: 'View the Labs registry & lookups' },
+      { action: ACTIONS.LAB_SETUP_MANAGE, label: 'Create / edit / delete labs' },
+      { action: ACTIONS.LAB_INVENTORY_VIEW, label: 'View inventory items & stock' },
+      { action: ACTIONS.LAB_INVENTORY_MANAGE, label: 'Add / edit / delete inventory items' },
+      { action: ACTIONS.LAB_PURCHASE_VIEW, label: 'View purchases, batches, alerts & bills' },
+      { action: ACTIONS.LAB_PURCHASE_MANAGE, label: 'Record / edit / delete purchases, batches & bills' },
+      { action: ACTIONS.LAB_ISSUE_VIEW, label: 'View the issue log (what has been issued)' },
+      { action: ACTIONS.LAB_ISSUE_MANAGE, label: 'Record / edit / delete / return issues' },
+      { action: ACTIONS.LAB_BREAKAGE_VIEW, label: 'View the breakage log' },
+      { action: ACTIONS.LAB_BREAKAGE_MANAGE, label: 'Record / edit / delete breakages' },
+    ],
+  },
 };
 
 const DEFAULT_MODULE = 'examination';

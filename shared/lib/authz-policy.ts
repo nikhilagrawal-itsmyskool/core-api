@@ -24,8 +24,18 @@ export const ACTIONS = {
   MEDICAL_PURCHASE_MANAGE: 'medical.purchase.manage',
   MEDICAL_ISSUE_VIEW: 'medical.issue.view',
   MEDICAL_ISSUE_MANAGE: 'medical.issue.manage',
-  LAB_VIEW: 'lab.view',
-  LAB_MANAGE: 'lab.manage',
+  // Lab inventory (strict module.resource.action). admin + lab-incharge hold the lab.*
+  // wildcard (everything); teachers get the two read leaves (inventory.view + issue.view).
+  LAB_SETUP_VIEW: 'lab.setup.view',
+  LAB_SETUP_MANAGE: 'lab.setup.manage',
+  LAB_INVENTORY_VIEW: 'lab.inventory.view',
+  LAB_INVENTORY_MANAGE: 'lab.inventory.manage',
+  LAB_PURCHASE_VIEW: 'lab.purchase.view',
+  LAB_PURCHASE_MANAGE: 'lab.purchase.manage',
+  LAB_ISSUE_VIEW: 'lab.issue.view',
+  LAB_ISSUE_MANAGE: 'lab.issue.manage',
+  LAB_BREAKAGE_VIEW: 'lab.breakage.view',
+  LAB_BREAKAGE_MANAGE: 'lab.breakage.manage',
   FINE_VIEW: 'fine.view',
   FINE_MANAGE: 'fine.manage',
   // Fees — module.resource.action, NO fee.* wildcard (every role lists exactly what it holds).
@@ -236,6 +246,8 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
   teacher: [
     'medical.inventory.view', // See medicine stock
     'medical.issue.view', // See what has been issued
+    'lab.inventory.view', // See lab stock
+    'lab.issue.view', // See what lab items have been issued
     'sports.view',
     'library.view',
     'supplies.view',

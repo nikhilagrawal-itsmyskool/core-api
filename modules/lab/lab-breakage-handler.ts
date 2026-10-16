@@ -8,6 +8,8 @@ import { labService } from './lab-service';
 import { CreateBreakageLogRequest, UpdateBreakageLogRequest } from './lab-interfaces';
 import { RESPONSIBLE_TYPES, BREAKAGE_CAUSES, BREAKAGE_ACTIONS, BREAKAGE_STATUSES } from './lab-constants';
 import { getDefaultStartDate, getDefaultEndDate, isValidDate } from '../../shared/util/datetime';
+import { guard } from '../auth/authz';
+import { LAB_ACTIONS } from './lab-actions';
 
 class LabBreakageHandler {
   public create = async (
@@ -302,10 +304,11 @@ class LabBreakageHandler {
 }
 
 const handler = new LabBreakageHandler();
-export const create = handler.create;
-export const update = handler.update;
-export const remove = handler.remove;
-export const getById = handler.getById;
-export const list = handler.list;
-export const getImage = handler.getImage;
-export const deleteImage = handler.deleteImage;
+const g = (ref: string, fn: any) => guard(LAB_ACTIONS[ref], fn);
+export const create = g('lab-breakage-handler.create', handler.create);
+export const update = g('lab-breakage-handler.update', handler.update);
+export const remove = g('lab-breakage-handler.remove', handler.remove);
+export const getById = g('lab-breakage-handler.getById', handler.getById);
+export const list = g('lab-breakage-handler.list', handler.list);
+export const getImage = g('lab-breakage-handler.getImage', handler.getImage);
+export const deleteImage = g('lab-breakage-handler.deleteImage', handler.deleteImage);

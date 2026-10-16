@@ -8,6 +8,8 @@ import { labService } from './lab-service';
 import { CreateIssueLogRequest, UpdateIssueLogRequest, ReturnItemRequest } from './lab-interfaces';
 import { ISSUE_TYPES, ISSUED_TO_TYPES, RETURN_CONDITIONS } from './lab-constants';
 import { getDefaultStartDate, getDefaultEndDate, isValidDate } from '../../shared/util/datetime';
+import { guard } from '../auth/authz';
+import { LAB_ACTIONS } from './lab-actions';
 
 class LabIssueHandler {
   public create = async (
@@ -326,9 +328,10 @@ class LabIssueHandler {
 }
 
 const handler = new LabIssueHandler();
-export const create = handler.create;
-export const update = handler.update;
-export const remove = handler.remove;
-export const getById = handler.getById;
-export const list = handler.list;
-export const returnItem = handler.returnItem;
+const g = (ref: string, fn: any) => guard(LAB_ACTIONS[ref], fn);
+export const create = g('lab-issue-handler.create', handler.create);
+export const update = g('lab-issue-handler.update', handler.update);
+export const remove = g('lab-issue-handler.remove', handler.remove);
+export const getById = g('lab-issue-handler.getById', handler.getById);
+export const list = g('lab-issue-handler.list', handler.list);
+export const returnItem = g('lab-issue-handler.returnItem', handler.returnItem);

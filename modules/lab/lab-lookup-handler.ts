@@ -1,5 +1,7 @@
 import { ApiCallback, ApiContext, ApiEvent } from '../../shared/lib/api.interfaces';
 import { ResponseBuilder } from '../../shared/lib/response-builder';
+import { guard } from '../auth/authz';
+import { LAB_ACTIONS } from './lab-actions';
 import {
   LAB_UNITS, LAB_TYPES, ITEM_TYPES, ITEM_CONDITIONS,
   ISSUE_TYPES, CATEGORIES_BY_LAB_TYPE,
@@ -53,7 +55,8 @@ class LabLookupHandler {
 }
 
 const handler = new LabLookupHandler();
-export const getUnits = handler.getUnits;
-export const getCategories = handler.getCategories;
-export const getLabTypes = handler.getLabTypes;
-export const getConditions = handler.getConditions;
+const g = (ref: string, fn: any) => guard(LAB_ACTIONS[ref], fn);
+export const getUnits = g('lab-lookup-handler.getUnits', handler.getUnits);
+export const getCategories = g('lab-lookup-handler.getCategories', handler.getCategories);
+export const getLabTypes = g('lab-lookup-handler.getLabTypes', handler.getLabTypes);
+export const getConditions = g('lab-lookup-handler.getConditions', handler.getConditions);

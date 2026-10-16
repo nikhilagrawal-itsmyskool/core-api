@@ -7,6 +7,8 @@ import { labItemService } from './lab-item-service';
 import { labService } from './lab-service';
 import { CreatePurchaseLogRequest, UpdatePurchaseLogRequest } from './lab-interfaces';
 import { isValidDate } from '../../shared/util/datetime';
+import { guard } from '../auth/authz';
+import { LAB_ACTIONS } from './lab-actions';
 
 class LabPurchaseHandler {
   public create = async (
@@ -229,8 +231,9 @@ class LabPurchaseHandler {
 }
 
 const handler = new LabPurchaseHandler();
-export const create = handler.create;
-export const update = handler.update;
-export const remove = handler.remove;
-export const getById = handler.getById;
-export const list = handler.list;
+const g = (ref: string, fn: any) => guard(LAB_ACTIONS[ref], fn);
+export const create = g('lab-purchase-handler.create', handler.create);
+export const update = g('lab-purchase-handler.update', handler.update);
+export const remove = g('lab-purchase-handler.remove', handler.remove);
+export const getById = g('lab-purchase-handler.getById', handler.getById);
+export const list = g('lab-purchase-handler.list', handler.list);
