@@ -649,9 +649,11 @@ class ReportService {
   }
 
   // ── Format config (Phase B.2): edit a scheme's labels/columns/areas/scale ───────────
-  // EDIT-only (update existing rows by uuid). Codes stay fixed — marks reference component_code
-  // + subject_code, and area grades reference the area uuid — so changing a label/max/range/etc.
-  // never orphans a value. (Add/remove/reorder is a later pass.)
+  // Components + subjects + grade scales are EDIT-only (codes stay fixed — marks reference
+  // component_code + subject_code). Co-scholastic AREAS additionally support ADD (payload row with no
+  // uuid → insert) and soft-DELETE (payload.removedAreaUuids) + changing value_type/scale_kind, since
+  // area grades reference the area uuid and simply drop when the area goes inactive. Components also
+  // expose denominator_editable (the class-test-style per-student "out of" toggle).
   async getScheme(schoolId: string, ayId: string, band: string, userId: string): Promise<any> {
     await this.ensureSchemes(schoolId, ayId, userId);
     const sc = await DB.query(
@@ -679,8 +681,9 @@ class ReportService {
     const now = new Date();
     for (const c of payload.components || []) {
       if (!c.uuid) continue;
-      await DB.query(singleLineString`update exam_report_component set label = $2, max_marks = $3, updatedby_userid = $4, updated_at = $5 where uuid = $1 and scheme_id = $6 and status = 'active'`,
-        [c.uuid, String(c.label || "").slice(0, 64), Number(c.maxMarks) || 0, userId, now, schemeId]);
+      const cdenom = c.denominatorEditable ? 1 : null; // per-student "out of" (class-test-style) toggle
+      await DB.query(singleLineString`update exam_report_component set label = $2, max_marks = $3, denominator_editable = $4, updatedby_userid = $5, updated_at = $6 where uuid = $1 and scheme_id = $7 and status = 'active'`,
+        [c.uuid, String(c.label || "").slice(0, 64), Number(c.maxMarks) || 0, cdenom, userId, now, schemeId]);
     }
     for (const s of payload.subjects || []) {
       if (!s.uuid) continue;
@@ -688,13 +691,28 @@ class ReportService {
       await DB.query(singleLineString`update exam_report_subject set report_label = $2, syllabus_subject = $3, applies_to_grades = $4, sort_order = coalesce($5, sort_order), updatedby_userid = $6, updated_at = $7 where uuid = $1 and scheme_id = $8 and status = 'active'`,
         [s.uuid, String(s.reportLabel || "").slice(0, 64), s.syllabusSubject ? String(s.syllabusSubject).slice(0, 128) : null, s.appliesToGrades ? String(s.appliesToGrades).slice(0, 64) : null, ssort, userId, now, schemeId]);
     }
+    // Co-scholastic areas: soft-delete the explicitly removed ones first (area_grade rows for an
+    // inactive area are simply ignored), then create (no uuid) / update the rest.
+    for (const uuid of payload.removedAreaUuids || []) {
+      if (!uuid) continue;
+      await DB.query(singleLineString`update exam_report_area set status = 'deleted', updatedby_userid = $2, updated_at = $3 where uuid = $1 and scheme_id = $4 and status = 'active'`,
+        [uuid, userId, now, schemeId]);
+    }
     for (const a of payload.areas || []) {
-      if (!a.uuid) continue;
       const asort = typeof a.sortOrder === "number" ? a.sortOrder : null; // reorder support
-      const amax = a.max === "" || a.max == null ? null : Number(a.max); // co-scholastic out-of
-      const adenom = a.denomEditable ? 1 : null;
-      await DB.query(singleLineString`update exam_report_area set section = $2, label = $3, max_marks = $4, denominator_editable = $5, sort_order = coalesce($6, sort_order), updatedby_userid = $7, updated_at = $8 where uuid = $1 and scheme_id = $9 and status = 'active'`,
-        [a.uuid, String(a.section || "").slice(0, 48), String(a.label || "").slice(0, 128), amax, adenom, asort, userId, now, schemeId]);
+      const vt = ["marks", "grade", "text"].includes(a.valueType) ? a.valueType : "marks";
+      const sk = a.scaleKind === "coscholastic10" ? "coscholastic10" : "coscholastic"; // /10 raw vs /100 percent
+      const amax = vt === "marks" && !(a.max === "" || a.max == null) ? Number(a.max) : null; // out-of (marks only)
+      const adenom = vt === "marks" && a.denomEditable ? 1 : null; // per-class "out of" (marks only)
+      const section = String(a.section || "").slice(0, 48);
+      const label = String(a.label || "").slice(0, 128);
+      if (a.uuid) {
+        await DB.query(singleLineString`update exam_report_area set section = $2, label = $3, value_type = $4, scale_kind = $5, max_marks = $6, denominator_editable = $7, sort_order = coalesce($8, sort_order), updatedby_userid = $9, updated_at = $10 where uuid = $1 and scheme_id = $11 and status = 'active'`,
+          [a.uuid, section, label, vt, sk, amax, adenom, asort, userId, now, schemeId]);
+      } else if (label) { // new area — skip blank rows
+        await DB.query(singleLineString`insert into exam_report_area (uuid, school_id, academic_year_id, scheme_id, section, label, scale_kind, value_type, max_marks, denominator_editable, sort_order, status, createdby_userid, created_at) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'active',$12,$13)`,
+          [generateShortUuid(12), schoolId, ayId, schemeId, section, label, sk, vt, amax, adenom, asort, userId, now]);
+      }
     }
     for (const g of payload.gradeScales || []) {
       if (!g.uuid) continue;
