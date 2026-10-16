@@ -2,7 +2,7 @@ import { ApiCallback, ApiContext, ApiEvent } from '../../shared/lib/api.interfac
 import { ErrorCode } from '../../shared/lib/error-codes';
 import { ResponseBuilder } from '../../shared/lib/response-builder';
 import { DB } from '../../shared/lib/db';
-import { ACTIONS, reloadPermissionOverrides } from '../../shared/lib/authz-policy';
+import { ACTIONS, reloadPermissionOverrides, reloadUserGrants } from '../../shared/lib/authz-policy';
 import { requireAction, getCaller } from './authz';
 const { generateShortUuid } = require('../../shared/util/generate-uuid.js');
 
@@ -292,6 +292,95 @@ class PermissionsHandler {
     }
   }
 
+  // GET /auth/permissions/grants?module=<key>  — active (non-expired, non-revoked) temporary
+  // per-employee grants, optionally narrowed to one module's actions, with the teacher's name.
+  public async listGrants(event: ApiEvent, context: ApiContext, callback: ApiCallback) {
+    context.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const caller = requireAction(event, ACTIONS.AUTHZ_MANAGE, callback);
+      if (!caller) return;
+      const moduleKey = event.queryStringParameters && event.queryStringParameters.module;
+      const rows = await DB.query(
+        'select g.uuid, g.employee_id, e.name as employee_name, g.action, g.reason, ' +
+          'g.granted_by_userid, extract(epoch from g.granted_at) * 1000 as granted_ms, ' +
+          'extract(epoch from g.expires_at) * 1000 as expires_ms ' +
+          'from authz_user_grant g left join employee e on e.uuid = g.employee_id ' +
+          'where g.revoked_at is null and g.expires_at > now() order by g.expires_at'
+      );
+      let grants = rows || [];
+      if (moduleKey && CATALOGS[moduleKey]) {
+        const inModule = new Set(CATALOGS[moduleKey].actions.map((a) => a.action));
+        grants = grants.filter((r: any) => inModule.has(r.action));
+      }
+      return ResponseBuilder.ok({ grants }, callback);
+    } catch (err) {
+      return ResponseBuilder.handleError(err, callback);
+    }
+  }
+
+  // POST /auth/permissions/grants  { employeeId, actions: string[], durationHours, reason }
+  // Assign one teacher a set of actions for durationHours (god-only). One row per action.
+  public async createGrants(event: ApiEvent, context: ApiContext, callback: ApiCallback) {
+    context.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const caller = requireAction(event, ACTIONS.AUTHZ_MANAGE, callback);
+      if (!caller) return;
+      const body = this._body(event);
+      if (!body) return ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'Request body is required', callback);
+
+      const employeeId = String(body.employeeId || '').trim();
+      const actions: string[] = Array.isArray(body.actions) ? body.actions.map((a: any) => String(a).trim()) : [];
+      const durationHours = Number(body.durationHours);
+      const reason = body.reason ? String(body.reason).slice(0, 255) : null;
+
+      if (!employeeId) return ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'employeeId is required', callback);
+      if (!actions.length) return ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'At least one action is required', callback);
+      const unknown = actions.filter((a) => !ALL_ACTIONS.has(a));
+      if (unknown.length) return ResponseBuilder.badRequest(ErrorCode.InvalidInput, `Unknown action(s): ${unknown.join(', ')}`, callback);
+      if (!Number.isFinite(durationHours) || durationHours < 1 || durationHours > 720) {
+        return ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'durationHours must be an integer between 1 and 720', callback);
+      }
+      const hours = Math.floor(durationHours);
+
+      // The grant is scoped to the teacher's own school (employee_id is globally unique).
+      const emp = await DB.query('select uuid, school_id, name from employee where uuid = $1', [employeeId]);
+      if (!emp.length) return ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'Unknown employee', callback);
+      const schoolId = emp[0].schoolId;
+
+      for (const action of actions) {
+        await DB.query(
+          'insert into authz_user_grant (uuid, school_id, employee_id, action, granted_by_userid, granted_at, expires_at, reason) ' +
+            'values ($1,$2,$3,$4,$5,now(), now() + make_interval(hours => $6), $7)',
+          [generateShortUuid(12), schoolId, employeeId, action, caller.loginId, hours, reason]
+        );
+      }
+      // Refresh THIS container immediately; other module containers catch up within the TTL.
+      await reloadUserGrants();
+      return ResponseBuilder.ok({ employeeId, employeeName: emp[0].name, actions, hours }, callback);
+    } catch (err) {
+      return ResponseBuilder.handleError(err, callback);
+    }
+  }
+
+  // DELETE /auth/permissions/grants/{id} — revoke a temporary grant early.
+  public async revokeGrant(event: ApiEvent, context: ApiContext, callback: ApiCallback) {
+    context.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const caller = requireAction(event, ACTIONS.AUTHZ_MANAGE, callback);
+      if (!caller) return;
+      const id = event.pathParameters && event.pathParameters.id;
+      if (!id) return ResponseBuilder.badRequest(ErrorCode.MissingId, 'grant id is required', callback);
+      await DB.query(
+        'update authz_user_grant set revoked_at = now(), revoked_by_userid = $1 where uuid = $2 and revoked_at is null',
+        [caller.loginId, id]
+      );
+      await reloadUserGrants();
+      return ResponseBuilder.ok({ revoked: id }, callback);
+    } catch (err) {
+      return ResponseBuilder.handleError(err, callback);
+    }
+  }
+
   private _body(event: ApiEvent): any {
     if (!event.body) return null;
     try {
@@ -306,3 +395,6 @@ const h = new PermissionsHandler();
 export const list = h.list.bind(h);
 export const effective = h.effective.bind(h);
 export const toggle = h.toggle.bind(h);
+export const listGrants = h.listGrants.bind(h);
+export const createGrants = h.createGrants.bind(h);
+export const revokeGrant = h.revokeGrant.bind(h);

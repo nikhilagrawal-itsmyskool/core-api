@@ -97,6 +97,42 @@ create table if not exists authz_permission_override (
 );
 create unique index if not exists idx_authz_override_cell on authz_permission_override(role, action);
 
+-- Rename migration (idempotent): attendance moved to module.resource.action. Re-key any
+-- existing permission overrides so they keep applying after the rename. Guarded so it
+-- only touches rows that still hold the old action names (0 rows on re-run).
+update authz_permission_override set action = 'attendance.session.mark'
+  where action = 'attendance.mark'
+    and not exists (select 1 from authz_permission_override o2
+                    where o2.role = authz_permission_override.role and o2.action = 'attendance.session.mark');
+update authz_permission_override set action = 'attendance.session.finalize'
+  where action = 'attendance.finalize'
+    and not exists (select 1 from authz_permission_override o2
+                    where o2.role = authz_permission_override.role and o2.action = 'attendance.session.finalize');
+-- Any now-duplicate leftovers (new-name row already existed) are dropped.
+delete from authz_permission_override where action in ('attendance.mark', 'attendance.finalize');
+
+-- Per-employee TEMPORARY permission grants. God assigns one teacher an action for a fixed
+-- window (the Permissions-screen "temporary access" panel). ADDITIVE ONLY — a live grant lets
+-- that employee do the action even if their roles don't; it never removes access. Enforced in
+-- shared/lib/authz-policy.ts hasActiveUserGrant() (per-Lambda 60s cache, expiry checked per
+-- request). PER-SCHOOL (school_id recorded); employee_id is globally unique so the runtime
+-- lookup keys on (employee_id, action). revoked_at set for an early revoke.
+create table if not exists authz_user_grant (
+  uuid varchar(12) primary key,
+  school_id varchar(12) not null,
+  employee_id varchar(12) not null,
+  action varchar(64) not null,
+  granted_by_userid varchar(12),
+  granted_at timestamp(0),
+  expires_at timestamp(0) not null,
+  reason varchar(255),
+  revoked_at timestamp(0),
+  revoked_by_userid varchar(12)
+);
+-- Hot path: "active grants" scan (loadUserGrantsNow filters revoked_at is null and expires_at > now()).
+create index if not exists idx_authz_user_grant_active on authz_user_grant(expires_at, employee_id);
+create index if not exists idx_authz_user_grant_emp on authz_user_grant(employee_id);
+
 -- Session version — the "force re-login" kill-switch for employee logins. Every employee JWT
 -- carries the login's session_version at mint time; the authz layer rejects (401) any token whose
 -- version is LOWER than the row here (checked behind a short per-Lambda cache, so ≤~60s to take

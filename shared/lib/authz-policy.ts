@@ -317,7 +317,7 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
   // Education director: lands on the Cockpit / School Pulse and reviews the school's
   // heartbeat. Read-oriented oversight across the pulse domains. Additive — a person can
   // also hold `god`. Mirrors admin-portal/src/permissions/policy.js.
-  director: [
+  'education-director': [
     'cockpit.view',
     'feedback.view',
     'feedback.review',
@@ -383,4 +383,60 @@ export function can(roles: string[] | undefined, action: string): boolean {
   if (rs.some((r) => (ROLE_PERMISSIONS[r] || []).includes('*'))) return true;         // god — never overridable
   if (rs.some((r) => hasOverride(r, action, 'grant'))) return true;                    // explicit grant wins
   return rs.some((r) => !hasOverride(r, action, 'revoke') && baseGrants(r, action));   // default, unless revoked
+}
+
+// ── Per-employee TEMPORARY grants (DB) ────────────────────────────────────────────────
+// God assigns one teacher an action for N hours (the Permissions-screen "temporary access"
+// panel). Same per-Lambda 60s cache + fail-safe pattern as the overrides above, but keyed to
+// the PERSON (employee_id) and time-bounded: a grant counts only while expires_at is in the
+// future and it hasn't been revoked. ADDITIVE ONLY — it can let a user do something the role
+// model denies, never the reverse. employee_id is globally unique, so no school scoping is
+// needed in the lookup (the row still records school_id for the management UI).
+type UserGrant = { employeeId: string; action: string; expiresAt: number };
+let USER_GRANTS: UserGrant[] = [];
+let userGrantsLoadedAt = 0;
+let userGrantsLoading = false;
+
+async function loadUserGrantsNow(): Promise<void> {
+  try {
+    const { DB } = require('./db');
+    // Load only still-active grants; expiry is re-checked per request against the clock, so a
+    // grant that lapses within the 60s cache window still stops working at its exact expiry.
+    const rows = await DB.query(
+      'select employee_id, action, extract(epoch from expires_at) * 1000 as expires_ms ' +
+        'from authz_user_grant where revoked_at is null and expires_at > now()'
+    );
+    USER_GRANTS = (rows || []).map((r: any) => ({
+      employeeId: r.employeeId,
+      action: r.action,
+      expiresAt: Number(r.expiresMs),
+    }));
+  } catch { /* keep current cache → no extra access on any failure */ }
+  userGrantsLoadedAt = Date.now();
+}
+
+function maybeRefreshUserGrants(): void {
+  if (process.env.NODE_ENV === 'test') return;
+  if (userGrantsLoading || Date.now() - userGrantsLoadedAt < OVERRIDE_TTL_MS) return;
+  userGrantsLoading = true;
+  loadUserGrantsNow().finally(() => { userGrantsLoading = false; });
+}
+
+// Force a reload now — called right after god creates/revokes a grant so the writing container
+// is immediately fresh (other module containers catch up within the 60s TTL).
+export async function reloadUserGrants(): Promise<void> { await loadUserGrantsNow(); }
+
+// True if this employee has an active (non-expired, non-revoked) temporary grant for `action`.
+// The call site (requireAction) allows when can() OR this returns true.
+export function hasActiveUserGrant(employeeId: string | undefined, action: string): boolean {
+  if (!employeeId) return false;
+  maybeRefreshUserGrants();
+  const now = Date.now();
+  return USER_GRANTS.some((g) => g.employeeId === employeeId && g.action === action && g.expiresAt > now);
+}
+
+// Test-only: seed the in-memory grant cache (jest has no DB, so the background loader is skipped).
+export function __setUserGrantsForTest(list: UserGrant[]): void {
+  USER_GRANTS = list;
+  userGrantsLoadedAt = Date.now();
 }

@@ -135,3 +135,30 @@
           path: permissions/toggle
           method: post
           cors: true
+
+  permissions-grants-list:
+    handler: permissions-handler.listGrants
+    name: ${self:service}-permissions-grants-list
+    events:
+      - http:
+          path: permissions/grants
+          method: get
+          cors: true
+
+  permissions-grants-create:
+    handler: permissions-handler.createGrants
+    name: ${self:service}-permissions-grants-create
+    events:
+      - http:
+          path: permissions/grants
+          method: post
+          cors: true
+
+  permissions-grants-revoke:
+    handler: permissions-handler.revokeGrant
+    name: ${self:service}-permissions-grants-revoke
+    events:
+      - http:
+          path: permissions/grants/{id}
+          method: delete
+          cors: true

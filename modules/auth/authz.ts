@@ -1,7 +1,7 @@
 import { ApiCallback, ApiContext, ApiEvent } from '../../shared/lib/api.interfaces';
 import { ErrorCode } from '../../shared/lib/error-codes';
 import { ResponseBuilder } from '../../shared/lib/response-builder';
-import { can } from '../../shared/lib/authz-policy';
+import { can, hasActiveUserGrant } from '../../shared/lib/authz-policy';
 import { isSessionStale } from '../../shared/lib/session-version';
 import { extractAndVerifyToken } from './token-utils';
 import { getAuthorizationHeader, getSchoolCodeFromHeader } from './auth-utils';
@@ -126,7 +126,10 @@ export function requireAction(event: ApiEvent, action: string, callback: ApiCall
   // get 403 and silently stop, since producers fire-and-forget. Role-based masking
   // still treats it as unprivileged (isAdminGod stays false).
   if (caller.type === 'service') return caller;
-  if (!can(caller.roles, action)) {
+  // Allow when the role policy grants it OR the caller holds an active temporary per-employee
+  // grant for this action (god assigns these for N hours from the Permissions screen). Additive
+  // only — a temp grant can let a teacher do something their roles don't, never the reverse.
+  if (!can(caller.roles, action) && !hasActiveUserGrant(caller.employeeId, action)) {
     ResponseBuilder.forbidden(ErrorCode.MissingPermission, `Missing permission: ${action}`, callback);
     return null;
   }
