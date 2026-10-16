@@ -156,6 +156,26 @@ const CATALOGS: Record<string, Catalog> = {
       { action: ACTIONS.LAB_BREAKAGE_MANAGE, label: 'Record / edit / delete breakages' },
     ],
   },
+  sports: {
+    module: 'sports',
+    roles: [
+      { role: 'admin', label: 'Admin' },
+      { role: 'sports-incharge', label: 'Sports In-charge' },
+      { role: 'teacher', label: 'Teacher' },
+    ],
+    actions: [
+      { action: ACTIONS.SPORTS_SETUP_VIEW, label: 'View sport in-charges & lookups' },
+      { action: ACTIONS.SPORTS_SETUP_MANAGE, label: 'Set sport in-charges' },
+      { action: ACTIONS.SPORTS_INVENTORY_VIEW, label: 'View inventory items & stock' },
+      { action: ACTIONS.SPORTS_INVENTORY_MANAGE, label: 'Add / edit / delete inventory items' },
+      { action: ACTIONS.SPORTS_PURCHASE_VIEW, label: 'View purchases, batches & bills' },
+      { action: ACTIONS.SPORTS_PURCHASE_MANAGE, label: 'Record / edit / delete purchases, batches & bills' },
+      { action: ACTIONS.SPORTS_ISSUE_VIEW, label: 'View the issue log (what has been issued)' },
+      { action: ACTIONS.SPORTS_ISSUE_MANAGE, label: 'Record / edit / delete / return issues' },
+      { action: ACTIONS.SPORTS_BREAKAGE_VIEW, label: 'View the breakage log' },
+      { action: ACTIONS.SPORTS_BREAKAGE_MANAGE, label: 'Record / edit / delete breakages' },
+    ],
+  },
 };
 
 const DEFAULT_MODULE = 'examination';

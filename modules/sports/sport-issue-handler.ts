@@ -8,6 +8,8 @@ import { sportService } from './sport-service';
 import { CreateIssueLogRequest, UpdateIssueLogRequest, ReturnItemRequest } from './sport-interfaces';
 import { SPORT_TYPES, ISSUE_TYPES, ISSUED_TO_TYPES, RETURN_CONDITIONS } from './sport-constants';
 import { getDefaultStartDate, getDefaultEndDate, isValidDate } from '../../shared/util/datetime';
+import { guard } from '../auth/authz';
+import { SPORT_ACTIONS } from './sport-actions';
 
 class SportIssueHandler {
   public create = async (
@@ -332,9 +334,10 @@ class SportIssueHandler {
 }
 
 const handler = new SportIssueHandler();
-export const create = handler.create;
-export const update = handler.update;
-export const remove = handler.remove;
-export const getById = handler.getById;
-export const list = handler.list;
-export const returnItem = handler.returnItem;
+const g = (ref: string, fn: any) => guard(SPORT_ACTIONS[ref], fn);
+export const create = g('sport-issue-handler.create', handler.create);
+export const update = g('sport-issue-handler.update', handler.update);
+export const remove = g('sport-issue-handler.remove', handler.remove);
+export const getById = g('sport-issue-handler.getById', handler.getById);
+export const list = g('sport-issue-handler.list', handler.list);
+export const returnItem = g('sport-issue-handler.returnItem', handler.returnItem);

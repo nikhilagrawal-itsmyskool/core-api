@@ -6,6 +6,8 @@ import { sportService } from './sport-service';
 import { sportInchargeService } from './sport-incharge-service';
 import { SetInchargesRequest } from './sport-interfaces';
 import { SPORT_TYPES } from './sport-constants';
+import { guard } from '../auth/authz';
+import { SPORT_ACTIONS } from './sport-actions';
 
 const VALID_SPORT_TYPES = SPORT_TYPES.map((t) => t.value) as readonly string[];
 
@@ -104,6 +106,7 @@ class SportInchargeHandler {
 }
 
 const handler = new SportInchargeHandler();
-export const list = handler.list;
-export const getBySport = handler.getBySport;
-export const setForSport = handler.setForSport;
+const g = (ref: string, fn: any) => guard(SPORT_ACTIONS[ref], fn);
+export const list = g('sport-incharge-handler.list', handler.list);
+export const getBySport = g('sport-incharge-handler.getBySport', handler.getBySport);
+export const setForSport = g('sport-incharge-handler.setForSport', handler.setForSport);

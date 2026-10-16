@@ -8,6 +8,8 @@ import { sportService } from './sport-service';
 import { CreatePurchaseLogRequest, UpdatePurchaseLogRequest } from './sport-interfaces';
 import { SPORT_TYPES } from './sport-constants';
 import { isValidDate } from '../../shared/util/datetime';
+import { guard } from '../auth/authz';
+import { SPORT_ACTIONS } from './sport-actions';
 
 class SportPurchaseHandler {
   public create = async (
@@ -236,8 +238,9 @@ class SportPurchaseHandler {
 }
 
 const handler = new SportPurchaseHandler();
-export const create = handler.create;
-export const update = handler.update;
-export const remove = handler.remove;
-export const getById = handler.getById;
-export const list = handler.list;
+const g = (ref: string, fn: any) => guard(SPORT_ACTIONS[ref], fn);
+export const create = g('sport-purchase-handler.create', handler.create);
+export const update = g('sport-purchase-handler.update', handler.update);
+export const remove = g('sport-purchase-handler.remove', handler.remove);
+export const getById = g('sport-purchase-handler.getById', handler.getById);
+export const list = g('sport-purchase-handler.list', handler.list);

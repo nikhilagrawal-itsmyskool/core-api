@@ -1,5 +1,7 @@
 import { ApiCallback, ApiContext, ApiEvent } from '../../shared/lib/api.interfaces';
 import { ResponseBuilder } from '../../shared/lib/response-builder';
+import { guard } from '../auth/authz';
+import { SPORT_ACTIONS } from './sport-actions';
 import {
   SPORT_UNITS, SPORT_TYPES, ITEM_TYPES, ITEM_CONDITIONS,
   ISSUE_TYPES, CATEGORIES_BY_SPORT_TYPE,
@@ -53,7 +55,8 @@ class SportLookupHandler {
 }
 
 const handler = new SportLookupHandler();
-export const getUnits = handler.getUnits;
-export const getCategories = handler.getCategories;
-export const getSportTypes = handler.getSportTypes;
-export const getConditions = handler.getConditions;
+const g = (ref: string, fn: any) => guard(SPORT_ACTIONS[ref], fn);
+export const getUnits = g('sport-lookup-handler.getUnits', handler.getUnits);
+export const getCategories = g('sport-lookup-handler.getCategories', handler.getCategories);
+export const getSportTypes = g('sport-lookup-handler.getSportTypes', handler.getSportTypes);
+export const getConditions = g('sport-lookup-handler.getConditions', handler.getConditions);

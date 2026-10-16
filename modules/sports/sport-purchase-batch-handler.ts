@@ -10,6 +10,8 @@ import {
 } from './sport-interfaces';
 import { SPORT_TYPES } from './sport-constants';
 import { isValidDate } from '../../shared/util/datetime';
+import { guard } from '../auth/authz';
+import { SPORT_ACTIONS } from './sport-actions';
 
 const VALID_SPORT_TYPES = SPORT_TYPES.map((t) => t.value) as readonly string[];
 
@@ -324,12 +326,13 @@ class SportPurchaseBatchHandler {
 }
 
 const handler = new SportPurchaseBatchHandler();
-export const createBulk = handler.createBulk;
-export const list = handler.list;
-export const getById = handler.getById;
-export const update = handler.update;
-export const remove = handler.remove;
-export const restore = handler.restore;
-export const uploadBill = handler.uploadBill;
-export const getBill = handler.getBill;
-export const deleteBill = handler.deleteBill;
+const g = (ref: string, fn: any) => guard(SPORT_ACTIONS[ref], fn);
+export const createBulk = g('sport-purchase-batch-handler.createBulk', handler.createBulk);
+export const list = g('sport-purchase-batch-handler.list', handler.list);
+export const getById = g('sport-purchase-batch-handler.getById', handler.getById);
+export const update = g('sport-purchase-batch-handler.update', handler.update);
+export const remove = g('sport-purchase-batch-handler.remove', handler.remove);
+export const restore = g('sport-purchase-batch-handler.restore', handler.restore);
+export const uploadBill = g('sport-purchase-batch-handler.uploadBill', handler.uploadBill);
+export const getBill = g('sport-purchase-batch-handler.getBill', handler.getBill);
+export const deleteBill = g('sport-purchase-batch-handler.deleteBill', handler.deleteBill);

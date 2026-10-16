@@ -56,8 +56,18 @@ export const ACTIONS = {
   UNIFORM_MANAGE: 'uniform.manage',
   SHOP_VIEW: 'shop.view',
   SHOP_MANAGE: 'shop.manage',
-  SPORTS_VIEW: 'sports.view',
-  SPORTS_MANAGE: 'sports.manage',
+  // Sports equipment (strict module.resource.action). admin + sports-incharge hold the
+  // sports.* wildcard; teachers get the two read leaves (inventory.view + issue.view).
+  SPORTS_SETUP_VIEW: 'sports.setup.view',
+  SPORTS_SETUP_MANAGE: 'sports.setup.manage',
+  SPORTS_INVENTORY_VIEW: 'sports.inventory.view',
+  SPORTS_INVENTORY_MANAGE: 'sports.inventory.manage',
+  SPORTS_PURCHASE_VIEW: 'sports.purchase.view',
+  SPORTS_PURCHASE_MANAGE: 'sports.purchase.manage',
+  SPORTS_ISSUE_VIEW: 'sports.issue.view',
+  SPORTS_ISSUE_MANAGE: 'sports.issue.manage',
+  SPORTS_BREAKAGE_VIEW: 'sports.breakage.view',
+  SPORTS_BREAKAGE_MANAGE: 'sports.breakage.manage',
   ASSET_VIEW: 'asset.view',
   ASSET_MANAGE: 'asset.manage',
   LIBRARY_VIEW: 'library.view',
@@ -248,7 +258,8 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
     'medical.issue.view', // See what has been issued
     'lab.inventory.view', // See lab stock
     'lab.issue.view', // See what lab items have been issued
-    'sports.view',
+    'sports.inventory.view', // See sports equipment stock
+    'sports.issue.view', // See what sports items have been issued
     'library.view',
     'supplies.view',
     'timetable.view',

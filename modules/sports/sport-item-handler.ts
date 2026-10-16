@@ -6,6 +6,8 @@ import { sportItemService } from './sport-item-service';
 import { sportService } from './sport-service';
 import { CreateSportItemRequest, UpdateSportItemRequest } from './sport-interfaces';
 import { SPORT_UNITS, SPORT_TYPES, ITEM_TYPES, ITEM_CONDITIONS } from './sport-constants';
+import { guard } from '../auth/authz';
+import { SPORT_ACTIONS } from './sport-actions';
 
 class SportItemHandler {
   public create = async (
@@ -248,8 +250,9 @@ class SportItemHandler {
 }
 
 const handler = new SportItemHandler();
-export const create = handler.create;
-export const update = handler.update;
-export const remove = handler.remove;
-export const getById = handler.getById;
-export const search = handler.search;
+const g = (ref: string, fn: any) => guard(SPORT_ACTIONS[ref], fn);
+export const create = g('sport-item-handler.create', handler.create);
+export const update = g('sport-item-handler.update', handler.update);
+export const remove = g('sport-item-handler.remove', handler.remove);
+export const getById = g('sport-item-handler.getById', handler.getById);
+export const search = g('sport-item-handler.search', handler.search);
