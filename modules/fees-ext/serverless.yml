@@ -1,0 +1,38 @@
+provider:
+  name: aws
+  region: ap-south-1
+  stage: ${opt:stage, 'dev'}
+  environment:
+    ${file(../../configs/${self:provider.stage}/${self:provider.stage}.yml)}
+  $<<: ${file(../global-config-${self:provider.stage}.yml):provider}
+
+custom:
+  prefix: itsmyskool
+  baseServiceName: fees-ext-service
+  fullServiceName: ${self:custom.prefix}-${self:custom.baseServiceName}
+  customDomain:
+   basePath: 'fees-ext'
+  # Second fees stack. The primary `fees` service hit CloudFormation's hard 500-resource/stack
+  # limit (80 endpoints of deeply-nested paths), so new fees endpoints live here under /fees-ext.
+  # Handlers import the existing service logic from ../fees — no business logic is duplicated.
+  splitStacks:
+    perFunction: true
+    perType: false
+    perGroupFunction: false
+  $<<: ${file(../global-config-${self:provider.stage}.yml):custom}
+
+service: ${self:provider.stage}-${self:custom.fullServiceName}
+configValidationMode: off
+
+plugins:
+  - ../../plugins/serverless-merge-config.js
+  - serverless-webpack
+  - serverless-offline
+  - serverless-domain-manager
+  - ../../plugins/serverless-cors-defaults.js
+  - ../../plugins/serverless-authorizer.js
+  - serverless-plugin-split-stacks
+
+functions: ${file(fees-ext-endpoints.yml)}
+
+$<<: ${file(../global-config-${self:provider.stage}.yml):resources}

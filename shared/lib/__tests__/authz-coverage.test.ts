@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { FEE_ACTIONS, FEE_PUBLIC } from '../../../modules/fees/fees-actions';
+import { FEE_EXT_ACTIONS, FEE_EXT_PUBLIC } from '../../../modules/fees-ext/fees-ext-actions';
 import { TRANSFER_ACTIONS, TRANSFER_PUBLIC } from '../../../modules/transfer/transfer-actions';
 import { EMPLOYEE_ACTIONS, EMPLOYEE_PUBLIC } from '../../../modules/employee/employee-actions';
 import { COMMUNICATION_ACTIONS, COMMUNICATION_PUBLIC } from '../../../modules/communication/communication-actions';
@@ -33,6 +34,7 @@ import { ASSEMBLY_ACTIONS, ASSEMBLY_PUBLIC } from '../../../modules/assembly/ass
 // MODULES when a new module is gated.
 const MODULES: Array<{ name: string; yml: string; actions: Record<string, string>; pub: string[] }> = [
   { name: 'fees', yml: 'modules/fees/fees-endpoints.yml', actions: FEE_ACTIONS, pub: FEE_PUBLIC },
+  { name: 'fees-ext', yml: 'modules/fees-ext/fees-ext-endpoints.yml', actions: FEE_EXT_ACTIONS, pub: FEE_EXT_PUBLIC },
   { name: 'transfer', yml: 'modules/transfer/transfer-endpoints.yml', actions: TRANSFER_ACTIONS, pub: TRANSFER_PUBLIC },
   { name: 'employee', yml: 'modules/employee/employee-endpoints.yml', actions: EMPLOYEE_ACTIONS, pub: EMPLOYEE_PUBLIC },
   { name: 'communication', yml: 'modules/communication/communication-endpoints.yml', actions: COMMUNICATION_ACTIONS, pub: COMMUNICATION_PUBLIC },

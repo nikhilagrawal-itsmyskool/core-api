@@ -11,7 +11,7 @@ import { ACTIONS } from '../../shared/lib/authz-policy';
 const {
   FEE_REPORT_VIEW, FEE_COLLECT, FEE_STRUCTURE_MANAGE, FEE_CONCESSION_MANAGE, FEE_CONCESSION_ASSIGN,
   FEE_WAIVER_MANAGE, FEE_LATEFEE_MANAGE, FEE_TRANSPORT_MANAGE, FEE_STUDENT_MANAGE, FEE_MANAGER_VIEW,
-  FEE_FINE_EXEMPT, FEE_RECEIPT_VERIFY, FEE_MIGRATION_IMPORT, FEE_WRITEOFF_MANAGE,
+  FEE_FINE_EXEMPT, FEE_RECEIPT_VERIFY, FEE_MIGRATION_IMPORT,
 } = ACTIONS;
 
 export const FEE_ACTIONS: Record<string, string> = {
@@ -115,8 +115,6 @@ export const FEE_ACTIONS: Record<string, string> = {
   'fees-report-handler.fineExemptions': FEE_REPORT_VIEW,
   'fees-report-handler.examOnlyStudents': FEE_REPORT_VIEW,
   'fees-report-handler.cancelExamOnlyDemands': FEE_STUDENT_MANAGE,
-  // Bad-debt write-off / restore (god-only). The read (bad-debt list) reuses topDues → report.view.
-  'fees-report-handler.writeOff': FEE_WRITEOFF_MANAGE,
 
   // Migration (god-only)
   'fees-migration-handler.importData': FEE_MIGRATION_IMPORT,

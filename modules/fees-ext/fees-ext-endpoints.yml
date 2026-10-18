@@ -1,0 +1,14 @@
+  # ---- Health (authorizer-exempt) ----
+  health:
+    handler: health-handler.health
+    events:
+      - http: { path: 'health', method: get, cors: true }
+
+  # ---- Student fee-status (overflow from the fees stack) ----
+  # Bad-debt write-off / restore (god-only). Logic lives in ../fees/fees-report-service.writeOff;
+  # this service only exposes the endpoint (the fees stack is at the 500-resource ceiling).
+  student-write-off:
+    handler: fees-ext-handler.writeOff
+    name: ${self:service}-student-write-off
+    events:
+      - http: { path: 'students/{id}/write-off', method: post, cors: true }

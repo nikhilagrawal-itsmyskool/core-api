@@ -31,7 +31,9 @@ function findRoute(pathname) {
   var prefixes = Object.keys(ROUTES);
   for (var i = 0; i < prefixes.length; i++) {
     var prefix = prefixes[i];
-    if (pathname.indexOf(prefix) === 0) {
+    // Match on a path-segment boundary so '/fees-ext/...' does not match the '/fees' route
+    // (plain startsWith would — '/fees' is a prefix of '/fees-ext').
+    if (pathname === prefix || pathname.indexOf(prefix + '/') === 0) {
       return {
         target: ROUTES[prefix].target,
         name: ROUTES[prefix].name,

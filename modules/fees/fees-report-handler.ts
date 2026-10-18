@@ -137,16 +137,6 @@ class FeesReportHandler {
     } catch (err: any) { ResponseBuilder.handleError(err, callback); }
   };
 
-  // POST /fees/students/{id}/write-off — mark/lift a student's dues as bad debt (body: {action, reason}).
-  public writeOff = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
-    ctx.callbackWaitsForEmptyEventLoop = false;
-    try {
-      const rc = await resolveSchool(event, callback); if (!rc) return;
-      const id = event.pathParameters?.id as string;
-      const result = await feesReportService.writeOff(rc.schoolId, id, JSON.parse(event.body || '{}'), rc.userId);
-      ResponseBuilder.ok(result, callback);
-    } catch (err: any) { ResponseBuilder.handleError(err, callback); }
-  };
 }
 
 const handler = new FeesReportHandler();
@@ -164,4 +154,3 @@ export const studentConcessions = guard(FEE_ACTIONS['fees-report-handler.student
 export const fineExemptions = guard(FEE_ACTIONS['fees-report-handler.fineExemptions'], handler.fineExemptions);
 export const examOnlyStudents = guard(FEE_ACTIONS['fees-report-handler.examOnlyStudents'], handler.examOnlyStudents);
 export const cancelExamOnlyDemands = guard(FEE_ACTIONS['fees-report-handler.cancelExamOnlyDemands'], handler.cancelExamOnlyDemands);
-export const writeOff = guard(FEE_ACTIONS['fees-report-handler.writeOff'], handler.writeOff);

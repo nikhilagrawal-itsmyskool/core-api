@@ -425,11 +425,6 @@
     name: ${self:service}-exam-only-cancel
     events:
       - http: { path: 'reports/exam-only-cancel', method: post, cors: true }
-  student-write-off:
-    handler: fees-report-handler.writeOff
-    name: ${self:service}-student-write-off
-    events:
-      - http: { path: 'students/{id}/write-off', method: post, cors: true }
 
   # ---- Migration ----
   migration-import:
