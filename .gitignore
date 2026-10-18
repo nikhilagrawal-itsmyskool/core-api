@@ -24,3 +24,6 @@ lib
 # (*.py, *.ts, HANDOFF.md, jest.config.js) tracked.
 modules/timetable/cpsat/*/
 modules/fees/reports/
+
+# Per-stage config files contain secrets: keep local, do not track
+configs/prod/prod.yml
