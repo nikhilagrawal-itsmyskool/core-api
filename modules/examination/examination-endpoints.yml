@@ -255,6 +255,10 @@
           method: put
           cors: true
 
+  # Parent-app exam endpoints reuse GET /me/report/cards/{classId}/{term} with classId='me'
+  # (dispatched in report-handler.getMyReportCards → exam-me-handler) so the stack adds no new
+  # route/resource — it is at the 500-resource cap. No separate -ext service needed.
+
   get-my-invigilations:
     handler: examination-handler.getMyInvigilations
     name: ${self:service}-get-my-invigilations

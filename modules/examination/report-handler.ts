@@ -6,6 +6,7 @@ import { ACTIONS } from "../../shared/lib/authz-policy";
 import { resolveSchool, resolveEmployee, parseBody, requireParam, callerCan } from "./handler-util";
 import { getCurrentAcademicYearId } from "./examination-common";
 import { reportService } from "./report-service";
+import { exams as examMeExams } from "./exam-me-handler";
 
 // Report-card marks + co-scholastic entry. /me/* is employee-scoped (subject/class teachers +
 // the exam-incharge, who bypasses the teacher checks via override). /report/* is guarded.
@@ -281,6 +282,10 @@ class ReportHandler {
   // GET /me/report/cards/{classId}/{term} — a class teacher views their class's report cards (to OK them).
   public getMyReportCards = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
     ctx.callbackWaitsForEmptyEventLoop = false;
+    // Parent app reuses this route as /me/report/cards/me/{view} (classId='me', term carries the
+    // view) — dispatched before the teacher guard so it adds no new CloudFormation resource (this
+    // stack is at the 500-resource cap). guardActiveStudent self-authorizes the active child.
+    if (event.pathParameters?.classId === "me") return examMeExams(event, ctx, callback);
     try {
       const emp = resolveEmployee(event, callback);
       if (!emp) return;

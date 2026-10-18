@@ -450,6 +450,25 @@
           method: post
           cors: true
 
+  # ---- App Access: manage parent-app family logins (list + reset) (god/admin) ----
+  list-app-logins:
+    handler: student-app-access-handler.listAppLogins
+    name: ${self:service}-list-app-logins
+    events:
+      - http:
+          path: 'app-logins'
+          method: get
+          cors: true
+
+  reset-app-login:
+    handler: student-app-access-handler.resetFamilyPassword
+    name: ${self:service}-reset-app-login
+    events:
+      - http:
+          path: 'app-logins/reset'
+          method: post
+          cors: true
+
   # ---- House assignment for a student ----
   assign-house:
     handler: house-handler.assign

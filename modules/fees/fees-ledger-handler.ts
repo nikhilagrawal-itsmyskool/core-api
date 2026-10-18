@@ -4,6 +4,7 @@ import { guard } from '../auth/authz';
 import { FEE_ACTIONS } from './fees-actions';
 import { resolveSchool, parseBody, requireParam } from './fees-util';
 import { feesLedgerService } from './fees-ledger-service';
+import { summary as feesMeSummary } from './fees-me-handler';
 
 class FeesLedgerHandler {
   public studentLedger = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
@@ -42,5 +43,14 @@ class FeesLedgerHandler {
 
 const handler = new FeesLedgerHandler();
 export const studentLedger = guard(FEE_ACTIONS['fees-ledger-handler.studentLedger'], handler.studentLedger);
-export const studentSummary = guard(FEE_ACTIONS['fees-ledger-handler.studentSummary'], handler.studentSummary);
+
+// students/{id}/summary. With id='me' it serves the parent app's active child
+// (guardActiveStudent inside feesMeSummary) and bypasses the admin guard; any other
+// id stays the admin-guarded summary. Sharing this route avoids a new CFN resource.
+const guardedSummary = guard(FEE_ACTIONS['fees-ledger-handler.studentSummary'], handler.studentSummary);
+export const studentSummary = (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) =>
+  event.pathParameters?.id === 'me'
+    ? feesMeSummary(event, ctx, callback)
+    : guardedSummary(event, ctx, callback);
+
 export const chargeRun = guard(FEE_ACTIONS['fees-ledger-handler.chargeRun'], handler.chargeRun);

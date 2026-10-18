@@ -43,6 +43,8 @@ export const STUDENT_ACTIONS: Record<string, string> = {
   'student-admin-handler.remove': STUDENT_MANAGE,
   'student-admin-handler.getCredentials': STUDENT_MANAGE,
   'student-admin-handler.resetPassword': STUDENT_MANAGE,
+  'student-app-access-handler.listAppLogins': STUDENT_MANAGE,
+  'student-app-access-handler.resetFamilyPassword': STUDENT_MANAGE,
   'house-handler.create': STUDENT_MANAGE,
   'house-handler.update': STUDENT_MANAGE,
   'house-handler.remove': STUDENT_MANAGE,

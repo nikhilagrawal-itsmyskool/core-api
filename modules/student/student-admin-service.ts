@@ -782,6 +782,62 @@ class StudentAdminService {
     );
     return true;
   }
+
+  // ---- App Access: central family-login list + family password reset ----
+
+  // Every family app login for the school, each with the children it covers (name +
+  // current class). Powers the admin "App Access" screen. Password returned (plaintext,
+  // same as getCredentials) so staff can read it out; the UI reveals it on demand.
+  public async listAppLogins(schoolId: string, search?: string) {
+    const params: any[] = [schoolId];
+    let searchClause = '';
+    const s = (search || '').trim();
+    if (s) {
+      params.push(`%${s}%`);
+      searchClause = singleLineString`
+        and (sl.username ilike $2 or sl.display_name ilike $2 or exists (
+          select 1 from student s2 where s2.family_unique_number = sl.username
+            and s2.school_id = sl.school_id and s2.status <> 'deleted' and s2.name ilike $2))`;
+    }
+    return DB.query(
+      singleLineString`
+        select sl.username, sl.password, sl.display_name,
+          coalesce(json_agg(json_build_object('id', s.uuid, 'name', s.name, 'className', cur.class_name)
+            order by s.name) filter (where s.uuid is not null), '[]') as students
+        from student_login sl
+        left join student s on s.family_unique_number = sl.username and s.school_id = sl.school_id and s.status <> 'deleted'
+        left join lateral (
+          select c.name as class_name from student_class sc
+          join academic_year ay on sc.academic_year_id = ay.uuid
+          left join class c on c.uuid = sc.class_id
+          where sc.student_id = s.uuid and (sc.status is null or sc.status <> 'deleted')
+          order by ay.start_date desc nulls last limit 1
+        ) cur on true
+        where sl.school_id = $1 ${searchClause}
+        group by sl.username, sl.password, sl.display_name
+        order by sl.username
+        limit 2000
+      `,
+      params
+    );
+  }
+
+  // Set a family login's password to an exact value (admin reset — manual or auto-generated).
+  public async setFamilyPassword(
+    schoolId: string,
+    username: string,
+    newPassword: string,
+    userId: string
+  ): Promise<boolean> {
+    const rows = await DB.query(
+      singleLineString`
+        update student_login set password = $1, updatedby_userid = $2, updated_at = $3
+        where username = $4 and school_id = $5 returning uuid
+      `,
+      [newPassword, userId, new Date(), username, schoolId]
+    );
+    return rows.length > 0;
+  }
 }
 
 export const studentAdminService = new StudentAdminService();

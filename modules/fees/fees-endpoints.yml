@@ -283,6 +283,9 @@
     name: ${self:service}-student-ledger
     events:
       - http: { path: 'students/{id}/ledger', method: get, cors: true }
+  # Also serves the parent app at students/me/summary (id='me' → active child via
+  # X-Student-Id), dispatched inside the handler so no extra CloudFormation resource
+  # is added — the fees stack is at the 500-resource ceiling.
   student-summary:
     handler: fees-ledger-handler.studentSummary
     name: ${self:service}-student-summary
