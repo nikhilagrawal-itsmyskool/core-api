@@ -51,13 +51,13 @@ class RecoveryHandler {
         userAgent: this._userAgent(event),
       });
 
-      // Generic, enumeration-safe message. Same shape whether or not the phone matched.
+      // A matched request always sends; a no-match throws a clear error (see service).
       ResponseBuilder.ok(
         {
           otpId: result.otpId,
           expiresInSec: result.expiresInSec,
           resendInSec: result.resendInSec,
-          message: 'If an account matches this number, a verification code has been sent by SMS.',
+          message: 'A verification code has been sent by SMS to your registered mobile number.',
           ...(result.devCode ? { devCode: result.devCode } : {}),
         },
         callback

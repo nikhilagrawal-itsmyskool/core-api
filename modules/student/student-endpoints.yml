@@ -469,6 +469,15 @@
           method: post
           cors: true
 
+  set-app-login-features:
+    handler: student-app-access-handler.setFeatures
+    name: ${self:service}-set-app-login-features
+    events:
+      - http:
+          path: 'app-logins/features'
+          method: post
+          cors: true
+
   # ---- House assignment for a student ----
   assign-house:
     handler: house-handler.assign

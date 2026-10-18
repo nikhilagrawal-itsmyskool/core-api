@@ -6,6 +6,26 @@ import { ErrorCode } from '../../shared/lib/error-codes';
 import { guardActiveStudent } from '../auth/auth-utils';
 import { studentAdminService } from './student-admin-service';
 
+// The family login's DISABLED app-feature keys (admin "App Access" toggles). [] = all on.
+async function resolveDisabledFeatures(schoolId: string, studentId: string): Promise<string[]> {
+  const rows = await DB.query(
+    singleLineString`
+      select sl.disabled_features from student_login sl
+      where sl.school_id = $1
+        and sl.username = (select family_unique_number from student where uuid = $2 and school_id = $1)
+      limit 1`,
+    [schoolId, studentId],
+  );
+  const raw = rows[0]?.disabledFeatures;
+  if (!raw) return [];
+  try {
+    const v = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    return Array.isArray(v) ? v.filter((x: any) => typeof x === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
 // The family's children (siblings share family_unique_number) with current class
 // + a presigned thumb photo URL, so the parent app's child switcher shows faces.
 async function resolveFamily(schoolId: string, studentId: string) {
@@ -106,6 +126,7 @@ class StudentMeHandler {
         photoThumbId: detail.photoThumbId ?? null,
         family: await resolveFamily(schoolId, studentId),
         enrollments: mapEnrollments(detail),
+        disabledFeatures: await resolveDisabledFeatures(schoolId, studentId),
       };
       ResponseBuilder.ok(profile, callback);
     } catch (err: any) {

@@ -8,6 +8,8 @@ drop table if exists student_sibling;
 drop table if exists student_address;
 drop table if exists student_lookup;
 
+alter table student_login drop column if exists disabled_features;
+
 alter table file_storage drop column if exists variant;
 
 alter table student_guardian drop column if exists relationship;

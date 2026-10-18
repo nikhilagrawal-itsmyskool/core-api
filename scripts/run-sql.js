@@ -11,15 +11,50 @@ function loadConfig(stage) {
   return yaml.load(fs.readFileSync(configPath, 'utf8'));
 }
 
+// Build a pg Pool from a (possibly credential-resolved) config. SYNCHRONOUS — every
+// module db-setup.js and migration script calls this directly, so it must not become a
+// Promise. For SSM-backed stages (prod) call `await resolveCredentials(config)` first.
 function createPool(config) {
   return new Pool({
     host: config.POSTGRES_ENDPOINT || config.POSTGRES_HOST,
     database: config.POSTGRES_DATABASE,
     user: config.POSTGRES_USERNAME || config.POSTGRES_USER,
-    password: config.POSTGRES_PASSWORD,
+    password: String(config.POSTGRES_PASSWORD == null ? '' : config.POSTGRES_PASSWORD),
     port: parseInt(config.POSTGRES_PORT || '5432'),
     ssl: config.POSTGRES_SSL === 'false' ? false : { rejectUnauthorized: false },
   });
+}
+
+// Resolve DB credentials INTO `config` (mutates POSTGRES_USERNAME/POSTGRES_PASSWORD) so the
+// synchronous createPool can use them. These are SETUP / MIGRATION scripts, which do DDL —
+// so on SSM stages they connect as the MASTER/owner role, not the least-privilege app_user
+// (app_user can't ALTER tables it doesn't own). Precedence:
+//   1. env override POSTGRES_PASSWORD (+ optional POSTGRES_USERNAME) — a hand-set password
+//   2. SSM master param (POSTGRES_SSM_MASTER_PASSWORD_PARAM) → connect as POSTGRES_USERNAME (postgres)
+//   3. SSM app_user param (POSTGRES_SSM_PASSWORD_PARAM) → connect as POSTGRES_SSM_USERNAME (fallback)
+//   4. otherwise leave the yml plaintext in place (local/dev/qa)
+// The STALE plaintext POSTGRES_PASSWORD in prod.yml is intentionally ignored on SSM stages.
+// SSM needs AWS creds that can read the param (export SSO creds first).
+async function resolveCredentials(config) {
+  if (process.env.POSTGRES_PASSWORD) {
+    config.POSTGRES_USERNAME = process.env.POSTGRES_USERNAME || config.POSTGRES_USERNAME || config.POSTGRES_USER;
+    config.POSTGRES_PASSWORD = process.env.POSTGRES_PASSWORD;
+    return config;
+  }
+  const masterParam = config.POSTGRES_SSM_MASTER_PASSWORD_PARAM;
+  const param = masterParam || config.POSTGRES_SSM_PASSWORD_PARAM;
+  if (param) {
+    const { SSMClient, GetParameterCommand } = require('@aws-sdk/client-ssm');
+    const ssm = new SSMClient({ region: config.AWS_REGION || process.env.AWS_REGION || 'ap-south-1' });
+    const res = await ssm.send(new GetParameterCommand({ Name: param, WithDecryption: true }));
+    const password = res.Parameter && res.Parameter.Value;
+    if (!password) throw new Error(`SSM parameter ${param} returned no value`);
+    config.POSTGRES_USERNAME = masterParam
+      ? (config.POSTGRES_SSM_MASTER_USERNAME || config.POSTGRES_USERNAME || 'postgres')
+      : (config.POSTGRES_SSM_USERNAME || config.POSTGRES_USERNAME || config.POSTGRES_USER);
+    config.POSTGRES_PASSWORD = password;
+  }
+  return config;
 }
 
 async function runSqlFile(pool, filePath) {
@@ -116,6 +151,7 @@ async function main() {
 
   try {
     const config = loadConfig(stage);
+    await resolveCredentials(config);
     console.log(`Connecting to ${config.POSTGRES_ENDPOINT || config.POSTGRES_HOST}/${config.POSTGRES_DATABASE}...`);
 
     const pool = createPool(config);
@@ -138,7 +174,7 @@ async function main() {
 }
 
 // Export for use by other scripts
-module.exports = { loadConfig, createPool, runSqlFile, runSqlString };
+module.exports = { loadConfig, createPool, resolveCredentials, runSqlFile, runSqlString };
 
 // Run if called directly
 if (require.main === module) {

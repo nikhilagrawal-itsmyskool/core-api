@@ -17,6 +17,17 @@ import { studentAddressService } from './student-address-service';
 import { studentSiblingService } from './student-sibling-service';
 const { generateShortUuid } = require('../../shared/util/generate-uuid.js');
 
+// Parse student_login.disabled_features (JSON array text) → string[]; [] on null/any error.
+function parseFeatureList(raw: any): string[] {
+  if (!raw) return [];
+  try {
+    const v = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    return Array.isArray(v) ? v.filter((x) => typeof x === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
 class StudentAdminService {
   // ---- validation helpers (no FKs — app must guard school ownership) ----
 
@@ -799,11 +810,13 @@ class StudentAdminService {
           select 1 from student s2 where s2.family_unique_number = sl.username
             and s2.school_id = sl.school_id and s2.status <> 'deleted' and s2.name ilike $2))`;
     }
-    return DB.query(
+    const rows = await DB.query(
       singleLineString`
-        select sl.username, sl.password, sl.display_name,
+        select sl.username, sl.password, sl.display_name, sl.disabled_features,
           coalesce(json_agg(json_build_object('id', s.uuid, 'name', s.name, 'className', cur.class_name)
-            order by s.name) filter (where s.uuid is not null), '[]') as students
+            order by s.name) filter (where s.uuid is not null), '[]') as students,
+          coalesce(dev.device_count, 0) as device_count,
+          dev.last_seen::text as last_seen
         from student_login sl
         left join student s on s.family_unique_number = sl.username and s.school_id = sl.school_id and s.status <> 'deleted'
         left join lateral (
@@ -813,13 +826,39 @@ class StudentAdminService {
           where sc.student_id = s.uuid and (sc.status is null or sc.status <> 'deleted')
           order by ay.start_date desc nulls last limit 1
         ) cur on true
+        left join lateral (
+          select count(*)::int as device_count, max(dt.last_seen) as last_seen
+          from device_token dt
+          join student s3 on s3.uuid = dt.recipient_id and s3.school_id = dt.school_id
+          where dt.school_id = sl.school_id and dt.recipient_type = 'student'
+            and s3.family_unique_number = sl.username and dt.status = 'active'
+        ) dev on true
         where sl.school_id = $1 ${searchClause}
-        group by sl.username, sl.password, sl.display_name
+        group by sl.username, sl.password, sl.display_name, sl.disabled_features, dev.device_count, dev.last_seen
         order by sl.username
         limit 2000
       `,
       params
     );
+    return rows.map((r: any) => ({ ...r, disabledFeatures: parseFeatureList(r.disabledFeatures) }));
+  }
+
+  // Set the per-family parent-app feature flags (array of DISABLED feature keys).
+  public async setFamilyFeatures(
+    schoolId: string,
+    username: string,
+    disabledFeatures: string[],
+    userId: string
+  ): Promise<boolean> {
+    const clean = Array.isArray(disabledFeatures) ? disabledFeatures.filter((k) => typeof k === 'string') : [];
+    const rows = await DB.query(
+      singleLineString`
+        update student_login set disabled_features = $1, updatedby_userid = $2, updated_at = $3
+        where username = $4 and school_id = $5 returning uuid
+      `,
+      [JSON.stringify(clean), userId, new Date(), username, schoolId]
+    );
+    return rows.length > 0;
   }
 
   // Set a family login's password to an exact value (admin reset — manual or auto-generated).

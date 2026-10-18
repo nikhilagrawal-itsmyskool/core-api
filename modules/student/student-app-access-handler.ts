@@ -71,8 +71,27 @@ class StudentAppAccessHandler {
       ResponseBuilder.handleError(err, callback);
     }
   };
+
+  // POST /app-logins/features { username, disabledFeatures: string[] } — per-family app feature flags.
+  public setFeatures = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
+    _context.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const schoolId = await resolveSchool(event, callback);
+      if (!schoolId) return;
+      const body = JSON.parse(event.body || '{}');
+      const username = (body.username || '').trim();
+      if (!username) { ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'username is required', callback); return; }
+      const disabledFeatures = Array.isArray(body.disabledFeatures) ? body.disabledFeatures : [];
+      const ok = await studentAdminService.setFamilyFeatures(schoolId, username, disabledFeatures, userId(event));
+      if (!ok) { ResponseBuilder.notFound(ErrorCode.InvalidId, 'No app login found for this number', callback); return; }
+      ResponseBuilder.ok({ username, disabledFeatures }, callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
 }
 
 const handler = new StudentAppAccessHandler();
 export const listAppLogins = guard(STUDENT_ACTIONS['student-app-access-handler.listAppLogins'], handler.listAppLogins);
 export const resetFamilyPassword = guard(STUDENT_ACTIONS['student-app-access-handler.resetFamilyPassword'], handler.resetFamilyPassword);
+export const setFeatures = guard(STUDENT_ACTIONS['student-app-access-handler.setFeatures'], handler.setFeatures);

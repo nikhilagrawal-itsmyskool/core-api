@@ -12,7 +12,7 @@
 
 const path = require('path');
 const readline = require('readline');
-const { loadConfig, createPool, runSqlFile } = require('../../../scripts/run-sql');
+const { loadConfig, createPool, resolveCredentials, runSqlFile } = require('../../../scripts/run-sql');
 
 const VALID_STAGES = ['local', 'dev', 'qa', 'prod'];
 const VALID_ACTIONS = ['setup', 'rollback'];
@@ -58,6 +58,7 @@ async function runSetup(stage, action) {
     console.log(`Action: ${action}`);
 
     const config = loadConfig(stage);
+    await resolveCredentials(config); // SSM for prod; no-op for local/dev/qa
     console.log(`\nConnecting to ${config.POSTGRES_ENDPOINT || config.POSTGRES_HOST}/${config.POSTGRES_DATABASE}...`);
 
     pool = createPool(config);

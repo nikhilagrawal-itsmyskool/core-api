@@ -200,6 +200,12 @@ alter table student_address alter column country_code type varchar(64);
 -- Null is treated as 'original' for legacy rows.
 alter table file_storage add column if not exists variant varchar(16);
 
+-- Parent-app per-family feature flags: a JSON array of DISABLED feature keys
+-- (null/empty = all features on). Managed from the admin "App Access" screen;
+-- read back on /student/me. student_login is a core table (modules/db/db-create-1.sql),
+-- but this column is owned by the student (parent-app) module, so it lives here.
+alter table student_login add column if not exists disabled_features text;
+
 -- Table 6: student_report_saved (school-wide saved report templates). config holds
 -- the builder's remembered options — { fields: [...], filter, orientation, pageBreak }.
 -- Classes are NOT saved: they are chosen fresh each run. Shared across all admins.

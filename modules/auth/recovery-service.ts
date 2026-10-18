@@ -115,10 +115,10 @@ export class RecoveryService {
     }
   }
 
-  // Step 1. Always responds the same shape whether or not the phone matched an
-  // account (anti-enumeration): a non-matching phone still gets an otpId and a stored
-  // row, it just carries an unmatchable code and sends no SMS, so verify fails exactly
-  // like a wrong code would.
+  // Step 1. Resolve the phone → account(s), mint + send an OTP. A phone that matches no
+  // account throws a clear "not registered" error (this is a single-school app that favors
+  // UX over anti-enumeration — see the no-account branch below). Rate limit + cooldown are
+  // enforced first so the endpoint still can't be hammered.
   public async requestOtp(ctx: RequestCtx): Promise<RequestResult> {
     const phone = last10(ctx.phone);
     const nowResp: RequestResult = { otpId: '', expiresInSec: CODE_TTL_MIN * 60, resendInSec: RESEND_COOLDOWN_SEC };
@@ -147,9 +147,19 @@ export class RecoveryService {
     }
 
     const accounts = await this.resolveAccounts(ctx.schoolId, ctx.userType, phone);
+    if (accounts.length === 0) {
+      // Single-school community app: we deliberately favor a clear "not registered"
+      // message over anti-enumeration silence, so a parent who mistypes their number
+      // isn't left waiting for an SMS that will never arrive. (The original design hid
+      // this to avoid leaking which numbers exist; that protection has little value here
+      // and a real UX cost.) Still audited + rate-limited above.
+      await this.audit(ctx.schoolId, ctx.userType, null, phone, 'otp_requested', ctx.ip, ctx.userAgent);
+      throw new Error('We couldn’t find an account registered with this mobile number. Please check the number, or contact the school office.');
+    }
+
     const code = generateCode();
     const otpId = generateShortUuid(12);
-    const codeHash = accounts.length > 0 ? hashCode(code) : hashCode(generateShortUuid(12)); // unmatchable hash when no account
+    const codeHash = hashCode(code);
 
     await DB.query(
       singleLineString`insert into login_otp (uuid, school_id, user_type, purpose, phone, code_hash, matched_accounts, expires_at, attempts, consumed_at, reset_done_at, ip, user_agent, created_at, updated_at) values ($1,$2,$3,$4,$5,$6,$7::jsonb, now() + make_interval(mins => $8), 0, null, null, $9, $10, now(), now())`,
@@ -157,13 +167,10 @@ export class RecoveryService {
     );
 
     await this.audit(ctx.schoolId, ctx.userType, null, phone, 'otp_requested', ctx.ip, ctx.userAgent);
-
-    if (accounts.length > 0) {
-      await this.sendOtpSms(ctx.schoolCode, phone, code);
-    }
+    await this.sendOtpSms(ctx.schoolCode, phone, code);
 
     nowResp.otpId = otpId;
-    if (accounts.length > 0 && process.env.OTP_DEV_ECHO === 'true') {
+    if (process.env.OTP_DEV_ECHO === 'true') {
       nowResp.devCode = code;
     }
     return nowResp;
