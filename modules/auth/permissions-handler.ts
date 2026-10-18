@@ -99,6 +99,7 @@ const CATALOGS: Record<string, Catalog> = {
       { action: ACTIONS.FEE_FINE_EXEMPT, label: 'Exempt a late fine' },
       { action: ACTIONS.FEE_RECEIPT_VERIFY, label: 'Scan & Verify receipts' },
       { action: ACTIONS.FEE_MIGRATION_IMPORT, label: 'Bulk historical import' },
+      { action: ACTIONS.FEE_WRITEOFF_MANAGE, label: 'Write off dues as bad debt (& restore)' },
     ],
   },
   leave: {

@@ -336,3 +336,21 @@ create table if not exists fee_followup_entry (
   created_at timestamp(0)
 );
 create index if not exists idx_fee_followup_entry on fee_followup_entry (school_id, student_id, academic_year_id, created_at desc);
+
+-- Bad-debt write-off. A student flagged here is removed from the COLLECTABLE dues number
+-- (reports/overview) but the ledger is NEVER touched — every charge stays owing, so the debt is
+-- preserved to the rupee, reversible, and recoverable if the student re-admits. God-only.
+-- `student.fee_write_off` is the app-maintained cache the dues engine filters on; fee_write_off is
+-- the append-only audit (every writeoff AND restore, with the outstanding snapshot + reason + actor).
+alter table student add column if not exists fee_write_off boolean;
+create table if not exists fee_write_off (
+  uuid varchar(12) primary key,
+  school_id varchar(12) not null,
+  student_id varchar(12) not null,
+  action varchar(12) check (action in ('writeoff', 'restore')),
+  amount numeric,                            -- outstanding snapshot at the moment (informational)
+  reason varchar(500),
+  createdby_userid varchar(12),
+  created_at timestamp(0)
+);
+create index if not exists idx_fee_write_off on fee_write_off (school_id, student_id, created_at desc);

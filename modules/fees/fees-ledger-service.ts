@@ -147,8 +147,18 @@ class FeesLedgerService {
   public async studentSummary(schoolId: string, studentId: string, academicYearId?: string) {
     const led = await this.studentLedger(schoolId, studentId, academicYearId);
     const dueLines = led.lines.filter((l) => l.remaining > 0);
+    // bad-debt (write-off) state for the banner/button — flag + latest write-off audit row
+    const woRow = await DB.query(singleLineString`select coalesce(fee_write_off, false) as fee_write_off from student where school_id = $1 and uuid = $2`, [schoolId, studentId]);
+    const feeWriteOff = woRow[0]?.feeWriteOff === true;
+    let writeOffInfo: any = null;
+    if (feeWriteOff) {
+      const info = await DB.query(singleLineString`select reason, amount, created_at, createdby_userid from fee_write_off where school_id = $1 and student_id = $2 and action = 'writeoff' order by created_at desc limit 1`, [schoolId, studentId]);
+      if (info.length) writeOffInfo = { reason: info[0].reason, amount: Number(info[0].amount || 0), at: info[0].createdAt, by: info[0].createdbyUserid };
+    }
     return {
       studentId,
+      feeWriteOff,
+      writeOffInfo,
       charged: led.totals.charged,
       paid: led.totals.paid,
       concession: led.totals.concession,

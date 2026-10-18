@@ -55,17 +55,25 @@ class FeesReportService {
     const ledgerParams: any[] = [schoolId];
     let ledgerWhere = `school_id = $1 and status = 'active' and student_id is not null`;
     if (ay) { ledgerParams.push(ay); ledgerWhere += ` and academic_year_id = $${ledgerParams.length}`; }
+    // Outstanding = COLLECTABLE only (written-off students split out into their own figure so the
+    // headline shrinks honestly and reconciles: old outstanding = outstanding + writtenOff).
     const balRow = await DB.query(
       singleLineString`
         select
-          coalesce(sum(case when net > 0 then net else 0 end), 0) as outstanding,
-          count(*) filter (where net > 0) as dues_students,
+          coalesce(sum(case when not wo and net > 0 then net else 0 end), 0) as outstanding,
+          count(*) filter (where not wo and net > 0) as dues_students,
           coalesce(sum(case when net < 0 then -net else 0 end), 0) as advance,
-          count(*) filter (where net < 0) as advance_students
+          count(*) filter (where net < 0) as advance_students,
+          coalesce(sum(case when wo and net > 0 then net else 0 end), 0) as written_off,
+          count(*) filter (where wo and net > 0) as written_off_students
         from (
-          select student_id, coalesce(sum(debit),0) - coalesce(sum(credit),0) as net
-          from student_ledger_entry where ${ledgerWhere} group by student_id
-        ) t`,
+          select t.student_id, t.net, coalesce(s.fee_write_off, false) as wo
+          from (
+            select student_id, coalesce(sum(debit),0) - coalesce(sum(credit),0) as net
+            from student_ledger_entry where ${ledgerWhere} group by student_id
+          ) t
+          join student s on s.uuid = t.student_id
+        ) x`,
       ledgerParams
     );
 
@@ -90,6 +98,7 @@ class FeesReportService {
             from student_ledger_entry e
             left join fee_cycle fc on fc.uuid = e.cycle_id and fc.status = 'active'
             where e.school_id = $1 and e.academic_year_id = $2 and e.kind = 'charge' and e.status = 'active'
+              and not exists (select 1 from student s where s.uuid = e.student_id and coalesce(s.fee_write_off, false) = true)
           ) ch
           left join (
             select settles_entry_id, sum(credit) as paid from student_ledger_entry
@@ -112,6 +121,8 @@ class FeesReportService {
       advance: Number(bal.advance || 0),
       advanceStudents: Number(bal.advanceStudents || 0),
       concessionYtd: Number(concRow[0]?.total || 0),
+      writtenOff: Number(bal.writtenOff || 0),
+      writtenOffStudents: Number(bal.writtenOffStudents || 0),
     };
   }
 
@@ -258,6 +269,9 @@ class FeesReportService {
     const bkt = dueBuckets();
     const currentAyId = q?.academicYearId || null;
     const limit = Math.min(Math.max(Number(q?.limit) || 5000, 1), 5000);
+    // Bad-debt scope: 'collectable' (default — written-off students excluded) | 'writeoff' (only them) |
+    // 'all'. A single-student lookup (q.studentId, used by the drawer) is never scope-filtered.
+    const include = q?.studentId ? 'all' : (q?.include || 'collectable');
 
     // optional single-student filter — lets the Dues-report slider reuse this engine for one student
     // (same shape as a report row) instead of scanning the whole school.
@@ -296,8 +310,17 @@ class FeesReportService {
       const s = (byStudent[r.studentId] ||= { studentId: r.studentId, byYear: {}, total: 0 });
       s.byYear[r.academicYearId] = amt; s.total += amt; yearsSeen.add(r.academicYearId);
     });
-    let list: any[] = Object.values(byStudent).filter((s: any) => s.total > 0.5).sort((a: any, b: any) => b.total - a.total).slice(0, limit);
-    if (!list.length) return { columns: [], rows: [], monthLabel: bkt.monthEndLabel, currentAcademicYearId: currentAyId, generatedAt: istToday(), studentCount: 0, grandTotal: 0 };
+    // written-off (bad-debt) set — filter/tag by scope (ledger untouched, so these still have dues here)
+    const woRows: any[] = await DB.query(singleLineString`select uuid from student where school_id = $1 and coalesce(fee_write_off, false) = true`, [schoolId]);
+    const writtenOffSet = new Set<string>(woRows.map((r) => r.uuid));
+    const inScope = (sid: string) => {
+      const wo = writtenOffSet.has(sid);
+      return include === 'writeoff' ? wo : include === 'all' ? true : !wo; // default collectable
+    };
+    let list: any[] = Object.values(byStudent)
+      .filter((s: any) => s.total > 0.5 && inScope(s.studentId))
+      .sort((a: any, b: any) => b.total - a.total).slice(0, limit);
+    if (!list.length) return { columns: [], rows: [], monthLabel: bkt.monthEndLabel, currentAcademicYearId: currentAyId, generatedAt: istToday(), studentCount: 0, grandTotal: 0, include };
 
     const ids = list.map((s: any) => s.studentId);
 
@@ -336,12 +359,13 @@ class FeesReportService {
         return {
           studentId: s.studentId, name: i.name || s.studentId, admissionNumber: i.admissionNumber || null,
           className: i.className || '—', hasLeft: i.status !== 'active' || i.withdrawalDate != null,
+          writtenOff: writtenOffSet.has(s.studentId),
           contacts: contactsById[s.studentId] || [], byYear: s.byYear, total: s.total,
         };
       });
     return {
       columns, rows, monthLabel: bkt.monthEndLabel, currentAcademicYearId: currentAyId,
-      generatedAt: istToday(), studentCount: rows.length, grandTotal: rows.reduce((a, r) => a + r.total, 0),
+      generatedAt: istToday(), studentCount: rows.length, grandTotal: rows.reduce((a, r) => a + r.total, 0), include,
     };
   }
 
@@ -416,6 +440,38 @@ class FeesReportService {
     }
     await DB.queriesInTransaction(queries, params);
     return { studentId, withdrawalDate: date, cyclesVoided: toVoid.length, amountVoided: Math.round(amount) };
+  }
+
+  // Bad-debt write-off / restore (god-only). Sets the student.fee_write_off cache flag and appends an
+  // append-only fee_write_off audit row. The LEDGER IS NEVER TOUCHED — charges stay fully owing, so the
+  // debt is preserved to the rupee, the figure just moves from "collectable" to "bad debt", and a
+  // restore snaps it straight back. `amount` is the live outstanding snapshot at this moment (info only).
+  public async writeOff(schoolId: string, studentId: string, body: any, userId: string) {
+    const action = body?.action === 'restore' ? 'restore' : 'writeoff';
+    const reason = (body?.reason || '').trim() || null;
+    if (!studentId) throw new BadRequestResult(ErrorCode.InvalidInput, 'studentId is required');
+    if (action === 'writeoff' && !reason) throw new BadRequestResult(ErrorCode.InvalidInput, 'A reason is required to write off a student');
+    const st = await DB.query(singleLineString`select uuid, coalesce(fee_write_off, false) as fee_write_off from student where school_id = $1 and uuid = $2 and status <> 'deleted'`, [schoolId, studentId]);
+    if (!st.length) throw new BadRequestResult(ErrorCode.InvalidInput, 'Student not found');
+    const already = st[0].feeWriteOff === true;
+    if (action === 'writeoff' && already) throw new BadRequestResult(ErrorCode.BusinessError, 'This student is already written off as bad debt');
+    if (action === 'restore' && !already) throw new BadRequestResult(ErrorCode.BusinessError, 'This student is not written off');
+
+    // live outstanding snapshot (net debit over all active ledger rows, all years) — informational
+    const amtRow = await DB.query(singleLineString`select greatest(0, coalesce(sum(debit),0) - coalesce(sum(credit),0)) as amt from student_ledger_entry where school_id = $1 and student_id = $2 and status = 'active'`, [schoolId, studentId]);
+    const amount = Math.round(Number(amtRow[0]?.amt || 0));
+
+    await DB.queriesInTransaction(
+      [
+        singleLineString`update student set fee_write_off = $3, updated_at = now(), updatedby_userid = $4 where school_id = $1 and uuid = $2`,
+        singleLineString`insert into fee_write_off (uuid, school_id, student_id, action, amount, reason, createdby_userid, created_at) values ($1, $2, $3, $4, $5, $6, $7, now())`,
+      ],
+      [
+        [schoolId, studentId, action === 'writeoff', userId],
+        [generateShortUuid(12), schoolId, studentId, action, amount, reason, userId],
+      ]
+    );
+    return { studentId, writtenOff: action === 'writeoff', amount, reason };
   }
 
   // ---- Exam-only students (registered here, studying elsewhere) ----

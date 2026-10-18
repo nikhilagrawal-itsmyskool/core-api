@@ -57,6 +57,7 @@ export const ACTIONS = {
   FEE_FINE_EXEMPT: 'fee.fine.exempt',           // exempt a late fine (manager + god only)
   FEE_RECEIPT_VERIFY: 'fee.receipt.verify',     // Scan & Verify (admin + god only)
   FEE_MIGRATION_IMPORT: 'fee.migration.import', // bulk historical import (god-only)
+  FEE_WRITEOFF_MANAGE: 'fee.writeoff.manage',   // mark/lift a student's dues as bad debt (god-only)
   // Uniform store (strict module.resource.action). admin holds the uniform.* wildcard; no teacher.
   UNIFORM_INVENTORY_VIEW: 'uniform.inventory.view',
   UNIFORM_INVENTORY_MANAGE: 'uniform.inventory.manage',
