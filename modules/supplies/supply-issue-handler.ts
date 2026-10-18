@@ -8,6 +8,8 @@ import { supplyIssueService } from './supply-issue-service';
 import { CreateIssueLogRequest, UpdateIssueLogRequest, ReturnItemRequest } from './supply-interfaces';
 import { ISSUE_TYPES, ISSUED_TO_TYPES, RETURN_CONDITIONS } from './supply-constants';
 import { getDefaultStartDate, getDefaultEndDate, isValidDate } from '../../shared/util/datetime';
+import { guard } from '../auth/authz';
+import { SUPPLY_ACTIONS } from './supply-actions';
 
 const VALID_ISSUE_TYPES = ISSUE_TYPES.map((t) => t.value) as readonly string[];
 
@@ -151,9 +153,10 @@ class SupplyIssueHandler {
 }
 
 const handler = new SupplyIssueHandler();
-export const create = handler.create;
-export const update = handler.update;
-export const remove = handler.remove;
-export const getById = handler.getById;
-export const list = handler.list;
-export const returnItem = handler.returnItem;
+const g = (ref: string, fn: any) => guard(SUPPLY_ACTIONS[ref], fn);
+export const create = g('supply-issue-handler.create', handler.create);
+export const update = g('supply-issue-handler.update', handler.update);
+export const remove = g('supply-issue-handler.remove', handler.remove);
+export const getById = g('supply-issue-handler.getById', handler.getById);
+export const list = g('supply-issue-handler.list', handler.list);
+export const returnItem = g('supply-issue-handler.returnItem', handler.returnItem);

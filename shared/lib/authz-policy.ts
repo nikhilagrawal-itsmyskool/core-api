@@ -36,8 +36,13 @@ export const ACTIONS = {
   LAB_ISSUE_MANAGE: 'lab.issue.manage',
   LAB_BREAKAGE_VIEW: 'lab.breakage.view',
   LAB_BREAKAGE_MANAGE: 'lab.breakage.manage',
-  FINE_VIEW: 'fine.view',
-  FINE_MANAGE: 'fine.manage',
+  // Disciplinary fines (strict module.resource.action; NOT fees). admin holds the fine.*
+  // wildcard; no teacher access. incident = the complaint/incident lifecycle (incident +
+  // evidence + notes); collection = recording fine collection.
+  FINE_INCIDENT_VIEW: 'fine.incident.view',
+  FINE_INCIDENT_MANAGE: 'fine.incident.manage',
+  FINE_COLLECTION_VIEW: 'fine.collection.view',
+  FINE_COLLECTION_MANAGE: 'fine.collection.manage',
   // Fees — module.resource.action, NO fee.* wildcard (every role lists exactly what it holds).
   FEE_REPORT_VIEW: 'fee.report.view',           // all fee reads: dues, reports, receipts, ledger, lists
   FEE_COLLECT: 'fee.collect.collect',           // take payments / refunds / cancel receipts
@@ -52,10 +57,24 @@ export const ACTIONS = {
   FEE_FINE_EXEMPT: 'fee.fine.exempt',           // exempt a late fine (manager + god only)
   FEE_RECEIPT_VERIFY: 'fee.receipt.verify',     // Scan & Verify (admin + god only)
   FEE_MIGRATION_IMPORT: 'fee.migration.import', // bulk historical import (god-only)
-  UNIFORM_VIEW: 'uniform.view',
-  UNIFORM_MANAGE: 'uniform.manage',
-  SHOP_VIEW: 'shop.view',
-  SHOP_MANAGE: 'shop.manage',
+  // Uniform store (strict module.resource.action). admin holds the uniform.* wildcard; no teacher.
+  UNIFORM_INVENTORY_VIEW: 'uniform.inventory.view',
+  UNIFORM_INVENTORY_MANAGE: 'uniform.inventory.manage',
+  UNIFORM_PURCHASE_VIEW: 'uniform.purchase.view',
+  UNIFORM_PURCHASE_MANAGE: 'uniform.purchase.manage',
+  UNIFORM_SET_VIEW: 'uniform.set.view',
+  UNIFORM_SET_MANAGE: 'uniform.set.manage',
+  UNIFORM_SALE_VIEW: 'uniform.sale.view',
+  UNIFORM_SALE_MANAGE: 'uniform.sale.manage',
+  // Shop / sets store (strict module.resource.action). admin holds the shop.* wildcard; no teacher.
+  SHOP_INVENTORY_VIEW: 'shop.inventory.view',
+  SHOP_INVENTORY_MANAGE: 'shop.inventory.manage',
+  SHOP_PURCHASE_VIEW: 'shop.purchase.view',
+  SHOP_PURCHASE_MANAGE: 'shop.purchase.manage',
+  SHOP_SET_VIEW: 'shop.set.view',
+  SHOP_SET_MANAGE: 'shop.set.manage',
+  SHOP_SALE_VIEW: 'shop.sale.view',
+  SHOP_SALE_MANAGE: 'shop.sale.manage',
   // Sports equipment (strict module.resource.action). admin + sports-incharge hold the
   // sports.* wildcard; teachers get the two read leaves (inventory.view + issue.view).
   SPORTS_SETUP_VIEW: 'sports.setup.view',
@@ -68,26 +87,55 @@ export const ACTIONS = {
   SPORTS_ISSUE_MANAGE: 'sports.issue.manage',
   SPORTS_BREAKAGE_VIEW: 'sports.breakage.view',
   SPORTS_BREAKAGE_MANAGE: 'sports.breakage.manage',
-  ASSET_VIEW: 'asset.view',
-  ASSET_MANAGE: 'asset.manage',
-  LIBRARY_VIEW: 'library.view',
-  LIBRARY_MANAGE: 'library.manage',
-  SUPPLIES_VIEW: 'supplies.view',
-  SUPPLIES_MANAGE: 'supplies.manage',
-  TIMETABLE_VIEW: 'timetable.view',
-  TIMETABLE_PRINT: 'timetable.print',
-  TIMETABLE_MANAGE: 'timetable.manage',
-  EMPLOYEE_VIEW: 'employee.view',
-  EMPLOYEE_MANAGE: 'employee.manage',
-  EMPLOYEE_RESTORE: 'employee.restore',
+  // Physical asset register (strict module.resource.action). admin + assets-incharge hold the
+  // asset.* wildcard; no teacher access. register = the containment tree/items/moves/
+  // responsibility; type = the per-school asset-type master.
+  ASSET_REGISTER_VIEW: 'asset.register.view',
+  ASSET_REGISTER_MANAGE: 'asset.register.manage',
+  ASSET_TYPE_VIEW: 'asset.type.view',
+  ASSET_TYPE_MANAGE: 'asset.type.manage',
+  // Library catalog & circulation (strict module.resource.action). admin + library-incharge hold
+  // the library.* wildcard; teachers get catalog.view (browse). catalog = works/copies/labels;
+  // circulation = issue/return/renew; fine = overdue/lost fines; config = circulation policy + lookups.
+  LIBRARY_CATALOG_VIEW: 'library.catalog.view',
+  LIBRARY_CATALOG_MANAGE: 'library.catalog.manage',
+  LIBRARY_CIRCULATION_VIEW: 'library.circulation.view',
+  LIBRARY_CIRCULATION_MANAGE: 'library.circulation.manage',
+  LIBRARY_FINE_VIEW: 'library.fine.view',
+  LIBRARY_FINE_MANAGE: 'library.fine.manage',
+  LIBRARY_CONFIG_VIEW: 'library.config.view',
+  LIBRARY_CONFIG_MANAGE: 'library.config.manage',
+  // School supplies / consumables (strict module.resource.action). admin + supplies-incharge
+  // hold the supplies.* wildcard; teachers get inventory.view + issue.view.
+  SUPPLIES_CATEGORY_VIEW: 'supplies.category.view',
+  SUPPLIES_CATEGORY_MANAGE: 'supplies.category.manage',
+  SUPPLIES_INVENTORY_VIEW: 'supplies.inventory.view',
+  SUPPLIES_INVENTORY_MANAGE: 'supplies.inventory.manage',
+  SUPPLIES_PURCHASE_VIEW: 'supplies.purchase.view',
+  SUPPLIES_PURCHASE_MANAGE: 'supplies.purchase.manage',
+  SUPPLIES_ISSUE_VIEW: 'supplies.issue.view',
+  SUPPLIES_ISSUE_MANAGE: 'supplies.issue.manage',
+  SUPPLIES_WASTAGE_VIEW: 'supplies.wastage.view',
+  SUPPLIES_WASTAGE_MANAGE: 'supplies.wastage.manage',
+  TIMETABLE_VIEW: 'timetable.grid.view',
+  TIMETABLE_PRINT: 'timetable.grid.print',
+  TIMETABLE_MANAGE: 'timetable.grid.manage',
+  EMPLOYEE_VIEW: 'employee.record.view',
+  EMPLOYEE_MANAGE: 'employee.record.manage',
+  EMPLOYEE_RESTORE: 'employee.record.restore',
   // Force an employee to sign out and back in (bumps employee_login.session_version). God-only by
   // default — NOT under any wildcard admin holds and listed on no role, so only god ('*') has it;
   // god can grant it to admin from the Permissions grid.
   EMPLOYEE_SESSION_RESET: 'employee.session.reset',
+  // Staff document handbook — authoring (create/edit/remind/archive/acks + the god-console
+  // reads). god-only by default (no role grant); god grants via the grid. The /me read-&-sign
+  // endpoints are self-service (PUBLIC in the manifest). documents.sign (frontend menu
+  // visibility for "My Documents") stays a raw grant on admin/teacher — it gates no endpoint.
+  DOCUMENTS_HANDBOOK_MANAGE: 'documents.handbook.manage',
   PURCHASE_LOG_EDIT: 'purchaseLog.edit',
   PURCHASE_LOG_RESTORE: 'purchaseLog.restore',
-  STUDENT_VIEW: 'student.view',
-  STUDENT_MANAGE: 'student.manage',
+  STUDENT_VIEW: 'student.record.view',
+  STUDENT_MANAGE: 'student.record.manage',
   STUDENT_VIEW_CONTACTS: 'student.contacts.view',
   // Attendance (module.resource.action). session.mark = take roll-call (roster/sessions/save +
   // read config); session.finalize = finalize sessions & edit records after finalize;
@@ -98,26 +146,49 @@ export const ACTIONS = {
   ATTENDANCE_FINALIZE: 'attendance.session.finalize',
   ATTENDANCE_RECORD_VIEW: 'attendance.record.view',
   ATTENDANCE_CONFIG_MANAGE: 'attendance.config.manage',
-  COMMUNICATION_SEND: 'communication.send',
+  COMMUNICATION_SEND: 'communication.message.send',
   COMMUNICATION_TEMPLATE_MANAGE: 'communication.template.manage',
   COMMUNICATION_TEMPLATE_DELETE: 'communication.template.delete',
-  HIRING_VIEW: 'hiring.view',
-  HIRING_MANAGE: 'hiring.manage',
-  TRANSPORT_VIEW: 'transport.view',
-  TRANSPORT_MANAGE: 'transport.manage',
+  // Recruitment/hiring (strict module.resource.action). admin + hiring-incharge; no teacher.
+  // candidate = the pipeline (candidate + stages + files + lookups).
+  HIRING_CANDIDATE_VIEW: 'hiring.candidate.view',
+  HIRING_CANDIDATE_MANAGE: 'hiring.candidate.manage',
+  TRANSPORT_VIEW: 'transport.setup.view',
+  TRANSPORT_MANAGE: 'transport.setup.manage',
   TRANSPORT_ATTENDANCE_MARK: 'transport.attendance.mark',
   TRANSPORT_ATTENDANCE_FINALIZE: 'transport.attendance.finalize',
-  TRANSFER_VIEW: 'transfer.view',
-  TRANSFER_MANAGE: 'transfer.manage',
-  SYLLABUS_VIEW: 'syllabus.view',
-  SYLLABUS_MANAGE: 'syllabus.manage',
+  TRANSFER_VIEW: 'transfer.certificate.view',
+  TRANSFER_MANAGE: 'transfer.certificate.manage',
+  SYLLABUS_VIEW: 'syllabus.plan.view',
+  SYLLABUS_MANAGE: 'syllabus.plan.manage',
   SYLLABUS_PROGRESS_MARK: 'syllabus.progress.mark',
-  ASSEMBLY_VIEW: 'assembly.view',
-  ASSEMBLY_MANAGE: 'assembly.manage',
-  HOMEWORK_POST: 'homework.post',
-  HOMEWORK_MANAGE: 'homework.manage',
+  // Morning-assembly planning — strict module.resource.action. plan = the planning content
+  // (plans, nodes, specials, themes, references, lookups, resolve/live, pulse, documents);
+  // week = the weekly roster workflow (admin surface); week.conduct = the teacher /me duty
+  // surface (run my assigned week — scoped in-handler by house/evaluator data, NOT role);
+  // grading = rubric + evaluators + grades + conduct checklist; house = house-mode + rotation;
+  // config.manage = house/grading setConfig (god-first). Student-app me/today, me/on and the
+  // duties leaderboard are PUBLIC (student token).
+  ASSEMBLY_PLAN_VIEW: 'assembly.plan.view',
+  ASSEMBLY_PLAN_MANAGE: 'assembly.plan.manage',
+  ASSEMBLY_WEEK_VIEW: 'assembly.week.view',
+  ASSEMBLY_WEEK_MANAGE: 'assembly.week.manage',
+  ASSEMBLY_WEEK_CONDUCT: 'assembly.week.conduct',
+  ASSEMBLY_GRADING_VIEW: 'assembly.grading.view',
+  ASSEMBLY_GRADING_MANAGE: 'assembly.grading.manage',
+  ASSEMBLY_HOUSE_VIEW: 'assembly.house.view',
+  ASSEMBLY_HOUSE_MANAGE: 'assembly.house.manage',
+  ASSEMBLY_CONFIG_MANAGE: 'assembly.config.manage',
+  // Daily homework photos (strict module.resource.action). day.post = a class teacher posts
+  // their class's photos (the /me surface, scoped by canPostForClass); day.manage = admin
+  // oversight edits + the class↔teacher mapping override; day.view = admin oversight reads.
+  // The student/parent app's /me/today self-authorizes (PUBLIC in the manifest).
+  HOMEWORK_DAY_VIEW: 'homework.day.view',
+  HOMEWORK_DAY_POST: 'homework.day.post',
+  HOMEWORK_DAY_MANAGE: 'homework.day.manage',
   ACADEMIC_CALENDAR_VIEW: 'academic-calendar.view',
   ACADEMIC_CALENDAR_MANAGE: 'academic-calendar.manage',
+  ACADEMIC_CALENDAR_CONFIG_MANAGE: 'academic-calendar.config.manage',
   // Examination — strict `module.resource.action` convention. NOTE: no role carries an `exam.*`
   // wildcard anymore (admin/exam-incharge get explicit lists below), so every leaf is independently
   // grantable and the god-only ones are NOT swallowed by a wildcard. (EXAM_VIEW/EXAM_MANAGE keep
@@ -136,12 +207,18 @@ export const ACTIONS = {
   // God-only: edit the role→permission overrides from the Permissions grid. No role but god
   // (via '*') holds it, so requireAction('authz.manage') is effectively god-only.
   AUTHZ_MANAGE: 'authz.manage',
-  // Developmental programmes (Spoken English & Life Communication, …). view = the
-  // teacher Class->Month->Theme reader + catalog (teacher/admin); manage = author
-  // units + re-upload source docs (admin/god/programme-incharge).
-  PROGRAMME_VIEW: 'programme.view',
-  PROGRAMME_MANAGE: 'programme.manage',
-  ASSISTANT_USE: 'assistant.use',
+  // Developmental programmes (Spoken English & Life Communication, …) — strict
+  // module.resource.action. unit = the programme definition + monthly units
+  // (reader + authoring); teach = mark a unit taught (every teacher); source =
+  // class-module reference docs (view = list/download, manage = upload);
+  // config.manage = SelcSettings (god-first, frontend-only gate, no endpoint).
+  PROGRAMME_UNIT_VIEW: 'programme.unit.view',
+  PROGRAMME_UNIT_MANAGE: 'programme.unit.manage',
+  PROGRAMME_UNIT_TEACH: 'programme.unit.teach',
+  PROGRAMME_SOURCE_VIEW: 'programme.source.view',
+  PROGRAMME_SOURCE_MANAGE: 'programme.source.manage',
+  PROGRAMME_CONFIG_MANAGE: 'programme.config.manage',
+  ASSISTANT_USE: 'assistant.voice.use',
   // Staff leave (strict module.resource.action). Self-service + the shared "who's on leave"
   // calendar are teacher/admin; all oversight/config/biometric/deduction writes are god-only
   // for now (god opens cells per-role via the Permissions grid — no live "director" role yet).
@@ -159,11 +236,11 @@ export const ACTIONS = {
   // record = log + assign to a teacher (teachers); respond = the assigned teacher's reply
   // (teachers, own items only); review = director dashboard + complete/reopen. `review` is
   // deliberately OUTSIDE any namespace admin inherits, so it is god-only until a real
-  // `education-director` role is introduced (grant it feedback.review then).
-  FEEDBACK_VIEW: 'feedback.view',
-  FEEDBACK_RECORD: 'feedback.record',
-  FEEDBACK_RESPOND: 'feedback.respond',
-  FEEDBACK_REVIEW: 'feedback.review',
+  // `education-director` role is introduced (grant it feedback.ticket.review then).
+  FEEDBACK_VIEW: 'feedback.ticket.view',
+  FEEDBACK_RECORD: 'feedback.ticket.record',
+  FEEDBACK_RESPOND: 'feedback.ticket.respond',
+  FEEDBACK_REVIEW: 'feedback.ticket.review',
   // Director's Cockpit / School Pulse landing (director + god). Read-only heartbeat.
   COCKPIT_VIEW: 'cockpit.view',
   // Clubs & Activities (per-school display name e.g. "Saturday Activities"). A day-neutral
@@ -207,36 +284,49 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
     'asset.*',
     'library.*',
     'supplies.*',
-    'employee.view',
-    'employee.manage',
-    'timetable.view',
-    'timetable.print',
-    'student.view',
-    'student.manage',
+    'employee.record.view',
+    'employee.record.manage',
+    'timetable.grid.view',
+    'timetable.grid.print',
+    'student.record.view',
+    'student.record.manage',
     'student.contacts.view',
     'attendance.session.mark',
     'attendance.session.finalize',
     'attendance.record.view',
     // attendance.config.manage is god-only by default (not here); god grants admin via the
     // Permissions grid if a school wants it. Mirrors the god-first convention.
-    'communication.send',
+    'communication.message.send',
     'communication.template.manage',
-    'hiring.view',
-    'hiring.manage',
-    'transport.view',
-    'transport.manage',
+    'hiring.candidate.view',
+    'hiring.candidate.manage',
+    'transport.setup.view',
+    'transport.setup.manage',
     'transport.attendance.mark',
     'transport.attendance.finalize',
-    'transfer.view',
-    'transfer.manage',
-    'syllabus.view',
-    'syllabus.manage',
+    'transfer.certificate.view',
+    'transfer.certificate.manage',
+    'syllabus.plan.view',
+    'syllabus.plan.manage',
     'syllabus.progress.mark',
-    'programme.view',
-    'assembly.view',
-    'assembly.manage',
-    'homework.post',
-    'homework.manage',
+    'programme.unit.view',
+    'programme.unit.teach',
+    'programme.source.view',
+    // programme.unit.manage + programme.source.manage are god-only (authoring stays god-first,
+    // as the old godpwa.* guard did); god grants admin/incharge via the Permissions grid.
+    'assembly.plan.view',
+    'assembly.plan.manage',
+    'assembly.week.view',
+    'assembly.week.manage',
+    'assembly.week.conduct',
+    'assembly.grading.view',
+    'assembly.grading.manage',
+    'assembly.house.view',
+    'assembly.house.manage',
+    // assembly.config.manage is god-only (house/grading setConfig).
+    'homework.day.view',
+    'homework.day.post',
+    'homework.day.manage',
     'academic-calendar.view',
     'academic-calendar.manage',
     // Examination (explicit, no wildcard): admin runs exams + report cards, views progress.
@@ -260,30 +350,34 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
     'lab.issue.view', // See what lab items have been issued
     'sports.inventory.view', // See sports equipment stock
     'sports.issue.view', // See what sports items have been issued
-    'library.view',
-    'supplies.view',
-    'timetable.view',
-    'student.view',
+    'library.catalog.view', // Browse the library catalog
+    'supplies.inventory.view', // See supply stock
+    'supplies.issue.view', // See what supplies have been issued
+    'timetable.grid.view',
+    'student.record.view',
     'student.contacts.view',
     'attendance.record.view', // read a student's attendance history on the 360 view
-    'employee.view',
-    'syllabus.view',
+    'employee.record.view',
+    'syllabus.plan.view',
     'syllabus.progress.mark',
-    'programme.view',
-    'assembly.view',
+    'programme.unit.view', // Read the Spoken English & Life Communication monthly units
+    'programme.unit.teach', // Mark a unit taught while conducting the programme
+    'programme.source.view', // Download the class-module reference docs
+    'assembly.plan.view', // Read the assembly plan for their wing
+    'assembly.week.conduct', // Run their assigned assembly week (/me duties; scoped in-handler by house/evaluator)
     'academic-calendar.view',
     'leave.calendar.view', // See the shared who's-on-leave calendar
     'leave.application.apply', // Apply for own leave
     'documents.sign',
     // Feedback/complaints: any teacher may record + assign, and respond to items
-    // assigned to them. Reviewing/completing (feedback.review) is god-only.
-    'feedback.view',
-    'feedback.record',
-    'feedback.respond',
+    // assigned to them. Reviewing/completing (feedback.ticket.review) is god-only.
+    'feedback.ticket.view',
+    'feedback.ticket.record',
+    'feedback.ticket.respond',
     'club.plan.conduct', // Run own club assignment (guide) + quick closure on the PWA
   ],
   // Class teacher: additive to `teacher` — may MARK attendance and POST homework.
-  'class-teacher': ['attendance.session.mark', 'homework.post'],
+  'class-teacher': ['attendance.session.mark', 'homework.day.post'],
   // Club in-charge: READ-ONLY by default across the three club resources (see clubs, the
   // activity bank, and the plan board). Authoring/approve/review/planning are god-first;
   // god grants this role more via the Permissions grid as each school decides.
@@ -301,8 +395,12 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
   'hiring-incharge': ['hiring.*'],
   'transport-incharge': ['transport.*'],
   'syllabus-incharge': ['syllabus.*'],
-  'programme-incharge': ['programme.*'],
-  'assembly-incharge': ['assembly.*'],
+  // Explicit (not programme.*) so authoring (unit.manage/source.manage) + config.manage stay
+  // god-first; god grants the write leaves to incharge via the Permissions grid.
+  'programme-incharge': ['programme.unit.view', 'programme.unit.teach', 'programme.source.view'],
+  // Explicit (not assembly.*) so assembly.config.manage stays god-first; incharge owns
+  // planning + weekly roster + grading + houses + conduct, like admin.
+  'assembly-incharge': ['assembly.plan.view', 'assembly.plan.manage', 'assembly.week.view', 'assembly.week.manage', 'assembly.week.conduct', 'assembly.grading.view', 'assembly.grading.manage', 'assembly.house.view', 'assembly.house.manage'],
   // Exam incharge === admin, but scoped to the examination module.
   // Exam office: run exams + view progress, but NOT report cards, config, mapping, or the god-only
   // overrides (enter-on-behalf, lock, class-exclude, dues-override).
@@ -319,16 +417,22 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
   // also hold `god`. Mirrors admin-portal/src/permissions/policy.js.
   'education-director': [
     'cockpit.view',
-    'feedback.view',
-    'feedback.review',
-    'assembly.view',
-    'assembly.manage',
-    'syllabus.view',
-    'student.view',
+    'feedback.ticket.view',
+    'feedback.ticket.review',
+    'assembly.plan.view',
+    'assembly.plan.manage',
+    'assembly.week.view',
+    'assembly.week.manage',
+    'assembly.grading.view',
+    'assembly.grading.manage',
+    'assembly.house.view',
+    'assembly.house.manage',
+    'syllabus.plan.view',
+    'student.record.view',
     'student.contacts.view',
     'academic-calendar.view',
-    'timetable.view',
-    'transport.view',
+    'timetable.grid.view',
+    'transport.setup.view',
     'leave.calendar.view',
     'leave.application.apply',
   ],

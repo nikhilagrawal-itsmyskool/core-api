@@ -8,6 +8,8 @@ import { ErrorCode } from "../../shared/lib/error-codes";
 import { resolveSchoolId, userIdOf } from "./library-common";
 import { copyService } from "./library-copy-service";
 import { CopyInput } from "./library-interfaces";
+import { guard } from "../auth/authz";
+import { LIBRARY_ACTIONS } from "./library-actions";
 
 class CopyHandler {
   // Add a batch of copies (a new acquisition) to an existing title.
@@ -256,10 +258,11 @@ class CopyHandler {
 }
 
 const handler = new CopyHandler();
-export const addCopies = handler.addCopies;
-export const listByTitle = handler.listByTitle;
-export const searchCopies = handler.searchCopies;
-export const getCopy = handler.getCopy;
-export const getByAccession = handler.getByAccession;
-export const updateCopy = handler.updateCopy;
-export const deleteCopy = handler.deleteCopy;
+const g = (ref: string, fn: any) => guard(LIBRARY_ACTIONS[ref], fn);
+export const addCopies = g("library-copy-handler.addCopies", handler.addCopies);
+export const listByTitle = g("library-copy-handler.listByTitle", handler.listByTitle);
+export const searchCopies = g("library-copy-handler.searchCopies", handler.searchCopies);
+export const getCopy = g("library-copy-handler.getCopy", handler.getCopy);
+export const getByAccession = g("library-copy-handler.getByAccession", handler.getByAccession);
+export const updateCopy = g("library-copy-handler.updateCopy", handler.updateCopy);
+export const deleteCopy = g("library-copy-handler.deleteCopy", handler.deleteCopy);

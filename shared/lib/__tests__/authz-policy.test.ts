@@ -4,7 +4,7 @@ import { can, ROLE_PERMISSIONS, ACTIONS } from '../authz-policy';
 
 describe('can()', () => {
   it('allows an exact action granted to a role', () => {
-    expect(can(['admin'], 'student.manage')).toBe(true);
+    expect(can(['admin'], 'student.record.manage')).toBe(true);
     expect(can(['class-teacher'], 'attendance.session.mark')).toBe(true);
   });
 
@@ -41,13 +41,13 @@ describe('can()', () => {
 
   it('god (*) grants everything', () => {
     expect(can(['god'], 'anything.at.all')).toBe(true);
-    expect(can(['god'], 'employee.restore')).toBe(true);
+    expect(can(['god'], 'employee.record.restore')).toBe(true);
   });
 
   it('denies actions not granted to the role', () => {
     expect(can(['teacher'], 'fee.collect.collect')).toBe(false);
-    expect(can(['teacher'], 'student.manage')).toBe(false);
-    expect(can(['fees-incharge'], 'student.manage')).toBe(false);
+    expect(can(['teacher'], 'student.record.manage')).toBe(false);
+    expect(can(['fees-incharge'], 'student.record.manage')).toBe(false);
   });
 
   it('keeps fee.receipt.verify to admin/god only (not fee incharges)', () => {
@@ -58,22 +58,22 @@ describe('can()', () => {
 
   it('is additive across multiple roles', () => {
     expect(can(['teacher', 'class-teacher'], 'attendance.session.mark')).toBe(true);
-    expect(can(['teacher', 'class-teacher'], 'homework.post')).toBe(true);
+    expect(can(['teacher', 'class-teacher'], 'homework.day.post')).toBe(true);
     // teacher gives the reads, class-teacher the two writes; neither gives fee.collect
     expect(can(['teacher', 'class-teacher'], 'fee.collect.collect')).toBe(false);
   });
 
   it('denies for empty/undefined/unknown roles (e.g. a student token)', () => {
-    expect(can([], 'student.view')).toBe(false);
-    expect(can(undefined, 'student.view')).toBe(false);
-    expect(can(['no-such-role'], 'student.view')).toBe(false);
+    expect(can([], 'student.record.view')).toBe(false);
+    expect(can(undefined, 'student.record.view')).toBe(false);
+    expect(can(['no-such-role'], 'student.record.view')).toBe(false);
   });
 
   it('gates god-only leaves away from admin', () => {
-    expect(can(['admin'], 'timetable.manage')).toBe(false);
-    expect(can(['admin'], 'employee.restore')).toBe(false);
-    expect(can(['admin'], 'assistant.use')).toBe(false);
-    expect(can(['god'], 'timetable.manage')).toBe(true);
+    expect(can(['admin'], 'timetable.grid.manage')).toBe(false);
+    expect(can(['admin'], 'employee.record.restore')).toBe(false);
+    expect(can(['admin'], 'assistant.voice.use')).toBe(false);
+    expect(can(['god'], 'timetable.grid.manage')).toBe(true);
   });
 
   it('leave: teachers get the shared calendar + self-service; oversight is god-only', () => {

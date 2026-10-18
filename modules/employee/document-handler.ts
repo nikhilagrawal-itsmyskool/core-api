@@ -2,6 +2,8 @@ import { ApiCallback, ApiContext, ApiEvent } from "../../shared/lib/api.interfac
 import { ResponseBuilder } from "../../shared/lib/response-builder";
 import { ErrorCode } from "../../shared/lib/error-codes";
 import { resolveSchool, requireManager, resolveEmployee, parseBody, requireParam, clientMeta } from "./document-util";
+import { guard } from "../auth/authz";
+import { EMPLOYEE_ACTIONS } from "./employee-actions";
 import { documentService } from "./document-service";
 import { notifyDoc } from "./document-notify";
 
@@ -227,15 +229,17 @@ class DocumentHandler {
 }
 
 const h = new DocumentHandler();
-export const list = h.list;
-export const get = h.get;
-export const create = h.create;
-export const update = h.update;
-export const remind = h.remind;
-export const archive = h.archive;
-export const acks = h.acks;
-export const ackArtifact = h.ackArtifact;
-export const docPdf = h.docPdf;
+const g = (ref: string, fn: any) => guard(EMPLOYEE_ACTIONS[ref], fn);
+export const list = g('document-handler.list', h.list);
+export const get = g('document-handler.get', h.get);
+export const create = g('document-handler.create', h.create);
+export const update = g('document-handler.update', h.update);
+export const remind = g('document-handler.remind', h.remind);
+export const archive = g('document-handler.archive', h.archive);
+export const acks = g('document-handler.acks', h.acks);
+export const ackArtifact = g('document-handler.ackArtifact', h.ackArtifact);
+export const docPdf = g('document-handler.docPdf', h.docPdf);
+// /me read-&-sign — self-service (resolveEmployee), not action-gated.
 export const myList = h.myList;
 export const myGet = h.myGet;
 export const myAcknowledge = h.myAcknowledge;

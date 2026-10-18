@@ -6,6 +6,8 @@ import { hiringCandidateService } from './hiring-candidate-service';
 import { hiringFileService } from './hiring-file-service';
 import { UploadFileRequest } from './hiring-interfaces';
 import { FILE_KINDS, FileKind, PHOTO_MIME_TYPES, RESUME_MIME_TYPES } from './hiring-constants';
+import { guard } from '../auth/authz';
+import { HIRING_ACTIONS } from './hiring-actions';
 
 class HiringFileHandler {
   public upload = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
@@ -132,6 +134,7 @@ class HiringFileHandler {
 }
 
 const handler = new HiringFileHandler();
-export const upload = handler.upload;
-export const get = handler.get;
-export const remove = handler.remove;
+const g = (ref: string, fn: any) => guard(HIRING_ACTIONS[ref], fn);
+export const upload = g('hiring-file-handler.upload', handler.upload);
+export const get = g('hiring-file-handler.get', handler.get);
+export const remove = g('hiring-file-handler.remove', handler.remove);

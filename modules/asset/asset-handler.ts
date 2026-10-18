@@ -8,6 +8,8 @@ import {
   IndividualizeRequest, SetResponsibilityRequest,
 } from './asset-interfaces';
 import { ASSET_CONDITIONS, ASSET_STATUSES } from './asset-constants';
+import { guard } from '../auth/authz';
+import { ASSET_ACTIONS } from './asset-actions';
 
 const VALID_CONDITIONS = ASSET_CONDITIONS.map((c) => c.value) as readonly string[];
 const VALID_STATUSES = ASSET_STATUSES.map((s) => s.value) as readonly string[];
@@ -365,18 +367,19 @@ class AssetHandler {
 }
 
 const handler = new AssetHandler();
-export const create = handler.create;
-export const search = handler.search;
-export const getTree = handler.getTree;
-export const suggestCode = handler.suggestCode;
-export const getById = handler.getById;
-export const update = handler.update;
-export const remove = handler.remove;
-export const move = handler.move;
-export const individualize = handler.individualize;
-export const setResponsibility = handler.setResponsibility;
-export const getResponsibility = handler.getResponsibility;
-export const getMovements = handler.getMovements;
-export const summary = handler.summary;
-export const counts = handler.counts;
-export const getByResponsible = handler.getByResponsible;
+const g = (ref: string, fn: any) => guard(ASSET_ACTIONS[ref], fn);
+export const create = g('asset-handler.create', handler.create);
+export const search = g('asset-handler.search', handler.search);
+export const getTree = g('asset-handler.getTree', handler.getTree);
+export const suggestCode = g('asset-handler.suggestCode', handler.suggestCode);
+export const getById = g('asset-handler.getById', handler.getById);
+export const update = g('asset-handler.update', handler.update);
+export const remove = g('asset-handler.remove', handler.remove);
+export const move = g('asset-handler.move', handler.move);
+export const individualize = g('asset-handler.individualize', handler.individualize);
+export const setResponsibility = g('asset-handler.setResponsibility', handler.setResponsibility);
+export const getResponsibility = g('asset-handler.getResponsibility', handler.getResponsibility);
+export const getMovements = g('asset-handler.getMovements', handler.getMovements);
+export const summary = g('asset-handler.summary', handler.summary);
+export const counts = g('asset-handler.counts', handler.counts);
+export const getByResponsible = g('asset-handler.getByResponsible', handler.getByResponsible);

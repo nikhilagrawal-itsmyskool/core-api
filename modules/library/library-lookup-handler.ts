@@ -23,6 +23,8 @@ import {
   LookupType,
 } from "./library-constants";
 import { CreateLookupRequest, UpdateLookupRequest } from "./library-interfaces";
+import { guard } from "../auth/authz";
+import { LIBRARY_ACTIONS } from "./library-actions";
 
 class LookupHandler {
   // ---- Per-school managed lookups ----
@@ -336,15 +338,16 @@ class LookupHandler {
 }
 
 const handler = new LookupHandler();
-export const listLookups = handler.listLookups;
-export const createLookup = handler.createLookup;
-export const updateLookup = handler.updateLookup;
-export const deleteLookup = handler.deleteLookup;
-export const getDdc = handler.getDdc;
-export const getDdcByCode = handler.getDdcByCode;
-export const normalizeAuthor = handler.normalizeAuthor;
-export const generateCallNo = handler.generateCallNo;
-export const isbnLookup = handler.isbnLookup;
-export const getKeywords = handler.getKeywords;
-export const getUsedDdc = handler.getUsedDdc;
-export const getStaticLookups = handler.getStaticLookups;
+const g = (ref: string, fn: any) => guard(LIBRARY_ACTIONS[ref], fn);
+export const listLookups = g("library-lookup-handler.listLookups", handler.listLookups);
+export const createLookup = g("library-lookup-handler.createLookup", handler.createLookup);
+export const updateLookup = g("library-lookup-handler.updateLookup", handler.updateLookup);
+export const deleteLookup = g("library-lookup-handler.deleteLookup", handler.deleteLookup);
+export const getDdc = g("library-lookup-handler.getDdc", handler.getDdc);
+export const getDdcByCode = g("library-lookup-handler.getDdcByCode", handler.getDdcByCode);
+export const normalizeAuthor = g("library-lookup-handler.normalizeAuthor", handler.normalizeAuthor);
+export const generateCallNo = g("library-lookup-handler.generateCallNo", handler.generateCallNo);
+export const isbnLookup = g("library-lookup-handler.isbnLookup", handler.isbnLookup);
+export const getKeywords = g("library-lookup-handler.getKeywords", handler.getKeywords);
+export const getUsedDdc = g("library-lookup-handler.getUsedDdc", handler.getUsedDdc);
+export const getStaticLookups = g("library-lookup-handler.getStaticLookups", handler.getStaticLookups);

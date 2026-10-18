@@ -5,7 +5,8 @@ import {
 } from "../../shared/lib/api.interfaces";
 import { ResponseBuilder } from "../../shared/lib/response-builder";
 import { resolveSchool } from "./handler-util";
-import { requireAction } from "../auth/authz";
+import { guard } from "../auth/authz";
+import { PROGRAMME_ACTIONS } from "./programmes-actions";
 import { listBaseClasses } from "./programmes-common";
 import { parseGrade } from "./programmes-util";
 import { programmeService } from "./programme-service";
@@ -20,7 +21,6 @@ class ProgrammesLookupHandler {
   ) => {
     _context.callbackWaitsForEmptyEventLoop = false;
     try {
-      if (!requireAction(event, "programme.view", callback)) return;
       const ctx = await resolveSchool(event, callback);
       if (!ctx) return;
       const programmes = await programmeService.list(ctx.schoolId);
@@ -47,7 +47,6 @@ class ProgrammesLookupHandler {
   ) => {
     _context.callbackWaitsForEmptyEventLoop = false;
     try {
-      if (!requireAction(event, "programme.view", callback)) return;
       const ctx = await resolveSchool(event, callback);
       if (!ctx) return;
       const classes = await listBaseClasses(ctx.schoolId);
@@ -69,5 +68,6 @@ class ProgrammesLookupHandler {
 }
 
 const handler = new ProgrammesLookupHandler();
-export const getLookups = handler.getLookups;
-export const getGrades = handler.getGrades;
+const g = (ref: string, fn: any) => guard(PROGRAMME_ACTIONS[ref], fn);
+export const getLookups = g("programmes-lookup-handler.getLookups", handler.getLookups);
+export const getGrades = g("programmes-lookup-handler.getGrades", handler.getGrades);

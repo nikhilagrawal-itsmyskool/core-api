@@ -10,7 +10,7 @@ import { FEEDBACK_ACTIONS } from "./feedback-actions";
 // Teacher PWA surface (employee bearer token). A teacher sees tickets they participate in
 // (own / watch / recorded) and can comment or reassign (forward / send back). Reassign is
 // owner-only and comment-mandatory (enforced in the service, isReviewer=false). Completing /
-// cancelling / reopening is the director's (feedback.review) job, not exposed here.
+// cancelling / reopening is the director's (feedback.ticket.review) job, not exposed here.
 class FeedbackMeHandler {
   // GET /feedback/me?tab=act|watching|recorded&status=
   public list = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {

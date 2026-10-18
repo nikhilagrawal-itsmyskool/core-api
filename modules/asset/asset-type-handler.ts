@@ -5,6 +5,8 @@ import { validateSchoolCodeHeader } from '../auth/auth-utils';
 import { assetTypeService } from './asset-type-service';
 import { CreateAssetTypeRequest, UpdateAssetTypeRequest } from './asset-interfaces';
 import { ASSET_KINDS } from './asset-constants';
+import { guard } from '../auth/authz';
+import { ASSET_ACTIONS } from './asset-actions';
 
 async function resolveSchool(event: ApiEvent, callback: ApiCallback): Promise<string | null> {
   const schoolCode = validateSchoolCodeHeader(event);
@@ -125,7 +127,8 @@ class AssetTypeHandler {
 }
 
 const handler = new AssetTypeHandler();
-export const list = handler.list;
-export const create = handler.create;
-export const update = handler.update;
-export const remove = handler.remove;
+const g = (ref: string, fn: any) => guard(ASSET_ACTIONS[ref], fn);
+export const list = g('asset-type-handler.list', handler.list);
+export const create = g('asset-type-handler.create', handler.create);
+export const update = g('asset-type-handler.update', handler.update);
+export const remove = g('asset-type-handler.remove', handler.remove);

@@ -9,6 +9,8 @@ import { resolveEmployee, guardActiveStudent, parseBody, requireParam } from "./
 import { getCurrentAcademicYearId } from "./homework-common";
 import { homeworkService } from "./homework-service";
 import { AddItemRequest, EditItemRequest, EnsureDayRequest } from "./homework-interfaces";
+import { guard } from "../auth/authz";
+import { HOMEWORK_ACTIONS } from "./homework-actions";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -215,13 +217,15 @@ class HomeworkMeHandler {
 }
 
 const h = new HomeworkMeHandler();
-export const myClasses = h.myClasses;
-export const getDay = h.getDay;
-export const ensureDay = h.ensureDay;
-export const addItem = h.addItem;
-export const editItem = h.editItem;
-export const removeItem = h.removeItem;
-export const getItemImage = h.getItemImage;
-export const publish = h.publish;
-export const unpublish = h.unpublish;
+const g = (ref: string, fn: any) => guard(HOMEWORK_ACTIONS[ref], fn);
+export const myClasses = g("homework-me-handler.myClasses", h.myClasses);
+export const getDay = g("homework-me-handler.getDay", h.getDay);
+export const ensureDay = g("homework-me-handler.ensureDay", h.ensureDay);
+export const addItem = g("homework-me-handler.addItem", h.addItem);
+export const editItem = g("homework-me-handler.editItem", h.editItem);
+export const removeItem = g("homework-me-handler.removeItem", h.removeItem);
+export const getItemImage = g("homework-me-handler.getItemImage", h.getItemImage);
+export const publish = g("homework-me-handler.publish", h.publish);
+export const unpublish = g("homework-me-handler.unpublish", h.unpublish);
+// Student/parent app — self-authorizes via the student token (PUBLIC in the manifest, not guarded).
 export const studentToday = h.studentToday;

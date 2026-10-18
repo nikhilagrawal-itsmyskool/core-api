@@ -1,4 +1,6 @@
 import { ApiCallback, ApiContext, ApiEvent } from '../../shared/lib/api.interfaces';
+import { guard } from "../auth/authz";
+import { ASSEMBLY_ACTIONS } from "./assembly-actions";
 import { ResponseBuilder } from '../../shared/lib/response-builder';
 import { ErrorCode } from '../../shared/lib/error-codes';
 import { resolveSchool, parseBody, requireParam } from './handler-util';
@@ -168,13 +170,14 @@ class AssemblyPlanHandler {
 }
 
 const handler = new AssemblyPlanHandler();
-export const create = handler.create;
-export const list = handler.list;
-export const getById = handler.getById;
-export const update = handler.update;
-export const remove = handler.remove;
-export const publish = handler.publish;
-export const clone = handler.clone;
-export const getClasses = handler.getClasses;
-export const setClasses = handler.setClasses;
-export const setDays = handler.setDays;
+const g = (ref: string, fn: any) => guard(ASSEMBLY_ACTIONS[ref], fn);
+export const create = g("assembly-plan-handler.create", handler.create);
+export const list = g("assembly-plan-handler.list", handler.list);
+export const getById = g("assembly-plan-handler.getById", handler.getById);
+export const update = g("assembly-plan-handler.update", handler.update);
+export const remove = g("assembly-plan-handler.remove", handler.remove);
+export const publish = g("assembly-plan-handler.publish", handler.publish);
+export const clone = g("assembly-plan-handler.clone", handler.clone);
+export const getClasses = g("assembly-plan-handler.getClasses", handler.getClasses);
+export const setClasses = g("assembly-plan-handler.setClasses", handler.setClasses);
+export const setDays = g("assembly-plan-handler.setDays", handler.setDays);

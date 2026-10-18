@@ -5,6 +5,8 @@ import { validateSchoolCodeHeader } from '../auth/auth-utils';
 import { uniformItemService } from './uniform-item-service';
 import { uniformSetService } from './uniform-set-service';
 import { GENDER_VALUES } from './uniform-constants';
+import { guard } from '../auth/authz';
+import { UNIFORM_ACTIONS } from './uniform-actions';
 
 class UniformSetHandler {
   public create = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
@@ -129,9 +131,10 @@ class UniformSetHandler {
 }
 
 const handler = new UniformSetHandler();
-export const create = handler.create;
-export const list = handler.list;
-export const getById = handler.getById;
-export const expandSet = handler.expandSet;
-export const update = handler.update;
-export const remove = handler.remove;
+const g = (ref: string, fn: any) => guard(UNIFORM_ACTIONS[ref], fn);
+export const create = g('uniform-set-handler.create', handler.create);
+export const list = g('uniform-set-handler.list', handler.list);
+export const getById = g('uniform-set-handler.getById', handler.getById);
+export const expandSet = g('uniform-set-handler.expandSet', handler.expandSet);
+export const update = g('uniform-set-handler.update', handler.update);
+export const remove = g('uniform-set-handler.remove', handler.remove);

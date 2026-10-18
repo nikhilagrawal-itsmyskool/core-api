@@ -1,4 +1,6 @@
 import { ApiCallback, ApiContext, ApiEvent } from '../../shared/lib/api.interfaces';
+import { guard } from "../auth/authz";
+import { ASSEMBLY_ACTIONS } from "./assembly-actions";
 import { ResponseBuilder } from '../../shared/lib/response-builder';
 import {
   WEEKDAYS,
@@ -26,4 +28,5 @@ class AssemblyLookupHandler {
 }
 
 const handler = new AssemblyLookupHandler();
-export const getLookups = handler.getLookups;
+const g = (ref: string, fn: any) => guard(ASSEMBLY_ACTIONS[ref], fn);
+export const getLookups = g("assembly-lookup-handler.getLookups", handler.getLookups);

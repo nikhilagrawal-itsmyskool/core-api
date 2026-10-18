@@ -1,4 +1,6 @@
 import { ApiCallback, ApiContext, ApiEvent } from '../../shared/lib/api.interfaces';
+import { guard } from "../auth/authz";
+import { ASSEMBLY_ACTIONS } from "./assembly-actions";
 import { ResponseBuilder } from '../../shared/lib/response-builder';
 import { resolveSchool } from './handler-util';
 import { assemblyPulseService } from './assembly-pulse-service';
@@ -30,4 +32,5 @@ class AssemblyPulseHandler {
 }
 
 const h = new AssemblyPulseHandler();
-export const pulse = h.pulse;
+const g = (ref: string, fn: any) => guard(ASSEMBLY_ACTIONS[ref], fn);
+export const pulse = g("assembly-pulse-handler.pulse", h.pulse);

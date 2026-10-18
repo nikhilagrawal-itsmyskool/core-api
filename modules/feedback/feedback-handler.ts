@@ -8,7 +8,7 @@ import { RecordFeedbackRequest, CommentRequest, AssignRequest, ReviewRequest } f
 import { FEEDBACK_ACTIONS } from "./feedback-actions";
 
 // Office / director surface (X-School-Code + JWT). Recording is open to teachers
-// (feedback.record); the dashboard + all director actions are god-only (feedback.review).
+// (feedback.ticket.record); the dashboard + all director actions are god-only (feedback.ticket.review).
 // Actions here run with isReviewer=true (may act on any ticket; may assign without a
 // comment). Role enforcement is applied by guard() at the export site below.
 class FeedbackHandler {

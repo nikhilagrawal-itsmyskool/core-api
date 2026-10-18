@@ -8,6 +8,8 @@ import { supplyWastageService } from './supply-wastage-service';
 import { CreateWastageLogRequest, UpdateWastageLogRequest } from './supply-interfaces';
 import { WASTAGE_REASONS, WASTAGE_ACTIONS, WASTAGE_STATUSES, RESPONSIBLE_TYPES } from './supply-constants';
 import { getDefaultStartDate, getDefaultEndDate, isValidDate } from '../../shared/util/datetime';
+import { guard } from '../auth/authz';
+import { SUPPLY_ACTIONS } from './supply-actions';
 
 const VALID_REASONS = WASTAGE_REASONS.map((r) => r.value) as readonly string[];
 
@@ -167,10 +169,11 @@ class SupplyWastageHandler {
 }
 
 const handler = new SupplyWastageHandler();
-export const create = handler.create;
-export const update = handler.update;
-export const remove = handler.remove;
-export const getById = handler.getById;
-export const list = handler.list;
-export const getImage = handler.getImage;
-export const deleteImage = handler.deleteImage;
+const g = (ref: string, fn: any) => guard(SUPPLY_ACTIONS[ref], fn);
+export const create = g('supply-wastage-handler.create', handler.create);
+export const update = g('supply-wastage-handler.update', handler.update);
+export const remove = g('supply-wastage-handler.remove', handler.remove);
+export const getById = g('supply-wastage-handler.getById', handler.getById);
+export const list = g('supply-wastage-handler.list', handler.list);
+export const getImage = g('supply-wastage-handler.getImage', handler.getImage);
+export const deleteImage = g('supply-wastage-handler.deleteImage', handler.deleteImage);

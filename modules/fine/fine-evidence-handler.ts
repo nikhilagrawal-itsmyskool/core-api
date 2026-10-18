@@ -5,6 +5,8 @@ import { validateSchoolCodeHeader } from '../auth/auth-utils';
 import { fineIncidentService } from './fine-incident-service';
 import { fineEvidenceService } from './fine-evidence-service';
 import { UploadEvidenceRequest } from './fine-interfaces';
+import { guard } from '../auth/authz';
+import { FINE_ACTIONS } from './fine-actions';
 
 const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'];
 
@@ -120,6 +122,7 @@ class FineEvidenceHandler {
 }
 
 const handler = new FineEvidenceHandler();
-export const upload = handler.upload;
-export const get = handler.get;
-export const remove = handler.remove;
+const g = (ref: string, fn: any) => guard(FINE_ACTIONS[ref], fn);
+export const upload = g('fine-evidence-handler.upload', handler.upload);
+export const get = g('fine-evidence-handler.get', handler.get);
+export const remove = g('fine-evidence-handler.remove', handler.remove);

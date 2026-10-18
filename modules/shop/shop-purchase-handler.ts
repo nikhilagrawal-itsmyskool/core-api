@@ -5,6 +5,8 @@ import { validateSchoolCodeHeader } from '../auth/auth-utils';
 import { shopItemService } from './shop-item-service';
 import { shopPurchaseService } from './shop-purchase-service';
 import { UploadBillRequest } from './shop-interfaces';
+import { guard } from '../auth/authz';
+import { SHOP_ACTIONS } from './shop-actions';
 
 const ALLOWED_BILL_MIME_TYPES = ['application/pdf', 'image/jpeg', 'image/png'];
 
@@ -182,10 +184,11 @@ class ShopPurchaseHandler {
 }
 
 const handler = new ShopPurchaseHandler();
-export const create = handler.create;
-export const list = handler.list;
-export const getById = handler.getById;
-export const remove = handler.remove;
-export const uploadBill = handler.uploadBill;
-export const getBill = handler.getBill;
-export const deleteBill = handler.deleteBill;
+const g = (ref: string, fn: any) => guard(SHOP_ACTIONS[ref], fn);
+export const create = g('shop-purchase-handler.create', handler.create);
+export const list = g('shop-purchase-handler.list', handler.list);
+export const getById = g('shop-purchase-handler.getById', handler.getById);
+export const remove = g('shop-purchase-handler.remove', handler.remove);
+export const uploadBill = g('shop-purchase-handler.uploadBill', handler.uploadBill);
+export const getBill = g('shop-purchase-handler.getBill', handler.getBill);
+export const deleteBill = g('shop-purchase-handler.deleteBill', handler.deleteBill);

@@ -7,6 +7,8 @@ import { fineCollectionService } from './fine-collection-service';
 import { CollectFineRequest } from './fine-interfaces';
 import { PAYMENT_METHOD_VALUES } from './fine-constants';
 import { isValidDate } from '../../shared/util/datetime';
+import { guard } from '../auth/authz';
+import { FINE_ACTIONS } from './fine-actions';
 
 class FineCollectionHandler {
   public collect = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
@@ -123,6 +125,7 @@ class FineCollectionHandler {
 }
 
 const handler = new FineCollectionHandler();
-export const collect = handler.collect;
-export const getReceipt = handler.getReceipt;
-export const listCollections = handler.listCollections;
+const g = (ref: string, fn: any) => guard(FINE_ACTIONS[ref], fn);
+export const collect = g('fine-collection-handler.collect', handler.collect);
+export const getReceipt = g('fine-collection-handler.getReceipt', handler.getReceipt);
+export const listCollections = g('fine-collection-handler.listCollections', handler.listCollections);

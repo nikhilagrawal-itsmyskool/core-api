@@ -4,6 +4,8 @@ import { ErrorCode } from '../../shared/lib/error-codes';
 import { validateSchoolCodeHeader } from '../auth/auth-utils';
 import { hiringCandidateService } from './hiring-candidate-service';
 import { CreateCandidateRequest, UpdateCandidateRequest } from './hiring-interfaces';
+import { guard } from '../auth/authz';
+import { HIRING_ACTIONS } from './hiring-actions';
 import {
   CANDIDATE_STATUS_VALUES,
   FINAL_DECISION_VALUES,
@@ -181,8 +183,9 @@ class HiringCandidateHandler {
 }
 
 const handler = new HiringCandidateHandler();
-export const create = handler.create;
-export const update = handler.update;
-export const remove = handler.remove;
-export const getById = handler.getById;
-export const list = handler.list;
+const g = (ref: string, fn: any) => guard(HIRING_ACTIONS[ref], fn);
+export const create = g('hiring-candidate-handler.create', handler.create);
+export const update = g('hiring-candidate-handler.update', handler.update);
+export const remove = g('hiring-candidate-handler.remove', handler.remove);
+export const getById = g('hiring-candidate-handler.getById', handler.getById);
+export const list = g('hiring-candidate-handler.list', handler.list);

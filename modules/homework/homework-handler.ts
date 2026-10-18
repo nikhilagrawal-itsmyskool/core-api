@@ -8,6 +8,8 @@ import { ErrorCode } from "../../shared/lib/error-codes";
 import { resolveSchool, parseBody, requireParam } from "./handler-util";
 import { getCurrentAcademicYearId } from "./homework-common";
 import { homeworkService } from "./homework-service";
+import { guard } from "../auth/authz";
+import { HOMEWORK_ACTIONS } from "./homework-actions";
 import {
   AddItemRequest,
   EditItemRequest,
@@ -253,16 +255,17 @@ class HomeworkHandler {
 }
 
 const h = new HomeworkHandler();
-export const getDay = h.getDay;
-export const ensureDay = h.ensureDay;
-export const addItem = h.addItem;
-export const editItem = h.editItem;
-export const removeItem = h.removeItem;
-export const getItemImage = h.getItemImage;
-export const publish = h.publish;
-export const unpublish = h.unpublish;
-export const listClasses = h.listClasses;
-export const classTeacherMap = h.classTeacherMap;
-export const setClassTeacher = h.setClassTeacher;
-export const clearClassTeacher = h.clearClassTeacher;
-export const getAudit = h.getAudit;
+const g = (ref: string, fn: any) => guard(HOMEWORK_ACTIONS[ref], fn);
+export const getDay = g("homework-handler.getDay", h.getDay);
+export const ensureDay = g("homework-handler.ensureDay", h.ensureDay);
+export const addItem = g("homework-handler.addItem", h.addItem);
+export const editItem = g("homework-handler.editItem", h.editItem);
+export const removeItem = g("homework-handler.removeItem", h.removeItem);
+export const getItemImage = g("homework-handler.getItemImage", h.getItemImage);
+export const publish = g("homework-handler.publish", h.publish);
+export const unpublish = g("homework-handler.unpublish", h.unpublish);
+export const listClasses = g("homework-handler.listClasses", h.listClasses);
+export const classTeacherMap = g("homework-handler.classTeacherMap", h.classTeacherMap);
+export const setClassTeacher = g("homework-handler.setClassTeacher", h.setClassTeacher);
+export const clearClassTeacher = g("homework-handler.clearClassTeacher", h.clearClassTeacher);
+export const getAudit = g("homework-handler.getAudit", h.getAudit);

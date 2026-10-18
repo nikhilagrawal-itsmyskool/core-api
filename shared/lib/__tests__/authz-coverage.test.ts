@@ -13,6 +13,18 @@ import { LEAVE_ACTIONS, LEAVE_PUBLIC } from '../../../modules/leave/leave-action
 import { MEDICAL_ACTIONS, MEDICAL_PUBLIC } from '../../../modules/medical/medical-actions';
 import { LAB_ACTIONS, LAB_PUBLIC } from '../../../modules/lab/lab-actions';
 import { SPORT_ACTIONS, SPORT_PUBLIC } from '../../../modules/sports/sport-actions';
+import { ASSET_ACTIONS, ASSET_PUBLIC } from '../../../modules/asset/asset-actions';
+import { LIBRARY_ACTIONS, LIBRARY_PUBLIC } from '../../../modules/library/library-actions';
+import { SUPPLY_ACTIONS, SUPPLY_PUBLIC } from '../../../modules/supplies/supply-actions';
+import { UNIFORM_ACTIONS, UNIFORM_PUBLIC } from '../../../modules/uniform/uniform-actions';
+import { SHOP_ACTIONS, SHOP_PUBLIC } from '../../../modules/shop/shop-actions';
+import { FINE_ACTIONS, FINE_PUBLIC } from '../../../modules/fine/fine-actions';
+import { HIRING_ACTIONS, HIRING_PUBLIC } from '../../../modules/hiring/hiring-actions';
+import { HOMEWORK_ACTIONS, HOMEWORK_PUBLIC } from '../../../modules/homework/homework-actions';
+import { ACADEMIC_CALENDAR_ACTIONS, ACADEMIC_CALENDAR_PUBLIC } from '../../../modules/academic-calendar/academic-calendar-actions';
+import { FEEDBACK_ACTIONS, FEEDBACK_PUBLIC } from '../../../modules/feedback/feedback-actions';
+import { PROGRAMME_ACTIONS, PROGRAMME_PUBLIC } from '../../../modules/programmes/programmes-actions';
+import { ASSEMBLY_ACTIONS, ASSEMBLY_PUBLIC } from '../../../modules/assembly/assembly-actions';
 
 // One coverage guard for every gated module: each `handler:` in the module's
 // *-endpoints.yml must have an explicit authorization decision — gated (in the
@@ -33,6 +45,18 @@ const MODULES: Array<{ name: string; yml: string; actions: Record<string, string
   { name: 'medical', yml: 'modules/medical/medical-endpoints.yml', actions: MEDICAL_ACTIONS, pub: MEDICAL_PUBLIC },
   { name: 'lab', yml: 'modules/lab/lab-endpoints.yml', actions: LAB_ACTIONS, pub: LAB_PUBLIC },
   { name: 'sports', yml: 'modules/sports/sport-endpoints.yml', actions: SPORT_ACTIONS, pub: SPORT_PUBLIC },
+  { name: 'asset', yml: 'modules/asset/asset-endpoints.yml', actions: ASSET_ACTIONS, pub: ASSET_PUBLIC },
+  { name: 'library', yml: 'modules/library/library-endpoints.yml', actions: LIBRARY_ACTIONS, pub: LIBRARY_PUBLIC },
+  { name: 'supplies', yml: 'modules/supplies/supply-endpoints.yml', actions: SUPPLY_ACTIONS, pub: SUPPLY_PUBLIC },
+  { name: 'uniform', yml: 'modules/uniform/uniform-endpoints.yml', actions: UNIFORM_ACTIONS, pub: UNIFORM_PUBLIC },
+  { name: 'shop', yml: 'modules/shop/shop-endpoints.yml', actions: SHOP_ACTIONS, pub: SHOP_PUBLIC },
+  { name: 'fine', yml: 'modules/fine/fine-endpoints.yml', actions: FINE_ACTIONS, pub: FINE_PUBLIC },
+  { name: 'hiring', yml: 'modules/hiring/hiring-endpoints.yml', actions: HIRING_ACTIONS, pub: HIRING_PUBLIC },
+  { name: 'homework', yml: 'modules/homework/homework-endpoints.yml', actions: HOMEWORK_ACTIONS, pub: HOMEWORK_PUBLIC },
+  { name: 'academic-calendar', yml: 'modules/academic-calendar/academic-calendar-endpoints.yml', actions: ACADEMIC_CALENDAR_ACTIONS, pub: ACADEMIC_CALENDAR_PUBLIC },
+  { name: 'feedback', yml: 'modules/feedback/feedback-endpoints.yml', actions: FEEDBACK_ACTIONS, pub: FEEDBACK_PUBLIC },
+  { name: 'programmes', yml: 'modules/programmes/programmes-endpoints.yml', actions: PROGRAMME_ACTIONS, pub: PROGRAMME_PUBLIC },
+  { name: 'assembly', yml: 'modules/assembly/assembly-endpoints.yml', actions: ASSEMBLY_ACTIONS, pub: ASSEMBLY_PUBLIC },
 ];
 
 function handlerRefs(ymlRel: string): string[] {

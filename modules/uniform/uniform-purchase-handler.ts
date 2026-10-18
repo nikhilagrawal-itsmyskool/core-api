@@ -5,6 +5,8 @@ import { validateSchoolCodeHeader } from '../auth/auth-utils';
 import { uniformItemService } from './uniform-item-service';
 import { uniformPurchaseService } from './uniform-purchase-service';
 import { UploadBillRequest } from './uniform-interfaces';
+import { guard } from '../auth/authz';
+import { UNIFORM_ACTIONS } from './uniform-actions';
 
 const ALLOWED_BILL_MIME_TYPES = ['application/pdf', 'image/jpeg', 'image/png'];
 
@@ -183,10 +185,11 @@ class UniformPurchaseHandler {
 }
 
 const handler = new UniformPurchaseHandler();
-export const create = handler.create;
-export const list = handler.list;
-export const getById = handler.getById;
-export const remove = handler.remove;
-export const uploadBill = handler.uploadBill;
-export const getBill = handler.getBill;
-export const deleteBill = handler.deleteBill;
+const g = (ref: string, fn: any) => guard(UNIFORM_ACTIONS[ref], fn);
+export const create = g('uniform-purchase-handler.create', handler.create);
+export const list = g('uniform-purchase-handler.list', handler.list);
+export const getById = g('uniform-purchase-handler.getById', handler.getById);
+export const remove = g('uniform-purchase-handler.remove', handler.remove);
+export const uploadBill = g('uniform-purchase-handler.uploadBill', handler.uploadBill);
+export const getBill = g('uniform-purchase-handler.getBill', handler.getBill);
+export const deleteBill = g('uniform-purchase-handler.deleteBill', handler.deleteBill);

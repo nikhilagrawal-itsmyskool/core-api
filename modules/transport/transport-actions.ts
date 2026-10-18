@@ -2,8 +2,8 @@ import { ACTIONS } from '../../shared/lib/authz-policy';
 
 // Required permission per transport endpoint, keyed by the `handler:` reference in
 // transport-endpoints.yml. Reads (lookups + vehicle/stop/route/assignment lists &
-// details, route roster, student report) = transport.view; config writes (vehicles,
-// stops, routes + route-stops, assignments) = transport.manage. Bus-attendance screens
+// details, route roster, student report) = transport.setup.view; config writes (vehicles,
+// stops, routes + route-stops, assignments) = transport.setup.manage. Bus-attendance screens
 // & marking = transport.attendance.mark (managers on any route; a transport-attendance
 // teacher only on routes they staff — that ROUTE-STAFF filtering stays in the handler);
 // finalize + post-finalize edit = transport.attendance.finalize.

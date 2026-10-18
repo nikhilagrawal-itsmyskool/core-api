@@ -3,10 +3,10 @@ import { ACTIONS } from "../../shared/lib/authz-policy";
 // Required permission per feedback endpoint, keyed by the `handler:` reference in
 // feedback-endpoints.yml (`file.export`). Single naming site for feedback authz.
 //
-// feedback.view    = category lookup (teachers need it to record)
-// feedback.record  = record + assign a home-visit feedback (teachers)
-// feedback.respond = teacher /me surface (read own tickets, comment, forward/send back)
-// feedback.review  = director dashboard + list/summary + complete/cancel/reopen/assign/comment
+// feedback.ticket.view    = category lookup (teachers need it to record)
+// feedback.ticket.record  = record + assign a home-visit feedback (teachers)
+// feedback.ticket.respond = teacher /me surface (read own tickets, comment, forward/send back)
+// feedback.ticket.review  = director dashboard + list/summary + complete/cancel/reopen/assign/comment
 //                    on any ticket (god-only for now — the "education director")
 const { FEEDBACK_VIEW, FEEDBACK_RECORD, FEEDBACK_RESPOND, FEEDBACK_REVIEW } = ACTIONS;
 

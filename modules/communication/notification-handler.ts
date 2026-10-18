@@ -7,6 +7,8 @@ import {
   guardActiveStudent,
 } from "../auth/auth-utils";
 import { extractAndVerifyToken } from "../auth/token-utils";
+import { guard } from "../auth/authz";
+import { COMMUNICATION_ACTIONS } from "./communication-actions";
 import { notificationService, NotifyRecipientType } from "./notification-service";
 
 interface CreateNotificationBody {
@@ -165,7 +167,9 @@ class NotificationHandler {
 }
 
 const h = new NotificationHandler();
-export const create = h.create;
+// POST /notifications — cross-module fan-out. guard() → service tokens bypass, humans need
+// communication.message.send. The /me endpoints below self-authorize (own inbox) and stay ungated.
+export const create = guard(COMMUNICATION_ACTIONS['notification-handler.create'], h.create);
 export const list = h.list;
 export const markRead = h.markRead;
 export const markAllRead = h.markAllRead;

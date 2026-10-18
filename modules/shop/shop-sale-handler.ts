@@ -4,6 +4,8 @@ import { ErrorCode } from '../../shared/lib/error-codes';
 import { validateSchoolCodeHeader } from '../auth/auth-utils';
 import { shopItemService } from './shop-item-service';
 import { shopSaleService, SetAlreadyAssignedError } from './shop-sale-service';
+import { guard } from '../auth/authz';
+import { SHOP_ACTIONS } from './shop-actions';
 
 function isValidDate(s: string): boolean {
   return /^\d{4}-\d{2}-\d{2}$/.test(s) && !isNaN(Date.parse(s));
@@ -157,8 +159,9 @@ class ShopSaleHandler {
 }
 
 const handler = new ShopSaleHandler();
-export const create = handler.create;
-export const assign = handler.assign;
-export const assignBulk = handler.assignBulk;
-export const list = handler.list;
-export const getById = handler.getById;
+const g = (ref: string, fn: any) => guard(SHOP_ACTIONS[ref], fn);
+export const create = g('shop-sale-handler.create', handler.create);
+export const assign = g('shop-sale-handler.assign', handler.assign);
+export const assignBulk = g('shop-sale-handler.assignBulk', handler.assignBulk);
+export const list = g('shop-sale-handler.list', handler.list);
+export const getById = g('shop-sale-handler.getById', handler.getById);

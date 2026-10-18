@@ -4,6 +4,8 @@ import { ErrorCode } from '../../shared/lib/error-codes';
 import { validateSchoolCodeHeader } from '../auth/auth-utils';
 import { shopItemService } from './shop-item-service';
 import { ITEM_TYPE_VALUES } from './shop-constants';
+import { guard } from '../auth/authz';
+import { SHOP_ACTIONS } from './shop-actions';
 
 class ShopItemHandler {
   public createItem = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
@@ -102,7 +104,8 @@ class ShopItemHandler {
 }
 
 const handler = new ShopItemHandler();
-export const createItem = handler.createItem;
-export const listItems = handler.listItems;
-export const updateItem = handler.updateItem;
-export const deleteItem = handler.deleteItem;
+const g = (ref: string, fn: any) => guard(SHOP_ACTIONS[ref], fn);
+export const createItem = g('shop-item-handler.createItem', handler.createItem);
+export const listItems = g('shop-item-handler.listItems', handler.listItems);
+export const updateItem = g('shop-item-handler.updateItem', handler.updateItem);
+export const deleteItem = g('shop-item-handler.deleteItem', handler.deleteItem);

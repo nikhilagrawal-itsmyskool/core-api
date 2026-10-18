@@ -5,6 +5,8 @@ import { BadRequestResult } from '../../shared/lib/errors';
 import { validateSchoolCodeHeader } from '../auth/auth-utils';
 import { uniformItemService } from './uniform-item-service';
 import { CATEGORY_VALUES, GENDER_VALUES } from './uniform-constants';
+import { guard } from '../auth/authz';
+import { UNIFORM_ACTIONS } from './uniform-actions';
 
 class UniformItemHandler {
   // ── Items ──────────────────────────────────────────────────────────────────
@@ -178,10 +180,11 @@ class UniformItemHandler {
 }
 
 const handler = new UniformItemHandler();
-export const createItem = handler.createItem;
-export const listItems = handler.listItems;
-export const updateItem = handler.updateItem;
-export const deleteItem = handler.deleteItem;
-export const createSize = handler.createSize;
-export const updateSize = handler.updateSize;
-export const deleteSize = handler.deleteSize;
+const g = (ref: string, fn: any) => guard(UNIFORM_ACTIONS[ref], fn);
+export const createItem = g('uniform-item-handler.createItem', handler.createItem);
+export const listItems = g('uniform-item-handler.listItems', handler.listItems);
+export const updateItem = g('uniform-item-handler.updateItem', handler.updateItem);
+export const deleteItem = g('uniform-item-handler.deleteItem', handler.deleteItem);
+export const createSize = g('uniform-item-handler.createSize', handler.createSize);
+export const updateSize = g('uniform-item-handler.updateSize', handler.updateSize);
+export const deleteSize = g('uniform-item-handler.deleteSize', handler.deleteSize);

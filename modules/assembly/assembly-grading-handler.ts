@@ -1,4 +1,6 @@
 import { ApiCallback, ApiContext, ApiEvent } from '../../shared/lib/api.interfaces';
+import { guard } from "../auth/authz";
+import { ASSEMBLY_ACTIONS } from "./assembly-actions";
 import { ResponseBuilder } from '../../shared/lib/response-builder';
 import { ErrorCode } from '../../shared/lib/error-codes';
 import { resolveSchool, parseBody, requireParam } from './handler-util';
@@ -175,19 +177,20 @@ class AssemblyGradingHandler {
 }
 
 const h = new AssemblyGradingHandler();
-export const getRubric = h.getRubric;
-export const setConfig = h.setConfig;
-export const createMetric = h.createMetric;
-export const updateMetric = h.updateMetric;
-export const deleteMetric = h.deleteMetric;
-export const createPenalty = h.createPenalty;
-export const updatePenalty = h.updatePenalty;
-export const deletePenalty = h.deletePenalty;
-export const listEvaluators = h.listEvaluators;
-export const addEvaluator = h.addEvaluator;
-export const removeEvaluator = h.removeEvaluator;
-export const listGrades = h.listGrades;
-export const saveGrade = h.saveGrade;
-export const getGrade = h.getGrade;
-export const deleteGrade = h.deleteGrade;
-export const leaderboard = h.leaderboard;
+const g = (ref: string, fn: any) => guard(ASSEMBLY_ACTIONS[ref], fn);
+export const getRubric = g("assembly-grading-handler.getRubric", h.getRubric);
+export const setConfig = g("assembly-grading-handler.setConfig", h.setConfig);
+export const createMetric = g("assembly-grading-handler.createMetric", h.createMetric);
+export const updateMetric = g("assembly-grading-handler.updateMetric", h.updateMetric);
+export const deleteMetric = g("assembly-grading-handler.deleteMetric", h.deleteMetric);
+export const createPenalty = g("assembly-grading-handler.createPenalty", h.createPenalty);
+export const updatePenalty = g("assembly-grading-handler.updatePenalty", h.updatePenalty);
+export const deletePenalty = g("assembly-grading-handler.deletePenalty", h.deletePenalty);
+export const listEvaluators = g("assembly-grading-handler.listEvaluators", h.listEvaluators);
+export const addEvaluator = g("assembly-grading-handler.addEvaluator", h.addEvaluator);
+export const removeEvaluator = g("assembly-grading-handler.removeEvaluator", h.removeEvaluator);
+export const listGrades = g("assembly-grading-handler.listGrades", h.listGrades);
+export const saveGrade = g("assembly-grading-handler.saveGrade", h.saveGrade);
+export const getGrade = g("assembly-grading-handler.getGrade", h.getGrade);
+export const deleteGrade = g("assembly-grading-handler.deleteGrade", h.deleteGrade);
+export const leaderboard = g("assembly-grading-handler.leaderboard", h.leaderboard);

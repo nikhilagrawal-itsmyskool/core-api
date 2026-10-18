@@ -5,7 +5,7 @@ import { ACTIONS } from '../../shared/lib/authz-policy';
 // (create/update/delete, credential view + reset) = employee.manage; restore = the
 // god-only employee.restore. Contact unmasking on search/detail stays row-level
 // (revealEmployee in auth-utils) on top of the employee.view gate.
-const { EMPLOYEE_VIEW, EMPLOYEE_MANAGE, EMPLOYEE_RESTORE, EMPLOYEE_SESSION_RESET } = ACTIONS;
+const { EMPLOYEE_VIEW, EMPLOYEE_MANAGE, EMPLOYEE_RESTORE, EMPLOYEE_SESSION_RESET, DOCUMENTS_HANDBOOK_MANAGE } = ACTIONS;
 
 export const EMPLOYEE_ACTIONS: Record<string, string> = {
   'employee-handler.search': EMPLOYEE_VIEW,
@@ -19,6 +19,29 @@ export const EMPLOYEE_ACTIONS: Record<string, string> = {
   'employee-handler.resetPassword': EMPLOYEE_MANAGE,
   // Force re-login is a stronger, god-only control (NOT part of employee.manage).
   'employee-handler.forceReLogin': EMPLOYEE_SESSION_RESET,
+  // Staff document handbook — authoring surface (incl. the god-console reads list/get/docPdf,
+  // which previously resolved school only). All god-first via documents.handbook.manage.
+  'document-handler.list': DOCUMENTS_HANDBOOK_MANAGE,
+  'document-handler.get': DOCUMENTS_HANDBOOK_MANAGE,
+  'document-handler.create': DOCUMENTS_HANDBOOK_MANAGE,
+  'document-handler.update': DOCUMENTS_HANDBOOK_MANAGE,
+  'document-handler.remind': DOCUMENTS_HANDBOOK_MANAGE,
+  'document-handler.archive': DOCUMENTS_HANDBOOK_MANAGE,
+  'document-handler.acks': DOCUMENTS_HANDBOOK_MANAGE,
+  'document-handler.ackArtifact': DOCUMENTS_HANDBOOK_MANAGE,
+  'document-handler.docPdf': DOCUMENTS_HANDBOOK_MANAGE,
 };
 
-export const EMPLOYEE_PUBLIC: string[] = ['health-handler.health'];
+// NOT gated by requireAction:
+//   - health: readiness probe
+//   - document-handler.my*: the employee's own read-&-sign surface (resolveEmployee → own
+//     identity from the token; every staff member signs their own docs). Self-service.
+export const EMPLOYEE_PUBLIC: string[] = [
+  'health-handler.health',
+  'document-handler.myList',
+  'document-handler.myGet',
+  'document-handler.myAcknowledge',
+  'document-handler.myUploadSigned',
+  'document-handler.myDocPdf',
+  'document-handler.myArtifact',
+];

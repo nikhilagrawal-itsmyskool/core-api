@@ -25,19 +25,12 @@ export async function resolveSchool(event: ApiEvent, callback: ApiCallback): Pro
   return { schoolId, schoolCode, userId };
 }
 
-// Resolve the school AND require a manager (god/admin) employee token — gates document
-// create/manage + the who-signed report.
+// Resolve the school for the document authoring surface. Authorization is now enforced at the
+// handler export site via guard(documents.handbook.manage) (god-first; god can grant via the
+// Permissions grid), so this no longer does its own role check — it only resolves the school.
+// (MANAGER_ROLES retained for reference/back-compat; the central action is the source of truth.)
 export async function requireManager(event: ApiEvent, callback: ApiCallback): Promise<RequestContext | null> {
-  const ctx = await resolveSchool(event, callback);
-  if (!ctx) return null;
-  const token = extractAndVerifyToken(getAuthorizationHeader(event));
-  const roles = token && Array.isArray(token.roles) ? token.roles : [];
-  const ok = !!token && token.type === "employee" && roles.some((r) => (MANAGER_ROLES as readonly string[]).includes(r));
-  if (!ok) {
-    ResponseBuilder.forbidden(ErrorCode.MissingPermission, "Only an admin/god user can manage documents", callback);
-    return null;
-  }
-  return ctx;
+  return resolveSchool(event, callback);
 }
 
 // Resolve the logged-in employee from the bearer token (staff /me surface), including the

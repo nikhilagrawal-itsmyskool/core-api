@@ -1,4 +1,6 @@
 import { ApiCallback, ApiContext, ApiEvent } from '../../shared/lib/api.interfaces';
+import { guard } from "../auth/authz";
+import { ASSEMBLY_ACTIONS } from "./assembly-actions";
 import { ResponseBuilder } from '../../shared/lib/response-builder';
 import { ErrorCode } from '../../shared/lib/error-codes';
 import { resolveSchool, parseBody, requireParam } from './handler-util';
@@ -68,7 +70,8 @@ class AssemblyDocumentHandler {
 }
 
 const h = new AssemblyDocumentHandler();
-export const list = h.list;
-export const upload = h.upload;
-export const getFile = h.getFile;
-export const remove = h.remove;
+const g = (ref: string, fn: any) => guard(ASSEMBLY_ACTIONS[ref], fn);
+export const list = g("assembly-document-handler.list", h.list);
+export const upload = g("assembly-document-handler.upload", h.upload);
+export const getFile = g("assembly-document-handler.getFile", h.getFile);
+export const remove = g("assembly-document-handler.remove", h.remove);

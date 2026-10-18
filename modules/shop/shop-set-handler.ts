@@ -5,6 +5,8 @@ import { validateSchoolCodeHeader } from '../auth/auth-utils';
 import { shopItemService } from './shop-item-service';
 import { shopSetService } from './shop-set-service';
 import { SECTION_VALUES } from './shop-constants';
+import { guard } from '../auth/authz';
+import { SHOP_ACTIONS } from './shop-actions';
 
 // "I-A" -> "I"; a name without a hyphen is its own grade (matches parseGrade).
 function parseGrade(name: string): string {
@@ -170,10 +172,11 @@ class ShopSetHandler {
 }
 
 const handler = new ShopSetHandler();
-export const create = handler.create;
-export const list = handler.list;
-export const getById = handler.getById;
-export const getStock = handler.getStock;
-export const listLoose = handler.listLoose;
-export const update = handler.update;
-export const remove = handler.remove;
+const g = (ref: string, fn: any) => guard(SHOP_ACTIONS[ref], fn);
+export const create = g('shop-set-handler.create', handler.create);
+export const list = g('shop-set-handler.list', handler.list);
+export const getById = g('shop-set-handler.getById', handler.getById);
+export const getStock = g('shop-set-handler.getStock', handler.getStock);
+export const listLoose = g('shop-set-handler.listLoose', handler.listLoose);
+export const update = g('shop-set-handler.update', handler.update);
+export const remove = g('shop-set-handler.remove', handler.remove);

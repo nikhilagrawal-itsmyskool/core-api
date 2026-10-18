@@ -12,6 +12,8 @@ import {
   VALID_STATUS_TRANSITIONS,
 } from './fine-constants';
 import { isValidDate } from '../../shared/util/datetime';
+import { guard } from '../auth/authz';
+import { FINE_ACTIONS } from './fine-actions';
 
 class FineIncidentHandler {
   public create = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
@@ -227,8 +229,9 @@ class FineIncidentHandler {
 }
 
 const handler = new FineIncidentHandler();
-export const create = handler.create;
-export const update = handler.update;
-export const remove = handler.remove;
-export const getById = handler.getById;
-export const list = handler.list;
+const g = (ref: string, fn: any) => guard(FINE_ACTIONS[ref], fn);
+export const create = g('fine-incident-handler.create', handler.create);
+export const update = g('fine-incident-handler.update', handler.update);
+export const remove = g('fine-incident-handler.remove', handler.remove);
+export const getById = g('fine-incident-handler.getById', handler.getById);
+export const list = g('fine-incident-handler.list', handler.list);

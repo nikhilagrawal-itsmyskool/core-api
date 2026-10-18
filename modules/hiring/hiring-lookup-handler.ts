@@ -1,5 +1,7 @@
 import { ApiCallback, ApiContext, ApiEvent } from '../../shared/lib/api.interfaces';
 import { ResponseBuilder } from '../../shared/lib/response-builder';
+import { guard } from '../auth/authz';
+import { HIRING_ACTIONS } from './hiring-actions';
 import {
   CANDIDATE_STATUSES,
   FINAL_DECISIONS,
@@ -32,4 +34,4 @@ class HiringLookupHandler {
 }
 
 const handler = new HiringLookupHandler();
-export const getLookups = handler.getLookups;
+export const getLookups = guard(HIRING_ACTIONS['hiring-lookup-handler.getLookups'], handler.getLookups);

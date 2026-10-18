@@ -5,8 +5,10 @@ import { DB, singleLineString } from '../../shared/lib/db';
 import { validateSchoolCodeHeader } from '../auth/auth-utils';
 import { uniformItemService } from './uniform-item-service';
 import { istToday } from '../../shared/util/datetime';
+import { guard } from '../auth/authz';
+import { UNIFORM_ACTIONS } from './uniform-actions';
 
-export const getStats = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
+const getStatsImpl = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
   _context.callbackWaitsForEmptyEventLoop = false;
   try {
     const schoolCode = validateSchoolCodeHeader(event);
@@ -97,3 +99,5 @@ export const getStats = async (event: ApiEvent, _context: ApiContext, callback: 
     ResponseBuilder.handleError(err, callback);
   }
 };
+
+export const getStats = guard(UNIFORM_ACTIONS['uniform-stats-handler.getStats'], getStatsImpl);

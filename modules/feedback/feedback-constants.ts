@@ -65,5 +65,5 @@ export const NOTIFY_ENTITY_TYPE = "feedback";
 
 // Roles that review + complete/cancel/reopen feedback (the "education director"). GOD-ONLY
 // for now by decision. Single flip point: introduce an `education-director` role, grant it
-// feedback.review in authz-policy, and add its code here so it becomes a reviewer.
+// feedback.ticket.review in authz-policy, and add its code here so it becomes a reviewer.
 export const REVIEWER_ROLE_CODES = ["god"] as const;

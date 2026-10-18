@@ -1,4 +1,6 @@
 import { ApiCallback, ApiContext, ApiEvent } from '../../shared/lib/api.interfaces';
+import { guard } from "../auth/authz";
+import { ASSEMBLY_ACTIONS } from "./assembly-actions";
 import { ResponseBuilder } from '../../shared/lib/response-builder';
 import { ErrorCode } from '../../shared/lib/error-codes';
 import { resolveSchool, parseBody, requireParam } from './handler-util';
@@ -118,12 +120,13 @@ class AssemblyWeekHandler {
 }
 
 const handler = new AssemblyWeekHandler();
-export const ensure = handler.ensure;
-export const list = handler.list;
-export const getById = handler.getById;
-export const saveRoster = handler.saveRoster;
-export const submit = handler.submit;
-export const approve = handler.approve;
-export const recall = handler.recall;
-export const lock = handler.lock;
-export const unlock = handler.unlock;
+const g = (ref: string, fn: any) => guard(ASSEMBLY_ACTIONS[ref], fn);
+export const ensure = g("assembly-week-handler.ensure", handler.ensure);
+export const list = g("assembly-week-handler.list", handler.list);
+export const getById = g("assembly-week-handler.getById", handler.getById);
+export const saveRoster = g("assembly-week-handler.saveRoster", handler.saveRoster);
+export const submit = g("assembly-week-handler.submit", handler.submit);
+export const approve = g("assembly-week-handler.approve", handler.approve);
+export const recall = g("assembly-week-handler.recall", handler.recall);
+export const lock = g("assembly-week-handler.lock", handler.lock);
+export const unlock = g("assembly-week-handler.unlock", handler.unlock);

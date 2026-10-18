@@ -8,6 +8,8 @@ import { ErrorCode } from "../../shared/lib/error-codes";
 import { resolveSchoolId } from "./library-common";
 import { copyService } from "./library-copy-service";
 import { labelService } from "./library-label-service";
+import { guard } from "../auth/authz";
+import { LIBRARY_ACTIONS } from "./library-actions";
 
 class LabelHandler {
   // Printable QR/barcode for a copy (encodes the accession number).
@@ -84,5 +86,6 @@ class LabelHandler {
 }
 
 const handler = new LabelHandler();
-export const getLabel = handler.getLabel;
-export const resolve = handler.resolve;
+const g = (ref: string, fn: any) => guard(LIBRARY_ACTIONS[ref], fn);
+export const getLabel = g("library-label-handler.getLabel", handler.getLabel);
+export const resolve = g("library-label-handler.resolve", handler.resolve);

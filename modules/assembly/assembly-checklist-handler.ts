@@ -1,4 +1,6 @@
 import { ApiCallback, ApiContext, ApiEvent } from '../../shared/lib/api.interfaces';
+import { guard } from "../auth/authz";
+import { ASSEMBLY_ACTIONS } from "./assembly-actions";
 import { ResponseBuilder } from '../../shared/lib/response-builder';
 import { ErrorCode } from '../../shared/lib/error-codes';
 import { resolveSchool, parseBody, requireParam } from './handler-util';
@@ -100,11 +102,12 @@ class AssemblyChecklistHandler {
 }
 
 const handler = new AssemblyChecklistHandler();
-export const listItems = handler.listItems;
-export const createItem = handler.createItem;
-export const updateItem = handler.updateItem;
-export const deleteItem = handler.deleteItem;
-export const getWeekChecklist = handler.getWeekChecklist;
-export const saveTicks = handler.saveTicks;
-export const signoff = handler.signoff;
-export const clearSignoff = handler.clearSignoff;
+const g = (ref: string, fn: any) => guard(ASSEMBLY_ACTIONS[ref], fn);
+export const listItems = g("assembly-checklist-handler.listItems", handler.listItems);
+export const createItem = g("assembly-checklist-handler.createItem", handler.createItem);
+export const updateItem = g("assembly-checklist-handler.updateItem", handler.updateItem);
+export const deleteItem = g("assembly-checklist-handler.deleteItem", handler.deleteItem);
+export const getWeekChecklist = g("assembly-checklist-handler.getWeekChecklist", handler.getWeekChecklist);
+export const saveTicks = g("assembly-checklist-handler.saveTicks", handler.saveTicks);
+export const signoff = g("assembly-checklist-handler.signoff", handler.signoff);
+export const clearSignoff = g("assembly-checklist-handler.clearSignoff", handler.clearSignoff);

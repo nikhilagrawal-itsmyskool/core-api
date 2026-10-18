@@ -7,6 +7,8 @@ import { hiringStageService } from './hiring-stage-service';
 import { CreateStageRequest, UpdateStageRequest } from './hiring-interfaces';
 import { STAGE_OUTCOME_VALUES, STAGE_TYPE_VALUES } from './hiring-constants';
 import { isValidDate } from '../../shared/util/datetime';
+import { guard } from '../auth/authz';
+import { HIRING_ACTIONS } from './hiring-actions';
 
 class HiringStageHandler {
   public create = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
@@ -136,6 +138,7 @@ class HiringStageHandler {
 }
 
 const handler = new HiringStageHandler();
-export const create = handler.create;
-export const update = handler.update;
-export const remove = handler.remove;
+const g = (ref: string, fn: any) => guard(HIRING_ACTIONS[ref], fn);
+export const create = g('hiring-stage-handler.create', handler.create);
+export const update = g('hiring-stage-handler.update', handler.update);
+export const remove = g('hiring-stage-handler.remove', handler.remove);

@@ -4,8 +4,10 @@ import { ErrorCode } from '../../shared/lib/error-codes';
 import { validateSchoolCodeHeader } from '../auth/auth-utils';
 import { shopItemService } from './shop-item-service';
 import { shopStatsService } from './shop-stats-service';
+import { guard } from '../auth/authz';
+import { SHOP_ACTIONS } from './shop-actions';
 
-export const getStats = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
+const getStatsImpl = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
   _context.callbackWaitsForEmptyEventLoop = false;
   try {
     const schoolCode = validateSchoolCodeHeader(event);
@@ -18,3 +20,5 @@ export const getStats = async (event: ApiEvent, _context: ApiContext, callback: 
     ResponseBuilder.handleError(err, callback);
   }
 };
+
+export const getStats = guard(SHOP_ACTIONS['shop-stats-handler.getStats'], getStatsImpl);

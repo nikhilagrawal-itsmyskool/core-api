@@ -8,6 +8,8 @@ import { ErrorCode } from "../../shared/lib/error-codes";
 import { resolveSchoolId, userIdOf } from "./library-common";
 import { fineService } from "./library-fine-service";
 import { CollectFineRequest, WaiveFineRequest } from "./library-interfaces";
+import { guard } from "../auth/authz";
+import { LIBRARY_ACTIONS } from "./library-actions";
 
 class FineHandler {
   public list = async (
@@ -111,6 +113,7 @@ class FineHandler {
 }
 
 const handler = new FineHandler();
-export const list = handler.list;
-export const collect = handler.collect;
-export const waive = handler.waive;
+const g = (ref: string, fn: any) => guard(LIBRARY_ACTIONS[ref], fn);
+export const list = g("library-fine-handler.list", handler.list);
+export const collect = g("library-fine-handler.collect", handler.collect);
+export const waive = g("library-fine-handler.waive", handler.waive);

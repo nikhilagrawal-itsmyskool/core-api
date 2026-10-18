@@ -78,7 +78,7 @@ describe('requireAction', () => {
   it('403 on cross-tenant school mismatch (header != token school_code)', () => {
     const cap = capture();
     // token is for DBPASN, header claims OTHER
-    const caller = requireAction(event(`Bearer ${empToken(['admin'], 'DBPASN')}`, 'OTHER'), 'student.manage', cap.cb);
+    const caller = requireAction(event(`Bearer ${empToken(['admin'], 'DBPASN')}`, 'OTHER'), 'student.record.manage', cap.cb);
     expect(caller).toBeNull();
     expect(cap.status()).toBe(403);
     expect(cap.code()).toBe('MISSING_PERMISSION');
@@ -86,7 +86,7 @@ describe('requireAction', () => {
 
   it('allows when header matches the token school_code', () => {
     const cap = capture();
-    const caller = requireAction(event(`Bearer ${empToken(['admin'], 'DBPASN')}`, 'DBPASN'), 'student.manage', cap.cb);
+    const caller = requireAction(event(`Bearer ${empToken(['admin'], 'DBPASN')}`, 'DBPASN'), 'student.record.manage', cap.cb);
     expect(caller).not.toBeNull();
   });
 

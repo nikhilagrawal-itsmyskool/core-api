@@ -4,6 +4,8 @@ import { ErrorCode } from '../../shared/lib/error-codes';
 import { validateSchoolCodeHeader } from '../auth/auth-utils';
 import { shopItemService } from './shop-item-service';
 import { shopIntakeService } from './shop-intake-service';
+import { guard } from '../auth/authz';
+import { SHOP_ACTIONS } from './shop-actions';
 
 function isValidDate(s: string): boolean {
   return /^\d{4}-\d{2}-\d{2}$/.test(s) && !isNaN(Date.parse(s));
@@ -73,6 +75,7 @@ class ShopIntakeHandler {
 }
 
 const handler = new ShopIntakeHandler();
-export const create = handler.create;
-export const list = handler.list;
-export const remove = handler.remove;
+const g = (ref: string, fn: any) => guard(SHOP_ACTIONS[ref], fn);
+export const create = g('shop-intake-handler.create', handler.create);
+export const list = g('shop-intake-handler.list', handler.list);
+export const remove = g('shop-intake-handler.remove', handler.remove);

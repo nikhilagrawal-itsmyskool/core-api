@@ -4,6 +4,8 @@ import { ErrorCode } from '../../shared/lib/error-codes';
 import { validateSchoolCodeHeader } from '../auth/auth-utils';
 import { assetTypeService } from './asset-type-service';
 import { ASSET_CONDITIONS, ASSET_STATUSES, ASSET_KINDS } from './asset-constants';
+import { guard } from '../auth/authz';
+import { ASSET_ACTIONS } from './asset-actions';
 
 class AssetLookupHandler {
   // Asset types are per-school managed data (seeded on first use), not a static enum.
@@ -41,7 +43,8 @@ class AssetLookupHandler {
 }
 
 const handler = new AssetLookupHandler();
-export const getTypes = handler.getTypes;
-export const getConditions = handler.getConditions;
-export const getStatuses = handler.getStatuses;
-export const getKinds = handler.getKinds;
+const g = (ref: string, fn: any) => guard(ASSET_ACTIONS[ref], fn);
+export const getTypes = g('asset-lookup-handler.getTypes', handler.getTypes);
+export const getConditions = g('asset-lookup-handler.getConditions', handler.getConditions);
+export const getStatuses = g('asset-lookup-handler.getStatuses', handler.getStatuses);
+export const getKinds = g('asset-lookup-handler.getKinds', handler.getKinds);

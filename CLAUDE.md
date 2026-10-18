@@ -22,16 +22,30 @@ npx prettier --write .
 
 ### Prod Deploy (Windows / PowerShell) — the command that actually works here
 
-Run from the **module directory** (`cd modules/<module>` first). `npx serverless` is unreliable
-on Windows and the prod account needs an explicit AWS profile + region (ap-south-1):
+Use the helper: **`pwsh scripts/deploy-prod.ps1 <module> [<module> ...]`** — it handles
+credentials and deploys each module (stage prod, region ap-south-1). No `reservedConcurrency`
+(the account has the min-10 unreserved limit).
+
+**Why a helper and NOT `$env:AWS_PROFILE`:** the prod account uses AWS **SSO**, and Serverless
+Framework v3's bundled AWS SDK **cannot parse the `[sso-session]` token-provider format** in
+`~/.aws/config`. Setting `$env:AWS_PROFILE = 'prod-itsmyskool-nikhil.agrawal'` makes SF fail with
+*"AWS profile … doesn't seem to be configured"* even though the token is valid (AWS CLI v2 and
+Terraform read it fine — only SF v3 chokes). The fix is to export the SSO session into **temporary
+env-var credentials** (which every SDK understands) and deploy with **no profile set**. That is
+exactly what the script does; inline it's:
 
 ```powershell
-$env:AWS_PROFILE = 'prod-itsmyskool-nikhil.agrawal'
-& "H:\github\itsmyskool\core-api\node_modules\.bin\serverless.cmd" deploy --stage prod --verbose --region ap-south-1
+Remove-Item Env:AWS_PROFILE -ErrorAction SilentlyContinue      # don't let SF re-parse the profile
+aws sso login --sso-session itsmyskool                         # ONLY if the token has expired (interactive)
+aws configure export-credentials --profile prod-itsmyskool-nikhil.agrawal --format env-no-export |
+  ForEach-Object { if ($_ -match '^(AWS_[^=]+)=(.*)$') { Set-Item "Env:$($matches[1])" $matches[2] } }
+Set-Location modules/<module>
+& "H:\github\itsmyskool\core-api\node_modules\.bin\serverless.cmd" deploy --stage prod --region ap-south-1
 ```
 
-Profile: `prod-itsmyskool-nikhil.agrawal` · Region: `ap-south-1`. No `reservedConcurrency`
-(account has the min-10 unreserved-limit).
+Profile: `prod-itsmyskool-nikhil.agrawal` · SSO session: `itsmyskool` · Region: `ap-south-1`.
+`aws sso login` is interactive (opens a browser), so if the token has expired an automated/agent
+session must ask the user to run it — only `aws configure export-credentials` is non-interactive.
 
 ## NPM Scripts
 

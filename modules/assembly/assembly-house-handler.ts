@@ -1,4 +1,6 @@
 import { ApiCallback, ApiContext, ApiEvent } from '../../shared/lib/api.interfaces';
+import { guard } from "../auth/authz";
+import { ASSEMBLY_ACTIONS } from "./assembly-actions";
 import { ResponseBuilder } from '../../shared/lib/response-builder';
 import { ErrorCode } from '../../shared/lib/error-codes';
 import { resolveSchool, parseBody, requireParam } from './handler-util';
@@ -72,9 +74,10 @@ class AssemblyHouseHandler {
 }
 
 const handler = new AssemblyHouseHandler();
-export const getConfig = handler.getConfig;
-export const setConfig = handler.setConfig;
-export const listHouses = handler.listHouses;
-export const setRotation = handler.setRotation;
-export const rotation = handler.rotation;
-export const setWeekHouse = handler.setWeekHouse;
+const g = (ref: string, fn: any) => guard(ASSEMBLY_ACTIONS[ref], fn);
+export const getConfig = g("assembly-house-handler.getConfig", handler.getConfig);
+export const setConfig = g("assembly-house-handler.setConfig", handler.setConfig);
+export const listHouses = g("assembly-house-handler.listHouses", handler.listHouses);
+export const setRotation = g("assembly-house-handler.setRotation", handler.setRotation);
+export const rotation = g("assembly-house-handler.rotation", handler.rotation);
+export const setWeekHouse = g("assembly-house-handler.setWeekHouse", handler.setWeekHouse);

@@ -1,5 +1,7 @@
 import { ApiCallback, ApiContext, ApiEvent } from '../../shared/lib/api.interfaces';
 import { ResponseBuilder } from '../../shared/lib/response-builder';
+import { guard } from '../auth/authz';
+import { SUPPLY_ACTIONS } from './supply-actions';
 import {
   SUPPLY_UNITS, ITEM_TYPES, ITEM_CONDITIONS, ISSUE_TYPES, WASTAGE_REASONS,
 } from './supply-constants';
@@ -22,5 +24,6 @@ class SupplyLookupHandler {
 }
 
 const handler = new SupplyLookupHandler();
-export const getUnits = handler.getUnits;
-export const getConditions = handler.getConditions;
+const g = (ref: string, fn: any) => guard(SUPPLY_ACTIONS[ref], fn);
+export const getUnits = g('supply-lookup-handler.getUnits', handler.getUnits);
+export const getConditions = g('supply-lookup-handler.getConditions', handler.getConditions);

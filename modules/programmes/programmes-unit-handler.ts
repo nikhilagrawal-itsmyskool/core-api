@@ -6,7 +6,8 @@ import {
 import { ResponseBuilder } from "../../shared/lib/response-builder";
 import { ErrorCode } from "../../shared/lib/error-codes";
 import { resolveSchool, parseBody, requireParam } from "./handler-util";
-import { requireAction } from "../auth/authz";
+import { guard } from "../auth/authz";
+import { PROGRAMME_ACTIONS } from "./programmes-actions";
 import { programmeUnitService } from "./programmes-unit-service";
 import { CreateUnitRequest, UpdateUnitRequest } from "./programmes-interfaces";
 
@@ -19,7 +20,6 @@ class ProgrammesUnitHandler {
   ) => {
     _context.callbackWaitsForEmptyEventLoop = false;
     try {
-      if (!requireAction(event, "programme.view", callback)) return;
       const ctx = await resolveSchool(event, callback);
       if (!ctx) return;
       const q = event.queryStringParameters || {};
@@ -51,7 +51,6 @@ class ProgrammesUnitHandler {
   ) => {
     _context.callbackWaitsForEmptyEventLoop = false;
     try {
-      if (!requireAction(event, "programme.view", callback)) return;
       const ctx = await resolveSchool(event, callback);
       if (!ctx) return;
       const id = requireParam(event, "id", callback);
@@ -74,7 +73,6 @@ class ProgrammesUnitHandler {
   ) => {
     _context.callbackWaitsForEmptyEventLoop = false;
     try {
-      if (!requireAction(event, "godpwa.programme.manage", callback)) return;
       const ctx = await resolveSchool(event, callback);
       if (!ctx) return;
       const body = parseBody<CreateUnitRequest>(event, callback);
@@ -93,7 +91,6 @@ class ProgrammesUnitHandler {
   ) => {
     _context.callbackWaitsForEmptyEventLoop = false;
     try {
-      if (!requireAction(event, "godpwa.programme.manage", callback)) return;
       const ctx = await resolveSchool(event, callback);
       if (!ctx) return;
       const id = requireParam(event, "id", callback);
@@ -118,7 +115,6 @@ class ProgrammesUnitHandler {
   ) => {
     _context.callbackWaitsForEmptyEventLoop = false;
     try {
-      if (!requireAction(event, "godpwa.programme.manage", callback)) return;
       const ctx = await resolveSchool(event, callback);
       if (!ctx) return;
       const id = requireParam(event, "id", callback);
@@ -142,7 +138,6 @@ class ProgrammesUnitHandler {
   ) => {
     _context.callbackWaitsForEmptyEventLoop = false;
     try {
-      if (!requireAction(event, "programme.view", callback)) return;
       const ctx = await resolveSchool(event, callback);
       if (!ctx) return;
       const q = event.queryStringParameters || {};
@@ -172,9 +167,10 @@ class ProgrammesUnitHandler {
 }
 
 const handler = new ProgrammesUnitHandler();
-export const list = handler.list;
-export const getById = handler.getById;
-export const create = handler.create;
-export const update = handler.update;
-export const remove = handler.remove;
-export const teach = handler.teach;
+const g = (ref: string, fn: any) => guard(PROGRAMME_ACTIONS[ref], fn);
+export const list = g("programmes-unit-handler.list", handler.list);
+export const getById = g("programmes-unit-handler.getById", handler.getById);
+export const create = g("programmes-unit-handler.create", handler.create);
+export const update = g("programmes-unit-handler.update", handler.update);
+export const remove = g("programmes-unit-handler.remove", handler.remove);
+export const teach = g("programmes-unit-handler.teach", handler.teach);

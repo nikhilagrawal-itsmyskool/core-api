@@ -140,6 +140,21 @@
           rate: rate(1 minute)
           enabled: true
 
+  # Director's "School Pulse" WhatsApp digest — once a day at 08:30 IST.
+  # Fans out to the cockpit source endpoints, composes the school_pulse_daily template
+  # and enqueues a WhatsApp to every holder of the education_director role. Inert until
+  # that role exists (dev/local, and prod until a director is wired up).
+  # Long timeout: several HTTP hops before it enqueues. (The actual send still rides
+  # the normal queue drained by drain-messages.)
+  cockpit-digest:
+    handler: message-handler.cockpitDigest
+    name: ${self:service}-cockpit-digest
+    timeout: 60
+    events:
+      - schedule:
+          rate: cron(0 3 * * ? *)   # 03:00 UTC = 08:30 IST daily (IST has no DST, never drifts)
+          enabled: true
+
   get-message:
     handler: message-handler.getById
     name: ${self:service}-get-message

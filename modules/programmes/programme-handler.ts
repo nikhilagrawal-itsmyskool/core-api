@@ -6,7 +6,8 @@ import {
 import { ResponseBuilder } from "../../shared/lib/response-builder";
 import { ErrorCode } from "../../shared/lib/error-codes";
 import { resolveSchool, parseBody, requireParam } from "./handler-util";
-import { requireAction } from "../auth/authz";
+import { guard } from "../auth/authz";
+import { PROGRAMME_ACTIONS } from "./programmes-actions";
 import { programmeService } from "./programme-service";
 
 class ProgrammeHandler {
@@ -18,7 +19,6 @@ class ProgrammeHandler {
   ) => {
     _context.callbackWaitsForEmptyEventLoop = false;
     try {
-      if (!requireAction(event, "programme.view", callback)) return;
       const ctx = await resolveSchool(event, callback);
       if (!ctx) return;
       ResponseBuilder.ok(await programmeService.list(ctx.schoolId), callback);
@@ -35,7 +35,6 @@ class ProgrammeHandler {
   ) => {
     _context.callbackWaitsForEmptyEventLoop = false;
     try {
-      if (!requireAction(event, "programme.view", callback)) return;
       const ctx = await resolveSchool(event, callback);
       if (!ctx) return;
       const code = requireParam(event, "code", callback);
@@ -59,7 +58,6 @@ class ProgrammeHandler {
   ) => {
     _context.callbackWaitsForEmptyEventLoop = false;
     try {
-      if (!requireAction(event, "godpwa.programme.manage", callback)) return;
       const ctx = await resolveSchool(event, callback);
       if (!ctx) return;
       const code = requireParam(event, "code", callback);
@@ -82,6 +80,7 @@ class ProgrammeHandler {
 }
 
 const handler = new ProgrammeHandler();
-export const list = handler.list;
-export const getByCode = handler.getByCode;
-export const update = handler.update;
+const g = (ref: string, fn: any) => guard(PROGRAMME_ACTIONS[ref], fn);
+export const list = g("programme-handler.list", handler.list);
+export const getByCode = g("programme-handler.getByCode", handler.getByCode);
+export const update = g("programme-handler.update", handler.update);

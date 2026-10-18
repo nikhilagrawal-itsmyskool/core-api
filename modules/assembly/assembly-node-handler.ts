@@ -1,4 +1,6 @@
 import { ApiCallback, ApiContext, ApiEvent } from '../../shared/lib/api.interfaces';
+import { guard } from "../auth/authz";
+import { ASSEMBLY_ACTIONS } from "./assembly-actions";
 import { ResponseBuilder } from '../../shared/lib/response-builder';
 import { ErrorCode } from '../../shared/lib/error-codes';
 import { resolveSchool, parseBody, requireParam } from './handler-util';
@@ -216,15 +218,16 @@ class AssemblyNodeHandler {
 }
 
 const handler = new AssemblyNodeHandler();
-export const create = handler.create;
-export const createForSpecial = handler.createForSpecial;
-export const reorderForSpecial = handler.reorderForSpecial;
-export const tree = handler.tree;
-export const reorder = handler.reorder;
-export const getById = handler.getById;
-export const update = handler.update;
-export const remove = handler.remove;
-export const setDays = handler.setDays;
-export const setResponsible = handler.setResponsible;
-export const setResources = handler.setResources;
-export const setDayContent = handler.setDayContent;
+const g = (ref: string, fn: any) => guard(ASSEMBLY_ACTIONS[ref], fn);
+export const create = g("assembly-node-handler.create", handler.create);
+export const createForSpecial = g("assembly-node-handler.createForSpecial", handler.createForSpecial);
+export const reorderForSpecial = g("assembly-node-handler.reorderForSpecial", handler.reorderForSpecial);
+export const tree = g("assembly-node-handler.tree", handler.tree);
+export const reorder = g("assembly-node-handler.reorder", handler.reorder);
+export const getById = g("assembly-node-handler.getById", handler.getById);
+export const update = g("assembly-node-handler.update", handler.update);
+export const remove = g("assembly-node-handler.remove", handler.remove);
+export const setDays = g("assembly-node-handler.setDays", handler.setDays);
+export const setResponsible = g("assembly-node-handler.setResponsible", handler.setResponsible);
+export const setResources = g("assembly-node-handler.setResources", handler.setResources);
+export const setDayContent = g("assembly-node-handler.setDayContent", handler.setDayContent);

@@ -6,6 +6,8 @@ import { fineIncidentService } from './fine-incident-service';
 import { fineNoteService } from './fine-note-service';
 import { CreateNoteRequest } from './fine-interfaces';
 import { PERSON_TYPES } from './fine-constants';
+import { guard } from '../auth/authz';
+import { FINE_ACTIONS } from './fine-actions';
 
 class FineNoteHandler {
   public create = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
@@ -85,5 +87,6 @@ class FineNoteHandler {
 }
 
 const handler = new FineNoteHandler();
-export const create = handler.create;
-export const list = handler.list;
+const g = (ref: string, fn: any) => guard(FINE_ACTIONS[ref], fn);
+export const create = g('fine-note-handler.create', handler.create);
+export const list = g('fine-note-handler.list', handler.list);

@@ -6,7 +6,8 @@ import {
 import { ResponseBuilder } from "../../shared/lib/response-builder";
 import { ErrorCode } from "../../shared/lib/error-codes";
 import { resolveSchool, parseBody, requireParam } from "./handler-util";
-import { requireAction } from "../auth/authz";
+import { guard } from "../auth/authz";
+import { PROGRAMME_ACTIONS } from "./programmes-actions";
 import { programmeSourceService } from "./programmes-source-service";
 
 class ProgrammesSourceHandler {
@@ -18,7 +19,6 @@ class ProgrammesSourceHandler {
   ) => {
     _context.callbackWaitsForEmptyEventLoop = false;
     try {
-      if (!requireAction(event, "programme.view", callback)) return;
       const ctx = await resolveSchool(event, callback);
       if (!ctx) return;
       const q = event.queryStringParameters || {};
@@ -41,7 +41,6 @@ class ProgrammesSourceHandler {
   ) => {
     _context.callbackWaitsForEmptyEventLoop = false;
     try {
-      if (!requireAction(event, "programme.view", callback)) return;
       const ctx = await resolveSchool(event, callback);
       if (!ctx) return;
       const grade = requireParam(event, "grade", callback);
@@ -76,7 +75,6 @@ class ProgrammesSourceHandler {
   ) => {
     _context.callbackWaitsForEmptyEventLoop = false;
     try {
-      if (!requireAction(event, "godpwa.programme.manage", callback)) return;
       const ctx = await resolveSchool(event, callback);
       if (!ctx) return;
       const grade = requireParam(event, "grade", callback);
@@ -106,6 +104,7 @@ class ProgrammesSourceHandler {
 }
 
 const handler = new ProgrammesSourceHandler();
-export const list = handler.list;
-export const download = handler.download;
-export const upload = handler.upload;
+const g = (ref: string, fn: any) => guard(PROGRAMME_ACTIONS[ref], fn);
+export const list = g("programmes-source-handler.list", handler.list);
+export const download = g("programmes-source-handler.download", handler.download);
+export const upload = g("programmes-source-handler.upload", handler.upload);

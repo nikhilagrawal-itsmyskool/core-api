@@ -7,6 +7,8 @@ import { supplyPurchaseBatchService } from './supply-purchase-batch-service';
 import { CreateBulkPurchaseRequest, UpdatePurchaseBatchRequest } from './supply-interfaces';
 import { SUPPLY_UNITS } from './supply-constants';
 import { isValidDate } from '../../shared/util/datetime';
+import { guard } from '../auth/authz';
+import { SUPPLY_ACTIONS } from './supply-actions';
 
 const VALID_UNITS = SUPPLY_UNITS.map((u) => u.value) as readonly string[];
 const ALLOWED_BILL_MIME = ['application/pdf', 'image/jpeg', 'image/png'];
@@ -224,12 +226,13 @@ class SupplyPurchaseBatchHandler {
 }
 
 const handler = new SupplyPurchaseBatchHandler();
-export const createBulk = handler.createBulk;
-export const list = handler.list;
-export const getById = handler.getById;
-export const update = handler.update;
-export const remove = handler.remove;
-export const restore = handler.restore;
-export const uploadBill = handler.uploadBill;
-export const getBill = handler.getBill;
-export const deleteBill = handler.deleteBill;
+const g = (ref: string, fn: any) => guard(SUPPLY_ACTIONS[ref], fn);
+export const createBulk = g('supply-purchase-batch-handler.createBulk', handler.createBulk);
+export const list = g('supply-purchase-batch-handler.list', handler.list);
+export const getById = g('supply-purchase-batch-handler.getById', handler.getById);
+export const update = g('supply-purchase-batch-handler.update', handler.update);
+export const remove = g('supply-purchase-batch-handler.remove', handler.remove);
+export const restore = g('supply-purchase-batch-handler.restore', handler.restore);
+export const uploadBill = g('supply-purchase-batch-handler.uploadBill', handler.uploadBill);
+export const getBill = g('supply-purchase-batch-handler.getBill', handler.getBill);
+export const deleteBill = g('supply-purchase-batch-handler.deleteBill', handler.deleteBill);

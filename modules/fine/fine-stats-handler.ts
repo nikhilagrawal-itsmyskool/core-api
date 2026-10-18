@@ -4,6 +4,8 @@ import { ErrorCode } from '../../shared/lib/error-codes';
 import { validateSchoolCodeHeader } from '../auth/auth-utils';
 import { fineIncidentService } from './fine-incident-service';
 import { fineStatsService } from './fine-stats-service';
+import { guard } from '../auth/authz';
+import { FINE_ACTIONS } from './fine-actions';
 
 class FineStatsHandler {
   public getStats = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
@@ -24,4 +26,4 @@ class FineStatsHandler {
 }
 
 const handler = new FineStatsHandler();
-export const getStats = handler.getStats;
+export const getStats = guard(FINE_ACTIONS['fine-stats-handler.getStats'], handler.getStats);

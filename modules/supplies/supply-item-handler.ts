@@ -6,6 +6,8 @@ import { supplyService } from './supply-service';
 import { supplyItemService } from './supply-item-service';
 import { CreateItemRequest, UpdateItemRequest, MergeItemRequest } from './supply-interfaces';
 import { SUPPLY_UNITS, ITEM_TYPES, ITEM_CONDITIONS } from './supply-constants';
+import { guard } from '../auth/authz';
+import { SUPPLY_ACTIONS } from './supply-actions';
 
 const VALID_UNITS = SUPPLY_UNITS.map((u) => u.value) as readonly string[];
 const VALID_CONDITIONS = ITEM_CONDITIONS.map((c) => c.value) as readonly string[];
@@ -148,9 +150,10 @@ class SupplyItemHandler {
 }
 
 const handler = new SupplyItemHandler();
-export const create = handler.create;
-export const search = handler.search;
-export const getById = handler.getById;
-export const update = handler.update;
-export const remove = handler.remove;
-export const merge = handler.merge;
+const g = (ref: string, fn: any) => guard(SUPPLY_ACTIONS[ref], fn);
+export const create = g('supply-item-handler.create', handler.create);
+export const search = g('supply-item-handler.search', handler.search);
+export const getById = g('supply-item-handler.getById', handler.getById);
+export const update = g('supply-item-handler.update', handler.update);
+export const remove = g('supply-item-handler.remove', handler.remove);
+export const merge = g('supply-item-handler.merge', handler.merge);

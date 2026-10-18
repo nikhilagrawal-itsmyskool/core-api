@@ -10,6 +10,8 @@ import { catalogService } from "./library-catalog-service";
 import { workService } from "./library-work-service";
 import { titleService } from "./library-title-service";
 import { CatalogRequest, WorkFields, TitleFields } from "./library-interfaces";
+import { guard } from "../auth/authz";
+import { LIBRARY_ACTIONS } from "./library-actions";
 
 class WorkHandler {
   // One-shot catalog: work (or workId) + title + copies.
@@ -291,11 +293,12 @@ class WorkHandler {
 }
 
 const handler = new WorkHandler();
-export const catalog = handler.catalog;
-export const createWork = handler.createWork;
-export const search = handler.search;
-export const getWork = handler.getWork;
-export const updateWork = handler.updateWork;
-export const addTitle = handler.addTitle;
-export const getTitle = handler.getTitle;
-export const updateTitle = handler.updateTitle;
+const g = (ref: string, fn: any) => guard(LIBRARY_ACTIONS[ref], fn);
+export const catalog = g("library-work-handler.catalog", handler.catalog);
+export const createWork = g("library-work-handler.createWork", handler.createWork);
+export const search = g("library-work-handler.search", handler.search);
+export const getWork = g("library-work-handler.getWork", handler.getWork);
+export const updateWork = g("library-work-handler.updateWork", handler.updateWork);
+export const addTitle = g("library-work-handler.addTitle", handler.addTitle);
+export const getTitle = g("library-work-handler.getTitle", handler.getTitle);
+export const updateTitle = g("library-work-handler.updateTitle", handler.updateTitle);

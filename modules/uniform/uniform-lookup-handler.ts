@@ -1,8 +1,10 @@
 import { ApiCallback, ApiContext, ApiEvent } from '../../shared/lib/api.interfaces';
 import { ResponseBuilder } from '../../shared/lib/response-builder';
 import { UNIFORM_CATEGORIES, UNIFORM_GENDERS, SALE_TYPES, PAYMENT_STATUSES, SEEDED_ITEMS } from './uniform-constants';
+import { guard } from '../auth/authz';
+import { UNIFORM_ACTIONS } from './uniform-actions';
 
-export const getLookups = async (_event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
+const getLookupsImpl = async (_event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
   _context.callbackWaitsForEmptyEventLoop = false;
   ResponseBuilder.ok({
     categories: UNIFORM_CATEGORIES,
@@ -12,3 +14,5 @@ export const getLookups = async (_event: ApiEvent, _context: ApiContext, callbac
     itemNameHints: SEEDED_ITEMS.map(i => i.name),
   }, callback);
 };
+
+export const getLookups = guard(UNIFORM_ACTIONS['uniform-lookup-handler.getLookups'], getLookupsImpl);

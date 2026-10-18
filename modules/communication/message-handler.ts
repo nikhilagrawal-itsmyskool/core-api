@@ -7,6 +7,7 @@ import { COMMUNICATION_ACTIONS } from './communication-actions';
 import { getCallerContext } from '../auth/auth-utils';
 import { maskContactFields } from '../../shared/util/mask-phone';
 import { messageService } from './message-service';
+import { runCockpitDigest } from './cockpit-digest-service';
 import { SendMessageRequest, PreviewRequest } from './communication-interfaces';
 
 class MessageHandler {
@@ -125,6 +126,20 @@ class MessageHandler {
     }
   };
 
+  // Internal: the Director's "School Pulse" daily digest. Invoked by an EventBridge
+  // schedule (cron 08:30 IST), not an HTTP request. Composes the cockpit cards and
+  // enqueues a WhatsApp to every holder of the education_director role. No-op until
+  // that role exists, so it's inert in dev/local and in prod until a director is wired up.
+  public cockpitDigest = async (_event: ApiEvent, context: ApiContext, callback: ApiCallback) => {
+    context.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const result = await runCockpitDigest();
+      ResponseBuilder.ok(result, callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
   // Provider delivery-status callback. Authenticated by a provider secret in real
   // adapters; the stub never calls it. Generic payload: { providerMessageId, status }.
   public webhook = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
@@ -150,4 +165,5 @@ export const getById = guard(COMMUNICATION_ACTIONS['message-handler.getById'], h
 export const cancel = guard(COMMUNICATION_ACTIONS['message-handler.cancel'], handler.cancel);
 export const processNext = handler.processNext; // public/exempt
 export const drain = handler.drain; // public/exempt
+export const cockpitDigest = handler.cockpitDigest; // schedule-invoked/exempt
 export const webhook = handler.webhook; // public/exempt

@@ -5,6 +5,8 @@ import { validateSchoolCodeHeader } from '../auth/auth-utils';
 import { supplyService } from './supply-service';
 import { supplyCategoryService } from './supply-category-service';
 import { CreateCategoryRequest, UpdateCategoryRequest } from './supply-interfaces';
+import { guard } from '../auth/authz';
+import { SUPPLY_ACTIONS } from './supply-actions';
 
 class SupplyCategoryHandler {
   public list = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
@@ -103,8 +105,9 @@ class SupplyCategoryHandler {
 }
 
 const handler = new SupplyCategoryHandler();
-export const list = handler.list;
-export const getById = handler.getById;
-export const create = handler.create;
-export const update = handler.update;
-export const remove = handler.remove;
+const g = (ref: string, fn: any) => guard(SUPPLY_ACTIONS[ref], fn);
+export const list = g('supply-category-handler.list', handler.list);
+export const getById = g('supply-category-handler.getById', handler.getById);
+export const create = g('supply-category-handler.create', handler.create);
+export const update = g('supply-category-handler.update', handler.update);
+export const remove = g('supply-category-handler.remove', handler.remove);

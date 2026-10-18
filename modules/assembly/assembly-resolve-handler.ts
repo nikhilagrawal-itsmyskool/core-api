@@ -1,4 +1,6 @@
 import { ApiCallback, ApiContext, ApiEvent } from '../../shared/lib/api.interfaces';
+import { guard } from "../auth/authz";
+import { ASSEMBLY_ACTIONS } from "./assembly-actions";
 import { ResponseBuilder } from '../../shared/lib/response-builder';
 import { ErrorCode } from '../../shared/lib/error-codes';
 import { resolveSchool } from './handler-util';
@@ -25,4 +27,5 @@ class AssemblyResolveHandler {
 }
 
 const handler = new AssemblyResolveHandler();
-export const resolve = handler.resolve;
+const g = (ref: string, fn: any) => guard(ASSEMBLY_ACTIONS[ref], fn);
+export const resolve = g("assembly-resolve-handler.resolve", handler.resolve);

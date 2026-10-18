@@ -5,6 +5,8 @@ import { validateSchoolCodeHeader } from '../auth/auth-utils';
 import { uniformItemService } from './uniform-item-service';
 import { uniformSaleService } from './uniform-sale-service';
 import { SALE_TYPE_VALUES, PAYMENT_STATUS_VALUES } from './uniform-constants';
+import { guard } from '../auth/authz';
+import { UNIFORM_ACTIONS } from './uniform-actions';
 
 function isValidDate(s: string): boolean {
   return /^\d{4}-\d{2}-\d{2}$/.test(s) && !isNaN(Date.parse(s));
@@ -202,9 +204,10 @@ class UniformSaleHandler {
 }
 
 const handler = new UniformSaleHandler();
-export const create = handler.create;
-export const list = handler.list;
-export const getById = handler.getById;
-export const addPayment = handler.addPayment;
-export const createReturn = handler.createReturn;
-export const getReturnEvidence = handler.getReturnEvidence;
+const g = (ref: string, fn: any) => guard(UNIFORM_ACTIONS[ref], fn);
+export const create = g('uniform-sale-handler.create', handler.create);
+export const list = g('uniform-sale-handler.list', handler.list);
+export const getById = g('uniform-sale-handler.getById', handler.getById);
+export const addPayment = g('uniform-sale-handler.addPayment', handler.addPayment);
+export const createReturn = g('uniform-sale-handler.createReturn', handler.createReturn);
+export const getReturnEvidence = g('uniform-sale-handler.getReturnEvidence', handler.getReturnEvidence);

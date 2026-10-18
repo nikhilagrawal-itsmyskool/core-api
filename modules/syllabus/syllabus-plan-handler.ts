@@ -48,7 +48,7 @@ class SyllabusPlanHandler {
     _context.callbackWaitsForEmptyEventLoop = false;
     try {
       // Lists every plan in the school — managers only. Teachers use /my-plans.
-      if (!requireAction(event, "syllabus.manage", callback)) return;
+      if (!requireAction(event, "syllabus.plan.manage", callback)) return;
       const ctx = await resolveSchool(event, callback);
       if (!ctx) return;
       const q = event.queryStringParameters || {};

@@ -9,6 +9,8 @@ import { resolveSchool, parseBody, requireParam } from "./handler-util";
 import { getCurrentAcademicYearId, isValidDate } from "./academic-calendar-common";
 import { academicCalendarService } from "./academic-calendar-service";
 import { notifyClosureParents, notifyClosureStaff } from "./academic-calendar-notify";
+import { guard } from "../auth/authz";
+import { ACADEMIC_CALENDAR_ACTIONS } from "./academic-calendar-actions";
 import {
   AddEntryRequest,
   CreateTypeRequest,
@@ -422,22 +424,23 @@ function lastDayOfMonth(month: string): string {
 }
 
 const h = new AcademicCalendarHandler();
-export const listTypes = h.listTypes;
-export const createType = h.createType;
-export const updateType = h.updateType;
-export const deleteType = h.deleteType;
-export const getCalendar = h.getCalendar;
-export const addEntry = h.addEntry;
-export const updateEntry = h.updateEntry;
-export const deleteEntry = h.deleteEntry;
-export const listHolidays = h.listHolidays;
-export const setHoliday = h.setHoliday;
-export const closeRange = h.closeRange;
-export const deleteHoliday = h.deleteHoliday;
-export const importPreview = h.importPreview;
-export const importApply = h.importApply;
-export const importHistory = h.importHistory;
-export const importFile = h.importFile;
-export const getSettings = h.getSettings;
-export const setSettings = h.setSettings;
-export const getNonTeaching = h.getNonTeaching;
+const g = (ref: string, fn: any) => guard(ACADEMIC_CALENDAR_ACTIONS[ref], fn);
+export const listTypes = g("academic-calendar-handler.listTypes", h.listTypes);
+export const createType = g("academic-calendar-handler.createType", h.createType);
+export const updateType = g("academic-calendar-handler.updateType", h.updateType);
+export const deleteType = g("academic-calendar-handler.deleteType", h.deleteType);
+export const getCalendar = g("academic-calendar-handler.getCalendar", h.getCalendar);
+export const addEntry = g("academic-calendar-handler.addEntry", h.addEntry);
+export const updateEntry = g("academic-calendar-handler.updateEntry", h.updateEntry);
+export const deleteEntry = g("academic-calendar-handler.deleteEntry", h.deleteEntry);
+export const listHolidays = g("academic-calendar-handler.listHolidays", h.listHolidays);
+export const setHoliday = g("academic-calendar-handler.setHoliday", h.setHoliday);
+export const closeRange = g("academic-calendar-handler.closeRange", h.closeRange);
+export const deleteHoliday = g("academic-calendar-handler.deleteHoliday", h.deleteHoliday);
+export const importPreview = g("academic-calendar-handler.importPreview", h.importPreview);
+export const importApply = g("academic-calendar-handler.importApply", h.importApply);
+export const importHistory = g("academic-calendar-handler.importHistory", h.importHistory);
+export const importFile = g("academic-calendar-handler.importFile", h.importFile);
+export const getSettings = g("academic-calendar-handler.getSettings", h.getSettings);
+export const setSettings = g("academic-calendar-handler.setSettings", h.setSettings);
+export const getNonTeaching = g("academic-calendar-handler.getNonTeaching", h.getNonTeaching);

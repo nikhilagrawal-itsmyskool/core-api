@@ -176,6 +176,275 @@ const CATALOGS: Record<string, Catalog> = {
       { action: ACTIONS.SPORTS_BREAKAGE_MANAGE, label: 'Record / edit / delete breakages' },
     ],
   },
+  asset: {
+    module: 'asset',
+    roles: [
+      { role: 'admin', label: 'Admin' },
+      { role: 'assets-incharge', label: 'Assets In-charge' },
+    ],
+    actions: [
+      { action: ACTIONS.ASSET_REGISTER_VIEW, label: 'View the asset register, counts, responsibility & movements' },
+      { action: ACTIONS.ASSET_REGISTER_MANAGE, label: 'Add / edit / move / individualize assets & set responsibility' },
+      { action: ACTIONS.ASSET_TYPE_VIEW, label: 'View the asset-type master' },
+      { action: ACTIONS.ASSET_TYPE_MANAGE, label: 'Create / edit / delete asset types' },
+    ],
+  },
+  library: {
+    module: 'library',
+    roles: [
+      { role: 'admin', label: 'Admin' },
+      { role: 'library-incharge', label: 'Library In-charge' },
+      { role: 'teacher', label: 'Teacher' },
+    ],
+    actions: [
+      { action: ACTIONS.LIBRARY_CATALOG_VIEW, label: 'Browse the catalog (works, titles, copies, labels)' },
+      { action: ACTIONS.LIBRARY_CATALOG_MANAGE, label: 'Create / edit catalog + print labels' },
+      { action: ACTIONS.LIBRARY_CIRCULATION_VIEW, label: 'View issues / returns / renewals' },
+      { action: ACTIONS.LIBRARY_CIRCULATION_MANAGE, label: 'Issue / return / renew books' },
+      { action: ACTIONS.LIBRARY_FINE_VIEW, label: 'View overdue / lost fines' },
+      { action: ACTIONS.LIBRARY_FINE_MANAGE, label: 'Collect / waive library fines' },
+      { action: ACTIONS.LIBRARY_CONFIG_VIEW, label: 'Read circulation policy & lookups' },
+      { action: ACTIONS.LIBRARY_CONFIG_MANAGE, label: 'Edit circulation policy & lookups' },
+    ],
+  },
+  supplies: {
+    module: 'supplies',
+    roles: [
+      { role: 'admin', label: 'Admin' },
+      { role: 'supplies-incharge', label: 'Supplies In-charge' },
+      { role: 'teacher', label: 'Teacher' },
+    ],
+    actions: [
+      { action: ACTIONS.SUPPLIES_CATEGORY_VIEW, label: 'View supply categories' },
+      { action: ACTIONS.SUPPLIES_CATEGORY_MANAGE, label: 'Create / edit / delete categories' },
+      { action: ACTIONS.SUPPLIES_INVENTORY_VIEW, label: 'View items & stock' },
+      { action: ACTIONS.SUPPLIES_INVENTORY_MANAGE, label: 'Add / edit / delete / merge items' },
+      { action: ACTIONS.SUPPLIES_PURCHASE_VIEW, label: 'View purchases, batches & bills' },
+      { action: ACTIONS.SUPPLIES_PURCHASE_MANAGE, label: 'Record / edit / delete purchases, batches & bills' },
+      { action: ACTIONS.SUPPLIES_ISSUE_VIEW, label: 'View the issue log' },
+      { action: ACTIONS.SUPPLIES_ISSUE_MANAGE, label: 'Record / edit / delete / return issues' },
+      { action: ACTIONS.SUPPLIES_WASTAGE_VIEW, label: 'View the wastage log' },
+      { action: ACTIONS.SUPPLIES_WASTAGE_MANAGE, label: 'Record / edit / delete wastage' },
+    ],
+  },
+  uniform: {
+    module: 'uniform',
+    roles: [{ role: 'admin', label: 'Admin' }],
+    actions: [
+      { action: ACTIONS.UNIFORM_INVENTORY_VIEW, label: 'View items & stock' },
+      { action: ACTIONS.UNIFORM_INVENTORY_MANAGE, label: 'Add / edit / delete items & sizes' },
+      { action: ACTIONS.UNIFORM_PURCHASE_VIEW, label: 'View purchases & bills' },
+      { action: ACTIONS.UNIFORM_PURCHASE_MANAGE, label: 'Record / edit / delete purchases & bills' },
+      { action: ACTIONS.UNIFORM_SET_VIEW, label: 'View sets' },
+      { action: ACTIONS.UNIFORM_SET_MANAGE, label: 'Create / edit / delete sets' },
+      { action: ACTIONS.UNIFORM_SALE_VIEW, label: 'View sales & returns' },
+      { action: ACTIONS.UNIFORM_SALE_MANAGE, label: 'Record sales, payments & returns' },
+    ],
+  },
+  shop: {
+    module: 'shop',
+    roles: [{ role: 'admin', label: 'Admin' }],
+    actions: [
+      { action: ACTIONS.SHOP_INVENTORY_VIEW, label: 'View items & stock' },
+      { action: ACTIONS.SHOP_INVENTORY_MANAGE, label: 'Add / edit / delete items' },
+      { action: ACTIONS.SHOP_PURCHASE_VIEW, label: 'View purchases, intake & bills' },
+      { action: ACTIONS.SHOP_PURCHASE_MANAGE, label: 'Record / edit / delete purchases, intake & bills' },
+      { action: ACTIONS.SHOP_SET_VIEW, label: 'View sets & stock' },
+      { action: ACTIONS.SHOP_SET_MANAGE, label: 'Create / edit / delete sets' },
+      { action: ACTIONS.SHOP_SALE_VIEW, label: 'View sales & assignments' },
+      { action: ACTIONS.SHOP_SALE_MANAGE, label: 'Record / assign sales' },
+    ],
+  },
+  fine: {
+    module: 'fine',
+    roles: [{ role: 'admin', label: 'Admin' }],
+    actions: [
+      { action: ACTIONS.FINE_INCIDENT_VIEW, label: 'View fine incidents, evidence & notes' },
+      { action: ACTIONS.FINE_INCIDENT_MANAGE, label: 'Create / edit / delete incidents, evidence & notes' },
+      { action: ACTIONS.FINE_COLLECTION_VIEW, label: 'View fine collections & receipts' },
+      { action: ACTIONS.FINE_COLLECTION_MANAGE, label: 'Record fine collection' },
+    ],
+  },
+  hiring: {
+    module: 'hiring',
+    roles: [
+      { role: 'admin', label: 'Admin' },
+      { role: 'hiring-incharge', label: 'Hiring In-charge' },
+    ],
+    actions: [
+      { action: ACTIONS.HIRING_CANDIDATE_VIEW, label: 'View candidates, stages, files & lookups' },
+      { action: ACTIONS.HIRING_CANDIDATE_MANAGE, label: 'Add / edit / delete candidates, stages, files & decisions' },
+    ],
+  },
+  homework: {
+    module: 'homework',
+    roles: [
+      { role: 'admin', label: 'Admin' },
+      { role: 'class-teacher', label: 'Class Teacher' },
+    ],
+    actions: [
+      { action: ACTIONS.HOMEWORK_DAY_VIEW, label: "View any class's homework + mapping & audit (oversight)" },
+      { action: ACTIONS.HOMEWORK_DAY_POST, label: "Post / edit / publish a class's homework photos" },
+      { action: ACTIONS.HOMEWORK_DAY_MANAGE, label: 'Oversight edits + class-teacher mapping override' },
+    ],
+  },
+  'academic-calendar': {
+    module: 'academic-calendar',
+    roles: [
+      { role: 'admin', label: 'Admin' },
+      { role: 'teacher', label: 'Teacher' },
+    ],
+    actions: [
+      { action: ACTIONS.ACADEMIC_CALENDAR_VIEW, label: 'Read the year calendar, holidays & columns' },
+      { action: ACTIONS.ACADEMIC_CALENDAR_MANAGE, label: 'Add/edit entries, holidays, closures, columns + Excel import' },
+      { action: ACTIONS.ACADEMIC_CALENDAR_CONFIG_MANAGE, label: 'Edit calendar settings (non-teaching / weekly-off)' },
+    ],
+  },
+  feedback: {
+    module: 'feedback',
+    roles: [
+      { role: 'teacher', label: 'Teacher' },
+      { role: 'education-director', label: 'Director' },
+    ],
+    actions: [
+      { action: ACTIONS.FEEDBACK_VIEW, label: 'See feedback categories (needed to record)' },
+      { action: ACTIONS.FEEDBACK_RECORD, label: 'Record + assign a home-visit ticket' },
+      { action: ACTIONS.FEEDBACK_RESPOND, label: 'My tickets: comment, forward / send back (owner)' },
+      { action: ACTIONS.FEEDBACK_REVIEW, label: 'Director dashboard: complete / cancel / reopen / assign any ticket' },
+    ],
+  },
+  transport: {
+    module: 'transport',
+    roles: [
+      { role: 'admin', label: 'Admin' },
+      { role: 'transport-incharge', label: 'Transport Incharge' },
+      { role: 'transport-attendance', label: 'Bus Attendance Teacher' },
+    ],
+    actions: [
+      { action: ACTIONS.TRANSPORT_VIEW, label: 'Read transport setup (vehicles, stops, routes, assignments)' },
+      { action: ACTIONS.TRANSPORT_MANAGE, label: 'Manage transport setup (vehicles, stops, routes, assignments)' },
+      { action: ACTIONS.TRANSPORT_ATTENDANCE_MARK, label: 'Open + mark bus attendance (route-scoped for the teacher)' },
+      { action: ACTIONS.TRANSPORT_ATTENDANCE_FINALIZE, label: 'Finalize bus attendance + edit records' },
+    ],
+  },
+  programmes: {
+    module: 'programmes',
+    roles: [
+      { role: 'admin', label: 'Admin' },
+      { role: 'teacher', label: 'Teacher' },
+      { role: 'programme-incharge', label: 'Programme Incharge' },
+    ],
+    actions: [
+      { action: ACTIONS.PROGRAMME_UNIT_VIEW, label: 'Read programme units (Class → Month → Theme) + catalog' },
+      { action: ACTIONS.PROGRAMME_UNIT_MANAGE, label: 'Author units + edit the programme definition' },
+      { action: ACTIONS.PROGRAMME_UNIT_TEACH, label: 'Mark a unit taught while conducting' },
+      { action: ACTIONS.PROGRAMME_SOURCE_VIEW, label: 'List + download class-module source docs' },
+      { action: ACTIONS.PROGRAMME_SOURCE_MANAGE, label: 'Upload class-module source docs' },
+      { action: ACTIONS.PROGRAMME_CONFIG_MANAGE, label: 'Edit programme settings (SelcSettings) — god-first' },
+    ],
+  },
+  assembly: {
+    module: 'assembly',
+    roles: [
+      { role: 'admin', label: 'Admin' },
+      { role: 'teacher', label: 'Teacher' },
+      { role: 'assembly-incharge', label: 'Assembly Incharge' },
+      { role: 'education-director', label: 'Director' },
+    ],
+    actions: [
+      { action: ACTIONS.ASSEMBLY_PLAN_VIEW, label: 'Read plans, specials, themes, live view & pulse' },
+      { action: ACTIONS.ASSEMBLY_PLAN_MANAGE, label: 'Author plans, nodes, specials, themes, references & docs' },
+      { action: ACTIONS.ASSEMBLY_WEEK_VIEW, label: 'Read the weekly roster' },
+      { action: ACTIONS.ASSEMBLY_WEEK_MANAGE, label: 'Manage weekly roster (ensure/approve/lock)' },
+      { action: ACTIONS.ASSEMBLY_WEEK_CONDUCT, label: 'Run my assigned week (/me duties; scoped to my house/evaluator)' },
+      { action: ACTIONS.ASSEMBLY_GRADING_VIEW, label: 'Read rubric, evaluators, grades & leaderboard' },
+      { action: ACTIONS.ASSEMBLY_GRADING_MANAGE, label: 'Manage rubric/grades + conduct checklist' },
+      { action: ACTIONS.ASSEMBLY_HOUSE_VIEW, label: 'Read house mode + rotation' },
+      { action: ACTIONS.ASSEMBLY_HOUSE_MANAGE, label: 'Manage house rotation & week-house' },
+      { action: ACTIONS.ASSEMBLY_CONFIG_MANAGE, label: 'Edit assembly config (house/grading setup) — god-first' },
+    ],
+  },
+  communication: {
+    module: 'communication',
+    roles: [
+      { role: 'admin', label: 'Admin' },
+    ],
+    actions: [
+      { action: ACTIONS.COMMUNICATION_SEND, label: 'Compose, preview, send & cancel SMS/WhatsApp + read templates/messages' },
+      { action: ACTIONS.COMMUNICATION_TEMPLATE_MANAGE, label: 'Create / edit message templates' },
+      { action: ACTIONS.COMMUNICATION_TEMPLATE_DELETE, label: 'Delete / restore a template — god-first' },
+    ],
+  },
+  employee: {
+    module: 'employee',
+    roles: [
+      { role: 'admin', label: 'Admin' },
+      { role: 'teacher', label: 'Teacher' },
+    ],
+    actions: [
+      { action: ACTIONS.EMPLOYEE_VIEW, label: 'Search + view employee records' },
+      { action: ACTIONS.EMPLOYEE_MANAGE, label: 'Create / edit employees + credentials & password reset' },
+      { action: ACTIONS.EMPLOYEE_RESTORE, label: 'Restore a deleted employee — god-first' },
+      { action: ACTIONS.EMPLOYEE_SESSION_RESET, label: 'Force an employee to re-login — god-first' },
+      { action: ACTIONS.DOCUMENTS_HANDBOOK_MANAGE, label: 'Author staff handbook documents — god-first' },
+    ],
+  },
+  student: {
+    module: 'student',
+    roles: [
+      { role: 'admin', label: 'Admin' },
+      { role: 'teacher', label: 'Teacher' },
+    ],
+    actions: [
+      { action: ACTIONS.STUDENT_VIEW, label: 'Search + view student records' },
+      { action: ACTIONS.STUDENT_MANAGE, label: 'Create / edit students' },
+      { action: ACTIONS.STUDENT_VIEW_CONTACTS, label: 'See un-masked parent/student contact numbers' },
+    ],
+  },
+  timetable: {
+    module: 'timetable',
+    roles: [
+      { role: 'admin', label: 'Admin' },
+      { role: 'teacher', label: 'Teacher' },
+    ],
+    actions: [
+      { action: ACTIONS.TIMETABLE_VIEW, label: 'View the published timetable' },
+      { action: ACTIONS.TIMETABLE_PRINT, label: 'Print / export the timetable' },
+      { action: ACTIONS.TIMETABLE_MANAGE, label: 'Edit the academic backbone + generate/publish — god-first' },
+    ],
+  },
+  syllabus: {
+    module: 'syllabus',
+    roles: [
+      { role: 'admin', label: 'Admin' },
+      { role: 'teacher', label: 'Teacher' },
+      { role: 'syllabus-incharge', label: 'Syllabus Incharge' },
+    ],
+    actions: [
+      { action: ACTIONS.SYLLABUS_VIEW, label: 'Read syllabus plans' },
+      { action: ACTIONS.SYLLABUS_MANAGE, label: 'Author plans + subjects' },
+      { action: ACTIONS.SYLLABUS_PROGRESS_MARK, label: 'Mark topics covered/pending for a section' },
+    ],
+  },
+  transfer: {
+    module: 'transfer',
+    roles: [
+      { role: 'admin', label: 'Admin' },
+    ],
+    actions: [
+      { action: ACTIONS.TRANSFER_VIEW, label: 'View transfer certificates' },
+      { action: ACTIONS.TRANSFER_MANAGE, label: 'Issue / edit transfer certificates' },
+    ],
+  },
+  assistant: {
+    module: 'assistant',
+    roles: [
+      { role: 'admin', label: 'Admin' },
+    ],
+    actions: [
+      { action: ACTIONS.ASSISTANT_USE, label: 'Use the voice assistant — god-first' },
+    ],
+  },
 };
 
 const DEFAULT_MODULE = 'examination';

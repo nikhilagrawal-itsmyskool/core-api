@@ -8,6 +8,8 @@ import { ErrorCode } from "../../shared/lib/error-codes";
 import { resolveSchoolId, userIdOf } from "./library-common";
 import { policyService } from "./library-policy-service";
 import { UpdatePolicyRequest } from "./library-interfaces";
+import { guard } from "../auth/authz";
+import { LIBRARY_ACTIONS } from "./library-actions";
 
 class PolicyHandler {
   public get = async (
@@ -57,5 +59,6 @@ class PolicyHandler {
 }
 
 const handler = new PolicyHandler();
-export const get = handler.get;
-export const update = handler.update;
+const g = (ref: string, fn: any) => guard(LIBRARY_ACTIONS[ref], fn);
+export const get = g("library-policy-handler.get", handler.get);
+export const update = g("library-policy-handler.update", handler.update);

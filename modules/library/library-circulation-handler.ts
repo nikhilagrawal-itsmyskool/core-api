@@ -7,6 +7,8 @@ import { ResponseBuilder } from "../../shared/lib/response-builder";
 import { ErrorCode } from "../../shared/lib/error-codes";
 import { resolveSchoolId, userIdOf } from "./library-common";
 import { circulationService } from "./library-circulation-service";
+import { guard } from "../auth/authz";
+import { LIBRARY_ACTIONS } from "./library-actions";
 import {
   IssueRequest,
   ReturnRequest,
@@ -163,8 +165,9 @@ class CirculationHandler {
 }
 
 const handler = new CirculationHandler();
-export const issue = handler.issue;
-export const returnBook = handler.returnBook;
-export const renew = handler.renew;
-export const list = handler.list;
-export const loans = handler.loans;
+const g = (ref: string, fn: any) => guard(LIBRARY_ACTIONS[ref], fn);
+export const issue = g("library-circulation-handler.issue", handler.issue);
+export const returnBook = g("library-circulation-handler.returnBook", handler.returnBook);
+export const renew = g("library-circulation-handler.renew", handler.renew);
+export const list = g("library-circulation-handler.list", handler.list);
+export const loans = g("library-circulation-handler.loans", handler.loans);
