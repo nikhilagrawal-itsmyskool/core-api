@@ -829,9 +829,8 @@ class StudentAdminService {
         left join lateral (
           select count(*)::int as device_count, max(dt.last_seen) as last_seen
           from device_token dt
-          join student s3 on s3.uuid = dt.recipient_id and s3.school_id = dt.school_id
-          where dt.school_id = sl.school_id and dt.recipient_type = 'student'
-            and s3.family_unique_number = sl.username and dt.status = 'active'
+          where dt.school_id = sl.school_id and dt.recipient_type = 'family'
+            and dt.recipient_id = sl.username and dt.status = 'active'
         ) dev on true
         where sl.school_id = $1 ${searchClause}
         group by sl.username, sl.password, sl.display_name, sl.disabled_features, dev.device_count, dev.last_seen

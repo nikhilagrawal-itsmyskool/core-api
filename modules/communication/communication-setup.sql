@@ -142,11 +142,14 @@ create index if not exists idx_notification_unread
 
 -- device_token: a native app's push token (Expo/FCM/APNs). Teacher PWA registers
 -- none (inbox only); the student native app registers here for real push.
+-- recipient_type 'family' = a parent-app device shared by all siblings; recipient_id is
+-- then the family_unique_number (so any child's notification reaches the one phone).
+-- 'student' is retained for back-compat; 'employee' for the teacher app.
 create table if not exists device_token (
     uuid varchar(12) primary key,
     school_id varchar(12) not null,
-    recipient_type varchar(16) not null check (recipient_type in ('employee', 'student')),
-    recipient_id varchar(12) not null,
+    recipient_type varchar(16) not null check (recipient_type in ('employee', 'student', 'family')),
+    recipient_id varchar(64) not null,
     platform varchar(16) check (platform in ('ios', 'android', 'web')),
     token varchar(255) not null,
     status varchar(16) not null check (status in ('active', 'deleted')),
@@ -158,3 +161,8 @@ create unique index if not exists idx_device_token_unique
     on device_token(school_id, token) where status = 'active';
 create index if not exists idx_device_token_recipient
     on device_token(school_id, recipient_type, recipient_id, status);
+-- Existing installs: widen recipient_id and allow the 'family' recipient type.
+alter table device_token alter column recipient_id type varchar(64);
+alter table device_token drop constraint if exists device_token_recipient_type_check;
+alter table device_token add constraint device_token_recipient_type_check
+    check (recipient_type in ('employee', 'student', 'family'));

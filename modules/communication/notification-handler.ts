@@ -30,13 +30,22 @@ function parseBody<T>(event: ApiEvent, callback: ApiCallback): T | null {
   return JSON.parse(event.body) as T;
 }
 
-// Resolve the /me caller as a notification recipient. An employee token maps to the
-// employee inbox; otherwise fall back to the family/student guard (active child).
-// Returns null AND writes the error response on failure.
-function resolveRecipient(
-  event: ApiEvent,
-  callback: ApiCallback,
-): { schoolId: string; recipientType: NotifyRecipientType; recipientId: string } | null {
+interface MeScope {
+  schoolId: string;
+  // Inbox scope: employee → [employeeId]; parent → all sibling student uuids.
+  recipientType: "employee" | "student";
+  recipientIds: string[];
+  // Device scope: employee → ('employee', employeeId); parent → ('family', familyNumber)
+  // so the one shared phone receives every child's notifications.
+  deviceType: "employee" | "family";
+  deviceId: string;
+}
+
+// Resolve the /me caller. An employee token maps to the employee inbox/device; a family
+// token resolves the active child to the WHOLE family — the inbox lists every sibling's
+// notifications and the device is registered family-wide. Returns null AND writes the
+// error response on failure. Async (parent resolution needs a DB lookup).
+async function resolveMe(event: ApiEvent, callback: ApiCallback): Promise<MeScope | null> {
   const token = extractAndVerifyToken(getAuthorizationHeader(event));
   if (token && token.type === "employee") {
     const employeeId = token.employee_id || token.id;
@@ -44,11 +53,18 @@ function resolveRecipient(
       ResponseBuilder.unauthorizedRequest(ErrorCode.GeneralError, "Employee login required", callback);
       return null;
     }
-    return { schoolId: token.school_id, recipientType: "employee", recipientId: employeeId };
+    return { schoolId: token.school_id, recipientType: "employee", recipientIds: [employeeId], deviceType: "employee", deviceId: employeeId };
   }
   const auth = guardActiveStudent(event, callback);
   if (!auth) return null; // guard already wrote the response
-  return { schoolId: auth.token.school_id, recipientType: "student", recipientId: auth.activeStudentId };
+  const { familyNumber, studentIds } = await notificationService.resolveFamily(auth.token.school_id, auth.activeStudentId);
+  return {
+    schoolId: auth.token.school_id,
+    recipientType: "student",
+    recipientIds: studentIds,
+    deviceType: "family",
+    deviceId: familyNumber || auth.activeStudentId,
+  };
 }
 
 class NotificationHandler {
@@ -91,10 +107,10 @@ class NotificationHandler {
   public list = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
     ctx.callbackWaitsForEmptyEventLoop = false;
     try {
-      const r = resolveRecipient(event, callback);
+      const r = await resolveMe(event, callback);
       if (!r) return;
       const q = event.queryStringParameters || {};
-      const result = await notificationService.list(r.schoolId, r.recipientType, r.recipientId, {
+      const result = await notificationService.list(r.schoolId, r.recipientType, r.recipientIds, {
         unreadOnly: q.unreadOnly === "true",
         limit: q.limit ? parseInt(q.limit, 10) : undefined,
       });
@@ -108,12 +124,12 @@ class NotificationHandler {
   public markRead = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
     ctx.callbackWaitsForEmptyEventLoop = false;
     try {
-      const r = resolveRecipient(event, callback);
+      const r = await resolveMe(event, callback);
       if (!r) return;
       const id = event.pathParameters?.id;
       if (!id) return ResponseBuilder.badRequest(ErrorCode.MissingId, "id is required", callback);
-      await notificationService.markRead(r.schoolId, r.recipientType, r.recipientId, id);
-      const result = await notificationService.list(r.schoolId, r.recipientType, r.recipientId, {});
+      await notificationService.markRead(r.schoolId, r.recipientType, r.recipientIds, id);
+      const result = await notificationService.list(r.schoolId, r.recipientType, r.recipientIds, {});
       ResponseBuilder.ok(result, callback);
     } catch (err: any) {
       ResponseBuilder.handleError(err, callback);
@@ -124,9 +140,9 @@ class NotificationHandler {
   public markAllRead = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
     ctx.callbackWaitsForEmptyEventLoop = false;
     try {
-      const r = resolveRecipient(event, callback);
+      const r = await resolveMe(event, callback);
       if (!r) return;
-      await notificationService.markAllRead(r.schoolId, r.recipientType, r.recipientId);
+      await notificationService.markAllRead(r.schoolId, r.recipientType, r.recipientIds);
       ResponseBuilder.ok({ ok: true }, callback);
     } catch (err: any) {
       ResponseBuilder.handleError(err, callback);
@@ -137,12 +153,12 @@ class NotificationHandler {
   public registerDevice = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
     ctx.callbackWaitsForEmptyEventLoop = false;
     try {
-      const r = resolveRecipient(event, callback);
+      const r = await resolveMe(event, callback);
       if (!r) return;
       const body = parseBody<{ platform: string; token: string }>(event, callback);
       if (!body) return;
       if (!body.token) return ResponseBuilder.badRequest(ErrorCode.InvalidInput, "token is required", callback);
-      await notificationService.registerDevice(r.schoolId, r.recipientType, r.recipientId, body.platform || "web", body.token);
+      await notificationService.registerDevice(r.schoolId, r.deviceType, r.deviceId, body.platform || "web", body.token);
       ResponseBuilder.ok({ ok: true }, callback);
     } catch (err: any) {
       ResponseBuilder.handleError(err, callback);
@@ -153,7 +169,7 @@ class NotificationHandler {
   public unregisterDevice = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
     ctx.callbackWaitsForEmptyEventLoop = false;
     try {
-      const r = resolveRecipient(event, callback);
+      const r = await resolveMe(event, callback);
       if (!r) return;
       const body = parseBody<{ token: string }>(event, callback);
       if (!body) return;
