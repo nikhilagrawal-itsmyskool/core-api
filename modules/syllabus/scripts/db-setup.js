@@ -14,7 +14,7 @@ const path = require("path");
 const readline = require("readline");
 const {
   loadConfig,
-  createPool,
+  createPool, resolveCredentials,
   runSqlFile,
 } = require("../../../scripts/run-sql");
 
@@ -66,6 +66,8 @@ async function runSetup(stage, action) {
     console.log(
       `\nConnecting to ${config.POSTGRES_ENDPOINT || config.POSTGRES_HOST}/${config.POSTGRES_DATABASE}...`,
     );
+
+    await resolveCredentials(config); // SSM master on prod; no-op for local/dev/qa
 
     pool = createPool(config);
 
