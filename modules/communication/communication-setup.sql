@@ -166,3 +166,21 @@ alter table device_token alter column recipient_id type varchar(64);
 alter table device_token drop constraint if exists device_token_recipient_type_check;
 alter table device_token add constraint device_token_recipient_type_check
     check (recipient_type in ('employee', 'student', 'family'));
+
+-- message_policy: per-school routing for each message TYPE (key). Each channel is an
+-- independent toggle; 'student_pref' resolves per-recipient through the preference ladder.
+-- Rows are seeded on first read from the code catalog (MESSAGE_TYPES); defaults live in
+-- code, not DDL. God-only screen (communication.config.*).
+create table if not exists message_policy (
+    uuid varchar(12) primary key,
+    school_id varchar(12) not null,
+    message_key varchar(64) not null,
+    in_app boolean not null,
+    sms boolean not null,
+    whatsapp boolean not null,
+    student_pref boolean not null,
+    updatedby_userid varchar(12),
+    updated_at timestamp(0),
+    created_at timestamp(0)
+);
+create unique index if not exists idx_message_policy_key on message_policy(school_id, message_key);

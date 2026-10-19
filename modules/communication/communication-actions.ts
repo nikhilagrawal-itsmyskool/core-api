@@ -5,7 +5,8 @@ import { ACTIONS } from '../../shared/lib/authz-policy';
 // messages the compose flow needs) = communication.message.send; creating/editing templates =
 // communication.template.manage; deleting/restoring a template = the god-only
 // communication.template.delete. Contact-reveal masking on message rows stays row-level.
-const { COMMUNICATION_SEND, COMMUNICATION_TEMPLATE_MANAGE, COMMUNICATION_TEMPLATE_DELETE } = ACTIONS;
+const { COMMUNICATION_SEND, COMMUNICATION_TEMPLATE_MANAGE, COMMUNICATION_TEMPLATE_DELETE,
+  COMMUNICATION_CONFIG_VIEW, COMMUNICATION_CONFIG_MANAGE } = ACTIONS;
 
 export const COMMUNICATION_ACTIONS: Record<string, string> = {
   'communication-lookup-handler.getChannels': COMMUNICATION_SEND,
@@ -24,6 +25,9 @@ export const COMMUNICATION_ACTIONS: Record<string, string> = {
   // In-app notification inbox: POST /notifications is the cross-module fan-out — service
   // tokens bypass requireAction; a human caller needs communication.message.send.
   'notification-handler.create': COMMUNICATION_SEND,
+  // Message-routing policy (god-only Config screen).
+  'message-policy-handler.list': COMMUNICATION_CONFIG_VIEW,
+  'message-policy-handler.update': COMMUNICATION_CONFIG_MANAGE,
 };
 
 // NOT gated by requireAction:

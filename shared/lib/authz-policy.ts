@@ -150,6 +150,10 @@ export const ACTIONS = {
   COMMUNICATION_SEND: 'communication.message.send',
   COMMUNICATION_TEMPLATE_MANAGE: 'communication.template.manage',
   COMMUNICATION_TEMPLATE_DELETE: 'communication.template.delete',
+  // config = the per-school message-routing policy (which channels each message type uses).
+  // GOD-ONLY by default (not granted to any role below).
+  COMMUNICATION_CONFIG_VIEW: 'communication.config.view',
+  COMMUNICATION_CONFIG_MANAGE: 'communication.config.manage',
   // Recruitment/hiring (strict module.resource.action). admin + hiring-incharge; no teacher.
   // candidate = the pipeline (candidate + stages + files + lookups).
   HIRING_CANDIDATE_VIEW: 'hiring.candidate.view',
