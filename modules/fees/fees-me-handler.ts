@@ -5,6 +5,7 @@ import { guardActiveStudent } from '../auth/auth-utils';
 import { resolveStudentEnrollment } from '../../shared/lib/student-context';
 import { istToday } from '../../shared/util/datetime';
 import { feesLedgerService } from './fees-ledger-service';
+import { feesReportService } from './fees-report-service';
 
 const nn = (v: any): number => (v == null ? 0 : Number(v));
 
@@ -62,6 +63,15 @@ class FeesMeHandler {
         type: r.type || null,
       }));
 
+      // Carried-forward arrears: outstanding in any PRIOR academic year (not this one),
+      // shown as a separate, clearly-labelled line so a parent knows the child is carrying
+      // a balance from before. Same cross-year logic the Collect screen's "also owes" banner uses.
+      const byYear = await feesReportService.duesByYear(schoolId, studentId);
+      const priorYears = byYear
+        .filter((r: any) => r.academicYearId !== academicYearId)
+        .map((r: any) => ({ academicYearId: r.academicYearId, yearName: r.yearName || null, amount: nn(r.balance) }));
+      const priorYearsDue = priorYears.reduce((s: number, y: any) => s + y.amount, 0);
+
       // Due-line breakdown the app can list under the summary (overdue first).
       const components = dueLines
         .map((l) => ({
@@ -91,6 +101,8 @@ class FeesMeHandler {
           upcoming: t.upcoming,
           lateFine,
           oldestDueDate,
+          priorYearsDue,
+          priorYears,
           monthEndLabel: t.monthEndLabel,
           quarterEndLabel: t.quarterEndLabel,
           components,
