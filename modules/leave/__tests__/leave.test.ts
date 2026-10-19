@@ -265,14 +265,14 @@ describe("Leave API", () => {
     });
     expect(res.created).toBe(1);
 
-    const inbox = await notificationService.list(schoolId, "employee", emp, {});
+    const inbox = await notificationService.list(schoolId, "employee", [emp], {});
     expect(inbox.unreadCount).toBeGreaterThanOrEqual(1);
     const mine = inbox.items.find((n) => n.key === "test_leave");
     expect(mine).toBeTruthy();
     expect(mine!.title).toBe("Leave approved");
 
-    await notificationService.markRead(schoolId, "employee", emp, mine!.uuid);
-    const after = await notificationService.list(schoolId, "employee", emp, { unreadOnly: true });
+    await notificationService.markRead(schoolId, "employee", [emp], mine!.uuid);
+    const after = await notificationService.list(schoolId, "employee", [emp], { unreadOnly: true });
     expect(after.items.find((n) => n.uuid === mine!.uuid)).toBeFalsy();
   });
 });
