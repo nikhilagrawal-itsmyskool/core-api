@@ -813,14 +813,14 @@ class StudentAdminService {
     const rows = await DB.query(
       singleLineString`
         select sl.username, sl.password, sl.display_name, sl.disabled_features,
-          coalesce(json_agg(json_build_object('id', s.uuid, 'name', s.name, 'className', cur.class_name)
+          coalesce(json_agg(json_build_object('id', s.uuid, 'name', s.name, 'className', cur.class_name, 'rollNumber', cur.roll_number)
             order by s.name) filter (where s.uuid is not null), '[]') as students,
           coalesce(dev.device_count, 0) as device_count,
           dev.last_seen::text as last_seen
         from student_login sl
         left join student s on s.family_unique_number = sl.username and s.school_id = sl.school_id and s.status <> 'deleted'
         left join lateral (
-          select c.name as class_name from student_class sc
+          select c.name as class_name, sc.roll_number from student_class sc
           join academic_year ay on sc.academic_year_id = ay.uuid
           left join class c on c.uuid = sc.class_id
           where sc.student_id = s.uuid and (sc.status is null or sc.status <> 'deleted')
