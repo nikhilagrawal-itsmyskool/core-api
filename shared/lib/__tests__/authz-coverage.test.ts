@@ -10,6 +10,7 @@ import { ASSISTANT_ACTIONS, ASSISTANT_PUBLIC } from '../../../modules/assistant/
 import { STUDENT_ACTIONS, STUDENT_PUBLIC } from '../../../modules/student/student-actions';
 import { TRANSPORT_ACTIONS, TRANSPORT_PUBLIC } from '../../../modules/transport/transport-actions';
 import { TIMETABLE_ACTIONS, TIMETABLE_PUBLIC } from '../../../modules/timetable/timetable-actions';
+import { TIMETABLE_EXT_ACTIONS, TIMETABLE_EXT_PUBLIC } from '../../../modules/timetable-ext/timetable-ext-actions';
 import { LEAVE_ACTIONS, LEAVE_PUBLIC } from '../../../modules/leave/leave-actions';
 import { MEDICAL_ACTIONS, MEDICAL_PUBLIC } from '../../../modules/medical/medical-actions';
 import { LAB_ACTIONS, LAB_PUBLIC } from '../../../modules/lab/lab-actions';
@@ -44,6 +45,7 @@ const MODULES: Array<{ name: string; yml: string; actions: Record<string, string
   { name: 'student', yml: 'modules/student/student-endpoints.yml', actions: STUDENT_ACTIONS, pub: STUDENT_PUBLIC },
   { name: 'transport', yml: 'modules/transport/transport-endpoints.yml', actions: TRANSPORT_ACTIONS, pub: TRANSPORT_PUBLIC },
   { name: 'timetable', yml: 'modules/timetable/timetable-endpoints.yml', actions: TIMETABLE_ACTIONS, pub: TIMETABLE_PUBLIC },
+  { name: 'timetable-ext', yml: 'modules/timetable-ext/timetable-ext-endpoints.yml', actions: TIMETABLE_EXT_ACTIONS, pub: TIMETABLE_EXT_PUBLIC },
   { name: 'leave', yml: 'modules/leave/leave-endpoints.yml', actions: LEAVE_ACTIONS, pub: LEAVE_PUBLIC },
   { name: 'medical', yml: 'modules/medical/medical-endpoints.yml', actions: MEDICAL_ACTIONS, pub: MEDICAL_PUBLIC },
   { name: 'lab', yml: 'modules/lab/lab-endpoints.yml', actions: LAB_ACTIONS, pub: LAB_PUBLIC },

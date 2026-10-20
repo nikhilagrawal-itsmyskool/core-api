@@ -608,52 +608,6 @@
           method: post
           cors: true
 
-  # Hand-authored (manual) master: create draft, load, fill/clear a cell, activate
-  createManualMaster:
-    handler: generation-handler.createManualMaster
-    name: ${self:service}-create-manual-master
-    events:
-      - http:
-          path: published/manual
-          method: post
-          cors: true
-
-  createPublishedEntry:
-    handler: generation-handler.createEntry
-    name: ${self:service}-create-entry
-    events:
-      - http:
-          path: published/entries
-          method: post
-          cors: true
-
-  deletePublishedEntry:
-    handler: generation-handler.deleteEntry
-    name: ${self:service}-delete-entry
-    events:
-      - http:
-          path: published/entries/{id}
-          method: delete
-          cors: true
-
-  getPublishedById:
-    handler: generation-handler.getPublishedById
-    name: ${self:service}-get-published-by-id
-    events:
-      - http:
-          path: published/{id}
-          method: get
-          cors: true
-
-  activateDraft:
-    handler: generation-handler.activateDraft
-    name: ${self:service}-activate-draft
-    events:
-      - http:
-          path: published/{id}/activate
-          method: post
-          cors: true
-
   # Teacher constraints
   list-teacher-constraints:
     handler: teacher-constraint-handler.list

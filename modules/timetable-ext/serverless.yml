@@ -1,0 +1,41 @@
+provider:
+  name: aws
+  region: ap-south-1
+  stage: ${opt:stage, 'dev'}
+  # Keep the stack lean (no versions/aliases — no provisioned concurrency here).
+  versionFunctions: false
+  environment:
+    ${file(../../configs/${self:provider.stage}/${self:provider.stage}.yml)}
+  $<<: ${file(../global-config-${self:provider.stage}.yml):provider}
+
+custom:
+  prefix: itsmyskool
+  baseServiceName: timetable-ext-service
+  fullServiceName: ${self:custom.prefix}-${self:custom.baseServiceName}
+  customDomain:
+   basePath: 'timetable-ext'
+  # Second timetable stack. The primary `timetable` service is at CloudFormation's hard
+  # 500-resource/stack limit (~90 endpoints), so new timetable endpoints live here under
+  # /timetable-ext. Handlers import the existing service logic from ../timetable — no
+  # business logic is duplicated.
+  splitStacks:
+    perFunction: true
+    perType: false
+    perGroupFunction: false
+  $<<: ${file(../global-config-${self:provider.stage}.yml):custom}
+
+service: ${self:provider.stage}-${self:custom.fullServiceName}
+configValidationMode: off
+
+plugins:
+  - ../../plugins/serverless-merge-config.js
+  - serverless-webpack
+  - serverless-offline
+  - serverless-domain-manager
+  - ../../plugins/serverless-cors-defaults.js
+  - ../../plugins/serverless-authorizer.js
+  - serverless-plugin-split-stacks
+
+functions: ${file(timetable-ext-endpoints.yml)}
+
+$<<: ${file(../global-config-${self:provider.stage}.yml):resources}

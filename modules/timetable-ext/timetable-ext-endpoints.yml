@@ -1,0 +1,39 @@
+  # ---- Health (authorizer-exempt) ----
+  health:
+    handler: health-handler.health
+    events:
+      - http: { path: 'health', method: get, cors: true }
+
+  # ---- Hand-authored (manual) master (overflow from the timetable stack) ----
+  # Business logic lives in ../timetable/generation-service; this service only exposes the
+  # endpoints (the timetable stack is at the 500-resource ceiling). Paths mirror the primary
+  # module's /published/* shape, under the /timetable-ext base path.
+  createManualMaster:
+    handler: timetable-ext-handler.createManualMaster
+    name: ${self:service}-create-manual-master
+    events:
+      - http: { path: 'published/manual', method: post, cors: true }
+
+  createPublishedEntry:
+    handler: timetable-ext-handler.createEntry
+    name: ${self:service}-create-entry
+    events:
+      - http: { path: 'published/entries', method: post, cors: true }
+
+  deletePublishedEntry:
+    handler: timetable-ext-handler.deleteEntry
+    name: ${self:service}-delete-entry
+    events:
+      - http: { path: 'published/entries/{id}', method: delete, cors: true }
+
+  getPublishedById:
+    handler: timetable-ext-handler.getPublishedById
+    name: ${self:service}-get-published-by-id
+    events:
+      - http: { path: 'published/{id}', method: get, cors: true }
+
+  activateDraft:
+    handler: timetable-ext-handler.activateDraft
+    name: ${self:service}-activate-draft
+    events:
+      - http: { path: 'published/{id}/activate', method: post, cors: true }

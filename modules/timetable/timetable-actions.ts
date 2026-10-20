@@ -53,9 +53,6 @@ export const TIMETABLE_ACTIONS: Record<string, string> = {
   'generation-handler.exportRun': V, 'generation-handler.getPublished': V, 'generation-handler.listPublished': V,
   'generation-handler.feasibility': M, 'generation-handler.generate': M, 'generation-handler.publish': M,
   'generation-handler.validateMove': M, 'generation-handler.moveEntry': M, 'generation-handler.editEntry': M, 'generation-handler.swapEntries': M,
-  // Hand-authored (manual) master: load=view, create/fill/clear/activate=manage
-  'generation-handler.getPublishedById': V,
-  'generation-handler.createManualMaster': M, 'generation-handler.createEntry': M, 'generation-handler.deleteEntry': M, 'generation-handler.activateDraft': M,
 
   // Teacher constraints
   'teacher-constraint-handler.list': V, 'teacher-constraint-handler.getById': V,

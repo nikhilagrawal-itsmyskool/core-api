@@ -425,12 +425,17 @@ helper the move/swap editor uses (class + teacher double-book), so a teacher-les
 Mother-teacher classes keep cells label-only; the class teacher shows in the grid header (from the
 existing `class_teacher` link), not stamped on each cell.
 
-- `POST   /timetable/published/manual` — `{ academicYearId, wingId?, configId }` → `{ publishedTimetableId }` (draft)
-- `GET    /timetable/published/{id}` — a specific master (draft or active) + entries + config (editor load)
-- `POST   /timetable/published/entries` — `{ publishedTimetableId, classId, dayOfWeek, timeSlotId, label?, subjectId?, teacherId? }`
-- `DELETE /timetable/published/entries/{id}?publishedTimetableId=` — clear a cell
-- `PUT    /timetable/published/entries/{id}` — edit a cell (now also accepts `label`)
-- `POST   /timetable/published/{id}/activate` — `{ effectiveFrom? }` draft → active
+The primary `timetable` stack is at CloudFormation's 500-resource limit, so the NEW
+manual endpoints live in a **second service, `timetable-ext`** (under `/timetable-ext`,
+handlers import `generationService` from this module — no duplicated logic; same split as
+`fees-ext`). Only the pre-existing cell `edit` stays on the primary stack.
+
+- `POST   /timetable-ext/published/manual` — `{ academicYearId, wingId?, configId }` → `{ publishedTimetableId }` (draft)
+- `GET    /timetable-ext/published/{id}` — a specific master (draft or active) + entries + config (editor load)
+- `POST   /timetable-ext/published/entries` — `{ publishedTimetableId, classId, dayOfWeek, timeSlotId, label?, subjectId?, teacherId? }`
+- `DELETE /timetable-ext/published/entries/{id}?publishedTimetableId=` — clear a cell
+- `POST   /timetable-ext/published/{id}/activate` — `{ effectiveFrom? }` draft → active
+- `PUT    /timetable/published/entries/{id}` — edit a cell on the PRIMARY stack (now also accepts `label`)
 - `label` flows through `/published`, `/now`, `/today`, `/me/week` (`HappeningSlot.entries[].label`).
 - Seed/bootstrap for pre-primary: `modules/timetable/scripts/seed-preprimary.js` (builds the
   "Pre-Primary" config + wing + master from the PDF grids; idempotent; hand-editable afterward).
