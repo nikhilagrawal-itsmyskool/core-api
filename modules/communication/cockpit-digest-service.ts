@@ -1,7 +1,7 @@
 // Director's "School Pulse" daily WhatsApp digest.
 //
 // A once-a-day briefing (fired by the `cockpit-digest` EventBridge schedule at
-// 08:30 IST) that mirrors the four most glanceable cards of the admin-portal
+// 1 PM IST) that mirrors the four most glanceable cards of the admin-portal
 // Director's Cockpit and sends them to the director over WhatsApp via the
 // approved `school_pulse_daily` template.
 //
@@ -85,22 +85,24 @@ function composeAssembly(pulse: any, today: string): string {
   const dueMin = pulse.dueTime
     ? (() => { const [h, m] = pulse.dueTime.split(':').map(Number); return h * 60 + m; })()
     : null;
-  // Most recent assembly day up to today (today only counts once it's signed, since
-  // this runs in the morning before grading). checklist is ascending by date.
-  let pick: any = null;
-  for (const e of pulse.checklist) {
-    if (e.date < today || (e.date === today && e.signedAt)) pick = e;
-  }
+  // Runs early afternoon (1 PM IST), so today's assembly is normally already done —
+  // prefer today's row (an assembly day always has a checklist row, signed or not) and
+  // report it directly. Only fall back to the most recent prior assembly day when today
+  // isn't an assembly day (weekend/holiday). checklist is ascending by date.
+  const todayRow = pulse.checklist.find((e: any) => e.date === today);
+  let pick: any = todayRow || null;
+  if (!pick) for (const e of pulse.checklist) if (e.date < today) pick = e;
   if (!pick) pick = pulse.checklist[pulse.checklist.length - 1];
   if (!pick) return 'no recent assembly';
+  const isToday = pick.date === today;
 
-  const label = `Last assembly (${dayLabel(pick.date)})`;
   const g = (pulse.grading || []).find((x: any) => x.date === pick.date);
   const gradeTxt = g && g.expected > 0 ? `, ${g.submitted}/${g.expected} graded` : '';
-  if (!pick.signedAt) return `${label}: not signed${gradeTxt}`;
+  const prefix = isToday ? '' : `last held ${dayLabel(pick.date)} — `;
+  if (!pick.signedAt) return `${prefix}${isToday ? 'not signed yet' : 'not signed'}${gradeTxt}`;
   const m = istMinutes(pick.signedAt);
   const timing = dueMin == null ? '' : m > dueMin ? `, ${m - dueMin}m late` : ', on time';
-  return `${label}: signed ${hhmm(m)}${timing}${gradeTxt}`;
+  return `${prefix}signed ${hhmm(m)}${timing}${gradeTxt}`;
 }
 
 function composeLeave(leave: any, today: string): { out: string; pending: string } {

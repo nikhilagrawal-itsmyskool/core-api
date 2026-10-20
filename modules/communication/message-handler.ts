@@ -134,7 +134,7 @@ class MessageHandler {
   };
 
   // Internal: the Director's "School Pulse" daily digest. Invoked by an EventBridge
-  // schedule (cron 08:30 IST), not an HTTP request. Composes the cockpit cards and
+  // schedule (cron 1 PM IST), not an HTTP request. Composes the cockpit cards and
   // enqueues a WhatsApp to every holder of the education_director role. No-op until
   // that role exists, so it's inert in dev/local and in prod until a director is wired up.
   public cockpitDigest = async (_event: ApiEvent, context: ApiContext, callback: ApiCallback) => {

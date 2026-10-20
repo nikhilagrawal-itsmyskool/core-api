@@ -1,27 +1,24 @@
 import { buildDigestContext } from '../cockpit-digest-service';
 
-// Fixed "today": Fri 16 Oct 2026. due time 07:30 IST (dueMin 450).
+// Fixed "today": Fri 16 Oct 2026. due time 07:30 IST (dueMin 450). The digest runs at
+// 1 PM IST, so the assembly card reports TODAY when today is an assembly day, and only
+// falls back to the most recent prior day on a non-assembly day (weekend/holiday).
 const TODAY = '2026-10-16';
 
-// Thu 15 Oct signed at 07:20 IST (UTC 01:50) — on time.
-const signedOnTime = '2026-10-15T01:50:00Z';
-// signed 07:45 IST (UTC 02:15) — 15 min late.
-const signedLate = '2026-10-15T02:15:00Z';
+// Today (16 Oct) signed 07:20 IST (UTC 01:50) on time / 07:45 IST (UTC 02:15) 15 min late.
+const signedTodayOnTime = '2026-10-16T01:50:00Z';
+const signedTodayLate = '2026-10-16T02:15:00Z';
+// Thu 15 Oct signed 07:20 IST — used for the off-day fallback case.
+const signedPrevOnTime = '2026-10-15T01:50:00Z';
 
 describe('cockpit digest — buildDigestContext', () => {
-  it('composes a full happy-path briefing', () => {
+  it('composes a full happy-path briefing (today signed, on time)', () => {
     const ctx = buildDigestContext(
       {
         pulse: {
           dueTime: '07:30',
-          checklist: [
-            { date: '2026-10-15', house: 'Red', signedAt: signedOnTime },
-            { date: '2026-10-16', house: 'Red', signedAt: null },
-          ],
-          grading: [
-            { date: '2026-10-15', expected: 5, submitted: 5, missing: [] },
-            { date: '2026-10-16', expected: 5, submitted: 0, missing: [] },
-          ],
+          checklist: [{ date: '2026-10-16', house: 'Red', signedAt: signedTodayOnTime }],
+          grading: [{ date: '2026-10-16', expected: 5, submitted: 5, missing: [] }],
         },
         leave: {
           pending: 3,
@@ -39,8 +36,8 @@ describe('cockpit digest — buildDigestContext', () => {
       TODAY,
     );
     expect(ctx.date).toBe('16 Oct 2026');
-    // Most recent completed assembly day is Thu 15 (today not yet signed).
-    expect(ctx.assembly).toBe('Last assembly (Thu 15): signed 07:20, on time, 5/5 graded');
+    // Today is an assembly day and already signed → reported directly, no "last held".
+    expect(ctx.assembly).toBe('signed 07:20, on time, 5/5 graded');
     expect(ctx.leaveOut).toBe('2 (Asha, Ravi)');
     expect(ctx.leavePending).toBe('3');
     expect(ctx.feedback).toBe('5 open, oldest 9d');
@@ -52,8 +49,8 @@ describe('cockpit digest — buildDigestContext', () => {
       {
         pulse: {
           dueTime: '07:30',
-          checklist: [{ date: '2026-10-15', signedAt: signedLate }],
-          grading: [{ date: '2026-10-15', expected: 4, submitted: 4, missing: [] }],
+          checklist: [{ date: '2026-10-16', signedAt: signedTodayLate }],
+          grading: [{ date: '2026-10-16', expected: 4, submitted: 4, missing: [] }],
         },
         leave: null,
         flow: null,
@@ -61,16 +58,16 @@ describe('cockpit digest — buildDigestContext', () => {
       },
       TODAY,
     );
-    expect(ctx.assembly).toBe('Last assembly (Thu 15): signed 07:45, 15m late, 4/4 graded');
+    expect(ctx.assembly).toBe('signed 07:45, 15m late, 4/4 graded');
   });
 
-  it('surfaces a recent missed sign-off', () => {
+  it("flags today's assembly not signed yet by send time", () => {
     const ctx = buildDigestContext(
       {
         pulse: {
           dueTime: '07:30',
-          checklist: [{ date: '2026-10-15', signedAt: null }],
-          grading: [{ date: '2026-10-15', expected: 5, submitted: 2, missing: [] }],
+          checklist: [{ date: '2026-10-16', signedAt: null }],
+          grading: [{ date: '2026-10-16', expected: 5, submitted: 2, missing: [] }],
         },
         leave: null,
         flow: null,
@@ -78,7 +75,25 @@ describe('cockpit digest — buildDigestContext', () => {
       },
       TODAY,
     );
-    expect(ctx.assembly).toBe('Last assembly (Thu 15): not signed, 2/5 graded');
+    expect(ctx.assembly).toBe('not signed yet, 2/5 graded');
+  });
+
+  it('falls back to the last held assembly on a non-assembly day', () => {
+    const ctx = buildDigestContext(
+      {
+        pulse: {
+          dueTime: '07:30',
+          // No row for today (16th) → today is not an assembly day; fall back to Thu 15.
+          checklist: [{ date: '2026-10-15', signedAt: signedPrevOnTime }],
+          grading: [{ date: '2026-10-15', expected: 9, submitted: 5, missing: [] }],
+        },
+        leave: null,
+        flow: null,
+        overview: null,
+      },
+      TODAY,
+    );
+    expect(ctx.assembly).toBe('last held Thu 15 — signed 07:20, on time, 5/9 graded');
   });
 
   it('shows the all-clear states', () => {
