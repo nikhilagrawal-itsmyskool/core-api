@@ -55,13 +55,24 @@ class NotificationService {
     }
     if (!ids.length || !input.title) return { created: 0 };
     const now = new Date();
-    for (const rid of ids) {
+    const title = input.title.slice(0, 128);
+    // Batched multi-row insert (chunked to stay well under Postgres' param cap) — broadcasts
+    // (e.g. a school-closure to every student) write synchronously, so a per-row loop is too slow.
+    const COLS = 11;
+    const CHUNK = 500;
+    for (let i = 0; i < ids.length; i += CHUNK) {
+      const slice = ids.slice(i, i + CHUNK);
+      const tuples: string[] = [];
+      const params: any[] = [];
+      slice.forEach((rid, j) => {
+        const b = j * COLS;
+        tuples.push(`($${b + 1},$${b + 2},$${b + 3},$${b + 4},$${b + 5},$${b + 6},$${b + 7},$${b + 8},$${b + 9},$${b + 10},$${b + 11})`);
+        params.push(generateShortUuid(12), input.schoolId, input.recipientType, rid, input.key || null, title,
+          input.body || null, input.entityType || null, input.entityId || null, input.userId || "system", now);
+      });
       await DB.query(
-        singleLineString`insert into notification
-          (uuid, school_id, recipient_type, recipient_id, key, title, body, entity_type, entity_id, createdby_userid, created_at)
-          values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
-        [generateShortUuid(12), input.schoolId, input.recipientType, rid, input.key || null, input.title.slice(0, 128),
-          input.body || null, input.entityType || null, input.entityId || null, input.userId || "system", now],
+        `insert into notification (uuid, school_id, recipient_type, recipient_id, key, title, body, entity_type, entity_id, createdby_userid, created_at) values ${tuples.join(",")}`,
+        params,
       );
     }
     // Best-effort push; never blocks or throws.

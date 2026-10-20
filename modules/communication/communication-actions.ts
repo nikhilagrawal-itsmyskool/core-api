@@ -25,8 +25,9 @@ export const COMMUNICATION_ACTIONS: Record<string, string> = {
   // In-app notification inbox: POST /notifications is the cross-module fan-out — service
   // tokens bypass requireAction; a human caller needs communication.message.send.
   'notification-handler.create': COMMUNICATION_SEND,
-  // Message-routing policy (god-only Config screen).
+  // Message-type registry (god-only Config screen).
   'message-policy-handler.list': COMMUNICATION_CONFIG_VIEW,
+  'message-policy-handler.create': COMMUNICATION_CONFIG_MANAGE,
   'message-policy-handler.update': COMMUNICATION_CONFIG_MANAGE,
 };
 

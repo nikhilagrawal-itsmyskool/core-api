@@ -27,10 +27,16 @@ export async function notifyClosureParents(
       method: "POST",
       headers: commHeaders(schoolCode),
       body: JSON.stringify({
-        templateKey: CLOSURE_TEMPLATE_KEY,
+        // Policy lane: messageKey routes per the Config screen (in-app + SMS/WhatsApp/preference).
+        messageKey: CLOSURE_TEMPLATE_KEY,
         source: "academic-calendar",
         audience: { students: { all: true } },
         context: { period, reason },
+        inApp: {
+          title: "School closure",
+          body: `School will remain closed ${period}${reason ? ` — ${reason}` : ""}.`,
+          entityType: "academic-calendar",
+        },
       }),
     });
     if (!res.ok) {

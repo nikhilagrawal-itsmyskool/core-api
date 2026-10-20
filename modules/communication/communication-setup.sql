@@ -184,3 +184,8 @@ create table if not exists message_policy (
     created_at timestamp(0)
 );
 create unique index if not exists idx_message_policy_key on message_policy(school_id, message_key);
+-- Registry metadata: display label/group + the template key this type sends on
+-- (defaults to message_key; explicit + repointable). Added after the base create.
+alter table message_policy add column if not exists label varchar(128);
+alter table message_policy add column if not exists group_name varchar(64);
+alter table message_policy add column if not exists template_key varchar(64);

@@ -130,6 +130,11 @@ export interface SendMessageRequest {
   scheduledAt?: string;
   forceChannel?: Channel;
   source?: string;
+  // Policy lane: when a module sends a logical event it passes messageKey (the message-type
+  // registry key) INSTEAD of templateKey; dispatch() reads the policy and fans out. inApp is
+  // the content for the synchronous in-app leg. Compose/OTP/cockpit keep using templateKey.
+  messageKey?: string;
+  inApp?: { title: string; body?: string; entityType?: string; entityId?: string };
 }
 
 export interface PreviewRequest {

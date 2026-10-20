@@ -38,7 +38,7 @@
           method: get
           cors: true
 
-  # ---- Message-routing policy (god-only Config screen) ----
+  # ---- Message-type registry (god-only Config screen) ----
   list-message-policies:
     handler: message-policy-handler.list
     name: ${self:service}-list-message-policies
@@ -46,6 +46,15 @@
       - http:
           path: config/message-policies
           method: get
+          cors: true
+
+  create-message-policy:
+    handler: message-policy-handler.create
+    name: ${self:service}-create-message-policy
+    events:
+      - http:
+          path: config/message-policies
+          method: post
           cors: true
 
   update-message-policy:

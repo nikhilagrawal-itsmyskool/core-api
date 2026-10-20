@@ -17,10 +17,19 @@ export async function notifyReceipt(
         Authorization: serviceAuthHeader({ name: 'fees' }),
       },
       body: JSON.stringify({
-        templateKey: FEE_RECEIPT_TEMPLATE_KEY,
+        // Policy lane: messageKey (= the registry key) lets communication route per the
+        // Config screen (in-app + SMS/WhatsApp/preference); inApp is the in-app content.
+        messageKey: FEE_RECEIPT_TEMPLATE_KEY,
         source: 'fees',
         audience: { students: { studentIds: [studentId] } },
         context,
+        inApp: {
+          title: 'Fee receipt',
+          body: [`Receipt ${context.receiptNo ?? ''}`.trim(), context.amount != null ? `₹${context.amount} received` : null]
+            .filter(Boolean).join(' · '),
+          entityType: 'fee_receipt',
+          entityId: context.receiptNo != null ? String(context.receiptNo) : undefined,
+        },
       }),
     });
     if (!res.ok) { console.error(`[fees] receipt notify failed: HTTP ${res.status}`); return null; }

@@ -110,10 +110,18 @@ export async function notifyAbsences(
         Authorization: serviceAuthHeader({ name: 'attendance' }),
       },
       body: JSON.stringify({
-        templateKey: ABSENT_TEMPLATE_KEY,
+        // Policy lane: messageKey (= the registry key) lets communication route per the
+        // Config screen (in-app + SMS/WhatsApp/preference); inApp is the in-app content.
+        messageKey: ABSENT_TEMPLATE_KEY,
         source: 'attendance',
         audience: { students: { studentIds: absentStudentIds } },
         context,
+        inApp: {
+          title: 'Marked absent today',
+          body: `Absent on ${context.date ?? 'today'}${context.className ? ` · ${context.className}` : ''}`,
+          entityType: 'attendance',
+          entityId: context.date != null ? String(context.date) : undefined,
+        },
       }),
     });
     if (!res.ok) {

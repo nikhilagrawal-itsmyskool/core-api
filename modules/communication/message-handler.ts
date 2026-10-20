@@ -18,6 +18,13 @@ class MessageHandler {
       if (!ctx) return;
       const body = parseBody<SendMessageRequest>(event, callback);
       if (!body) return;
+      // Module events carry a messageKey → policy lane (in-app + external per the registry).
+      // Compose / OTP / cockpit carry a templateKey → explicit send, untouched.
+      if (body.messageKey) {
+        const result = await messageService.dispatch(ctx.schoolId, body, ctx.userId);
+        ResponseBuilder.ok({ ...result, status: result.skipped ? 'skipped' : 'queued' }, callback);
+        return;
+      }
       const jobId = await messageService.enqueue(ctx.schoolId, body, ctx.userId);
       ResponseBuilder.ok({ jobId, status: 'queued' }, callback);
     } catch (err: any) {

@@ -9,6 +9,8 @@ import {
 import { resolveLadder, resolveVariables, studentNumbers, employeeNumbers, autoContext, schoolContext, firstName } from './communication-util';
 import { templateService } from './template-service';
 import { getProvider } from './providers';
+import { messagePolicyService } from './message-policy-service';
+import { notificationService } from './notification-service';
 const { generateShortUuid } = require('../../shared/util/generate-uuid.js');
 
 // Single-row insert for message_recipient, shared by the expand transaction.
@@ -67,6 +69,62 @@ class MessageService {
       ],
     );
     return uuid;
+  }
+
+  // Policy lane: a module event (req.messageKey) → read the message-type registry and fan
+  // out. In-app is written synchronously here; external goes through the normal queue with a
+  // policy-derived force_channel. Unknown key → skip + log (never auto-created). Dedupe:
+  // studentPref (ladder) supersedes explicit sms/whatsapp so no recipient is double-sent.
+  public async dispatch(
+    schoolId: string, req: SendMessageRequest, userId: string,
+  ): Promise<{ skipped?: boolean; reason?: string; jobIds: string[]; inAppCreated: number }> {
+    const type = await messagePolicyService.resolveType(schoolId, req.messageKey!);
+    if (!type) {
+      console.warn(`[communication] dispatch: unknown message type "${req.messageKey}" — not sent`);
+      return { skipped: true, reason: 'unknown message type', jobIds: [], inAppCreated: 0 };
+    }
+
+    let inAppCreated = 0;
+    if (type.inApp && req.inApp && req.inApp.title) {
+      const ids = await this.resolveRecipientIds(schoolId, req.audience);
+      const common = { schoolId, key: type.key, title: req.inApp.title, body: req.inApp.body, entityType: req.inApp.entityType, entityId: req.inApp.entityId, userId };
+      if (ids.students.length) inAppCreated += (await notificationService.create({ ...common, recipientType: 'student', recipientIds: ids.students })).created;
+      if (ids.employees.length) inAppCreated += (await notificationService.create({ ...common, recipientType: 'employee', recipientIds: ids.employees })).created;
+    }
+
+    // External directives: ladder (null) when studentPref, else one per explicit channel.
+    const directives: (Channel | undefined)[] = [];
+    if (type.studentPref) directives.push(undefined);
+    else {
+      if (type.sms) directives.push('sms');
+      if (type.whatsapp) directives.push('whatsapp');
+    }
+    const jobIds: string[] = [];
+    for (const forceChannel of directives) {
+      jobIds.push(await this.enqueue(schoolId, {
+        templateKey: type.templateKey,
+        language: req.language,
+        audience: req.audience,
+        context: req.context,
+        forceChannel,
+        source: req.source,
+      }, userId));
+    }
+    return { jobIds, inAppCreated };
+  }
+
+  // Audience → distinct student/employee ids, for the in-app leg (reuses the external
+  // audience resolver so class / all audiences expand the same way).
+  public async resolveRecipientIds(schoolId: string, audience?: AudienceSpec): Promise<{ students: string[]; employees: string[] }> {
+    const targets = await this.resolveTargets(schoolId, audience);
+    const students = new Set<string>();
+    const employees = new Set<string>();
+    for (const t of targets) {
+      if (!t.recipientId) continue;
+      if (t.recipientType === 'student') students.add(t.recipientId);
+      else if (t.recipientType === 'employee') employees.add(t.recipientId);
+    }
+    return { students: [...students], employees: [...employees] };
   }
 
   public async list(schoolId: string): Promise<MessageJob[]> {
