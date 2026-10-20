@@ -191,6 +191,13 @@ export const ACTIONS = {
   HOMEWORK_DAY_VIEW: 'homework.day.view',
   HOMEWORK_DAY_POST: 'homework.day.post',
   HOMEWORK_DAY_MANAGE: 'homework.day.manage',
+  // Outreach "Moments" — parent-facing photo+text feed (strict module.resource.action).
+  // moment.post = a class teacher posts/publishes their OWN class's moments (the /me surface,
+  // scoped by canPostForClass + own-authored); moment.manage = admin compose to any audience;
+  // moment.view = admin reads. The parent/student app feed self-authorizes (PUBLIC in the manifest).
+  OUTREACH_MOMENT_VIEW: 'outreach.moment.view',
+  OUTREACH_MOMENT_POST: 'outreach.moment.post',
+  OUTREACH_MOMENT_MANAGE: 'outreach.moment.manage',
   ACADEMIC_CALENDAR_VIEW: 'academic-calendar.view',
   ACADEMIC_CALENDAR_MANAGE: 'academic-calendar.manage',
   ACADEMIC_CALENDAR_CONFIG_MANAGE: 'academic-calendar.config.manage',
@@ -332,6 +339,9 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
     'homework.day.view',
     'homework.day.post',
     'homework.day.manage',
+    'outreach.moment.view',
+    'outreach.moment.post',
+    'outreach.moment.manage',
     'academic-calendar.view',
     'academic-calendar.manage',
     // Examination (explicit, no wildcard): admin runs exams + report cards, views progress.
@@ -383,6 +393,11 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
   ],
   // Class teacher: additive to `teacher` — may MARK attendance and POST homework.
   'class-teacher': ['attendance.session.mark', 'homework.day.post'],
+  // Moments in-charge: owns the parent-facing Moments feed end to end — compose to any
+  // audience (whole school / grade / class), publish/unpublish. Admin-scoped-to-module, like
+  // the other *-incharge roles. NOT class-teacher related; the PWA Moments screen is for
+  // god / admin / moments-incharge only.
+  'moments-incharge': ['outreach.moment.view', 'outreach.moment.post', 'outreach.moment.manage'],
   // Club in-charge: READ-ONLY by default across the three club resources (see clubs, the
   // activity bank, and the plan board). Authoring/approve/review/planning are god-first;
   // god grants this role more via the Permissions grid as each school decides.

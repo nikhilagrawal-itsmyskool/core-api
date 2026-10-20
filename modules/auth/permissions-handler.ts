@@ -289,6 +289,18 @@ const CATALOGS: Record<string, Catalog> = {
       { action: ACTIONS.HOMEWORK_DAY_MANAGE, label: 'Oversight edits + class-teacher mapping override' },
     ],
   },
+  outreach: {
+    module: 'outreach',
+    roles: [
+      { role: 'admin', label: 'Admin' },
+      { role: 'moments-incharge', label: 'Moments In-charge' },
+    ],
+    actions: [
+      { action: ACTIONS.OUTREACH_MOMENT_VIEW, label: 'View all moments (admin oversight)' },
+      { action: ACTIONS.OUTREACH_MOMENT_POST, label: "Post / publish own class's moments" },
+      { action: ACTIONS.OUTREACH_MOMENT_MANAGE, label: 'Compose & publish to any audience' },
+    ],
+  },
   'academic-calendar': {
     module: 'academic-calendar',
     roles: [
