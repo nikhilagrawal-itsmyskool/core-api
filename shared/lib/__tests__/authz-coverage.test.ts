@@ -22,6 +22,7 @@ import { SHOP_ACTIONS, SHOP_PUBLIC } from '../../../modules/shop/shop-actions';
 import { FINE_ACTIONS, FINE_PUBLIC } from '../../../modules/fine/fine-actions';
 import { HIRING_ACTIONS, HIRING_PUBLIC } from '../../../modules/hiring/hiring-actions';
 import { HOMEWORK_ACTIONS, HOMEWORK_PUBLIC } from '../../../modules/homework/homework-actions';
+import { OUTREACH_ACTIONS, OUTREACH_PUBLIC } from '../../../modules/outreach/outreach-actions';
 import { ACADEMIC_CALENDAR_ACTIONS, ACADEMIC_CALENDAR_PUBLIC } from '../../../modules/academic-calendar/academic-calendar-actions';
 import { FEEDBACK_ACTIONS, FEEDBACK_PUBLIC } from '../../../modules/feedback/feedback-actions';
 import { PROGRAMME_ACTIONS, PROGRAMME_PUBLIC } from '../../../modules/programmes/programmes-actions';
@@ -55,6 +56,7 @@ const MODULES: Array<{ name: string; yml: string; actions: Record<string, string
   { name: 'fine', yml: 'modules/fine/fine-endpoints.yml', actions: FINE_ACTIONS, pub: FINE_PUBLIC },
   { name: 'hiring', yml: 'modules/hiring/hiring-endpoints.yml', actions: HIRING_ACTIONS, pub: HIRING_PUBLIC },
   { name: 'homework', yml: 'modules/homework/homework-endpoints.yml', actions: HOMEWORK_ACTIONS, pub: HOMEWORK_PUBLIC },
+  { name: 'outreach', yml: 'modules/outreach/outreach-endpoints.yml', actions: OUTREACH_ACTIONS, pub: OUTREACH_PUBLIC },
   { name: 'academic-calendar', yml: 'modules/academic-calendar/academic-calendar-endpoints.yml', actions: ACADEMIC_CALENDAR_ACTIONS, pub: ACADEMIC_CALENDAR_PUBLIC },
   { name: 'feedback', yml: 'modules/feedback/feedback-endpoints.yml', actions: FEEDBACK_ACTIONS, pub: FEEDBACK_PUBLIC },
   { name: 'programmes', yml: 'modules/programmes/programmes-endpoints.yml', actions: PROGRAMME_ACTIONS, pub: PROGRAMME_PUBLIC },

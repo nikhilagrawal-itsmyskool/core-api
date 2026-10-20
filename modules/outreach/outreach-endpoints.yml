@@ -1,0 +1,227 @@
+  # Health check
+  health:
+    handler: health-handler.health
+    events:
+      - http:
+          path: health
+          method: get
+          cors: true
+
+  # ── Admin / compose (X-School-Code + JWT) ──────────────────────────────────
+  create-moment:
+    handler: outreach-handler.createMoment
+    name: ${self:service}-create-moment
+    events:
+      - http:
+          path: moments
+          method: post
+          cors: true
+
+  list-moments:
+    handler: outreach-handler.listMoments
+    name: ${self:service}-list-moments
+    memorySize: 512
+    timeout: 20
+    events:
+      - http:
+          path: moments
+          method: get
+          cors: true
+
+  get-moment:
+    handler: outreach-handler.getMoment
+    name: ${self:service}-get-moment
+    memorySize: 512
+    timeout: 20
+    events:
+      - http:
+          path: moments/{id}
+          method: get
+          cors: true
+
+  update-moment:
+    handler: outreach-handler.updateMoment
+    name: ${self:service}-update-moment
+    events:
+      - http:
+          path: moments/{id}
+          method: put
+          cors: true
+
+  add-photo:
+    handler: outreach-handler.addPhoto
+    name: ${self:service}-add-photo
+    memorySize: 512
+    timeout: 20
+    events:
+      - http:
+          path: moments/{id}/photos
+          method: post
+          cors: true
+
+  remove-photo:
+    handler: outreach-handler.removePhoto
+    name: ${self:service}-remove-photo
+    events:
+      - http:
+          path: moments/{id}/photos/{photoId}
+          method: delete
+          cors: true
+
+  get-photo-image:
+    handler: outreach-handler.getPhotoImage
+    name: ${self:service}-get-photo-image
+    memorySize: 512
+    timeout: 20
+    events:
+      - http:
+          path: moments/{id}/photos/{photoId}/image
+          method: get
+          cors: true
+
+  publish-moment:
+    handler: outreach-handler.publish
+    name: ${self:service}-publish-moment
+    events:
+      - http:
+          path: moments/{id}/publish
+          method: post
+          cors: true
+
+  unpublish-moment:
+    handler: outreach-handler.unpublish
+    name: ${self:service}-unpublish-moment
+    events:
+      - http:
+          path: moments/{id}/unpublish
+          method: post
+          cors: true
+
+  get-audit:
+    handler: outreach-handler.getAudit
+    name: ${self:service}-get-audit
+    events:
+      - http:
+          path: moments/{id}/audit
+          method: get
+          cors: true
+
+  audience-options:
+    handler: outreach-handler.audienceOptions
+    name: ${self:service}-audience-options
+    events:
+      - http:
+          path: audience-options
+          method: get
+          cors: true
+
+  # ── Teacher PWA (resolveEmployee, own-class via canPostForClass) ───────────
+  me-classes:
+    handler: outreach-me-handler.myClasses
+    name: ${self:service}-me-classes
+    events:
+      - http:
+          path: me/classes
+          method: get
+          cors: true
+
+  me-posted:
+    handler: outreach-me-handler.posted
+    name: ${self:service}-me-posted
+    memorySize: 512
+    timeout: 20
+    events:
+      - http:
+          path: me/posted
+          method: get
+          cors: true
+
+  me-create-moment:
+    handler: outreach-me-handler.createMoment
+    name: ${self:service}-me-create-moment
+    events:
+      - http:
+          path: me/moments
+          method: post
+          cors: true
+
+  me-add-photo:
+    handler: outreach-me-handler.addPhoto
+    name: ${self:service}-me-add-photo
+    memorySize: 512
+    timeout: 20
+    events:
+      - http:
+          path: me/moments/{id}/photos
+          method: post
+          cors: true
+
+  me-remove-photo:
+    handler: outreach-me-handler.removePhoto
+    name: ${self:service}-me-remove-photo
+    events:
+      - http:
+          path: me/moments/{id}/photos/{photoId}
+          method: delete
+          cors: true
+
+  me-publish-moment:
+    handler: outreach-me-handler.publish
+    name: ${self:service}-me-publish-moment
+    events:
+      - http:
+          path: me/moments/{id}/publish
+          method: post
+          cors: true
+
+  me-unpublish-moment:
+    handler: outreach-me-handler.unpublish
+    name: ${self:service}-me-unpublish-moment
+    events:
+      - http:
+          path: me/moments/{id}/unpublish
+          method: post
+          cors: true
+
+  # ── Parent / student app feed (student token + X-Student-Id) ───────────────
+  me-feed:
+    handler: outreach-me-handler.feed
+    name: ${self:service}-me-feed
+    memorySize: 512
+    timeout: 20
+    events:
+      - http:
+          path: me/feed
+          method: get
+          cors: true
+
+  me-feed-moment:
+    handler: outreach-me-handler.getFeedMoment
+    name: ${self:service}-me-feed-moment
+    memorySize: 512
+    timeout: 20
+    events:
+      - http:
+          path: me/feed/{id}
+          method: get
+          cors: true
+
+  me-feed-reaction:
+    handler: outreach-me-handler.setReaction
+    name: ${self:service}-me-feed-reaction
+    events:
+      - http:
+          path: me/feed/{id}/reaction
+          method: put
+          cors: true
+
+  me-feed-photo-image:
+    handler: outreach-me-handler.getFeedPhotoImage
+    name: ${self:service}-me-feed-photo-image
+    memorySize: 512
+    timeout: 20
+    events:
+      - http:
+          path: me/feed/{id}/photos/{photoId}/image
+          method: get
+          cors: true
