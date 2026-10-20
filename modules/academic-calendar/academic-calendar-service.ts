@@ -443,6 +443,9 @@ class AcademicCalendarService {
 
   // Upcoming holidays + events (festivals / important days / …) in [from, to], one flat
   // date-sorted list; the app groups by month. Daily 'Theme' entries are excluded (noise).
+  // Deduped: a festival/celebration entered BOTH as a holiday and as a dated entry (the
+  // common case — e.g. Vijayadashmi) shows once, as the holiday ("school closed" is what a
+  // parent needs). Duplicate entries of the same name on a date collapse too.
   async meCalendar(schoolId: string, ay: string, from: string, to: string) {
     const holidays = await this.listHolidays(schoolId, ay, from, to);
     const types = await this.listTypes(schoolId, "system");
@@ -454,8 +457,25 @@ class AcademicCalendarService {
         order by entry_date, sort_order nulls last`,
       [schoolId, ay, from, to],
     );
-    const items: any[] = [];
+
+    // Normalise a label for matching: lower-case, strip punctuation + a trailing " h"
+    // (some imports suffix the holiday name), collapse spaces.
+    const norm = (s: any) => String(s || "").toLowerCase().replace(/[^a-z0-9 ]/g, "").replace(/\s+/g, " ").replace(/ h$/, "").trim();
+
+    // Holiday names per date (to suppress a same-named festival entry on that date).
+    const holByDate = new Map<string, string[]>();
     for (const h of holidays) {
+      const arr = holByDate.get(h.holidayDate) || [];
+      arr.push(norm(h.name));
+      holByDate.set(h.holidayDate, arr);
+    }
+
+    const items: any[] = [];
+    const seen = new Set<string>(); // `${date}|${normLabel}` — collapse duplicates
+    for (const h of holidays) {
+      const key = `${h.holidayDate}|${norm(h.name)}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
       items.push({
         date: h.holidayDate, kind: "holiday", label: h.name || "Holiday", detail: null,
         holidayKind: h.kind, typeName: h.kind === "full" ? "Holiday" : "Restricted holiday", typeCode: "holiday",
@@ -464,6 +484,13 @@ class AcademicCalendarService {
     for (const r of entryRows) {
       const t: any = typeById.get(r.typeId);
       if (t && (/theme/i.test(t.code || "") || /theme/i.test(t.name || ""))) continue;
+      const nv = norm(r.value);
+      const key = `${r.entryDate}|${nv}`;
+      if (seen.has(key)) continue; // already shown (as a holiday or an earlier entry)
+      // Same date already has a holiday whose name matches/contains this → it's the same day.
+      const hns = holByDate.get(r.entryDate) || [];
+      if (nv && hns.some((hn) => hn && (nv === hn || nv.startsWith(hn) || hn.startsWith(nv)))) continue;
+      seen.add(key);
       items.push({
         date: r.entryDate, endDate: r.endDate || null, kind: "event", label: r.value, detail: r.detail || null,
         holidayKind: null, typeName: t?.name || null, typeCode: t?.code || null,
