@@ -9,7 +9,8 @@ create table if not exists file_storage (
     mime_type varchar(128) not null,
     size_bytes integer not null,
     data text,                    -- nullable: object bytes live in S3 once migrated (see db-create-4)
-    storage_key varchar(512),     -- S3 object key; null = legacy row still stored in the data column
+    storage_key varchar(512),     -- object key in the bucket; null = legacy row still stored in the data column
+    storage_provider varchar(8),  -- 's3' | 'r2' | null (= s3/pg legacy): which backend holds the bytes
     entity_type varchar(64) not null,
     entity_id varchar(12) not null,
     school_id varchar(12) not null,

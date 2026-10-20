@@ -101,12 +101,54 @@ class PostgresFileStorageService implements IFileStorageService {
 const s3 = new S3Client({});
 const FILE_STORAGE_BUCKET = process.env.FILE_STORAGE_BUCKET as string;
 
+// ── Cloudflare R2 (S3-compatible), opt-in PER ENTITY TYPE ────────────────────────────
+// R2 charges $0 for egress. We route only the entity types listed in R2_ENTITY_TYPES (e.g.
+// 'outreach' — parent-facing Moments photos, downloaded by many families) to R2; everything
+// else stays on S3. Each file row records its backend in storage_provider, so reads presign /
+// fetch against the right store. Inert unless all four R2_* env vars are set.
+const R2_ENDPOINT = process.env.R2_ENDPOINT as string; // https://<account>.r2.cloudflarestorage.com
+const R2_BUCKET = process.env.R2_BUCKET as string;
+const R2_ENTITY_TYPES = new Set(
+  (process.env.R2_ENTITY_TYPES || '').split(',').map((s) => s.trim()).filter(Boolean),
+);
+const r2Configured = !!(R2_ENDPOINT && R2_BUCKET && process.env.R2_ACCESS_KEY_ID && process.env.R2_SECRET_ACCESS_KEY);
+
+let _r2: S3Client | null = null;
+function r2Client(): S3Client {
+  if (!_r2) {
+    _r2 = new S3Client({
+      region: 'auto',
+      endpoint: R2_ENDPOINT,
+      credentials: {
+        accessKeyId: process.env.R2_ACCESS_KEY_ID as string,
+        secretAccessKey: process.env.R2_SECRET_ACCESS_KEY as string,
+      },
+    });
+  }
+  return _r2;
+}
+
+// Should this entity type's bytes live in R2 (and is R2 configured)?
+function useR2(entityType: string): boolean {
+  return r2Configured && R2_ENTITY_TYPES.has(entityType);
+}
+
 // Short-lived presigned GET URL for a stored object, so clients (e.g. the command
 // palette) can render an <img> straight from S3 without base64. Returns null when
 // S3 isn't configured (local/Postgres mode) or there's no key.
-export async function getSignedPhotoUrl(storageKey: string | null | undefined, expiresIn = 300): Promise<string | null> {
-  if (!storageKey || !FILE_STORAGE_BUCKET) return null;
+export async function getSignedPhotoUrl(
+  storageKey: string | null | undefined,
+  expiresIn = 300,
+  provider?: string | null,
+): Promise<string | null> {
+  if (!storageKey) return null;
   const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
+  // R2-backed object → presign against R2 (zero egress). Else S3 as before.
+  if (provider === 'r2') {
+    if (!r2Configured) return null;
+    return getSignedUrl(r2Client(), new GetObjectCommand({ Bucket: R2_BUCKET, Key: storageKey }), { expiresIn });
+  }
+  if (!FILE_STORAGE_BUCKET) return null;
   return getSignedUrl(s3, new GetObjectCommand({ Bucket: FILE_STORAGE_BUCKET, Key: storageKey }), { expiresIn });
 }
 
@@ -126,9 +168,10 @@ class S3FileStorageService implements IFileStorageService {
     const buffer = Buffer.from(input.base64Data, 'base64');
     const sizeBytes = buffer.length;
     const storageKey = buildStorageKey({ ...input, uuid });
+    const toR2 = useR2(input.entityType);
 
-    await s3.send(new PutObjectCommand({
-      Bucket: FILE_STORAGE_BUCKET,
+    await (toR2 ? r2Client() : s3).send(new PutObjectCommand({
+      Bucket: toR2 ? R2_BUCKET : FILE_STORAGE_BUCKET,
       Key: storageKey,
       Body: buffer,
       ContentType: input.mimeType,
@@ -136,12 +179,12 @@ class S3FileStorageService implements IFileStorageService {
 
     const query = singleLineString`
       insert into file_storage
-      (uuid, file_name, mime_type, size_bytes, data, storage_key, entity_type, entity_id, variant, school_id, createdby_userid, created_at)
-      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      (uuid, file_name, mime_type, size_bytes, data, storage_key, storage_provider, entity_type, entity_id, variant, school_id, createdby_userid, created_at)
+      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
     `;
     const params = [
       uuid, input.fileName, input.mimeType, sizeBytes,
-      null, storageKey,
+      null, storageKey, toR2 ? 'r2' : 's3',
       input.entityType, input.entityId, input.variant || 'original', input.schoolId, input.userId, now,
     ];
     await DB.query(query, params);
@@ -160,7 +203,7 @@ class S3FileStorageService implements IFileStorageService {
 
   public async getWithData(uuid: string, schoolId: string): Promise<StoredFileWithData | null> {
     const query = singleLineString`
-      select uuid, file_name, mime_type, size_bytes, data, storage_key, entity_type, entity_id, variant, school_id, createdby_userid, created_at
+      select uuid, file_name, mime_type, size_bytes, data, storage_key, storage_provider, entity_type, entity_id, variant, school_id, createdby_userid, created_at
       from file_storage
       where uuid = $1 and school_id = $2
     `;
@@ -170,7 +213,11 @@ class S3FileStorageService implements IFileStorageService {
 
     let data: string;
     if (row.storageKey) {
-      const obj = await s3.send(new GetObjectCommand({ Bucket: FILE_STORAGE_BUCKET, Key: row.storageKey }));
+      // Fetch from the bucket that holds it — R2 when storage_provider='r2', else S3.
+      const fromR2 = row.storageProvider === 'r2';
+      const obj = await (fromR2 ? r2Client() : s3).send(
+        new GetObjectCommand({ Bucket: fromR2 ? R2_BUCKET : FILE_STORAGE_BUCKET, Key: row.storageKey }),
+      );
       data = await (obj.Body as any).transformToString('base64');
     } else {
       // Legacy row not yet migrated: fall back to the DB blob (dual-read).
@@ -181,17 +228,21 @@ class S3FileStorageService implements IFileStorageService {
 
   public async delete(uuid: string, schoolId: string): Promise<void> {
     const meta = await DB.query(
-      singleLineString`select storage_key from file_storage where uuid = $1 and school_id = $2`,
+      singleLineString`select storage_key, storage_provider from file_storage where uuid = $1 and school_id = $2`,
       [uuid, schoolId],
     );
     if (meta.length > 0 && meta[0].storageKey) {
       // Best-effort: a storage-delete failure (e.g. a missing IAM action, or an
       // already-gone object) must not block the logical delete. Log and carry on;
-      // an orphaned object is harmless and can be swept later.
+      // an orphaned object is harmless and can be swept later. Delete from the bucket
+      // that actually holds it (R2 vs S3).
+      const fromR2 = meta[0].storageProvider === 'r2';
       try {
-        await s3.send(new DeleteObjectCommand({ Bucket: FILE_STORAGE_BUCKET, Key: meta[0].storageKey }));
+        await (fromR2 ? r2Client() : s3).send(
+          new DeleteObjectCommand({ Bucket: fromR2 ? R2_BUCKET : FILE_STORAGE_BUCKET, Key: meta[0].storageKey }),
+        );
       } catch (err) {
-        console.error(`file-storage: failed to delete S3 object ${meta[0].storageKey}; removing the DB row anyway`, err);
+        console.error(`file-storage: failed to delete ${fromR2 ? 'R2' : 'S3'} object ${meta[0].storageKey}; removing the DB row anyway`, err);
       }
     }
     await DB.query(

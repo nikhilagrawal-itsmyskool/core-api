@@ -215,7 +215,7 @@ class OutreachService {
     );
     if (!rows.length) return [];
     const files = await DB.query(
-      singleLineString`select entity_id as photo_id, uuid as file_id, storage_key from file_storage
+      singleLineString`select entity_id as photo_id, uuid as file_id, storage_key, storage_provider from file_storage
         where entity_type = $1 and school_id = $2 and entity_id = any($3)`,
       [FILE_ENTITY_TYPE, schoolId, rows.map((r: any) => r.uuid)],
     );
@@ -223,7 +223,7 @@ class OutreachService {
     const out: MomentPhotoView[] = [];
     for (const r of rows) {
       const f: any = fileMap.get(r.uuid);
-      const imageUrl = f ? await getSignedPhotoUrl(f.storageKey) : null;
+      const imageUrl = f ? await getSignedPhotoUrl(f.storageKey, 300, f.storageProvider) : null;
       out.push({ uuid: r.uuid, caption: r.caption || null, seq: r.seq, imageUrl: imageUrl || null, fileId: f?.fileId || null });
     }
     return out;

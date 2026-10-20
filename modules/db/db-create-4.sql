@@ -4,5 +4,8 @@
 -- (db-create-1.sql should carry these for fresh setups).
 
 alter table file_storage add column if not exists storage_key varchar(512);
+-- Which backend holds the bytes: 's3' (default) | 'r2' (Cloudflare, zero-egress) | null (legacy).
+-- Lets a single file_storage table mix providers (e.g. outreach photos on R2, the rest on S3).
+alter table file_storage add column if not exists storage_provider varchar(8);
 alter table file_storage alter column data drop not null;
 create index if not exists idx_file_storage_storage_key on file_storage (storage_key);
