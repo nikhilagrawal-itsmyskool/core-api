@@ -394,6 +394,85 @@ class AcademicCalendarService {
     return out;
   }
 
+  // ── Parent app (/me): day status + upcoming holidays & events ───────────────
+  private static WD = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+  // The day's Theme (value-of-the-day), if the school set one. Matches the 'Theme' type
+  // by code or name (seeded per school).
+  private async themeFor(schoolId: string, ay: string, date: string): Promise<string | null> {
+    const rows = await DB.query(
+      singleLineString`select e.value from calendar_entry e join calendar_type t on t.uuid = e.type_id
+        where e.school_id = $1 and e.academic_year_id = $2 and e.entry_date = $3 and e.status = 'active'
+          and (lower(t.code) = 'theme' or lower(t.name) = 'theme')
+        order by e.sort_order nulls last limit 1`,
+      [schoolId, ay, date],
+    );
+    return rows[0]?.value || null;
+  }
+
+  // Status of a single date for the parent app: weekly-off / holiday (full|restricted) +
+  // the day's theme. Fixes "timetable + attendance shown on a holiday" in the app.
+  async meDay(schoolId: string, ay: string, date: string) {
+    const weeklyOff = await this.getWeeklyOff(schoolId, ay);
+    const dow = new Date(`${date}T00:00:00Z`).getUTCDay();
+    const isWeeklyOff = weeklyOff.includes(dow);
+    const hol = (await this.listHolidays(schoolId, ay, date, date))[0] || null;
+    const kind: string | null = hol ? hol.kind : null;
+    const theme = await this.themeFor(schoolId, ay, date);
+    const nonTeaching = isWeeklyOff || kind === "full";
+    const label = kind === "full"
+      ? (hol!.name || "Holiday")
+      : isWeeklyOff
+        ? `${AcademicCalendarService.WD[dow]} — weekly off`
+        : kind === "restricted"
+          ? `${hol!.name || "Restricted holiday"} (optional)`
+          : "School open";
+    return {
+      date,
+      weekday: AcademicCalendarService.WD[dow],
+      isWeeklyOff,
+      isHoliday: !!hol,
+      holidayName: hol?.name || null,
+      holidayKind: kind,
+      nonTeaching,
+      working: !nonTeaching,
+      theme,
+      label,
+    };
+  }
+
+  // Upcoming holidays + events (festivals / important days / …) in [from, to], one flat
+  // date-sorted list; the app groups by month. Daily 'Theme' entries are excluded (noise).
+  async meCalendar(schoolId: string, ay: string, from: string, to: string) {
+    const holidays = await this.listHolidays(schoolId, ay, from, to);
+    const types = await this.listTypes(schoolId, "system");
+    const typeById = new Map(types.map((t) => [t.uuid, t]));
+    const entryRows = await DB.query(
+      singleLineString`select ${ENTRY_COLS} from calendar_entry
+        where school_id = $1 and academic_year_id = $2 and status = 'active'
+          and entry_date >= $3 and entry_date <= $4
+        order by entry_date, sort_order nulls last`,
+      [schoolId, ay, from, to],
+    );
+    const items: any[] = [];
+    for (const h of holidays) {
+      items.push({
+        date: h.holidayDate, kind: "holiday", label: h.name || "Holiday", detail: null,
+        holidayKind: h.kind, typeName: h.kind === "full" ? "Holiday" : "Restricted holiday", typeCode: "holiday",
+      });
+    }
+    for (const r of entryRows) {
+      const t: any = typeById.get(r.typeId);
+      if (t && (/theme/i.test(t.code || "") || /theme/i.test(t.name || ""))) continue;
+      items.push({
+        date: r.entryDate, endDate: r.endDate || null, kind: "event", label: r.value, detail: r.detail || null,
+        holidayKind: null, typeName: t?.name || null, typeCode: t?.code || null,
+      });
+    }
+    items.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+    return { items };
+  }
+
   // ── Grid read ─────────────────────────────────────────────────────────────
 
   async getCalendar(schoolId: string, ay: string, from: string, to: string, userId: string): Promise<CalendarView> {

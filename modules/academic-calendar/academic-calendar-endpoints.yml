@@ -7,6 +7,23 @@
           method: get
           cors: true
 
+  # ── Parent app (/me): day status + upcoming holidays & events ──────────────
+  me-day:
+    handler: academic-calendar-me-handler.day
+    events:
+      - http:
+          path: me/day
+          method: get
+          cors: true
+
+  me-calendar:
+    handler: academic-calendar-me-handler.calendar
+    events:
+      - http:
+          path: me/calendar
+          method: get
+          cors: true
+
   # ── Types (per-school configurable "columns") ──────────────────────────────
   list-types:
     handler: academic-calendar-handler.listTypes

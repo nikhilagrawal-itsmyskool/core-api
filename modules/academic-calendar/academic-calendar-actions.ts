@@ -39,4 +39,10 @@ export const ACADEMIC_CALENDAR_ACTIONS: Record<string, string> = {
 
 // Endpoints intentionally NOT gated by requireAction:
 //   - health: authorizer-exempt readiness probe.
-export const ACADEMIC_CALENDAR_PUBLIC: string[] = ["health-handler.health"];
+//   - me/day, me/calendar: parent-app reads that self-authorize from the family token +
+//     X-Student-Id (guardActiveStudent); students carry no roles, so they can't be action-gated.
+export const ACADEMIC_CALENDAR_PUBLIC: string[] = [
+  "health-handler.health",
+  "academic-calendar-me-handler.day",
+  "academic-calendar-me-handler.calendar",
+];
