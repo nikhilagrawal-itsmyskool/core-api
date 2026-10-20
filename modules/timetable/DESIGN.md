@@ -405,6 +405,36 @@ columns, `school_id` on every row, partial unique indexes `where status =
 - `POST /timetable/validate-move` — built now, powers Phase-3 live editing
 - `GET  /timetable/health`
 
+### Hand-authored (manual) master
+
+A second way to produce a master, alongside the solver: **hand-build and hand-edit** the grid
+cell by cell. First user is **pre-primary** (Nursery/LKG/UKG) — static, teacher-less, mother-teacher
+label grids the solver never touches — but it generalises to any class (edit a generated grid, or
+author one for classes the solver doesn't cover).
+
+A manual master is an ordinary `published_timetable` with **`source_candidate_id` null** that carries
+its grid **`config_id` directly** (solver masters resolve the config via the source candidate's run;
+a manual master has no run, so `getActivePublished`/`getPublishedById` fall back to `config_id`). It
+starts as **`status='draft'`** (new value), is filled cell by cell, then **activated** (archiving the
+prior active master for its `(year, wing)` scope, exactly like `publish`).
+
+A **cell** is a `published_entry` carrying a free-text **`label`** (new column on `published_entry` /
+`timetable_entry`) and/or a subject+teacher. A pure label cell is teacher-less and subject-less — e.g.
+pre-primary "Hindi Book" / "Circle time". Every create/edit is clash-checked with the same `clashesAt`
+helper the move/swap editor uses (class + teacher double-book), so a teacher-less cell always passes.
+Mother-teacher classes keep cells label-only; the class teacher shows in the grid header (from the
+existing `class_teacher` link), not stamped on each cell.
+
+- `POST   /timetable/published/manual` — `{ academicYearId, wingId?, configId }` → `{ publishedTimetableId }` (draft)
+- `GET    /timetable/published/{id}` — a specific master (draft or active) + entries + config (editor load)
+- `POST   /timetable/published/entries` — `{ publishedTimetableId, classId, dayOfWeek, timeSlotId, label?, subjectId?, teacherId? }`
+- `DELETE /timetable/published/entries/{id}?publishedTimetableId=` — clear a cell
+- `PUT    /timetable/published/entries/{id}` — edit a cell (now also accepts `label`)
+- `POST   /timetable/published/{id}/activate` — `{ effectiveFrom? }` draft → active
+- `label` flows through `/published`, `/now`, `/today`, `/me/week` (`HappeningSlot.entries[].label`).
+- Seed/bootstrap for pre-primary: `modules/timetable/scripts/seed-preprimary.js` (builds the
+  "Pre-Primary" config + wing + master from the PDF grids; idempotent; hand-editable afterward).
+
 ## Async execution (DB-as-queue, no AWS needed)
 
 `generate` only inserts a `generation_run` row (`queued`) and returns fast. A

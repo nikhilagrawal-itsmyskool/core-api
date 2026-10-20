@@ -408,6 +408,9 @@ create table if not exists timetable_entry (
 alter table timetable_entry alter column teacher_id drop not null;
 -- subject_id is null for a registration (0th attendance) entry: class teacher, no subject.
 alter table timetable_entry alter column subject_id drop not null;
+-- label: free-text cell content for a hand-authored (teacher-less, subject-less) entry,
+-- e.g. a pre-primary "Hindi Book" / "Circle time" period. null on solver-placed entries.
+alter table timetable_entry add column if not exists label varchar(128);
 
 create index if not exists idx_timetable_entry_candidate on timetable_entry(candidate_id);
 create index if not exists idx_timetable_entry_class on timetable_entry(candidate_id, class_id);
@@ -425,7 +428,7 @@ create table if not exists published_timetable (
     academic_year_id varchar(12) not null,
     wing_id varchar(12),
     source_candidate_id varchar(12),
-    status varchar(16) check (status in ('active', 'archived')),
+    status varchar(16) check (status in ('active', 'archived', 'draft')),
     effective_from date,
     createdby_userid varchar(12),
     created_at timestamp(0),
@@ -435,6 +438,16 @@ create table if not exists published_timetable (
 
 -- forward-compatible column for existing databases.
 alter table published_timetable add column if not exists wing_id varchar(12);
+-- config_id: the grid config a HAND-AUTHORED master renders against. Solver-published
+-- masters leave this null and resolve the config via source_candidate_id -> run; a manual
+-- master has no candidate, so it carries its config directly. (getActivePublished falls
+-- back to this when source_candidate_id is null.)
+alter table published_timetable add column if not exists config_id varchar(12);
+-- 'draft' is the editable state of a hand-authored master before it is published/activated.
+-- Widen the inline CHECK on existing databases (drop+re-add is idempotent).
+alter table published_timetable drop constraint if exists published_timetable_status_check;
+alter table published_timetable add constraint published_timetable_status_check
+    check (status in ('active', 'archived', 'draft'));
 
 create index if not exists idx_published_timetable_school_year on published_timetable(school_id, academic_year_id, status);
 
@@ -460,6 +473,9 @@ create table if not exists published_entry (
 alter table published_entry alter column teacher_id drop not null;
 -- subject_id is null for a registration (0th attendance) entry: class teacher, no subject.
 alter table published_entry alter column subject_id drop not null;
+-- label: free-text cell content for a hand-authored (teacher-less, subject-less) entry,
+-- e.g. a pre-primary "Hindi Book" / "Circle time" period. null on solver-placed entries.
+alter table published_entry add column if not exists label varchar(128);
 
 create index if not exists idx_published_entry_timetable on published_entry(published_timetable_id);
 create index if not exists idx_published_entry_class on published_entry(published_timetable_id, class_id);

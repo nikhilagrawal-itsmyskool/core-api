@@ -798,8 +798,169 @@ class GenerationService {
         config = await configService.getConfigById(rows[0].configId, schoolId);
       }
     }
+    // Hand-authored master: no source candidate, so the grid config is carried directly.
+    if (!config && pt.configId) {
+      config = await configService.getConfigById(pt.configId, schoolId);
+    }
 
     return { publishedTimetable: pt, entries, config, sourceRunId };
+  }
+
+  // A specific master (draft or active) by id, plus its entries and grid config — the
+  // load surface for the hand-authored grid editor (which edits a draft before publishing).
+  public async getPublishedById(
+    schoolId: string,
+    publishedTimetableId: string,
+  ): Promise<any | null> {
+    const pts = await DB.query(
+      singleLineString`select * from published_timetable where uuid = $1 and school_id = $2`,
+      [publishedTimetableId, schoolId],
+    );
+    if (pts.length === 0) return null;
+    const pt = pts[0];
+    const entries = await DB.query(
+      singleLineString`
+        select pe.*, s.name as subject_name, s.code as subject_code
+        from published_entry pe
+        left join subject s on s.uuid = pe.subject_id
+        where pe.published_timetable_id = $1 and pe.school_id = $2
+        order by pe.day_of_week, pe.time_slot_id
+      `,
+      [pt.uuid, schoolId],
+    );
+    let config = null;
+    if (pt.sourceCandidateId) {
+      const rows = await DB.query(
+        singleLineString`
+          select r.config_id from timetable_candidate c
+          join generation_run r on r.uuid = c.generation_run_id
+          where c.uuid = $1 and c.school_id = $2
+        `,
+        [pt.sourceCandidateId, schoolId],
+      );
+      if (rows.length > 0) config = await configService.getConfigById(rows[0].configId, schoolId);
+    }
+    if (!config && pt.configId) {
+      config = await configService.getConfigById(pt.configId, schoolId);
+    }
+    return { publishedTimetable: pt, entries, config };
+  }
+
+  // ---- Hand-authored (manual) master: create / fill / clear / activate ------------
+  // A manual master is a published_timetable with no source_candidate_id; it carries its
+  // grid config_id directly and starts life as a 'draft' that is hand-filled cell by cell
+  // (each cell = a free-text label and/or a subject+teacher), then activated to go live.
+
+  // Create an empty draft master for (year, wing) against a grid config.
+  public async createManualMaster(
+    schoolId: string,
+    academicYearId: string,
+    wingId: string | null,
+    configId: string,
+    userId: string,
+  ): Promise<{ publishedTimetableId: string }> {
+    const cfg = await configService.getConfigById(configId, schoolId);
+    if (!cfg) throw new BusinessErrorResult(ErrorCode.BusinessError, "Grid config not found");
+    const publishedId = generateShortUuid(12);
+    await DB.query(
+      singleLineString`
+        insert into published_timetable
+        (uuid, school_id, academic_year_id, wing_id, config_id, status, createdby_userid, created_at)
+        values ($1, $2, $3, $4, $5, 'draft', $6, $7)
+      `,
+      [publishedId, schoolId, academicYearId, wingId, configId, userId, new Date()],
+    );
+    return { publishedTimetableId: publishedId };
+  }
+
+  // Add one cell to a master. label and/or subjectId may be set; teacherId optional.
+  // Clash-checked (class double-book, teacher double-book) via the shared checker, so a
+  // teacher-less label cell always passes.
+  public async createPublishedEntry(
+    schoolId: string,
+    publishedTimetableId: string,
+    cell: {
+      classId: string;
+      dayOfWeek: number;
+      timeSlotId: string;
+      subjectId?: string | null;
+      teacherId?: string | null;
+      label?: string | null;
+    },
+    userId: string,
+  ): Promise<{ entryId: string }> {
+    if (!cell.classId || !cell.timeSlotId || !Number.isInteger(cell.dayOfWeek))
+      throw new BusinessErrorResult(ErrorCode.BusinessError, "classId, dayOfWeek and timeSlotId are required");
+    const entries = await this.loadPublished(publishedTimetableId, schoolId);
+    const newId = generateShortUuid(12);
+    const proposed = {
+      uuid: newId,
+      classId: cell.classId,
+      teacherId: cell.teacherId ?? null,
+      dayOfWeek: cell.dayOfWeek,
+      timeSlotId: cell.timeSlotId,
+    };
+    const issues = this.clashesAt(entries, [proposed], cell.dayOfWeek, cell.timeSlotId);
+    if (issues.length)
+      throw new BusinessErrorResult(ErrorCode.BusinessError, issues.join("; "));
+    await DB.query(
+      singleLineString`
+        insert into published_entry
+        (uuid, school_id, published_timetable_id, class_id, subject_id, teacher_id, day_of_week, time_slot_id, label, createdby_userid, created_at)
+        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      `,
+      [
+        newId, schoolId, publishedTimetableId, cell.classId,
+        cell.subjectId ?? null, cell.teacherId ?? null, cell.dayOfWeek, cell.timeSlotId,
+        cell.label ?? null, userId, new Date(),
+      ],
+    );
+    return { entryId: newId };
+  }
+
+  // Clear a single cell row.
+  public async deletePublishedEntry(
+    schoolId: string,
+    publishedTimetableId: string,
+    entryId: string,
+  ): Promise<{ deleted: boolean }> {
+    const rows = await DB.query(
+      singleLineString`delete from published_entry where uuid = $1 and published_timetable_id = $2 and school_id = $3 returning uuid`,
+      [entryId, publishedTimetableId, schoolId],
+    );
+    if (!rows.length) throw new NotFoundResult(ErrorCode.InvalidId, "Entry not found");
+    return { deleted: true };
+  }
+
+  // Activate a draft master: it becomes the live master for its (year, wing) scope, and
+  // the prior active master for that same scope is archived. Mirrors publish()'s archive.
+  public async activateDraft(
+    schoolId: string,
+    publishedTimetableId: string,
+    effectiveFrom: string | null,
+    userId: string,
+  ): Promise<{ publishedTimetableId: string }> {
+    const rows = await DB.query(
+      singleLineString`select * from published_timetable where uuid = $1 and school_id = $2`,
+      [publishedTimetableId, schoolId],
+    );
+    if (rows.length === 0) throw new NotFoundResult(ErrorCode.InvalidId, "Master not found");
+    const pt = rows[0];
+    if (pt.status === "active") return { publishedTimetableId };
+    const now = new Date();
+    const queries: string[] = [];
+    const params: any[][] = [];
+    queries.push(singleLineString`
+      update published_timetable set status = 'archived', updated_at = $1
+      where school_id = $2 and academic_year_id = $3 and status = 'active' and wing_id is not distinct from $4
+    `);
+    params.push([now, schoolId, pt.academicYearId, pt.wingId ?? null]);
+    queries.push(singleLineString`
+      update published_timetable set status = 'active', effective_from = $1, updatedby_userid = $2, updated_at = $3 where uuid = $4
+    `);
+    params.push([effectiveFrom, userId, now, publishedTimetableId]);
+    await DB.queriesInTransaction(queries, params);
+    return { publishedTimetableId };
   }
 
   // All active published masters for a year (whole-school + each wing), with the
@@ -913,7 +1074,7 @@ class GenerationService {
     schoolId: string,
     publishedTimetableId: string,
     entryId: string,
-    changes: { subjectId?: string | null; teacherId?: string | null },
+    changes: { subjectId?: string | null; teacherId?: string | null; label?: string | null },
     userId: string,
   ): Promise<{ updated: boolean }> {
     const entries = await this.loadPublished(publishedTimetableId, schoolId);
@@ -921,6 +1082,7 @@ class GenerationService {
     if (!row) throw new NotFoundResult(ErrorCode.InvalidId, "Entry not found");
     const subjectId = changes.subjectId !== undefined ? changes.subjectId : row.subjectId;
     const teacherId = changes.teacherId !== undefined ? changes.teacherId : row.teacherId;
+    const label = changes.label !== undefined ? changes.label : row.label;
     // if the teacher changed, it must be free at this slot (ignore this same cell)
     if (teacherId && teacherId !== row.teacherId) {
       const group = this.cellGroup(entries, row);
@@ -938,8 +1100,8 @@ class GenerationService {
         );
     }
     await DB.query(
-      singleLineString`update published_entry set subject_id = $1, teacher_id = $2, updatedby_userid = $3, updated_at = $4 where uuid = $5 and school_id = $6`,
-      [subjectId, teacherId, userId, new Date(), entryId, schoolId],
+      singleLineString`update published_entry set subject_id = $1, teacher_id = $2, label = $3, updatedby_userid = $4, updated_at = $5 where uuid = $6 and school_id = $7`,
+      [subjectId, teacherId, label, userId, new Date(), entryId, schoolId],
     );
     return { updated: true };
   }

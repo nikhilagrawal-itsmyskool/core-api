@@ -306,7 +306,7 @@ class NowService {
   ): Promise<Map<string, HappeningSlot["entries"]>> {
     const rows = await DB.query(
       singleLineString`
-        select pe.time_slot_id, pe.subject_id, pe.teacher_id,
+        select pe.time_slot_id, pe.subject_id, pe.teacher_id, pe.label,
                s.name as subject_name, e.name as teacher_name
         from published_entry pe
         left join subject s on s.uuid = pe.subject_id
@@ -324,6 +324,7 @@ class NowService {
         subjectName: r.subjectName ?? null,
         teacherId: r.teacherId ?? null,
         teacherName: r.teacherName ?? null,
+        label: r.label ?? null,
       });
       map.set(r.timeSlotId, list);
     }

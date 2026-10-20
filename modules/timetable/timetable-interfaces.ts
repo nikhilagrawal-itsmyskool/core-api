@@ -420,6 +420,8 @@ export interface HappeningSlot {
     subjectName?: string | null;
     teacherId?: string | null;
     teacherName?: string | null;
+    // free-text content for a hand-authored cell (pre-primary label grids); null otherwise
+    label?: string | null;
   }[];
 }
 
