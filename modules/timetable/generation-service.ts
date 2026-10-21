@@ -968,18 +968,48 @@ class GenerationService {
   public async listActivePublished(
     schoolId: string,
     academicYearId: string,
+    includeDrafts = false,
   ): Promise<any[]> {
+    // The Published view wants active masters only (the default); the manual-timetable
+    // wizard also wants in-progress drafts, so it can resume/activate/discard them.
+    const statusClause = includeDrafts ? "pt.status in ('active', 'draft')" : "pt.status = 'active'";
     return DB.query(
       singleLineString`
-        select pt.uuid, pt.wing_id, w.name as wing_name, pt.effective_from, pt.created_at,
+        select pt.uuid, pt.wing_id, w.name as wing_name, pt.status, pt.config_id, pt.effective_from, pt.created_at,
                (select count(*) from published_entry pe where pe.published_timetable_id = pt.uuid) as entry_count
         from published_timetable pt
         left join timetable_wing w on w.uuid = pt.wing_id
-        where pt.school_id = $1 and pt.academic_year_id = $2 and pt.status = 'active'
-        order by w.name nulls first
+        where pt.school_id = $1 and pt.academic_year_id = $2 and ${statusClause}
+        order by pt.status asc, w.name nulls first
       `,
       [schoolId, academicYearId],
     );
+  }
+
+  // Delete a DRAFT master and its entries (discard an in-progress hand-authored grid).
+  // Refuses an active master — replace that by activating another, or edit it in place.
+  public async deleteMaster(
+    schoolId: string,
+    publishedTimetableId: string,
+  ): Promise<{ deleted: boolean }> {
+    const rows = await DB.query(
+      singleLineString`select status from published_timetable where uuid = $1 and school_id = $2`,
+      [publishedTimetableId, schoolId],
+    );
+    if (rows.length === 0) throw new NotFoundResult(ErrorCode.InvalidId, "Master not found");
+    if (rows[0].status === "active")
+      throw new BusinessErrorResult(ErrorCode.BusinessError, "Cannot delete an active master");
+    await DB.queriesInTransaction(
+      [
+        singleLineString`delete from published_entry where published_timetable_id = $1 and school_id = $2`,
+        singleLineString`delete from published_timetable where uuid = $1 and school_id = $2`,
+      ],
+      [
+        [publishedTimetableId, schoolId],
+        [publishedTimetableId, schoolId],
+      ],
+    );
+    return { deleted: true };
   }
 
   // ---- Manual editing of the PUBLISHED master (Phase-3 live editing) --------------

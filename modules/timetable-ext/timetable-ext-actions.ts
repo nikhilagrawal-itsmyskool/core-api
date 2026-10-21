@@ -12,6 +12,7 @@ export const TIMETABLE_EXT_ACTIONS: Record<string, string> = {
   'timetable-ext-handler.createManualMaster': M,
   'timetable-ext-handler.createEntry': M,
   'timetable-ext-handler.deleteEntry': M,
+  'timetable-ext-handler.deleteMaster': M,
   'timetable-ext-handler.activateDraft': M,
 };
 

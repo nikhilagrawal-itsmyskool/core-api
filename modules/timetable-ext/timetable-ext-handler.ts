@@ -87,6 +87,21 @@ class TimetableExtHandler {
     }
   };
 
+  // Discard a draft master (and its entries).
+  public deleteMaster = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
+    _context.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const ctx = await resolveSchool(event, callback);
+      if (!ctx) return;
+      const id = requireParam(event, 'id', callback);
+      if (!id) return;
+      const result = await generationService.deleteMaster(ctx.schoolId, id);
+      ResponseBuilder.ok(result, callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
   // Activate a draft master (archives the prior active master for the same scope).
   public activateDraft = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
     _context.callbackWaitsForEmptyEventLoop = false;
@@ -109,4 +124,5 @@ export const createManualMaster = guard(TIMETABLE_EXT_ACTIONS['timetable-ext-han
 export const getPublishedById = guard(TIMETABLE_EXT_ACTIONS['timetable-ext-handler.getPublishedById'], handler.getPublishedById);
 export const createEntry = guard(TIMETABLE_EXT_ACTIONS['timetable-ext-handler.createEntry'], handler.createEntry);
 export const deleteEntry = guard(TIMETABLE_EXT_ACTIONS['timetable-ext-handler.deleteEntry'], handler.deleteEntry);
+export const deleteMaster = guard(TIMETABLE_EXT_ACTIONS['timetable-ext-handler.deleteMaster'], handler.deleteMaster);
 export const activateDraft = guard(TIMETABLE_EXT_ACTIONS['timetable-ext-handler.activateDraft'], handler.activateDraft);

@@ -189,7 +189,9 @@ class GenerationHandler {
       if (!ctx) return;
       const academicYearId = event.queryStringParameters?.academicYearId;
       if (!academicYearId) { ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'academicYearId is required', callback); return; }
-      const published = await generationService.listActivePublished(ctx.schoolId, academicYearId);
+      const idq = event.queryStringParameters?.includeDrafts;
+      const includeDrafts = idq === 'true' || idq === '1';
+      const published = await generationService.listActivePublished(ctx.schoolId, academicYearId, includeDrafts);
       ResponseBuilder.ok({ published }, callback);
     } catch (err: any) {
       ResponseBuilder.handleError(err, callback);

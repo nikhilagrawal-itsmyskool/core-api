@@ -32,6 +32,12 @@
     events:
       - http: { path: 'published/{id}', method: get, cors: true }
 
+  deleteMaster:
+    handler: timetable-ext-handler.deleteMaster
+    name: ${self:service}-delete-master
+    events:
+      - http: { path: 'published/{id}', method: delete, cors: true }
+
   activateDraft:
     handler: timetable-ext-handler.activateDraft
     name: ${self:service}-activate-draft
