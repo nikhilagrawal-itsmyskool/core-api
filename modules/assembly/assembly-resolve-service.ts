@@ -176,7 +176,9 @@ class AssemblyResolveService {
     const out: ResolvedNode[] = [];
     for (const n of nodes) {
       const e = entryByNode.get(n.uuid);
-      if (e && e.opted === false) continue; // the house opted this leaf out for the day
+      // A dynamic/auto node (e.g. the birthday spotlight) always shows — it's auto-filled,
+      // not house content, so a roster opt-out must not silently hide the day's birthdays.
+      if (e && e.opted === false && !n.dynamicSource) continue; // the house opted this leaf out for the day
       if (e?.content) { n.content = e.content; n.contentFromRoster = true; } // house-filled content overrides the template
       const parts = partsByNode.get(n.uuid) || [];
       if (parts.length) {
