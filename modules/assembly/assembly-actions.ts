@@ -104,12 +104,16 @@ export const ASSEMBLY_ACTIONS: Record<string, string> = {
   "assembly-duties-handler.getGrades": ASSEMBLY_WEEK_CONDUCT,
   "assembly-duties-handler.saveGrade": ASSEMBLY_WEEK_CONDUCT,
 
-  // Grading (admin surface)
-  "assembly-grading-handler.getRubric": ASSEMBLY_GRADING_VIEW,
+  // Grading (admin surface). getRubric + leaderboard are non-sensitive (grading criteria
+  // and house averages) and needed by evaluator-teachers (to grade) and all staff (to see
+  // the leaderboard), so they sit at plan.view — matching the frontend tile gate. The
+  // per-evaluator reads (listGrades/getGrade/listEvaluators) stay grading.view so one
+  // teacher can't see another's individual marks.
+  "assembly-grading-handler.getRubric": ASSEMBLY_PLAN_VIEW,
+  "assembly-grading-handler.leaderboard": ASSEMBLY_PLAN_VIEW,
   "assembly-grading-handler.listEvaluators": ASSEMBLY_GRADING_VIEW,
   "assembly-grading-handler.listGrades": ASSEMBLY_GRADING_VIEW,
   "assembly-grading-handler.getGrade": ASSEMBLY_GRADING_VIEW,
-  "assembly-grading-handler.leaderboard": ASSEMBLY_GRADING_VIEW,
   "assembly-grading-handler.createMetric": ASSEMBLY_GRADING_MANAGE,
   "assembly-grading-handler.updateMetric": ASSEMBLY_GRADING_MANAGE,
   "assembly-grading-handler.deleteMetric": ASSEMBLY_GRADING_MANAGE,
