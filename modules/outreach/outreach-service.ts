@@ -22,15 +22,30 @@ import {
   CreateMomentRequest,
   UpdateMomentRequest,
   AddPhotoRequest,
+  AddVideoRequest,
   MomentView,
   MomentListRow,
   MomentPhotoView,
+  MomentVideoView,
   ReactionSummary,
   AudienceOptions,
   MyClass,
   MomentAuditRow,
 } from "./outreach-interfaces";
 const { generateShortUuid } = require("../../shared/util/generate-uuid.js");
+
+// Extract the 11-char YouTube id from any common URL form (watch / youtu.be / shorts /
+// embed / live), or a bare id. Returns null if it doesn't look like a YouTube video.
+function parseYouTubeId(input: string): string | null {
+  const s = (input || "").trim();
+  if (!s) return null;
+  if (/^[A-Za-z0-9_-]{11}$/.test(s)) return s; // already a bare id
+  let m =
+    s.match(/[?&]v=([A-Za-z0-9_-]{11})/) ||
+    s.match(/youtu\.be\/([A-Za-z0-9_-]{11})/) ||
+    s.match(/youtube\.com\/(?:embed|shorts|live|v)\/([A-Za-z0-9_-]{11})/);
+  return m ? m[1] : null;
+}
 
 class OutreachService {
   // ── Audience ─────────────────────────────────────────────────────────────────
@@ -229,24 +244,133 @@ class OutreachService {
     return out;
   }
 
+  // ── Videos (YouTube links) ─────────────────────────────────────────────────────
+
+  async addVideo(schoolId: string, momentId: string, req: AddVideoRequest, userId: string): Promise<MomentView | null> {
+    const m = await this.momentRow(schoolId, momentId);
+    if (!m) return null;
+    if (m.status === "published") throw new BusinessErrorResult(ErrorCode.BusinessError, "Unpublish the moment before adding videos");
+    const youtubeId = parseYouTubeId(req.url || "");
+    if (!youtubeId) throw new BusinessErrorResult(ErrorCode.BusinessError, "Not a valid YouTube link");
+    const videoId = generateShortUuid(12);
+    const now = new Date();
+    const seqRow = await DB.query(
+      singleLineString`select coalesce(max(seq), 0) + 1 as next from moment_video where moment_id = $1 and status = 'active'`,
+      [momentId],
+    );
+    await DB.query(
+      singleLineString`insert into moment_video (uuid, school_id, moment_id, youtube_id, url, caption, seq, status, createdby_userid, created_at)
+        values ($1, $2, $3, $4, $5, $6, $7, 'active', $8, $9)`,
+      [videoId, schoolId, momentId, youtubeId, (req.url || "").slice(0, 512), req.caption?.trim() || null, seqRow[0].next, userId, now],
+    );
+    await this.audit(schoolId, momentId, "edit", `video-add ${youtubeId}`, userId);
+    return this.getMoment(schoolId, momentId, { reactorId: null });
+  }
+
+  async removeVideo(schoolId: string, momentId: string, videoId: string, userId: string): Promise<MomentView | null> {
+    const m = await this.momentRow(schoolId, momentId);
+    if (!m) return null;
+    if (m.status === "published") throw new BusinessErrorResult(ErrorCode.BusinessError, "Unpublish the moment before removing videos");
+    const v = await DB.query(
+      singleLineString`select uuid from moment_video where uuid = $1 and moment_id = $2 and school_id = $3 and status = 'active'`,
+      [videoId, momentId, schoolId],
+    );
+    if (!v.length) return null;
+    await DB.query(
+      singleLineString`update moment_video set status = 'deleted', updatedby_userid = $1, updated_at = $2 where uuid = $3 and school_id = $4`,
+      [userId, new Date(), videoId, schoolId],
+    );
+    await this.audit(schoolId, momentId, "edit", "video-remove", userId);
+    return this.getMoment(schoolId, momentId, { reactorId: null });
+  }
+
+  private async videos(schoolId: string, momentId: string): Promise<MomentVideoView[]> {
+    const rows = await DB.query(
+      singleLineString`select uuid, youtube_id, url, caption from moment_video
+        where moment_id = $1 and school_id = $2 and status = 'active'
+        order by seq asc nulls last, created_at asc`,
+      [momentId, schoolId],
+    );
+    return rows.map((r: any) => ({ uuid: r.uuid, youtubeId: r.youtubeId, url: r.url || null, caption: r.caption || null }));
+  }
+
+  private async mediaCount(momentId: string): Promise<number> {
+    const r = await DB.query(
+      singleLineString`select
+          (select count(1) from moment_photo where moment_id = $1 and status = 'active')
+        + (select count(1) from moment_video where moment_id = $1 and status = 'active') as n`,
+      [momentId],
+    );
+    return Number(r[0].n) || 0;
+  }
+
   // ── Publish / unpublish ────────────────────────────────────────────────────────
 
   async publish(schoolId: string, id: string, userId: string): Promise<MomentView | null> {
     const m = await this.momentRow(schoolId, id);
     if (!m) return null;
     if (m.status === "published") throw new BusinessErrorResult(ErrorCode.BusinessError, "Moment is already published");
-    const cnt = await DB.query(
-      singleLineString`select count(1)::int as n from moment_photo where moment_id = $1 and status = 'active'`,
-      [id],
-    );
-    if (cnt[0].n === 0) throw new BusinessErrorResult(ErrorCode.BusinessError, "Add at least one photo before publishing");
+    if ((await this.mediaCount(id)) === 0) throw new BusinessErrorResult(ErrorCode.BusinessError, "Add at least one photo or video before publishing");
     const now = new Date();
     await DB.query(
-      singleLineString`update moment set status = 'published', published_at = $1, publishedby_userid = $2, updatedby_userid = $2, updated_at = $1 where uuid = $3`,
+      singleLineString`update moment set status = 'published', published_at = $1, publish_at = null, publishedby_userid = $2, updatedby_userid = $2, updated_at = $1 where uuid = $3`,
       [now, userId, id],
     );
     await this.audit(schoolId, id, "publish", null, userId);
     return this.getMoment(schoolId, id, { reactorId: null });
+  }
+
+  // ── Scheduled publish ──────────────────────────────────────────────────────────
+
+  // Set a future publish time on a draft ("scheduled"). A worker (processScheduled) flips it
+  // to published at that moment and notifies. Requires media, like an immediate publish.
+  async schedule(schoolId: string, id: string, publishAtIso: string, userId: string): Promise<MomentView | null> {
+    const m = await this.momentRow(schoolId, id);
+    if (!m) return null;
+    if (m.status === "published") throw new BusinessErrorResult(ErrorCode.BusinessError, "Moment is already published");
+    const when = new Date(publishAtIso);
+    if (isNaN(when.getTime())) throw new BusinessErrorResult(ErrorCode.BusinessError, "Invalid publish time");
+    if (when.getTime() <= Date.now()) throw new BusinessErrorResult(ErrorCode.BusinessError, "Scheduled time must be in the future");
+    if ((await this.mediaCount(id)) === 0) throw new BusinessErrorResult(ErrorCode.BusinessError, "Add at least one photo or video before scheduling");
+    await DB.query(
+      singleLineString`update moment set publish_at = $1, updatedby_userid = $2, updated_at = $3 where uuid = $4 and school_id = $5`,
+      [when, userId, new Date(), id, schoolId],
+    );
+    await this.audit(schoolId, id, "edit", `schedule ${when.toISOString()}`, userId);
+    return this.getMoment(schoolId, id, { reactorId: null });
+  }
+
+  // Cancel a pending schedule (back to a plain draft).
+  async cancelSchedule(schoolId: string, id: string, userId: string): Promise<MomentView | null> {
+    const m = await this.momentRow(schoolId, id);
+    if (!m) return null;
+    await DB.query(
+      singleLineString`update moment set publish_at = null, updatedby_userid = $1, updated_at = $2 where uuid = $3 and school_id = $4`,
+      [userId, new Date(), id, schoolId],
+    );
+    await this.audit(schoolId, id, "edit", "unschedule", userId);
+    return this.getMoment(schoolId, id, { reactorId: null });
+  }
+
+  // Publish every draft whose scheduled time has arrived. Returns the published ids (for the
+  // worker to fan notifications). A due moment with no media is un-scheduled (not retried).
+  async processScheduled(limit = 50): Promise<{ momentId: string; schoolId: string }[]> {
+    const due = await DB.query(
+      singleLineString`select uuid, school_id from moment
+        where status = 'draft' and publish_at is not null and publish_at <= now()
+        order by publish_at asc limit ${Math.min(limit, 200)}`,
+    );
+    const published: { momentId: string; schoolId: string }[] = [];
+    for (const d of due) {
+      try {
+        const r = await this.publish(d.schoolId, d.uuid, "scheduler");
+        if (r) published.push({ momentId: d.uuid, schoolId: d.schoolId });
+      } catch {
+        // e.g. no media left — clear the schedule so it isn't retried every minute.
+        await DB.query(singleLineString`update moment set publish_at = null where uuid = $1`, [d.uuid]);
+      }
+    }
+    return published;
   }
 
   async unpublish(schoolId: string, id: string, userId: string): Promise<MomentView | null> {
@@ -307,7 +431,7 @@ class OutreachService {
   private async momentRow(schoolId: string, id: string): Promise<any | null> {
     const rows = await DB.query(
       singleLineString`select uuid, school_id, academic_year_id, author_employee_id, title, body, status,
-          published_at::text as published_at, created_at::text as created_at
+          published_at::text as published_at, publish_at::text as publish_at, created_at::text as created_at
         from moment where uuid = $1 and school_id = $2`,
       [id, schoolId],
     );
@@ -323,10 +447,13 @@ class OutreachService {
       body: m.body || null,
       status: m.status,
       publishedAt: m.publishedAt || null,
+      publishAt: m.publishAt || null,
+      scheduled: m.status === "draft" && !!m.publishAt,
       authorEmployeeId: m.authorEmployeeId || null,
       authorName: m.authorEmployeeId ? await findEmployeeName(schoolId, m.authorEmployeeId) : null,
       audience: await this.audienceViews(schoolId, id),
       photos: await this.photos(schoolId, id),
+      videos: await this.videos(schoolId, id),
       reactions: await this.reactionSummary(schoolId, id, opts.reactorId),
       createdAt: m.createdAt || null,
     };
@@ -346,13 +473,14 @@ class OutreachService {
     const limit = Math.min(filters.limit || 50, 100);
     const offset = filters.offset || 0;
     const rows = await DB.query(
-      singleLineString`select m.uuid, m.title, m.status, m.published_at::text as published_at, m.created_at::text as created_at,
+      singleLineString`select m.uuid, m.title, m.status, m.published_at::text as published_at, m.publish_at::text as publish_at, m.created_at::text as created_at,
           m.author_employee_id,
           (select count(1)::int from moment_photo p where p.moment_id = m.uuid and p.status = 'active') as photo_count,
+          (select count(1)::int from moment_video v where v.moment_id = m.uuid and v.status = 'active') as video_count,
           (select count(1)::int from moment_reaction r where r.moment_id = m.uuid) as reaction_count
         from moment m
         where ${where.join(" and ")}
-        order by coalesce(m.published_at, m.created_at) desc nulls last
+        order by coalesce(m.published_at, m.publish_at, m.created_at) desc nulls last
         limit ${limit} offset ${offset}`,
       params,
     );
@@ -363,9 +491,12 @@ class OutreachService {
         title: r.title || null,
         status: r.status,
         publishedAt: r.publishedAt || null,
+        publishAt: r.publishAt || null,
+        scheduled: r.status === "draft" && !!r.publishAt,
         authorName: r.authorEmployeeId ? await findEmployeeName(schoolId, r.authorEmployeeId) : null,
         audience: await this.audienceViews(schoolId, r.uuid),
         photoCount: r.photoCount,
+        videoCount: r.videoCount,
         reactionCount: r.reactionCount,
         createdAt: r.createdAt || null,
       });
@@ -557,8 +688,9 @@ class OutreachService {
       const v = await this.getMoment(schoolId, r.uuid, { reactorId: null });
       out.push({
         uuid: v.uuid, title: v.title ?? null, status: v.status, publishedAt: v.publishedAt ?? null,
+        publishAt: v.publishAt ?? null, scheduled: v.scheduled ?? false,
         authorName: v.authorName ?? null, audience: v.audience,
-        photoCount: v.photos.length, reactionCount: v.reactions.total, createdAt: v.createdAt ?? null,
+        photoCount: v.photos.length, videoCount: v.videos.length, reactionCount: v.reactions.total, createdAt: v.createdAt ?? null,
       });
     }
     return out;

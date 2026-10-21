@@ -35,6 +35,17 @@ export interface AddPhotoRequest {
   image: MomentImageInput;
 }
 
+// ---- Video (YouTube link) ----
+export interface AddVideoRequest {
+  url: string;       // any YouTube URL (watch / youtu.be / shorts / embed)
+  caption?: string;
+}
+
+// ---- Schedule ----
+export interface ScheduleRequest {
+  publishAt: string; // ISO datetime (UTC); auto-publishes at that moment
+}
+
 // Teacher PWA create — audience is forced to the teacher's own class.
 export interface TeacherCreateMomentRequest {
   classId: string;
@@ -55,6 +66,13 @@ export interface MomentPhotoView {
   fileId?: string | null;   // file_storage uuid — fetch base64 via .../photos/{id}/image
 }
 
+export interface MomentVideoView {
+  uuid: string;
+  youtubeId: string;
+  url?: string | null;
+  caption?: string | null;
+}
+
 export interface ReactionSummary {
   counts: Record<string, number>; // emoji token -> count
   total: number;
@@ -67,10 +85,13 @@ export interface MomentView {
   body?: string | null;
   status: MomentStatus;
   publishedAt?: string | null;
+  publishAt?: string | null;   // scheduled publish time (set + still draft = "scheduled")
+  scheduled?: boolean;         // convenience: draft with a future publishAt
   authorEmployeeId?: string | null;
   authorName?: string | null;
   audience: AudienceView[];
   photos: MomentPhotoView[];
+  videos: MomentVideoView[];
   reactions: ReactionSummary;
   createdAt?: string | null;
 }
@@ -81,9 +102,12 @@ export interface MomentListRow {
   title?: string | null;
   status: MomentStatus;
   publishedAt?: string | null;
+  publishAt?: string | null;
+  scheduled?: boolean;
   authorName?: string | null;
   audience: AudienceView[];
   photoCount: number;
+  videoCount: number;
   reactionCount: number;
   createdAt?: string | null;
 }

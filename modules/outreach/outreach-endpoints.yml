@@ -115,6 +115,50 @@
           method: get
           cors: true
 
+  add-video:
+    handler: outreach-handler.addVideo
+    name: ${self:service}-add-video
+    events:
+      - http:
+          path: moments/{id}/videos
+          method: post
+          cors: true
+
+  remove-video:
+    handler: outreach-handler.removeVideo
+    name: ${self:service}-remove-video
+    events:
+      - http:
+          path: moments/{id}/videos/{videoId}
+          method: delete
+          cors: true
+
+  schedule-moment:
+    handler: outreach-handler.schedule
+    name: ${self:service}-schedule-moment
+    events:
+      - http:
+          path: moments/{id}/schedule
+          method: post
+          cors: true
+
+  unschedule-moment:
+    handler: outreach-handler.unschedule
+    name: ${self:service}-unschedule-moment
+    events:
+      - http:
+          path: moments/{id}/unschedule
+          method: post
+          cors: true
+
+  # ── Scheduled-publish worker (EventBridge; no HTTP). serverless-offline won't fire it. ──
+  scheduled-drain:
+    handler: outreach-scheduled-handler.drain
+    name: ${self:service}-scheduled-drain
+    timeout: 60
+    events:
+      - schedule: rate(1 minute)
+
   # ── Teacher PWA (resolveEmployee, own-class via canPostForClass) ───────────
   me-classes:
     handler: outreach-me-handler.myClasses

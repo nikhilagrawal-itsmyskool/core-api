@@ -69,6 +69,29 @@ create table if not exists moment_reaction (
 create unique index if not exists idx_moment_reaction_unique on moment_reaction(moment_id, reactor_id);
 create index if not exists idx_moment_reaction_moment on moment_reaction(moment_id);
 
+-- Scheduled publish: a future publish_at on a draft = "scheduled" (a worker publishes it then
+-- and notifies). Derived state, so no new status value / no CHECK migration needed.
+alter table moment add column if not exists publish_at timestamp(0);
+create index if not exists idx_moment_scheduled on moment(status, publish_at);
+
+-- Videos on a moment = YouTube links (several per moment). Only the youtube id + original url
+-- are stored; the parent app embeds the player. We never host video (long clips -> YouTube).
+create table if not exists moment_video (
+    uuid varchar(12) primary key,
+    school_id varchar(12) not null,
+    moment_id varchar(12) not null,
+    youtube_id varchar(32) not null,
+    url varchar(512),
+    caption varchar(256),
+    seq integer,
+    status varchar(16) not null check (status in ('active', 'deleted')),
+    createdby_userid varchar(12),
+    created_at timestamp(0),
+    updatedby_userid varchar(12),
+    updated_at timestamp(0)
+);
+create index if not exists idx_moment_video_moment on moment_video(moment_id, status);
+
 -- Append-only activity log.
 create table if not exists moment_audit (
     uuid varchar(12) primary key,

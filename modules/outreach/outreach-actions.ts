@@ -23,6 +23,10 @@ export const OUTREACH_ACTIONS: Record<string, string> = {
   "outreach-handler.removePhoto": OUTREACH_MOMENT_MANAGE,
   "outreach-handler.publish": OUTREACH_MOMENT_MANAGE,
   "outreach-handler.unpublish": OUTREACH_MOMENT_MANAGE,
+  "outreach-handler.addVideo": OUTREACH_MOMENT_MANAGE,
+  "outreach-handler.removeVideo": OUTREACH_MOMENT_MANAGE,
+  "outreach-handler.schedule": OUTREACH_MOMENT_MANAGE,
+  "outreach-handler.unschedule": OUTREACH_MOMENT_MANAGE,
 
   // Class teacher's own-class posting (outreach-me-handler)
   "outreach-me-handler.myClasses": OUTREACH_MOMENT_POST,
@@ -44,4 +48,6 @@ export const OUTREACH_PUBLIC: string[] = [
   "outreach-me-handler.getFeedMoment",
   "outreach-me-handler.setReaction",
   "outreach-me-handler.getFeedPhotoImage",
+  // EventBridge-driven scheduled-publish worker — no HTTP/authorizer, invoked by the schedule event.
+  "outreach-scheduled-handler.drain",
 ];

@@ -14,6 +14,8 @@ import {
   CreateMomentRequest,
   UpdateMomentRequest,
   AddPhotoRequest,
+  AddVideoRequest,
+  ScheduleRequest,
 } from "./outreach-interfaces";
 
 // Admin/compose surface (X-School-Code + JWT). Admin can target any audience. The
@@ -203,6 +205,78 @@ class OutreachHandler {
       ResponseBuilder.handleError(err, callback);
     }
   };
+
+  // POST /outreach/moments/{id}/videos {url, caption?}
+  public addVideo = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const auth = await resolveSchool(event, callback);
+      if (!auth) return;
+      const id = requireParam(event, "id", callback);
+      if (!id) return;
+      const body = parseBody<AddVideoRequest>(event, callback);
+      if (!body) return;
+      if (!body.url) return ResponseBuilder.badRequest(ErrorCode.InvalidInput, "url is required", callback);
+      const result = await outreachService.addVideo(auth.schoolId, id, body, auth.userId);
+      if (!result) return ResponseBuilder.notFound(ErrorCode.InvalidId, "Moment not found", callback);
+      ResponseBuilder.ok(result, callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
+  // DELETE /outreach/moments/{id}/videos/{videoId}
+  public removeVideo = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const auth = await resolveSchool(event, callback);
+      if (!auth) return;
+      const id = requireParam(event, "id", callback);
+      if (!id) return;
+      const videoId = requireParam(event, "videoId", callback);
+      if (!videoId) return;
+      const result = await outreachService.removeVideo(auth.schoolId, id, videoId, auth.userId);
+      if (!result) return ResponseBuilder.notFound(ErrorCode.InvalidId, "Moment or video not found", callback);
+      ResponseBuilder.ok(result, callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
+  // POST /outreach/moments/{id}/schedule {publishAt}
+  public schedule = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const auth = await resolveSchool(event, callback);
+      if (!auth) return;
+      const id = requireParam(event, "id", callback);
+      if (!id) return;
+      const body = parseBody<ScheduleRequest>(event, callback);
+      if (!body) return;
+      if (!body.publishAt) return ResponseBuilder.badRequest(ErrorCode.InvalidInput, "publishAt is required", callback);
+      const result = await outreachService.schedule(auth.schoolId, id, body.publishAt, auth.userId);
+      if (!result) return ResponseBuilder.notFound(ErrorCode.InvalidId, "Moment not found", callback);
+      ResponseBuilder.ok(result, callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
+  // POST /outreach/moments/{id}/unschedule
+  public unschedule = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const auth = await resolveSchool(event, callback);
+      if (!auth) return;
+      const id = requireParam(event, "id", callback);
+      if (!id) return;
+      const result = await outreachService.cancelSchedule(auth.schoolId, id, auth.userId);
+      if (!result) return ResponseBuilder.notFound(ErrorCode.InvalidId, "Moment not found", callback);
+      ResponseBuilder.ok(result, callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
 }
 
 const h = new OutreachHandler();
@@ -218,3 +292,7 @@ export const publish = g("outreach-handler.publish", h.publish);
 export const unpublish = g("outreach-handler.unpublish", h.unpublish);
 export const getAudit = g("outreach-handler.getAudit", h.getAudit);
 export const audienceOptions = g("outreach-handler.audienceOptions", h.audienceOptions);
+export const addVideo = g("outreach-handler.addVideo", h.addVideo);
+export const removeVideo = g("outreach-handler.removeVideo", h.removeVideo);
+export const schedule = g("outreach-handler.schedule", h.schedule);
+export const unschedule = g("outreach-handler.unschedule", h.unschedule);
