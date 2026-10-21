@@ -301,6 +301,15 @@ const CATALOGS: Record<string, Catalog> = {
       { action: ACTIONS.OUTREACH_MOMENT_MANAGE, label: 'Compose & publish to any audience' },
     ],
   },
+  website: {
+    module: 'website',
+    roles: [
+      { role: 'website-incharge', label: 'Website In-charge' },
+    ],
+    actions: [
+      { action: ACTIONS.WEBSITE_PUBLISH, label: 'Push curated Moments photos to the website (Contentful)' },
+    ],
+  },
   'academic-calendar': {
     module: 'academic-calendar',
     roles: [

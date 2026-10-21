@@ -273,6 +273,11 @@ export const ACTIONS = {
   CLUB_PLAN_MANAGE: 'club.plan.manage',
   CLUB_PLAN_PUBLISH: 'club.plan.publish',
   CLUB_PLAN_CONDUCT: 'club.plan.conduct',
+  // Website publisher — per-school push of curated Moments photos into the school's Contentful
+  // CMS (tagged assets + a School Event entry). One curation action; granted to a dedicated
+  // 'website-incharge' role (god via '*'). NOT on admin by default, so it stays out of the
+  // sellable core — only a school with a website_config row + this grant ever sees it.
+  WEBSITE_PUBLISH: 'website.publish',
 } as const;
 
 // Role -> allowed actions. Mirror of policy.js ROLE_PERMISSIONS (order preserved).
@@ -402,6 +407,8 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
   // activity bank, and the plan board). Authoring/approve/review/planning are god-first;
   // god grants this role more via the Permissions grid as each school decides.
   'club-incharge': ['club.setup.view', 'club.activity.view', 'club.plan.view'],
+  // Website publisher — curates Moments photos into Contentful. Per-school (only DBPASN assigns it).
+  'website-incharge': ['website.publish'],
   // Each in-charge === admin, but scoped to its own module.
   'medical-incharge': ['medical.*'],
   'lab-incharge': ['lab.*'],

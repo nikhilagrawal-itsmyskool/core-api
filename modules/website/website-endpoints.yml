@@ -1,0 +1,93 @@
+  # Health check
+  health:
+    handler: health-handler.health
+    events:
+      - http:
+          path: health
+          method: get
+          cors: true
+
+  config:
+    handler: website-handler.config
+    name: ${self:service}-config
+    events:
+      - http:
+          path: config
+          method: get
+          cors: true
+
+  tags:
+    handler: website-handler.tags
+    name: ${self:service}-tags
+    events:
+      - http:
+          path: tags
+          method: get
+          cors: true
+
+  source-moments:
+    handler: website-handler.sourceMoments
+    name: ${self:service}-source-moments
+    events:
+      - http:
+          path: sources/moments
+          method: get
+          cors: true
+
+  source-moment:
+    handler: website-handler.sourceMoment
+    name: ${self:service}-source-moment
+    memorySize: 512
+    timeout: 20
+    events:
+      - http:
+          path: sources/moments/{id}
+          method: get
+          cors: true
+
+  push-event:
+    handler: website-handler.pushEvent
+    name: ${self:service}-push-event
+    memorySize: 512
+    timeout: 25
+    events:
+      - http:
+          path: publications/event
+          method: post
+          cors: true
+
+  list-publications:
+    handler: website-handler.listPublications
+    name: ${self:service}-list-publications
+    events:
+      - http:
+          path: publications
+          method: get
+          cors: true
+
+  get-publication:
+    handler: website-handler.getPublication
+    name: ${self:service}-get-publication
+    events:
+      - http:
+          path: publications/{id}
+          method: get
+          cors: true
+
+  publish-publication:
+    handler: website-handler.publish
+    name: ${self:service}-publish-publication
+    timeout: 20
+    events:
+      - http:
+          path: publications/{id}/publish
+          method: post
+          cors: true
+
+  # ── Push worker (EventBridge; no HTTP). serverless-offline won't fire it. ──
+  process-drain:
+    handler: website-process-handler.drain
+    name: ${self:service}-process-drain
+    timeout: 300
+    events:
+      - schedule: rate(1 minute)
