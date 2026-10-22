@@ -91,6 +91,15 @@ create table if not exists moment_video (
     updated_at timestamp(0)
 );
 create index if not exists idx_moment_video_moment on moment_video(moment_id, status);
+-- A video is either a YouTube link (youtube_id) OR an uploaded clip stored in R2 (source='r2'
+-- + storage_key). Additive/idempotent so setup.sql stays the canonical schema.
+alter table moment_video alter column youtube_id drop not null;
+alter table moment_video add column if not exists source varchar(8);           -- 'youtube' | 'r2' (null = youtube, legacy)
+alter table moment_video add column if not exists storage_key varchar(512);
+alter table moment_video add column if not exists storage_provider varchar(8);
+alter table moment_video add column if not exists mime_type varchar(128);
+alter table moment_video add column if not exists size_bytes bigint;
+alter table moment_video add column if not exists duration_seconds integer;
 
 -- Append-only activity log.
 create table if not exists moment_audit (

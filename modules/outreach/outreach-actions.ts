@@ -24,6 +24,8 @@ export const OUTREACH_ACTIONS: Record<string, string> = {
   "outreach-handler.publish": OUTREACH_MOMENT_MANAGE,
   "outreach-handler.unpublish": OUTREACH_MOMENT_MANAGE,
   "outreach-handler.addVideo": OUTREACH_MOMENT_MANAGE,
+  "outreach-handler.videoUploadUrl": OUTREACH_MOMENT_MANAGE,
+  "outreach-handler.addR2Video": OUTREACH_MOMENT_MANAGE,
   "outreach-handler.removeVideo": OUTREACH_MOMENT_MANAGE,
   "outreach-handler.schedule": OUTREACH_MOMENT_MANAGE,
   "outreach-handler.unschedule": OUTREACH_MOMENT_MANAGE,

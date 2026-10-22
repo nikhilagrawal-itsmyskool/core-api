@@ -1,7 +1,15 @@
 import { DB, singleLineString } from "../../shared/lib/db";
 import { BusinessErrorResult } from "../../shared/lib/errors";
 import { ErrorCode } from "../../shared/lib/error-codes";
-import { fileStorageService, getSignedPhotoUrl } from "../../shared/lib/file-storage";
+import {
+  fileStorageService,
+  getSignedPhotoUrl,
+  buildStorageKey,
+  getR2UploadUrl,
+  r2ObjectExists,
+  r2DeleteObject,
+  r2Available,
+} from "../../shared/lib/file-storage";
 import {
   getCurrentAcademicYearId,
   findBaseClass,
@@ -13,6 +21,10 @@ import {
   IMAGE_ALLOWED_MIME,
   IMAGE_MAX_BYTES,
   FILE_ENTITY_TYPE,
+  VIDEO_ALLOWED_MIME,
+  VIDEO_MAX_BYTES,
+  VIDEO_MAX_SECONDS,
+  VIDEO_ENTITY_TYPE,
   REACTION_EMOJIS,
   ReactionEmoji,
 } from "./outreach-constants";
@@ -23,6 +35,9 @@ import {
   UpdateMomentRequest,
   AddPhotoRequest,
   AddVideoRequest,
+  VideoUploadUrlRequest,
+  VideoUploadUrlResult,
+  AddR2VideoRequest,
   MomentView,
   MomentListRow,
   MomentPhotoView,
@@ -280,12 +295,68 @@ class OutreachService {
     return this.getMoment(schoolId, momentId, { reactorId: null });
   }
 
+  // ── Uploaded videos (direct-to-R2) ──────────────────────────────────────────────
+  // Step 1: validate format/size/duration, then mint a presigned R2 PUT URL. The browser
+  // uploads the bytes straight to R2 (the API can't carry them — Gateway's ~10 MB cap).
+  async videoUploadUrl(schoolId: string, momentId: string, req: VideoUploadUrlRequest): Promise<VideoUploadUrlResult | null> {
+    const m = await this.momentRow(schoolId, momentId);
+    if (!m) return null;
+    if (m.status === "published") throw new BusinessErrorResult(ErrorCode.BusinessError, "Unpublish the moment before adding videos");
+    if (!r2Available) throw new BusinessErrorResult(ErrorCode.BusinessError, "Video upload is not configured");
+    const mime = (req.mimeType || "").toLowerCase();
+    if (!(VIDEO_ALLOWED_MIME as readonly string[]).includes(mime)) {
+      throw new BusinessErrorResult(ErrorCode.BusinessError, "Unsupported video format (use MP4, MOV or WebM)");
+    }
+    if (!req.sizeBytes || req.sizeBytes > VIDEO_MAX_BYTES) {
+      throw new BusinessErrorResult(ErrorCode.BusinessError, `Video must be under ${Math.round(VIDEO_MAX_BYTES / (1024 * 1024))} MB`);
+    }
+    if (req.durationSeconds && req.durationSeconds > VIDEO_MAX_SECONDS) {
+      throw new BusinessErrorResult(ErrorCode.BusinessError, `Video must be under ${VIDEO_MAX_SECONDS / 60} minutes`);
+    }
+    const uuid = generateShortUuid(12);
+    const storageKey = buildStorageKey({
+      schoolId, entityType: VIDEO_ENTITY_TYPE, entityId: momentId, uuid, fileName: req.fileName || `${uuid}.mp4`,
+    });
+    const uploadUrl = await getR2UploadUrl(storageKey, mime, 900);
+    if (!uploadUrl) throw new BusinessErrorResult(ErrorCode.BusinessError, "Video upload is not configured");
+    return { uploadUrl, storageKey, expiresIn: 900 };
+  }
+
+  // Step 2: after the direct upload finishes, record the clip on the moment.
+  async addR2Video(schoolId: string, momentId: string, req: AddR2VideoRequest, userId: string): Promise<MomentView | null> {
+    const m = await this.momentRow(schoolId, momentId);
+    if (!m) return null;
+    if (m.status === "published") throw new BusinessErrorResult(ErrorCode.BusinessError, "Unpublish the moment before adding videos");
+    const key = req.storageKey || "";
+    // The key must sit under THIS moment's prefix — reject anything else (no cross-moment injection).
+    if (!key.startsWith(`${schoolId}/${VIDEO_ENTITY_TYPE}/${momentId}/`)) {
+      throw new BusinessErrorResult(ErrorCode.BusinessError, "Invalid upload reference");
+    }
+    if (!(await r2ObjectExists(key))) {
+      throw new BusinessErrorResult(ErrorCode.BusinessError, "Upload not found — please try again");
+    }
+    const videoId = generateShortUuid(12);
+    const now = new Date();
+    const seqRow = await DB.query(
+      singleLineString`select coalesce(max(seq), 0) + 1 as next from moment_video where moment_id = $1 and status = 'active'`,
+      [momentId],
+    );
+    await DB.query(
+      singleLineString`insert into moment_video (uuid, school_id, moment_id, youtube_id, url, caption, seq, status, source, storage_key, storage_provider, mime_type, size_bytes, duration_seconds, createdby_userid, created_at)
+        values ($1, $2, $3, null, null, $4, $5, 'active', 'r2', $6, 'r2', $7, $8, $9, $10, $11)`,
+      [videoId, schoolId, momentId, req.caption?.trim() || null, seqRow[0].next, key,
+        (req.mimeType || "").toLowerCase() || null, req.sizeBytes || null, req.durationSeconds || null, userId, now],
+    );
+    await this.audit(schoolId, momentId, "edit", "video-upload", userId);
+    return this.getMoment(schoolId, momentId, { reactorId: null });
+  }
+
   async removeVideo(schoolId: string, momentId: string, videoId: string, userId: string): Promise<MomentView | null> {
     const m = await this.momentRow(schoolId, momentId);
     if (!m) return null;
     if (m.status === "published") throw new BusinessErrorResult(ErrorCode.BusinessError, "Unpublish the moment before removing videos");
     const v = await DB.query(
-      singleLineString`select uuid from moment_video where uuid = $1 and moment_id = $2 and school_id = $3 and status = 'active'`,
+      singleLineString`select uuid, source, storage_key from moment_video where uuid = $1 and moment_id = $2 and school_id = $3 and status = 'active'`,
       [videoId, momentId, schoolId],
     );
     if (!v.length) return null;
@@ -293,18 +364,32 @@ class OutreachService {
       singleLineString`update moment_video set status = 'deleted', updatedby_userid = $1, updated_at = $2 where uuid = $3 and school_id = $4`,
       [userId, new Date(), videoId, schoolId],
     );
+    // Uploaded clip → also drop its R2 bytes (best-effort; YouTube links have nothing to clean).
+    if (v[0].source === "r2" && v[0].storageKey) await r2DeleteObject(v[0].storageKey);
     await this.audit(schoolId, momentId, "edit", "video-remove", userId);
     return this.getMoment(schoolId, momentId, { reactorId: null });
   }
 
   private async videos(schoolId: string, momentId: string): Promise<MomentVideoView[]> {
     const rows = await DB.query(
-      singleLineString`select uuid, youtube_id, url, caption from moment_video
+      singleLineString`select uuid, youtube_id, url, caption, source, storage_key, storage_provider, mime_type, duration_seconds from moment_video
         where moment_id = $1 and school_id = $2 and status = 'active'
         order by seq asc nulls last, created_at asc`,
       [momentId, schoolId],
     );
-    return rows.map((r: any) => ({ uuid: r.uuid, youtubeId: r.youtubeId, url: r.url || null, caption: r.caption || null }));
+    const out: MomentVideoView[] = [];
+    for (const r of rows) {
+      if (r.source === "r2" && r.storageKey) {
+        const videoUrl = await getSignedPhotoUrl(r.storageKey, 3600, r.storageProvider || "r2");
+        out.push({
+          uuid: r.uuid, source: "r2", youtubeId: null, url: null, videoUrl: videoUrl || null,
+          mimeType: r.mimeType || null, durationSeconds: r.durationSeconds ?? null, caption: r.caption || null,
+        });
+      } else {
+        out.push({ uuid: r.uuid, source: "youtube", youtubeId: r.youtubeId, url: r.url || null, videoUrl: null, caption: r.caption || null });
+      }
+    }
+    return out;
   }
 
   private async mediaCount(momentId: string): Promise<number> {

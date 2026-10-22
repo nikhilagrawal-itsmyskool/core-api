@@ -42,6 +42,28 @@ export interface AddVideoRequest {
   caption?: string;
 }
 
+// ---- Uploaded video (direct-to-R2) ----
+// Step 1: ask for a presigned PUT URL (validates format/size/duration before the big upload).
+export interface VideoUploadUrlRequest {
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+  durationSeconds?: number;
+}
+export interface VideoUploadUrlResult {
+  uploadUrl: string;    // presigned R2 PUT — client PUTs the bytes with Content-Type = mimeType
+  storageKey: string;   // echo back on completion
+  expiresIn: number;    // seconds the uploadUrl stays valid
+}
+// Step 2: after the direct upload finishes, record the clip on the moment.
+export interface AddR2VideoRequest {
+  storageKey: string;
+  mimeType: string;
+  sizeBytes?: number;
+  durationSeconds?: number;
+  caption?: string;
+}
+
 // ---- Schedule ----
 export interface ScheduleRequest {
   publishAt: string; // ISO datetime (UTC); auto-publishes at that moment
@@ -69,8 +91,12 @@ export interface MomentPhotoView {
 
 export interface MomentVideoView {
   uuid: string;
-  youtubeId: string;
-  url?: string | null;
+  source: "youtube" | "r2";
+  youtubeId?: string | null;   // YouTube videos only
+  url?: string | null;         // original YouTube url
+  videoUrl?: string | null;    // uploaded (r2) videos: short-lived signed playback URL
+  mimeType?: string | null;    // uploaded videos
+  durationSeconds?: number | null;
   caption?: string | null;
 }
 

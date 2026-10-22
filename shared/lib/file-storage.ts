@@ -1,5 +1,5 @@
 import { DB, singleLineString } from './db';
-import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3';
 import { extname } from 'path';
 const { generateShortUuid } = require('../util/generate-uuid.js');
 
@@ -150,6 +150,48 @@ export async function getSignedPhotoUrl(
   }
   if (!FILE_STORAGE_BUCKET) return null;
   return getSignedUrl(s3, new GetObjectCommand({ Bucket: FILE_STORAGE_BUCKET, Key: storageKey }), { expiresIn });
+}
+
+// Whether R2 is usable (all four R2_* env vars present). Exported so callers that upload
+// LARGE objects directly to R2 (presigned PUT, bypassing the base64 API path) can check first.
+export const r2Available = r2Configured;
+
+// Presigned PUT so a browser can upload a large file (e.g. a video) straight to R2 — the API
+// can't carry it as base64 (Gateway's ~10 MB request cap). The client PUTs the bytes with the
+// SAME Content-Type that is signed here. R2-only; null when R2 isn't configured.
+export async function getR2UploadUrl(
+  storageKey: string,
+  contentType: string,
+  expiresIn = 900,
+): Promise<string | null> {
+  if (!r2Configured) return null;
+  const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
+  return getSignedUrl(
+    r2Client(),
+    new PutObjectCommand({ Bucket: R2_BUCKET, Key: storageKey, ContentType: contentType }),
+    { expiresIn },
+  );
+}
+
+// Confirm an object exists in R2 (used to verify a direct upload finished before recording it).
+export async function r2ObjectExists(storageKey: string): Promise<boolean> {
+  if (!r2Configured || !storageKey) return false;
+  try {
+    await r2Client().send(new HeadObjectCommand({ Bucket: R2_BUCKET, Key: storageKey }));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// Best-effort delete of an R2 object by key (for removing an uploaded video's bytes).
+export async function r2DeleteObject(storageKey: string): Promise<void> {
+  if (!r2Configured || !storageKey) return;
+  try {
+    await r2Client().send(new DeleteObjectCommand({ Bucket: R2_BUCKET, Key: storageKey }));
+  } catch (err) {
+    console.error(`file-storage: failed to delete R2 object ${storageKey}`, err);
+  }
 }
 
 // S3 key scheme: {schoolId}/{entityType}/{entityId}/{variant}/{uuid}{ext}

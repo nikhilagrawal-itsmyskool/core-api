@@ -124,6 +124,24 @@
           method: post
           cors: true
 
+  video-upload-url:
+    handler: outreach-handler.videoUploadUrl
+    name: ${self:service}-video-upload-url
+    events:
+      - http:
+          path: moments/{id}/videos/upload-url
+          method: post
+          cors: true
+
+  add-r2-video:
+    handler: outreach-handler.addR2Video
+    name: ${self:service}-add-r2-video
+    events:
+      - http:
+          path: moments/{id}/videos/r2
+          method: post
+          cors: true
+
   remove-video:
     handler: outreach-handler.removeVideo
     name: ${self:service}-remove-video

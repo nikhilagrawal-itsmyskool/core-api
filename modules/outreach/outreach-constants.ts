@@ -21,5 +21,14 @@ export const IMAGE_ALLOWED_MIME = ["image/jpeg", "image/png", "image/webp"] as c
 // Shared file_storage partition for Moments photos.
 export const FILE_ENTITY_TYPE = "outreach";
 
+// Uploaded videos (short clips) live in R2, uploaded straight from the phone (direct PUT,
+// bypassing the API's base64 path). Longer event recordings still go to YouTube as a link.
+export const VIDEO_MAX_BYTES = 250 * 1024 * 1024; // 250 MB size backstop
+export const VIDEO_MAX_SECONDS = 300; // 5 minutes
+export const VIDEO_ALLOWED_MIME = ["video/mp4", "video/quicktime", "video/webm"] as const;
+// R2 key prefix for uploaded videos: {school}/outreach-video/{momentId}/original/{uuid}{ext}.
+// (The row lives in moment_video with storage_key, not in file_storage.)
+export const VIDEO_ENTITY_TYPE = "outreach-video";
+
 // Notification category key (deep-links the app to the Moment).
 export const NOTIFY_KEY = "outreach.moment";

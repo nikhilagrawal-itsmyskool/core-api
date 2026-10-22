@@ -15,6 +15,8 @@ import {
   UpdateMomentRequest,
   AddPhotoRequest,
   AddVideoRequest,
+  VideoUploadUrlRequest,
+  AddR2VideoRequest,
   ScheduleRequest,
 } from "./outreach-interfaces";
 
@@ -225,6 +227,48 @@ class OutreachHandler {
     }
   };
 
+  // POST /outreach/moments/{id}/videos/upload-url {fileName, mimeType, sizeBytes, durationSeconds}
+  // → presigned R2 PUT URL for a direct browser upload (step 1 of 2).
+  public videoUploadUrl = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const auth = await resolveSchool(event, callback);
+      if (!auth) return;
+      const id = requireParam(event, "id", callback);
+      if (!id) return;
+      const body = parseBody<VideoUploadUrlRequest>(event, callback);
+      if (!body) return;
+      if (!body.mimeType || !body.sizeBytes) {
+        return ResponseBuilder.badRequest(ErrorCode.InvalidInput, "mimeType and sizeBytes are required", callback);
+      }
+      const result = await outreachService.videoUploadUrl(auth.schoolId, id, body);
+      if (!result) return ResponseBuilder.notFound(ErrorCode.InvalidId, "Moment not found", callback);
+      ResponseBuilder.ok(result, callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
+  // POST /outreach/moments/{id}/videos/r2 {storageKey, mimeType, sizeBytes, durationSeconds, caption}
+  // → record the uploaded clip on the moment (step 2 of 2).
+  public addR2Video = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const auth = await resolveSchool(event, callback);
+      if (!auth) return;
+      const id = requireParam(event, "id", callback);
+      if (!id) return;
+      const body = parseBody<AddR2VideoRequest>(event, callback);
+      if (!body) return;
+      if (!body.storageKey) return ResponseBuilder.badRequest(ErrorCode.InvalidInput, "storageKey is required", callback);
+      const result = await outreachService.addR2Video(auth.schoolId, id, body, auth.userId);
+      if (!result) return ResponseBuilder.notFound(ErrorCode.InvalidId, "Moment not found", callback);
+      ResponseBuilder.ok(result, callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
   // DELETE /outreach/moments/{id}/videos/{videoId}
   public removeVideo = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
     ctx.callbackWaitsForEmptyEventLoop = false;
@@ -293,6 +337,8 @@ export const unpublish = g("outreach-handler.unpublish", h.unpublish);
 export const getAudit = g("outreach-handler.getAudit", h.getAudit);
 export const audienceOptions = g("outreach-handler.audienceOptions", h.audienceOptions);
 export const addVideo = g("outreach-handler.addVideo", h.addVideo);
+export const videoUploadUrl = g("outreach-handler.videoUploadUrl", h.videoUploadUrl);
+export const addR2Video = g("outreach-handler.addR2Video", h.addR2Video);
 export const removeVideo = g("outreach-handler.removeVideo", h.removeVideo);
 export const schedule = g("outreach-handler.schedule", h.schedule);
 export const unschedule = g("outreach-handler.unschedule", h.unschedule);
