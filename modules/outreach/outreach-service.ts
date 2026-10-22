@@ -480,7 +480,7 @@ class OutreachService {
           (select count(1)::int from moment_reaction r where r.moment_id = m.uuid) as reaction_count
         from moment m
         where ${where.join(" and ")}
-        order by coalesce(m.published_at, m.publish_at, m.created_at) desc nulls last
+        order by m.created_at desc
         limit ${limit} offset ${offset}`,
       params,
     );
