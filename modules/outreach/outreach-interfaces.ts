@@ -100,6 +100,7 @@ export interface MomentView {
 export interface MomentListRow {
   uuid: string;
   title?: string | null;
+  coverUrl?: string | null;   // first photo's presigned URL (null in local/Postgres mode)
   status: MomentStatus;
   publishedAt?: string | null;
   publishAt?: string | null;

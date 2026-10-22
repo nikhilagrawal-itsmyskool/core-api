@@ -475,6 +475,7 @@ class OutreachService {
     const rows = await DB.query(
       singleLineString`select m.uuid, m.title, m.status, m.published_at::text as published_at, m.publish_at::text as publish_at, m.created_at::text as created_at,
           m.author_employee_id,
+          (select p.uuid from moment_photo p where p.moment_id = m.uuid and p.status = 'active' order by p.seq asc nulls last, p.created_at asc limit 1) as cover_photo_id,
           (select count(1)::int from moment_photo p where p.moment_id = m.uuid and p.status = 'active') as photo_count,
           (select count(1)::int from moment_video v where v.moment_id = m.uuid and v.status = 'active') as video_count,
           (select count(1)::int from moment_reaction r where r.moment_id = m.uuid) as reaction_count
@@ -484,11 +485,25 @@ class OutreachService {
         limit ${limit} offset ${offset}`,
       params,
     );
+    // Batch-resolve cover thumbnails (first photo of each moment).
+    const coverIds = rows.map((r: any) => r.coverPhotoId).filter(Boolean);
+    const coverMap = new Map<string, any>();
+    if (coverIds.length) {
+      const files = await DB.query(
+        singleLineString`select entity_id as photo_id, storage_key, storage_provider from file_storage
+          where entity_type = $1 and school_id = $2 and entity_id = any($3)`,
+        [FILE_ENTITY_TYPE, schoolId, coverIds],
+      );
+      files.forEach((f: any) => coverMap.set(f.photoId, f));
+    }
     const out: MomentListRow[] = [];
     for (const r of rows) {
+      const cf = r.coverPhotoId ? coverMap.get(r.coverPhotoId) : null;
+      const coverUrl = cf ? await getSignedPhotoUrl(cf.storageKey, 300, cf.storageProvider) : null;
       out.push({
         uuid: r.uuid,
         title: r.title || null,
+        coverUrl: coverUrl || null,
         status: r.status,
         publishedAt: r.publishedAt || null,
         publishAt: r.publishAt || null,
