@@ -33,6 +33,7 @@ export interface UpdateMomentRequest {
 export interface AddPhotoRequest {
   caption?: string;
   image: MomentImageInput;
+  thumb?: MomentImageInput; // optional small variant (~320px) for list covers; saves data
 }
 
 // ---- Video (YouTube link) ----

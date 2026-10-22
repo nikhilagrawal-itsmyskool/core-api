@@ -184,6 +184,19 @@ class OutreachService {
       schoolId,
       userId,
     });
+    // Optional small variant for list covers (saves the teacher's mobile data).
+    if (req.thumb?.base64Data && req.thumb?.mimeType) {
+      await fileStorageService.upload({
+        fileName: req.thumb.fileName || `moment-${photoId}-thumb.img`,
+        mimeType: req.thumb.mimeType,
+        base64Data: req.thumb.base64Data,
+        entityType: FILE_ENTITY_TYPE,
+        entityId: photoId,
+        variant: "thumb",
+        schoolId,
+        userId,
+      });
+    }
     await this.audit(schoolId, momentId, "photo-add", req.caption?.trim() || null, userId);
     return this.getMoment(schoolId, momentId, { reactorId: null });
   }
@@ -213,7 +226,7 @@ class OutreachService {
   // Single-image base64 (fallback / local dev when there's no presigned URL).
   async getPhotoImage(schoolId: string, photoId: string): Promise<{ data: string; mimeType: string; fileName: string } | null> {
     const files = await DB.query(
-      singleLineString`select uuid from file_storage where entity_type = $1 and entity_id = $2 and school_id = $3 order by created_at desc limit 1`,
+      singleLineString`select uuid from file_storage where entity_type = $1 and entity_id = $2 and school_id = $3 and (variant = 'original' or variant is null) order by created_at desc limit 1`,
       [FILE_ENTITY_TYPE, photoId, schoolId],
     );
     if (!files.length) return null;
@@ -231,7 +244,7 @@ class OutreachService {
     if (!rows.length) return [];
     const files = await DB.query(
       singleLineString`select entity_id as photo_id, uuid as file_id, storage_key, storage_provider from file_storage
-        where entity_type = $1 and school_id = $2 and entity_id = any($3)`,
+        where entity_type = $1 and school_id = $2 and entity_id = any($3) and (variant = 'original' or variant is null)`,
       [FILE_ENTITY_TYPE, schoolId, rows.map((r: any) => r.uuid)],
     );
     const fileMap = new Map(files.map((f: any) => [f.photoId, f]));
@@ -490,11 +503,12 @@ class OutreachService {
     const coverMap = new Map<string, any>();
     if (coverIds.length) {
       const files = await DB.query(
-        singleLineString`select entity_id as photo_id, storage_key, storage_provider from file_storage
+        singleLineString`select entity_id as photo_id, variant, storage_key, storage_provider from file_storage
           where entity_type = $1 and school_id = $2 and entity_id = any($3)`,
         [FILE_ENTITY_TYPE, schoolId, coverIds],
       );
-      files.forEach((f: any) => coverMap.set(f.photoId, f));
+      // Prefer the small 'thumb' variant for covers; fall back to the original.
+      files.forEach((f: any) => { if (!coverMap.has(f.photoId) || f.variant === "thumb") coverMap.set(f.photoId, f); });
     }
     const out: MomentListRow[] = [];
     for (const r of rows) {
