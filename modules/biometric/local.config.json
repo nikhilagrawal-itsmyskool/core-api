@@ -1,0 +1,5 @@
+{
+  "httpPort": 3067,
+  "lambdaPort": 3068,
+  "prefix": "biometric"
+}

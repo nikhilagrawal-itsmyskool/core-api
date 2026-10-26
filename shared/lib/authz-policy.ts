@@ -278,6 +278,27 @@ export const ACTIONS = {
   // 'website-incharge' role (god via '*'). NOT on admin by default, so it stays out of the
   // sellable core — only a school with a website_config row + this grant ever sees it.
   WEBSITE_PUBLISH: 'website.publish',
+  // Biometric / attendance devices (ESSL K30 Pro etc.) — strict module.resource.action.
+  // device = the device registry (register/enable/disable); enrollment = push a staff
+  // member to a device (assign device_number + enqueue the user), view enrollment state;
+  // punch = read captured attendance punches. Locked god-first (no role grant below) — a
+  // hardware-admin surface; god opens cells per-role via the Permissions grid. The device's
+  // own iclock push endpoints are machine (authorizer-exempt, SN-gated), not role-gated.
+  BIOMETRIC_DEVICE_VIEW: 'biometric.device.view',
+  BIOMETRIC_DEVICE_MANAGE: 'biometric.device.manage',
+  BIOMETRIC_ENROLLMENT_VIEW: 'biometric.enrollment.view',
+  BIOMETRIC_ENROLLMENT_SYNC: 'biometric.enrollment.sync',
+  BIOMETRIC_PUNCH_VIEW: 'biometric.punch.view',
+  // Staff attendance (distinct from the student roll-call `attendance` module). Derives daily
+  // staff in/out from biometric punches against season-aware policy. record.view = oversight
+  // dashboard + reports (admin + education-director); config.manage = policy/season Config
+  // (god-only); regularization.apply = the employee /me surface (file/cancel own request, see
+  // own attendance) — held by all staff; regularization.approve = decide requests (education-
+  // director, god). No `staff-attendance.*` wildcard, so god-only leaves aren't swallowed.
+  STAFF_ATTENDANCE_VIEW: 'staff-attendance.record.view',
+  STAFF_ATTENDANCE_CONFIG_MANAGE: 'staff-attendance.config.manage',
+  STAFF_ATTENDANCE_REGULARIZE: 'staff-attendance.regularization.apply',
+  STAFF_ATTENDANCE_APPROVE: 'staff-attendance.regularization.approve',
 } as const;
 
 // Role -> allowed actions. Mirror of policy.js ROLE_PERMISSIONS (order preserved).
@@ -358,6 +379,8 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
     'fee.receipt.verify', // Scan & Verify (admin + god only; NOT fee incharges)
     'leave.calendar.view', // See the shared who's-on-leave calendar
     'leave.application.apply', // Self-service own leave; oversight/config/biometric/deduction are god-only for now
+    'staff-attendance.record.view', // Oversight: daily ins/outs grid + reports
+    'staff-attendance.regularization.apply', // Admins also see own attendance + file regularization
     'documents.sign', // Read & sign own documents; authoring (documents.manage) is god-only
     // Clubs & Activities: NONE by default (locked to god). god grants admin what it needs via
     // the Permissions grid. No club.* here on purpose.
@@ -388,6 +411,7 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
     'academic-calendar.view',
     'leave.calendar.view', // See the shared who's-on-leave calendar
     'leave.application.apply', // Apply for own leave
+    'staff-attendance.regularization.apply', // See own attendance + file/cancel own regularization
     'documents.sign',
     // Feedback/complaints: any teacher may record + assign, and respond to items
     // assigned to them. Reviewing/completing (feedback.ticket.review) is god-only.
@@ -462,6 +486,9 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
     'transport.setup.view',
     'leave.calendar.view',
     'leave.application.apply',
+    'staff-attendance.record.view', // Oversight dashboard + reports
+    'staff-attendance.regularization.apply', // Own attendance + regularization
+    'staff-attendance.regularization.approve', // Approve/reject staff regularizations
   ],
 };
 

@@ -1,0 +1,5 @@
+{
+  "httpPort": 3069,
+  "lambdaPort": 3070,
+  "prefix": "staff-attendance"
+}

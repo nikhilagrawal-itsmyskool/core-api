@@ -107,6 +107,7 @@ class EmployeeService {
     const roleIds = data.roleIds || [];
     await this.assertFamilyNumberAvailable(data.familyUniqueNumber, schoolId);
     await this.assertRolesExist(roleIds, schoolId);
+    await this.assertDeviceNumberValid(data.deviceNumber, schoolId, null);
 
     const employeeUuid = generateShortUuid(12);
     const loginUuid = generateShortUuid(12);
@@ -117,8 +118,8 @@ class EmployeeService {
 
     queries.push(singleLineString`
       insert into employee
-      (uuid, employee_number, name, code, gender, dob, family_unique_number, mobile, whatsapp, email, status, school_id, createdby_userid, created_at)
-      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+      (uuid, employee_number, name, code, gender, dob, family_unique_number, mobile, whatsapp, email, status, school_id, createdby_userid, created_at, device_number)
+      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
     `);
     params.push([
       employeeUuid,
@@ -135,6 +136,7 @@ class EmployeeService {
       schoolId,
       userId,
       now,
+      data.deviceNumber ? String(data.deviceNumber).trim() : null,
     ]);
 
     queries.push(singleLineString`
@@ -182,6 +184,9 @@ class EmployeeService {
     if (data.roleIds !== undefined) {
       await this.assertRolesExist(data.roleIds, schoolId);
     }
+    if (data.deviceNumber !== undefined) {
+      await this.assertDeviceNumberValid(data.deviceNumber, schoolId, id);
+    }
 
     const now = new Date();
     const queries: string[] = [];
@@ -199,6 +204,7 @@ class EmployeeService {
     if (data.familyUniqueNumber !== undefined) setField('family_unique_number', data.familyUniqueNumber);
     if (data.employeeNumber !== undefined) setField('employee_number', data.employeeNumber);
     if (data.code !== undefined) setField('code', data.code);
+    if (data.deviceNumber !== undefined) setField('device_number', data.deviceNumber ? String(data.deviceNumber).trim() : null);
     if (data.gender !== undefined) setField('gender', data.gender);
     if (data.dob !== undefined) setField('dob', data.dob);
     if (data.mobile !== undefined) setField('mobile', data.mobile);
@@ -465,6 +471,27 @@ class EmployeeService {
     );
     if (found.length !== roleIds.length) {
       throw new Error('One or more role IDs are invalid for this school');
+    }
+  }
+
+  // The biometric/attendance-device PIN must be numeric (<= 9 digits) and unique per
+  // school. Only validated when a non-empty value is provided; '' / null clears it.
+  private async assertDeviceNumberValid(deviceNumber: string | undefined, schoolId: string, excludeId: string | null): Promise<void> {
+    if (deviceNumber === undefined || deviceNumber === null || deviceNumber === '') return;
+    const value = String(deviceNumber).trim();
+    if (!/^[0-9]{1,9}$/.test(value)) {
+      throw new Error('Device number must be numeric (max 9 digits)');
+    }
+    const match = await DB.query(
+      singleLineString`
+        select uuid from employee
+        where device_number = $1 and school_id = $2 and status <> 'deleted'
+          and ($3::text is null or uuid <> $3)
+      `,
+      [value, schoolId, excludeId]
+    );
+    if (match.length > 0) {
+      throw new Error(`Device number '${value}' is already assigned to another employee`);
     }
   }
 }

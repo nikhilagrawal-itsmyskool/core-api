@@ -1,0 +1,36 @@
+provider:
+  name: aws
+  region: ap-south-1
+  stage: ${opt:stage, 'dev'}
+  environment:
+    ${file(../../configs/${self:provider.stage}/${self:provider.stage}.yml)}
+  $<<: ${file(../global-config-${self:provider.stage}.yml):provider}
+
+custom:
+  prefix: itsmyskool
+  baseServiceName: biometric-service
+  fullServiceName: ${self:custom.prefix}-${self:custom.baseServiceName}
+  customDomain:
+   basePath: 'biometric'
+  # The device (ESSL K30 Pro) push endpoints are called by the hardware over the ADMS
+  # iclock protocol with NO JWT — it carries only its serial number. Exempt them from
+  # the authorizer (identity/allowlist is the registered SN, checked in-handler). A single
+  # greedy proxy route catches /iclock/cdata(.aspx), /iclock/getrequest(.aspx), etc.
+  authorizerExtraExempt:
+    - iclock/{proxy+}
+  $<<: ${file(../global-config-${self:provider.stage}.yml):custom}
+
+service: ${self:provider.stage}-${self:custom.fullServiceName}
+configValidationMode: off
+
+plugins:
+  - ../../plugins/serverless-merge-config.js
+  - serverless-webpack
+  - serverless-offline
+  - serverless-domain-manager
+  - ../../plugins/serverless-cors-defaults.js
+  - ../../plugins/serverless-authorizer.js
+
+functions: ${file(biometric-endpoints.yml)}
+
+$<<: ${file(../global-config-${self:provider.stage}.yml):resources}

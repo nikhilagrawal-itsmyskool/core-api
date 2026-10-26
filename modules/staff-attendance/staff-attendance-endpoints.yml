@@ -1,0 +1,147 @@
+  health:
+    handler: health-handler.health
+    events:
+      - http:
+          path: health
+          method: get
+          cors: true
+
+  # ── Config (god-only): policy defaults + seasonal timing windows ────────────
+  get-config:
+    handler: config-handler.getConfig
+    name: ${self:service}-get-config
+    events:
+      - http:
+          path: config
+          method: get
+          cors: true
+  update-config:
+    handler: config-handler.updateConfig
+    name: ${self:service}-update-config
+    events:
+      - http:
+          path: config
+          method: put
+          cors: true
+  list-seasons:
+    handler: config-handler.listSeasons
+    name: ${self:service}-list-seasons
+    events:
+      - http:
+          path: config/seasons
+          method: get
+          cors: true
+  create-season:
+    handler: config-handler.createSeason
+    name: ${self:service}-create-season
+    events:
+      - http:
+          path: config/seasons
+          method: post
+          cors: true
+  update-season:
+    handler: config-handler.updateSeason
+    name: ${self:service}-update-season
+    events:
+      - http:
+          path: config/seasons/{id}
+          method: put
+          cors: true
+  delete-season:
+    handler: config-handler.deleteSeason
+    name: ${self:service}-delete-season
+    events:
+      - http:
+          path: config/seasons/{id}
+          method: delete
+          cors: true
+
+  # ── Oversight (admin + education-director): dashboards + reports ────────────
+  day-view:
+    handler: staff-attendance-handler.dayView
+    name: ${self:service}-day-view
+    timeout: 30
+    events:
+      - http:
+          path: day
+          method: get
+          cors: true
+  report:
+    handler: staff-attendance-handler.report
+    name: ${self:service}-report
+    timeout: 60
+    events:
+      - http:
+          path: report
+          method: get
+          cors: true
+  employee-attendance:
+    handler: staff-attendance-handler.employeeAttendance
+    name: ${self:service}-employee-attendance
+    timeout: 30
+    events:
+      - http:
+          path: employees/{id}
+          method: get
+          cors: true
+
+  # ── Regularization queue (education-director) ───────────────────────────────
+  list-regularizations:
+    handler: staff-attendance-handler.listRegularizations
+    name: ${self:service}-list-regularizations
+    events:
+      - http:
+          path: regularizations
+          method: get
+          cors: true
+  approve-regularization:
+    handler: staff-attendance-handler.approveRegularization
+    name: ${self:service}-approve-regularization
+    events:
+      - http:
+          path: regularizations/{id}/approve
+          method: post
+          cors: true
+  reject-regularization:
+    handler: staff-attendance-handler.rejectRegularization
+    name: ${self:service}-reject-regularization
+    events:
+      - http:
+          path: regularizations/{id}/reject
+          method: post
+          cors: true
+
+  # ── Employee self-service (/me) ─────────────────────────────────────────────
+  my-attendance:
+    handler: staff-attendance-me-handler.myAttendance
+    name: ${self:service}-my-attendance
+    timeout: 30
+    events:
+      - http:
+          path: me/attendance
+          method: get
+          cors: true
+  my-regularizations:
+    handler: staff-attendance-me-handler.myRegularizations
+    name: ${self:service}-my-regularizations
+    events:
+      - http:
+          path: me/regularizations
+          method: get
+          cors: true
+  apply-regularization:
+    handler: staff-attendance-me-handler.applyRegularization
+    name: ${self:service}-apply-regularization
+    events:
+      - http:
+          path: me/regularizations
+          method: post
+          cors: true
+  cancel-regularization:
+    handler: staff-attendance-me-handler.cancelRegularization
+    name: ${self:service}-cancel-regularization
+    events:
+      - http:
+          path: me/regularizations/{id}/cancel
+          method: post
+          cors: true

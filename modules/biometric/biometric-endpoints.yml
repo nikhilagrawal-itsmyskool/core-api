@@ -1,0 +1,98 @@
+  # Health check (authorizer-exempt via the global default)
+  health:
+    handler: health-handler.health
+    events:
+      - http:
+          path: health
+          method: get
+          cors: true
+
+  # ── Device (ESSL K30 Pro) ADMS push protocol ──────────────────────────────
+  # One greedy proxy catches every /iclock/* path the firmware uses (cdata,
+  # getrequest, devicecmd — with or without a .aspx suffix) across all methods.
+  # Authorizer-exempt (see custom.authorizerExtraExempt); SN-gated in-handler.
+  # Longer timeout: a poll may claim a command + parse an upload batch.
+  device-iclock:
+    handler: device-handler.iclock
+    name: ${self:service}-device-iclock
+    timeout: 30
+    events:
+      - http:
+          path: iclock/{proxy+}
+          method: any
+          cors: true
+
+  # ── Admin surface (X-School-Code + JWT; guarded in biometric-actions.ts) ───
+  list-devices:
+    handler: biometric-admin-handler.listDevices
+    name: ${self:service}-list-devices
+    events:
+      - http:
+          path: devices
+          method: get
+          cors: true
+
+  register-device:
+    handler: biometric-admin-handler.registerDevice
+    name: ${self:service}-register-device
+    events:
+      - http:
+          path: devices
+          method: post
+          cors: true
+
+  get-device:
+    handler: biometric-admin-handler.getDevice
+    name: ${self:service}-get-device
+    events:
+      - http:
+          path: devices/{sn}
+          method: get
+          cors: true
+
+  update-device:
+    handler: biometric-admin-handler.updateDevice
+    name: ${self:service}-update-device
+    events:
+      - http:
+          path: devices/{sn}
+          method: put
+          cors: true
+
+  # Push a staff member to the device(s): assign device_number if needed + enqueue
+  # the user-create command. The super admin then enrols the fingerprint at the device.
+  sync-employee:
+    handler: biometric-admin-handler.syncEmployee
+    name: ${self:service}-sync-employee
+    events:
+      - http:
+          path: employees/{employeeId}/sync
+          method: post
+          cors: true
+
+  unsync-employee:
+    handler: biometric-admin-handler.unsyncEmployee
+    name: ${self:service}-unsync-employee
+    events:
+      - http:
+          path: employees/{employeeId}/unsync
+          method: post
+          cors: true
+
+  list-enrollments:
+    handler: biometric-admin-handler.listEnrollments
+    name: ${self:service}-list-enrollments
+    events:
+      - http:
+          path: enrollments
+          method: get
+          cors: true
+
+  list-punches:
+    handler: biometric-admin-handler.listPunches
+    name: ${self:service}-list-punches
+    events:
+      - http:
+          path: punches
+          method: get
+          cors: true

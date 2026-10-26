@@ -9,6 +9,7 @@ export interface Employee {
   employeeNumber?: string;
   name: string;
   code?: string; // short teacher code (e.g. "NKG") for the master timetable
+  deviceNumber?: string; // numeric PIN on biometric/attendance devices (see biometric module)
   gender?: string;
   dob?: string;
   familyUniqueNumber: string;
@@ -30,6 +31,7 @@ export interface CreateEmployeeRequest {
   familyUniqueNumber: string;
   employeeNumber?: string;
   code?: string;
+  deviceNumber?: string;
   gender?: string;
   dob?: string;
   mobile?: string;
@@ -43,6 +45,7 @@ export interface UpdateEmployeeRequest {
   familyUniqueNumber?: string;
   employeeNumber?: string;
   code?: string;
+  deviceNumber?: string;
   gender?: string;
   dob?: string;
   mobile?: string;
