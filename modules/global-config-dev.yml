@@ -16,7 +16,9 @@ provider:
     lambda: false
   region: ap-south-1
   stage: ${opt:stage, 'dev'}
-  memorySize: 160
+  # 1024 MB (not 160): CPU scales with memory on Lambda and our handlers are CPU-bound
+  # (DB snake->camel transformKeys + JSON). See global-config-prod.yml for the measured win.
+  memorySize: 1024
   logRetentionInDays: 7
   timeout: 10 
   versionFunctions: false 

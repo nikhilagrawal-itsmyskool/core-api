@@ -10,7 +10,12 @@ provider:
     lambda: false
   region: ap-south-1
   stage: ${opt:stage, 'prod'}
-  memorySize: 160
+  # 1024 MB (not 160): CPU scales with memory on Lambda, and our handlers are CPU-bound
+  # (DB snake->camel transformKeys + JSON). Measured on assembly 2026-10-26: billed/request
+  # ~1750ms@160 -> 627ms@1024 (cold total ~2.1s -> ~1.0s); warm ~323ms -> ~180ms. Cost rises
+  # ~2-3x/request but is a dollar or two a month for one school. Takes effect per module on
+  # its next deploy. See memory: project_cockpit_cold_start_perf.
+  memorySize: 1024
   logRetentionInDays: 7
   timeout: 10
   versionFunctions: false
