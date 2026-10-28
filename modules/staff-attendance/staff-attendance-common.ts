@@ -24,11 +24,38 @@ export async function getEmployee(schoolId: string, id: string): Promise<StaffRo
   return rows.length ? rows[0] : null;
 }
 
+// Active staff MINUS those exempted from staff attendance. Exemption (from staff_attendance_config)
+// is: (holds a role in exempt_role_codes OR is in exempt_employee_ids) AND NOT in
+// include_employee_ids — so a whole role can be exempt while one person is pulled back in.
 export async function listActiveStaff(schoolId: string): Promise<StaffRow[]> {
+  let exemptRoleCodes: string[] = [], includeIds: string[] = [], exemptIds: string[] = [];
+  try {
+    const rows = await DB.query(
+      singleLineString`select exempt_role_codes, include_employee_ids, exempt_employee_ids
+        from staff_attendance_config where school_id = $1`,
+      [schoolId],
+    );
+    if (rows.length) {
+      const csv = (v: any): string[] => (v ? String(v).split(',').map((s) => s.trim()).filter(Boolean) : []);
+      exemptRoleCodes = csv(rows[0].exemptRoleCodes);
+      includeIds = csv(rows[0].includeEmployeeIds);
+      exemptIds = csv(rows[0].exemptEmployeeIds);
+    }
+  } catch { /* no config yet → no exemptions */ }
+
   return DB.query(
-    singleLineString`select uuid, name, device_number, employee_number from employee
-      where school_id = $1 and status = 'active' order by name`,
-    [schoolId],
+    singleLineString`select e.uuid, e.name, e.device_number, e.employee_number from employee e
+      where e.school_id = $1 and e.status = 'active'
+        and not (
+          (
+            exists (select 1 from employee_role er join role r on r.uuid = er.role_id
+                    where er.employee_id = e.uuid and er.school_id = e.school_id and r.code = any($2::text[]))
+            or e.uuid = any($3::text[])
+          )
+          and e.uuid <> all($4::text[])
+        )
+      order by e.name`,
+    [schoolId, exemptRoleCodes, exemptIds, includeIds],
   );
 }
 

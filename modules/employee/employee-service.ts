@@ -10,6 +10,19 @@ import {
 import { ACTIVE_AND_DELETED_STATUS, ACTIVE_STATUS, DEFAULT_PASSWORD, DEFAULT_STATUS } from './employee-constants';
 const { generateShortUuid } = require('../../shared/util/generate-uuid.js');
 
+// Parse a CSV string (role codes / ids stored in a single column) into a trimmed, de-duped list.
+function csvToList(raw: any): string[] {
+  if (!raw) return [];
+  return Array.from(
+    new Set(
+      String(raw)
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean)
+    )
+  );
+}
+
 class EmployeeService {
   public async getSchoolIdByCode(schoolCode: string): Promise<string | null> {
     const query = singleLineString`
@@ -424,22 +437,24 @@ class EmployeeService {
   // ── Per-school employee config ──────────────────────────────────────────────────────
   // restrictRoledEdit: when true (the default when no row exists), admins can't edit/delete a
   // roled employee. Enforced in the handlers; the screen is god-only (employee.config.manage).
-  public async getConfig(schoolId: string): Promise<{ restrictRoledEdit: boolean }> {
+  public async getConfig(schoolId: string): Promise<{ editProtectedRoles: string[] }> {
     const rows = await DB.query(
-      singleLineString`select restrict_roled_edit from employee_config where school_id = $1`,
+      singleLineString`select edit_protected_roles from employee_config where school_id = $1`,
       [schoolId]
     );
-    const raw = rows.length ? rows[0].restrictRoledEdit : null;
-    return { restrictRoledEdit: raw == null ? true : Boolean(raw) };
+    return { editProtectedRoles: csvToList(rows.length ? rows[0].editProtectedRoles : null) };
   }
 
   public async updateConfig(
     schoolId: string,
-    data: { restrictRoledEdit?: boolean },
+    data: { editProtectedRoles?: string[] },
     userId: string
-  ): Promise<{ restrictRoledEdit: boolean }> {
+  ): Promise<{ editProtectedRoles: string[] }> {
     const current = await this.getConfig(schoolId);
-    const restrictRoledEdit = data.restrictRoledEdit == null ? current.restrictRoledEdit : Boolean(data.restrictRoledEdit);
+    const editProtectedRoles = Array.isArray(data.editProtectedRoles)
+      ? data.editProtectedRoles.map((r) => String(r).trim()).filter(Boolean)
+      : current.editProtectedRoles;
+    const csv = editProtectedRoles.join(',');
     const now = new Date();
     const existing = await DB.query(
       singleLineString`select school_id from employee_config where school_id = $1`,
@@ -447,26 +462,28 @@ class EmployeeService {
     );
     if (existing.length) {
       await DB.query(
-        singleLineString`update employee_config set restrict_roled_edit = $1, updatedby_userid = $2, updated_at = $3 where school_id = $4`,
-        [restrictRoledEdit, userId, now, schoolId]
+        singleLineString`update employee_config set edit_protected_roles = $1, updatedby_userid = $2, updated_at = $3 where school_id = $4`,
+        [csv, userId, now, schoolId]
       );
     } else {
       await DB.query(
-        singleLineString`insert into employee_config (school_id, restrict_roled_edit, updatedby_userid, updated_at) values ($1, $2, $3, $4)`,
-        [schoolId, restrictRoledEdit, userId, now]
+        singleLineString`insert into employee_config (school_id, edit_protected_roles, updatedby_userid, updated_at) values ($1, $2, $3, $4)`,
+        [schoolId, csv, userId, now]
       );
     }
-    return { restrictRoledEdit };
+    return { editProtectedRoles };
   }
 
-  // True when this employee may NOT be edited/deleted by a non-god admin: the school's config has
-  // the restriction on AND the employee holds at least one role. Used to gate update/delete.
+  // True when this employee may NOT be edited/deleted by a non-god admin: the school configured a
+  // set of edit-protected role codes AND this employee holds at least one of them. Empty config =
+  // never restricted. Used to gate update/delete (god bypasses in the handler).
   public async isEditRestricted(id: string, schoolId: string): Promise<boolean> {
-    const { restrictRoledEdit } = await this.getConfig(schoolId);
-    if (!restrictRoledEdit) return false;
+    const { editProtectedRoles } = await this.getConfig(schoolId);
+    if (!editProtectedRoles.length) return false;
     const rows = await DB.query(
-      singleLineString`select 1 from employee_role where employee_id = $1 and school_id = $2 limit 1`,
-      [id, schoolId]
+      singleLineString`select 1 from employee_role er join role r on r.uuid = er.role_id
+        where er.employee_id = $1 and er.school_id = $2 and r.code = any($3::text[]) limit 1`,
+      [id, schoolId, editProtectedRoles]
     );
     return rows.length > 0;
   }

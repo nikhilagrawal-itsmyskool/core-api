@@ -23,6 +23,14 @@ create table if not exists staff_attendance_config (
 );
 create unique index if not exists idx_staff_att_config_school on staff_attendance_config (school_id);
 
+-- Exemption from staff attendance (who does NOT appear in the roster/dashboard). Effective rule:
+-- an employee is exempt if (holds any role in exempt_role_codes OR is in exempt_employee_ids)
+-- AND is NOT in include_employee_ids. So you can exempt a whole role and still pull one person
+-- back in. All CSV columns; empty/null = nothing exempted.
+alter table staff_attendance_config add column if not exists exempt_role_codes text;
+alter table staff_attendance_config add column if not exists include_employee_ids text;  -- 'take attendance anyway' (override)
+alter table staff_attendance_config add column if not exists exempt_employee_ids text;   -- also exempt (no role needed)
+
 -- Seasonal timing overrides (summer/winter/...). Recurring by month-day (no year), so no
 -- annual maintenance; a window may wrap the year end (start_md > end_md). A date picks the
 -- first matching active season (by sort_order); none -> config defaults.

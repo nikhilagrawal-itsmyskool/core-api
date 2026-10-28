@@ -5,6 +5,12 @@ import { ConfigRow, SeasonRow } from './staff-attendance-derive';
 
 const { generateShortUuid } = require('../../shared/util/generate-uuid.js');
 
+// Parse a CSV column (role codes / employee ids) into a trimmed, de-duped list.
+function csvToList(raw: any): string[] {
+  if (!raw) return [];
+  return Array.from(new Set(String(raw).split(',').map((s) => s.trim()).filter(Boolean)));
+}
+
 // Hardcoded fallback when a school hasn't configured anything yet (keeps derivation working).
 const DEFAULTS: ConfigRow = { expectedIn: '09:00', expectedOut: '15:00', graceMin: 10, halfDayAfterMin: null };
 
@@ -19,7 +25,7 @@ class PolicyService {
   async getConfig(schoolId: string): Promise<{ configured: boolean } & ConfigRow & { minPresentMin: number | null; enabled: string }> {
     const rows = await DB.query(singleLineString`select * from staff_attendance_config where school_id = $1`, [schoolId]);
     if (!rows.length) {
-      return { configured: false, ...DEFAULTS, minPresentMin: null, enabled: 'on' };
+      return { configured: false, ...DEFAULTS, minPresentMin: null, enabled: 'on', exemptRoleCodes: [], includeEmployeeIds: [], exemptEmployeeIds: [] } as any;
     }
     const c = rows[0];
     return {
@@ -30,12 +36,19 @@ class PolicyService {
       halfDayAfterMin: c.halfDayAfterMin ?? null,
       minPresentMin: c.minPresentMin ?? null,
       enabled: c.enabled || 'on',
-    };
+      exemptRoleCodes: csvToList(c.exemptRoleCodes),
+      includeEmployeeIds: csvToList(c.includeEmployeeIds),
+      exemptEmployeeIds: csvToList(c.exemptEmployeeIds),
+    } as any;
   }
 
   async upsertConfig(schoolId: string, userId: string, data: any): Promise<any> {
     assertHHMM('expectedIn', data.expectedIn);
     assertHHMM('expectedOut', data.expectedOut);
+    // Preserve any group not sent (timing vs exemption are saved from different UI sections).
+    const current: any = await this.getConfig(schoolId);
+    const toCsv = (v: any, fallback: string[]): string =>
+      (Array.isArray(v) ? v.map((x) => String(x).trim()).filter(Boolean) : fallback).join(',');
     const existing = await DB.query(singleLineString`select uuid from staff_attendance_config where school_id = $1`, [schoolId]);
     const vals = [
       data.expectedIn ?? DEFAULTS.expectedIn,
@@ -44,19 +57,23 @@ class PolicyService {
       data.halfDayAfterMin ?? null,
       data.minPresentMin ?? null,
       data.enabled === 'off' ? 'off' : 'on',
+      toCsv(data.exemptRoleCodes, current.exemptRoleCodes || []),
+      toCsv(data.includeEmployeeIds, current.includeEmployeeIds || []),
+      toCsv(data.exemptEmployeeIds, current.exemptEmployeeIds || []),
     ];
     if (existing.length) {
       await DB.query(
         singleLineString`update staff_attendance_config set
           expected_in = $2, expected_out = $3, grace_min = $4, half_day_after_min = $5, min_present_min = $6, enabled = $7,
-          updatedby_userid = $8, updated_at = now() where school_id = $1`,
+          exempt_role_codes = $8, include_employee_ids = $9, exempt_employee_ids = $10,
+          updatedby_userid = $11, updated_at = now() where school_id = $1`,
         [schoolId, ...vals, userId],
       );
     } else {
       await DB.query(
         singleLineString`insert into staff_attendance_config
-          (uuid, school_id, expected_in, expected_out, grace_min, half_day_after_min, min_present_min, enabled, createdby_userid, created_at, updated_at)
-          values ($1,$2,$3,$4,$5,$6,$7,$8,$9, now(), now())`,
+          (uuid, school_id, expected_in, expected_out, grace_min, half_day_after_min, min_present_min, enabled, exempt_role_codes, include_employee_ids, exempt_employee_ids, createdby_userid, created_at, updated_at)
+          values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12, now(), now())`,
         [generateShortUuid(12), schoolId, ...vals, userId],
       );
     }

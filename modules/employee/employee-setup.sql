@@ -90,7 +90,11 @@ create index if not exists idx_employee_document_ack_employee
 -- the app treats a missing row / null as TRUE (restriction ON by default).
 create table if not exists employee_config (
     school_id varchar(12) primary key,
-    restrict_roled_edit boolean,
+    restrict_roled_edit boolean,          -- legacy (unused); superseded by edit_protected_roles
+    edit_protected_roles text,            -- CSV of role CODES; an admin can't edit/delete an
+                                          -- employee holding any of these roles (god always can).
+                                          -- empty/null = no lock.
     updatedby_userid varchar(12),
     updated_at timestamp(0)
 );
+alter table employee_config add column if not exists edit_protected_roles text;
