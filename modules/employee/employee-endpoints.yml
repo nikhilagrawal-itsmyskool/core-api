@@ -25,6 +25,26 @@
           method: get
           cors: true
 
+  # Per-school employee config. GET readable by employee viewers (UI gating); PUT = god.
+  # Static 'config' must resolve ahead of /{id}.
+  get-employee-config:
+    handler: employee-handler.getConfig
+    name: ${self:service}-get-employee-config
+    events:
+      - http:
+          path: config
+          method: get
+          cors: true
+
+  update-employee-config:
+    handler: employee-handler.updateConfig
+    name: ${self:service}-update-employee-config
+    events:
+      - http:
+          path: config
+          method: put
+          cors: true
+
   create-employee:
     handler: employee-handler.create
     name: ${self:service}-create-employee

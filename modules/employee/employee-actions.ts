@@ -5,7 +5,7 @@ import { ACTIONS } from '../../shared/lib/authz-policy';
 // (create/update/delete, credential view + reset) = employee.manage; restore = the
 // god-only employee.restore. Contact unmasking on search/detail stays row-level
 // (revealEmployee in auth-utils) on top of the employee.view gate.
-const { EMPLOYEE_VIEW, EMPLOYEE_MANAGE, EMPLOYEE_RESTORE, EMPLOYEE_SESSION_RESET, DOCUMENTS_HANDBOOK_MANAGE } = ACTIONS;
+const { EMPLOYEE_VIEW, EMPLOYEE_MANAGE, EMPLOYEE_RESTORE, EMPLOYEE_SESSION_RESET, EMPLOYEE_CONFIG_MANAGE, DOCUMENTS_HANDBOOK_MANAGE } = ACTIONS;
 
 export const EMPLOYEE_ACTIONS: Record<string, string> = {
   'employee-handler.search': EMPLOYEE_VIEW,
@@ -19,6 +19,10 @@ export const EMPLOYEE_ACTIONS: Record<string, string> = {
   'employee-handler.resetPassword': EMPLOYEE_MANAGE,
   // Force re-login is a stronger, god-only control (NOT part of employee.manage).
   'employee-handler.forceReLogin': EMPLOYEE_SESSION_RESET,
+  // Employee config: reading is open to employee viewers (so the UI can gate buttons);
+  // changing it is god-only (employee.config.manage).
+  'employee-handler.getConfig': EMPLOYEE_VIEW,
+  'employee-handler.updateConfig': EMPLOYEE_CONFIG_MANAGE,
   // Staff document handbook — authoring surface (incl. the god-console reads list/get/docPdf,
   // which previously resolved school only). All god-first via documents.handbook.manage.
   'document-handler.list': DOCUMENTS_HANDBOOK_MANAGE,

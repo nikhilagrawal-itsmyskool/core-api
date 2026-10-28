@@ -421,6 +421,56 @@ class EmployeeService {
     return updated.length > 0;
   }
 
+  // ── Per-school employee config ──────────────────────────────────────────────────────
+  // restrictRoledEdit: when true (the default when no row exists), admins can't edit/delete a
+  // roled employee. Enforced in the handlers; the screen is god-only (employee.config.manage).
+  public async getConfig(schoolId: string): Promise<{ restrictRoledEdit: boolean }> {
+    const rows = await DB.query(
+      singleLineString`select restrict_roled_edit from employee_config where school_id = $1`,
+      [schoolId]
+    );
+    const raw = rows.length ? rows[0].restrictRoledEdit : null;
+    return { restrictRoledEdit: raw == null ? true : Boolean(raw) };
+  }
+
+  public async updateConfig(
+    schoolId: string,
+    data: { restrictRoledEdit?: boolean },
+    userId: string
+  ): Promise<{ restrictRoledEdit: boolean }> {
+    const current = await this.getConfig(schoolId);
+    const restrictRoledEdit = data.restrictRoledEdit == null ? current.restrictRoledEdit : Boolean(data.restrictRoledEdit);
+    const now = new Date();
+    const existing = await DB.query(
+      singleLineString`select school_id from employee_config where school_id = $1`,
+      [schoolId]
+    );
+    if (existing.length) {
+      await DB.query(
+        singleLineString`update employee_config set restrict_roled_edit = $1, updatedby_userid = $2, updated_at = $3 where school_id = $4`,
+        [restrictRoledEdit, userId, now, schoolId]
+      );
+    } else {
+      await DB.query(
+        singleLineString`insert into employee_config (school_id, restrict_roled_edit, updatedby_userid, updated_at) values ($1, $2, $3, $4)`,
+        [schoolId, restrictRoledEdit, userId, now]
+      );
+    }
+    return { restrictRoledEdit };
+  }
+
+  // True when this employee may NOT be edited/deleted by a non-god admin: the school's config has
+  // the restriction on AND the employee holds at least one role. Used to gate update/delete.
+  public async isEditRestricted(id: string, schoolId: string): Promise<boolean> {
+    const { restrictRoledEdit } = await this.getConfig(schoolId);
+    if (!restrictRoledEdit) return false;
+    const rows = await DB.query(
+      singleLineString`select 1 from employee_role where employee_id = $1 and school_id = $2 limit 1`,
+      [id, schoolId]
+    );
+    return rows.length > 0;
+  }
+
   public async listRoles(schoolId: string): Promise<EmployeeRole[]> {
     const query = singleLineString`
       select uuid, code, name from role where school_id = $1 order by name

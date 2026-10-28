@@ -83,3 +83,14 @@ create index if not exists idx_employee_document_ack_doc
     on employee_document_ack(school_id, document_id, document_version);
 create index if not exists idx_employee_document_ack_employee
     on employee_document_ack(school_id, employee_id);
+
+-- employee_config: per-school employee-module settings (god-only screen). One row per school.
+-- restrict_roled_edit: when true, an admin (anyone WITHOUT employee.roles.manage) may NOT edit or
+-- delete an employee who holds at least one role — those are managed only by god. No DDL default;
+-- the app treats a missing row / null as TRUE (restriction ON by default).
+create table if not exists employee_config (
+    school_id varchar(12) primary key,
+    restrict_roled_edit boolean,
+    updatedby_userid varchar(12),
+    updated_at timestamp(0)
+);

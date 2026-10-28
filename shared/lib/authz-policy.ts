@@ -132,6 +132,9 @@ export const ACTIONS = {
   // employees (name, employee number, device number, …) but CANNOT grant/revoke roles. God-only
   // by default (no role lists it; not under any wildcard admin holds); grantable via the grid.
   EMPLOYEE_ROLES_MANAGE: 'employee.roles.manage',
+  // Manage the per-school Employee Config screen (e.g. whether admins may edit/delete employees
+  // who hold a role). God-only by default; grantable via the Permissions grid.
+  EMPLOYEE_CONFIG_MANAGE: 'employee.config.manage',
   // Staff document handbook — authoring (create/edit/remind/archive/acks + the god-console
   // reads). god-only by default (no role grant); god grants via the grid. The /me read-&-sign
   // endpoints are self-service (PUBLIC in the manifest). documents.sign (frontend menu

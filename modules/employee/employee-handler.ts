@@ -18,6 +18,53 @@ class EmployeeHandler {
     return !!caller && can(caller.roles, ACTIONS.EMPLOYEE_ROLES_MANAGE);
   }
 
+  // Per-school config: whether admins may edit/delete employees who hold a role.
+  // GET is readable by employee viewers so the UI can gate its buttons.
+  public getConfig = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
+    _context.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const schoolId = await this.resolveSchoolId(event, callback);
+      if (!schoolId) return;
+      const config = await employeeService.getConfig(schoolId);
+      ResponseBuilder.ok({ config }, callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
+  // PUT /config — god-only (employee.config.manage).
+  public updateConfig = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
+    _context.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const schoolId = await this.resolveSchoolId(event, callback);
+      if (!schoolId) return;
+      if (!event.body) {
+        ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'Request body is required', callback);
+        return;
+      }
+      const body = JSON.parse(event.body);
+      const userId = this.getUserId(event);
+      const config = await employeeService.updateConfig(schoolId, body, userId);
+      ResponseBuilder.ok({ config }, callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
+  // Block a non-god admin from editing/deleting an employee who holds a role (when the school's
+  // restrict_roled_edit config is on). Writes a 403 and returns true when blocked. God (anyone with
+  // employee.roles.manage) bypasses.
+  private async blockedByRoledRestriction(event: ApiEvent, id: string, schoolId: string, callback: ApiCallback): Promise<boolean> {
+    if (this.canManageRoles(event)) return false;
+    if (!(await employeeService.isEditRestricted(id, schoolId))) return false;
+    ResponseBuilder.forbidden(
+      ErrorCode.MissingPermission,
+      'This employee has an assigned role; only a god user can edit or delete them.',
+      callback
+    );
+    return true;
+  }
+
   public search = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
     _context.callbackWaitsForEmptyEventLoop = false;
     try {
@@ -131,6 +178,10 @@ class EmployeeHandler {
         ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'Request body is required', callback);
         return;
       }
+
+      // A roled employee can only be edited by god when the school restricts it (config).
+      if (await this.blockedByRoledRestriction(event, id, schoolId, callback)) return;
+
       const body: UpdateEmployeeRequest = JSON.parse(event.body);
 
       // Only god (employee.roles.manage) may change roles; an admin's roleIds are ignored so the
@@ -160,6 +211,9 @@ class EmployeeHandler {
         ResponseBuilder.badRequest(ErrorCode.MissingId, 'Employee ID is required', callback);
         return;
       }
+
+      // A roled employee can only be deleted by god when the school restricts it (config).
+      if (await this.blockedByRoledRestriction(event, id, schoolId, callback)) return;
 
       const userId = this.getUserId(event);
       const deleted = await employeeService.delete(id, schoolId, userId);
@@ -294,3 +348,5 @@ export const restore = guard(EMPLOYEE_ACTIONS['employee-handler.restore'], handl
 export const getCredentials = guard(EMPLOYEE_ACTIONS['employee-handler.getCredentials'], handler.getCredentials);
 export const resetPassword = guard(EMPLOYEE_ACTIONS['employee-handler.resetPassword'], handler.resetPassword);
 export const forceReLogin = guard(EMPLOYEE_ACTIONS['employee-handler.forceReLogin'], handler.forceReLogin);
+export const getConfig = guard(EMPLOYEE_ACTIONS['employee-handler.getConfig'], handler.getConfig);
+export const updateConfig = guard(EMPLOYEE_ACTIONS['employee-handler.updateConfig'], handler.updateConfig);
