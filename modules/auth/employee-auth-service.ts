@@ -65,11 +65,17 @@ export class EmployeeAuthService {
     // Resolve the employee uuid (used as the actor id for audit columns) and
     // read that employee's roles.
     const employeeQuery = singleLineString`
-      select uuid from employee
+      select uuid, login_disabled from employee
       where family_unique_number = $1 and school_id = $2 and status = 'active'
       order by created_at asc limit 1`;
     const employeeResults = await DB.query(employeeQuery, [username, schoolId]);
     const employeeId = employeeResults.length > 0 ? employeeResults[0].uuid : null;
+
+    // Inactive employee: login disabled by an admin. Block the login (password was correct, but
+    // the account is deactivated). Returns null → the handler responds with the generic 401.
+    if (employeeResults.length > 0 && employeeResults[0].loginDisabled === true) {
+      return null;
+    }
 
     const rolesQuery = singleLineString`
       select distinct r.code

@@ -23,6 +23,10 @@ export const EMPLOYEE_ACTIONS: Record<string, string> = {
   // changing it is god-only (employee.config.manage).
   'employee-handler.getConfig': EMPLOYEE_VIEW,
   'employee-handler.updateConfig': EMPLOYEE_CONFIG_MANAGE,
+  // Employee photo: view with the record; upload/remove with manage (same as other fields).
+  'employee-photo-handler.get': EMPLOYEE_VIEW,
+  'employee-photo-handler.upload': EMPLOYEE_MANAGE,
+  'employee-photo-handler.remove': EMPLOYEE_MANAGE,
   // Staff document handbook — authoring surface (incl. the god-console reads list/get/docPdf,
   // which previously resolved school only). All god-first via documents.handbook.manage.
   'document-handler.list': DOCUMENTS_HANDBOOK_MANAGE,

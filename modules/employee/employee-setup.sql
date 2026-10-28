@@ -98,3 +98,7 @@ create table if not exists employee_config (
     updated_at timestamp(0)
 );
 alter table employee_config add column if not exists edit_protected_roles text;
+
+-- Inactive employees: login_disabled = true blocks login but keeps the employee active and listed
+-- (distinct from soft-delete). The employee table lives in modules/db/*; additive + idempotent here.
+alter table employee add column if not exists login_disabled boolean;

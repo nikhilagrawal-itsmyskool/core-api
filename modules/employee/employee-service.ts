@@ -99,7 +99,32 @@ class EmployeeService {
       rolesByEmployee.set(row.employeeId, list);
     }
 
-    return employees.map((e: Employee) => ({ ...e, roles: rolesByEmployee.get(e.uuid) || [] }));
+    // One photo per employee for the grid avatar (prefer the thumb). The handler presigns a URL
+    // from photoStorageKey when the caller asks (?withPhotos=true), then drops the raw key.
+    const photoRows = await DB.query(
+      singleLineString`
+        select distinct on (entity_id) entity_id, storage_key, storage_provider
+        from file_storage
+        where entity_type = 'employee' and school_id = $1 and entity_id in (${idPlaceholders})
+          and storage_key is not null
+        order by entity_id, (variant = 'thumb') desc, created_at desc
+      `,
+      [schoolId, ...ids]
+    );
+    const photoByEmployee = new Map<string, { key: string; provider: string | null }>();
+    for (const row of photoRows) {
+      photoByEmployee.set(row.entityId, { key: row.storageKey, provider: row.storageProvider ?? null });
+    }
+
+    return employees.map((e: Employee) => {
+      const photo = photoByEmployee.get(e.uuid);
+      return {
+        ...e,
+        roles: rolesByEmployee.get(e.uuid) || [],
+        photoStorageKey: photo?.key,
+        photoProvider: photo?.provider,
+      };
+    });
   }
 
   public async getById(id: string, schoolId: string): Promise<EmployeeWithRoles | null> {
@@ -218,6 +243,7 @@ class EmployeeService {
     if (data.employeeNumber !== undefined) setField('employee_number', data.employeeNumber);
     if (data.code !== undefined) setField('code', data.code);
     if (data.deviceNumber !== undefined) setField('device_number', data.deviceNumber ? String(data.deviceNumber).trim() : null);
+    if (data.loginDisabled !== undefined) setField('login_disabled', data.loginDisabled === true);
     if (data.gender !== undefined) setField('gender', data.gender);
     if (data.dob !== undefined) setField('dob', data.dob);
     if (data.mobile !== undefined) setField('mobile', data.mobile);

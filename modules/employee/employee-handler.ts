@@ -4,6 +4,7 @@ import { ErrorCode } from '../../shared/lib/error-codes';
 import { validateSchoolCodeHeader, getCallerContext, revealEmployee } from '../auth/auth-utils';
 import { guard, getCaller } from '../auth/authz';
 import { can, ACTIONS } from '../../shared/lib/authz-policy';
+import { getSignedPhotoUrl } from '../../shared/lib/file-storage';
 import { EMPLOYEE_ACTIONS } from './employee-actions';
 import { maskContactFields } from '../../shared/util/mask-phone';
 import { employeeService } from './employee-service';
@@ -83,7 +84,22 @@ class EmployeeHandler {
 
       const results = await employeeService.search(schoolId, name, includeDeleted, roleCodes);
       const ctx = getCallerContext(event);
+      // Presign a thumb URL per row only when asked (the grid does; dropdowns skip the cost).
+      // Batch the signings so a whole-staff match doesn't fire thousands of SigV4 calls at once.
+      if (event.queryStringParameters?.withPhotos === 'true') {
+        const withKey = (results as any[]).filter((r: any) => r.photoStorageKey);
+        const BATCH = 25;
+        for (let i = 0; i < withKey.length; i += BATCH) {
+          await Promise.all(
+            withKey.slice(i, i + BATCH).map(async (r: any) => {
+              r.photoUrl = await getSignedPhotoUrl(r.photoStorageKey, 300, r.photoProvider);
+            })
+          );
+        }
+      }
       for (const r of results || []) {
+        (r as any).photoStorageKey = undefined;
+        (r as any).photoProvider = undefined;
         // familyUniqueNumber is the login id — but it is the employee's mobile number.
         maskContactFields(r, ['mobile', 'whatsapp', 'familyUniqueNumber'], revealEmployee(ctx, r.uuid));
       }

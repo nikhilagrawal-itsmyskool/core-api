@@ -209,6 +209,36 @@
           method: get
           cors: true
 
+  # Employee photos (shared file_storage, entity_type='employee'). Static 'photos' before /{id}.
+  upload-employee-photo:
+    handler: employee-photo-handler.upload
+    name: ${self:service}-upload-employee-photo
+    memorySize: 512
+    timeout: 20
+    events:
+      - http:
+          path: photos/{id}
+          method: post
+          cors: true
+
+  get-employee-photo:
+    handler: employee-photo-handler.get
+    name: ${self:service}-get-employee-photo
+    events:
+      - http:
+          path: photos/{id}
+          method: get
+          cors: true
+
+  delete-employee-photo:
+    handler: employee-photo-handler.remove
+    name: ${self:service}-delete-employee-photo
+    events:
+      - http:
+          path: photos/{id}
+          method: delete
+          cors: true
+
   # Per-employee endpoints
   get-employee:
     handler: employee-handler.getById

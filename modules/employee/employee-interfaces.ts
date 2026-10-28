@@ -52,6 +52,14 @@ export interface UpdateEmployeeRequest {
   whatsapp?: string;
   email?: string;
   roleIds?: string[];
+  loginDisabled?: boolean; // true = inactive (login blocked); false = active
+}
+
+export interface UploadPhotoRequest {
+  fileName?: string;
+  mimeType: string;
+  base64Data: string;
+  variant?: string; // 'original' | 'thumb'
 }
 
 export interface EmployeeCredentials {
