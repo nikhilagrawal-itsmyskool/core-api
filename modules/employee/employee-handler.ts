@@ -2,15 +2,21 @@ import { ApiCallback, ApiContext, ApiEvent } from '../../shared/lib/api.interfac
 import { ResponseBuilder } from '../../shared/lib/response-builder';
 import { ErrorCode } from '../../shared/lib/error-codes';
 import { validateSchoolCodeHeader, getCallerContext, revealEmployee } from '../auth/auth-utils';
-import { guard } from '../auth/authz';
+import { guard, getCaller } from '../auth/authz';
+import { can, ACTIONS } from '../../shared/lib/authz-policy';
 import { EMPLOYEE_ACTIONS } from './employee-actions';
 import { maskContactFields } from '../../shared/util/mask-phone';
 import { employeeService } from './employee-service';
 import { CreateEmployeeRequest, UpdateEmployeeRequest } from './employee-interfaces';
 
 class EmployeeHandler {
-  // NOTE: These endpoints intentionally perform NO backend role checks.
-  // Authorization (admin/god only for add/edit/credentials/reset) is enforced in the UI for now.
+  // Role assignment is a god-only sub-permission of employee management: an admin may add/edit
+  // employees but cannot grant/revoke roles. Enforced server-side by stripping roleIds from the
+  // request unless the caller holds employee.roles.manage (the UI also hides the role editor).
+  private canManageRoles(event: ApiEvent): boolean {
+    const caller = getCaller(event);
+    return !!caller && can(caller.roles, ACTIONS.EMPLOYEE_ROLES_MANAGE);
+  }
 
   public search = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
     _context.callbackWaitsForEmptyEventLoop = false;
@@ -74,6 +80,9 @@ class EmployeeHandler {
         return;
       }
 
+      // Only god (employee.roles.manage) may set roles; an admin's roleIds are ignored.
+      if (!this.canManageRoles(event)) body.roleIds = undefined;
+
       const userId = this.getUserId(event);
       const result = await employeeService.create(body, schoolId, userId);
       ResponseBuilder.ok(result, callback);
@@ -123,6 +132,10 @@ class EmployeeHandler {
         return;
       }
       const body: UpdateEmployeeRequest = JSON.parse(event.body);
+
+      // Only god (employee.roles.manage) may change roles; an admin's roleIds are ignored so the
+      // rest of the edit (name, employee number, device number, …) still goes through.
+      if (!this.canManageRoles(event)) body.roleIds = undefined;
 
       const userId = this.getUserId(event);
       const result = await employeeService.update(id, body, schoolId, userId);

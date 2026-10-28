@@ -128,6 +128,10 @@ export const ACTIONS = {
   // default — NOT under any wildcard admin holds and listed on no role, so only god ('*') has it;
   // god can grant it to admin from the Permissions grid.
   EMPLOYEE_SESSION_RESET: 'employee.session.reset',
+  // Assign/change an employee's ROLES. Split out of employee.manage so an admin can add & edit
+  // employees (name, employee number, device number, …) but CANNOT grant/revoke roles. God-only
+  // by default (no role lists it; not under any wildcard admin holds); grantable via the grid.
+  EMPLOYEE_ROLES_MANAGE: 'employee.roles.manage',
   // Staff document handbook — authoring (create/edit/remind/archive/acks + the god-console
   // reads). god-only by default (no role grant); god grants via the grid. The /me read-&-sign
   // endpoints are self-service (PUBLIC in the manifest). documents.sign (frontend menu
