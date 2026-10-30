@@ -54,6 +54,18 @@ class NotificationService {
       ids = rows.map((r: any) => r.uuid);
     }
     if (!ids.length || !input.title) return { created: 0 };
+
+    // Parent-app gate: only create an in-app row for a family that actually HAS the
+    // app — otherwise a family installing months later would open to a backlog of
+    // stale notices. "Has the app" = app-presence (student_login.last_active_at) OR a
+    // registered push device. No-app families are still reached via SMS/WhatsApp (the
+    // message_job queue, separate). Employee notifications are NOT gated — that inbox is
+    // also read on the admin web (no device), so gating would blank the staff bell.
+    if (input.recipientType === "student") {
+      ids = await this.filterToAppFamilies(input.schoolId, ids);
+      if (!ids.length) return { created: 0 };
+    }
+
     const now = new Date();
     const title = input.title.slice(0, 128);
     // Batched multi-row insert (chunked to stay well under Postgres' param cap) — broadcasts
@@ -161,6 +173,43 @@ class NotificationService {
     );
     const studentIds = sibs.map((r: any) => r.uuid);
     return { familyNumber, studentIds: studentIds.length ? studentIds : [studentId] };
+  }
+
+  // Keep only the students whose FAMILY has demonstrated app-presence — either the
+  // family login has been stamped active (opened the app) or there's a registered
+  // family push device. Students with no family number are dropped (no inbox to land in).
+  async filterToAppFamilies(schoolId: string, studentIds: string[]): Promise<string[]> {
+    if (!studentIds.length) return [];
+    const rows = await DB.query(
+      singleLineString`
+        select s.uuid from student s
+        where s.school_id = $1 and s.uuid = any($2)
+          and coalesce(trim(s.family_unique_number), '') <> ''
+          and (
+            exists (select 1 from student_login sl
+              where sl.school_id = s.school_id and sl.username = s.family_unique_number
+                and sl.last_active_at is not null)
+            or exists (select 1 from device_token dt
+              where dt.school_id = s.school_id and dt.recipient_type = 'family'
+                and dt.recipient_id = s.family_unique_number and dt.status = 'active')
+          )
+      `,
+      [schoolId, studentIds],
+    );
+    return rows.map((r: any) => r.uuid);
+  }
+
+  // Stamp a family login as "active now" (push-independent app-presence). Throttled in
+  // SQL — a no-op unless the last stamp is older than 5 min — so it's cheap to call on
+  // every /me fetch and won't thrash the row. Never the source of a request failure.
+  async touchFamilyActive(schoolId: string, familyNumber: string): Promise<void> {
+    if (!familyNumber) return;
+    await DB.query(
+      singleLineString`update student_login set last_active_at = now()
+        where school_id = $1 and username = $2
+          and (last_active_at is null or last_active_at < now() - interval '5 minutes')`,
+      [schoolId, familyNumber],
+    );
   }
 
   async registerDevice(

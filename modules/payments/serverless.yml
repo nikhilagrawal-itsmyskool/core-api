@@ -1,0 +1,34 @@
+provider:
+  name: aws
+  region: ap-south-1
+  stage: ${opt:stage, 'dev'}
+  environment:
+    ${file(../../configs/${self:provider.stage}/${self:provider.stage}.yml)}
+  $<<: ${file(../global-config-${self:provider.stage}.yml):provider}
+
+custom:
+  prefix: itsmyskool
+  baseServiceName: payments-service
+  fullServiceName: ${self:custom.prefix}-${self:custom.baseServiceName}
+  customDomain:
+   basePath: 'payments'
+  # The Razorpay webhook is called server-to-server with no JWT (it carries its own
+  # HMAC signature we verify) — exempt it from the authorizer (health is exempt by default).
+  authorizerExtraExempt:
+    - webhooks/razorpay
+  $<<: ${file(../global-config-${self:provider.stage}.yml):custom}
+
+service: ${self:provider.stage}-${self:custom.fullServiceName}
+configValidationMode: off
+
+plugins:
+  - ../../plugins/serverless-merge-config.js
+  - serverless-webpack
+  - serverless-offline
+  - serverless-domain-manager
+  - ../../plugins/serverless-cors-defaults.js
+  - ../../plugins/serverless-authorizer.js
+
+functions: ${file(payments-endpoints.yml)}
+
+$<<: ${file(../global-config-${self:provider.stage}.yml):resources}

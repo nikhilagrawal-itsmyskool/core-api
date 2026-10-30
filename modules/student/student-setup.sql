@@ -206,6 +206,12 @@ alter table file_storage add column if not exists variant varchar(16);
 -- but this column is owned by the student (parent-app) module, so it lives here.
 alter table student_login add column if not exists disabled_features text;
 
+-- Parent-app "last active" — push-independent app-presence. Stamped (throttled)
+-- whenever the family app hits a /me endpoint (see communication notification-handler),
+-- so the admin "App Access" screen shows a truthful "active X ago" even before FCM
+-- push is configured (device_token.last_seen only moves on push registration).
+alter table student_login add column if not exists last_active_at timestamp;
+
 -- Table 6: student_report_saved (school-wide saved report templates). config holds
 -- the builder's remembered options — { fields: [...], filter, orientation, pageBreak }.
 -- Classes are NOT saved: they are chosen fresh each run. Shared across all admins.

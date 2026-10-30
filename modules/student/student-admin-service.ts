@@ -816,7 +816,7 @@ class StudentAdminService {
           coalesce(json_agg(json_build_object('id', s.uuid, 'name', s.name, 'className', cur.class_name, 'rollNumber', cur.roll_number)
             order by s.name) filter (where s.uuid is not null), '[]') as students,
           coalesce(dev.device_count, 0) as device_count,
-          dev.last_seen::text as last_seen
+          greatest(dev.last_seen, sl.last_active_at)::text as last_seen
         from student_login sl
         left join student s on s.family_unique_number = sl.username and s.school_id = sl.school_id and s.status <> 'deleted'
         left join lateral (
@@ -833,7 +833,7 @@ class StudentAdminService {
             and dt.recipient_id = sl.username and dt.status = 'active'
         ) dev on true
         where sl.school_id = $1 ${searchClause}
-        group by sl.username, sl.password, sl.display_name, sl.disabled_features, dev.device_count, dev.last_seen
+        group by sl.username, sl.password, sl.display_name, sl.disabled_features, dev.device_count, dev.last_seen, sl.last_active_at
         order by sl.username
         limit 2000
       `,

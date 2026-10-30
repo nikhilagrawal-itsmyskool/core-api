@@ -1,0 +1,46 @@
+  # Health check
+  health:
+    handler: health-handler.health
+    events:
+      - http:
+          path: health
+          method: get
+          cors: true
+
+  # ── Parent / student app (student token + X-Student-Id) ────────────────────────
+  me-payable:
+    handler: payments-handler.payable
+    name: ${self:service}-me-payable
+    events:
+      - http:
+          path: me/payable
+          method: get
+          cors: true
+
+  me-order:
+    handler: payments-handler.createOrder
+    name: ${self:service}-me-order
+    events:
+      - http:
+          path: me/order
+          method: post
+          cors: true
+
+  me-verify:
+    handler: payments-handler.verify
+    name: ${self:service}-me-verify
+    events:
+      - http:
+          path: me/verify
+          method: post
+          cors: true
+
+  # ── Razorpay webhook (no JWT; verifies its own HMAC signature) ─────────────────
+  webhook-razorpay:
+    handler: payments-handler.webhook
+    name: ${self:service}-webhook-razorpay
+    events:
+      - http:
+          path: webhooks/razorpay
+          method: post
+          cors: true

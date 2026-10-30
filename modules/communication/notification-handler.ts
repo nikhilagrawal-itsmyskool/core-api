@@ -109,6 +109,11 @@ class NotificationHandler {
     try {
       const r = await resolveMe(event, callback);
       if (!r) return;
+      // Push-independent "last active" telemetry: a family opening the app lands here
+      // (Home bell fetch). Throttled + swallowed so it never delays or breaks the read.
+      if (r.deviceType === "family") {
+        try { await notificationService.touchFamilyActive(r.schoolId, r.deviceId); } catch { /* telemetry only */ }
+      }
       const q = event.queryStringParameters || {};
       const result = await notificationService.list(r.schoolId, r.recipientType, r.recipientIds, {
         unreadOnly: q.unreadOnly === "true",

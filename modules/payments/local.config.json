@@ -1,0 +1,5 @@
+{
+  "httpPort": 3071,
+  "lambdaPort": 3072,
+  "prefix": "payments"
+}

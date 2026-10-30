@@ -72,6 +72,21 @@ class OutreachHandler {
     }
   };
 
+  // GET /outreach/moments/{id}/reactions — admin: who reacted (names). Not in the feed.
+  public getReactions = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const auth = await resolveSchool(event, callback);
+      if (!auth) return;
+      const id = requireParam(event, "id", callback);
+      if (!id) return;
+      const result = await outreachService.reactionDetail(auth.schoolId, id);
+      ResponseBuilder.ok(result, callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
   // PUT /outreach/moments/{id} {title?, body?, audience?}
   public updateMoment = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
     ctx.callbackWaitsForEmptyEventLoop = false;
@@ -328,6 +343,7 @@ const g = (ref: string, fn: any) => guard(OUTREACH_ACTIONS[ref], fn);
 export const createMoment = g("outreach-handler.createMoment", h.createMoment);
 export const listMoments = g("outreach-handler.listMoments", h.listMoments);
 export const getMoment = g("outreach-handler.getMoment", h.getMoment);
+export const getReactions = g("outreach-handler.getReactions", h.getReactions);
 export const updateMoment = g("outreach-handler.updateMoment", h.updateMoment);
 export const addPhoto = g("outreach-handler.addPhoto", h.addPhoto);
 export const removePhoto = g("outreach-handler.removePhoto", h.removePhoto);
