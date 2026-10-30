@@ -58,6 +58,20 @@ const CATALOGS: Record<string, Catalog> = {
       { action: ACTIONS.ATTENDANCE_CONFIG_MANAGE, label: 'Manage attendance config (half-day policy)' },
     ],
   },
+  'staff-attendance': {
+    module: 'staff-attendance',
+    roles: [
+      { role: 'admin', label: 'Admin' },
+      { role: 'education-director', label: 'Education Director' },
+      { role: 'teacher', label: 'Teacher' },
+    ],
+    actions: [
+      { action: ACTIONS.STAFF_ATTENDANCE_VIEW, label: 'Oversight: daily ins/outs dashboard & reports' },
+      { action: ACTIONS.STAFF_ATTENDANCE_REGULARIZE, label: 'See own attendance & file/cancel regularization (My Attendance)' },
+      { action: ACTIONS.STAFF_ATTENDANCE_APPROVE, label: 'Approve / reject regularization requests' },
+      { action: ACTIONS.STAFF_ATTENDANCE_CONFIG_MANAGE, label: 'Manage policy, seasons & exemptions (Config)' },
+    ],
+  },
   club: {
     module: 'club',
     roles: [
