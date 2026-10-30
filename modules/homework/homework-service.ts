@@ -2,6 +2,7 @@ import { DB, singleLineString } from "../../shared/lib/db";
 import { BusinessErrorResult } from "../../shared/lib/errors";
 import { ErrorCode } from "../../shared/lib/error-codes";
 import { fileStorageService, getSignedPhotoUrl } from "../../shared/lib/file-storage";
+import { convertDocxToPdf } from "../../shared/lib/docx-to-pdf";
 import { resolveEffectiveClassId } from "../../shared/lib/effective-class";
 import {
   getCurrentAcademicYearId,
@@ -12,13 +13,21 @@ import {
 import {
   HW_IMAGE_ALLOWED_MIME,
   HW_IMAGE_MAX_BYTES,
+  HW_DOC_MAX_BYTES,
+  HW_PDF_MIME,
+  HW_WORD_ALLOWED_MIME,
+  HW_PDF_MIME_OUT,
+  HW_MAX_CONVERT_ATTEMPTS,
   FILE_ENTITY_TYPE,
+  HW_VARIANT_ORIGINAL,
+  HW_VARIANT_SOURCE,
 } from "./homework-constants";
 import {
   AddItemRequest,
   EditItemRequest,
   HomeworkDayResult,
   HomeworkItemView,
+  ConversionStatus,
   MyHomeworkClass,
   ClassTeacherMapRow,
   PostableClass,
@@ -26,6 +35,21 @@ import {
   HomeworkAuditRow,
 } from "./homework-interfaces";
 const { generateShortUuid } = require("../../shared/util/generate-uuid.js");
+
+// Word->PDF conversion is enabled only once the LibreOffice layer is provisioned and
+// verified (self-test). Gated separately from syllabus so each can be flipped on its
+// own. When disabled the worker claims nothing, so pending Word items wait (never fail).
+function isHomeworkConvertEnabled(): boolean {
+  return process.env.HOMEWORK_CONVERT_ENABLED === "true";
+}
+
+// Result of claiming+converting one pending item in the worker.
+type ConvertResult =
+  | { status: "converted"; itemId: string }
+  | { status: "retry"; itemId: string; error: string }
+  | { status: "failed"; itemId: string; error: string }
+  | { status: "idle" }
+  | { status: "skipped"; reason: string };
 
 class HomeworkService {
   // ── Class-teacher resolution (override -> timetable class_teacher) ────────────
@@ -212,32 +236,59 @@ class HomeworkService {
     return this.findDayRow(schoolId, ay, classId, date);
   }
 
-  // Active items under a day, each with a presigned image URL (null in local mode).
+  // Map an item's stored pdf_status to the client-facing conversion status. Images and
+  // PDFs carry no pdf_status (null) and are always 'ready'; a converting Word item is
+  // 'pending' until the worker finishes.
+  private conversionStatus(pdfStatus: string | null): ConversionStatus {
+    if (pdfStatus === "failed") return "failed";
+    if (pdfStatus === "pending" || pdfStatus === "converting") return "pending";
+    return "ready";
+  }
+
+  // Active items under a day. Images carry a presigned imageUrl; PDFs (incl. converted
+  // Word docs) carry fileUrl + mimeType so the client opens them as a document. A Word
+  // item still converting has no 'original' file yet — it reports conversionStatus
+  // 'pending' and its name comes from the uploaded source. (URLs are null in local mode.)
   private async itemsForDay(schoolId: string, dayId: string): Promise<HomeworkItemView[]> {
     const items = await DB.query(
-      singleLineString`select uuid, subject_label, note, seq from homework_item
+      singleLineString`select uuid, subject_label, note, seq, pdf_status from homework_item
         where homework_day_id = $1 and school_id = $2 and status = 'active'
         order by seq asc nulls last, created_at asc`,
       [dayId, schoolId],
     );
     if (!items.length) return [];
     const files = await DB.query(
-      singleLineString`select entity_id as item_id, uuid as file_id, storage_key from file_storage
+      singleLineString`select entity_id as item_id, uuid as file_id, storage_key, storage_provider,
+          mime_type, file_name, variant from file_storage
         where entity_type = $1 and school_id = $2 and entity_id = any($3)`,
       [FILE_ENTITY_TYPE, schoolId, items.map((i: any) => i.uuid)],
     );
-    const fileMap = new Map(files.map((f: any) => [f.itemId, f]));
+    // Prefer the rendered 'original' per item; fall back to the 'source' (Word doc
+    // awaiting conversion) for the display name only.
+    const originalMap = new Map<string, any>();
+    const sourceMap = new Map<string, any>();
+    for (const f of files as any[]) {
+      if (f.variant === HW_VARIANT_SOURCE) sourceMap.set(f.itemId, f);
+      else originalMap.set(f.itemId, f);
+    }
     const out: HomeworkItemView[] = [];
     for (const it of items) {
-      const f: any = fileMap.get(it.uuid);
-      const imageUrl = f ? await getSignedPhotoUrl(f.storageKey) : null;
+      const status = this.conversionStatus(it.pdfStatus || null);
+      const original: any = originalMap.get(it.uuid);
+      const source: any = sourceMap.get(it.uuid);
+      const isImage = !!original && typeof original.mimeType === "string" && original.mimeType.startsWith("image/");
+      const signedUrl = original ? await getSignedPhotoUrl(original.storageKey, 300, original.storageProvider) : null;
       out.push({
         uuid: it.uuid,
         subjectLabel: it.subjectLabel || null,
         note: it.note || null,
         seq: it.seq,
-        imageUrl: imageUrl || null,
-        fileId: f?.fileId || null,
+        imageUrl: isImage ? signedUrl || null : null,
+        fileUrl: original ? signedUrl || null : null,
+        mimeType: original?.mimeType || (source ? HW_PDF_MIME_OUT : null),
+        fileName: original?.fileName || source?.fileName || null,
+        conversionStatus: status,
+        fileId: original?.fileId || null,
       });
     }
     return out;
@@ -274,17 +325,25 @@ class HomeworkService {
     const year = req.academicYearId || (await getCurrentAcademicYearId(schoolId));
     if (!year) throw new BusinessErrorResult(ErrorCode.BusinessError, "No current academic year");
     if (!(await findPostableClass(schoolId, req.classId))) throw new BusinessErrorResult(ErrorCode.BusinessError, "Invalid class");
+
     const img = req.image;
-    if (!img?.base64Data || !img?.mimeType) throw new BusinessErrorResult(ErrorCode.BusinessError, "image (mimeType + base64Data) is required");
-    if (!(HW_IMAGE_ALLOWED_MIME as readonly string[]).includes(img.mimeType)) {
-      throw new BusinessErrorResult(ErrorCode.BusinessError, `Unsupported image type. Allowed: ${HW_IMAGE_ALLOWED_MIME.join(", ")}`);
+    if (!img?.base64Data || !img?.mimeType) throw new BusinessErrorResult(ErrorCode.BusinessError, "file (mimeType + base64Data) is required");
+    const isImage = (HW_IMAGE_ALLOWED_MIME as readonly string[]).includes(img.mimeType);
+    const isPdf = img.mimeType === HW_PDF_MIME;
+    const isWord = (HW_WORD_ALLOWED_MIME as readonly string[]).includes(img.mimeType);
+    if (!isImage && !isPdf && !isWord) {
+      throw new BusinessErrorResult(
+        ErrorCode.BusinessError,
+        "Unsupported file type. Upload a photo (JPG/PNG/WebP), a PDF, or a Word document.",
+      );
     }
-    if (Buffer.byteLength(img.base64Data, "base64") > HW_IMAGE_MAX_BYTES) {
-      throw new BusinessErrorResult(ErrorCode.BusinessError, `Image too large (max ${Math.round(HW_IMAGE_MAX_BYTES / (1024 * 1024))} MB)`);
+    const maxBytes = isImage ? HW_IMAGE_MAX_BYTES : HW_DOC_MAX_BYTES;
+    if (Buffer.byteLength(img.base64Data, "base64") > maxBytes) {
+      throw new BusinessErrorResult(ErrorCode.BusinessError, `File too large (max ${Math.round(maxBytes / (1024 * 1024))} MB)`);
     }
 
     const day = await this.ensureDay(schoolId, year, req.classId, req.date, userId);
-    if (day.status === "published") throw new BusinessErrorResult(ErrorCode.BusinessError, "Unpublish the homework before adding photos");
+    if (day.status === "published") throw new BusinessErrorResult(ErrorCode.BusinessError, "Unpublish the homework before adding items");
 
     const itemId = generateShortUuid(12);
     const now = new Date();
@@ -292,21 +351,45 @@ class HomeworkService {
       singleLineString`select coalesce(max(seq), 0) + 1 as next from homework_item where homework_day_id = $1 and status = 'active'`,
       [day.uuid],
     );
-    await DB.query(
-      singleLineString`insert into homework_item (uuid, school_id, homework_day_id, subject_label, note, seq, status, createdby_userid, created_at)
-        values ($1, $2, $3, $4, $5, $6, 'active', $7, $8)`,
-      [itemId, schoolId, day.uuid, req.subjectLabel?.trim() || null, req.note?.trim() || null, seqRow[0].next, userId, now],
-    );
-    await fileStorageService.upload({
-      fileName: img.fileName || `homework-${itemId}.img`,
-      mimeType: img.mimeType,
-      base64Data: img.base64Data,
-      entityType: FILE_ENTITY_TYPE,
-      entityId: itemId,
-      variant: "original",
-      schoolId,
-      userId,
-    });
+
+    if (isWord) {
+      // Store the Word doc as the SOURCE; the worker converts it to a PDF 'original'
+      // and flips pdf_status 'pending' -> 'ready'. Nothing parent-facing until ready.
+      const src = await fileStorageService.upload({
+        fileName: img.fileName || `homework-${itemId}.docx`,
+        mimeType: img.mimeType,
+        base64Data: img.base64Data,
+        entityType: FILE_ENTITY_TYPE,
+        entityId: itemId,
+        variant: HW_VARIANT_SOURCE,
+        schoolId,
+        userId,
+      });
+      await DB.query(
+        singleLineString`insert into homework_item
+          (uuid, school_id, homework_day_id, subject_label, note, seq, status, pdf_status, pdf_attempts, src_file_id, createdby_userid, created_at)
+          values ($1, $2, $3, $4, $5, $6, 'active', 'pending', 0, $7, $8, $9)`,
+        [itemId, schoolId, day.uuid, req.subjectLabel?.trim() || null, req.note?.trim() || null, seqRow[0].next, src.uuid, userId, now],
+      );
+    } else {
+      // Image or PDF — stored directly and immediately viewable (no conversion).
+      await DB.query(
+        singleLineString`insert into homework_item
+          (uuid, school_id, homework_day_id, subject_label, note, seq, status, createdby_userid, created_at)
+          values ($1, $2, $3, $4, $5, $6, 'active', $7, $8)`,
+        [itemId, schoolId, day.uuid, req.subjectLabel?.trim() || null, req.note?.trim() || null, seqRow[0].next, userId, now],
+      );
+      await fileStorageService.upload({
+        fileName: img.fileName || `homework-${itemId}.${isPdf ? "pdf" : "img"}`,
+        mimeType: img.mimeType,
+        base64Data: img.base64Data,
+        entityType: FILE_ENTITY_TYPE,
+        entityId: itemId,
+        variant: HW_VARIANT_ORIGINAL,
+        schoolId,
+        userId,
+      });
+    }
     await this.audit(schoolId, day.uuid, itemId, req.classId, req.date, "upload", req.subjectLabel || null, userId);
     return this.dayResult(schoolId, year, req.classId, req.date);
   }
@@ -366,10 +449,22 @@ class HomeworkService {
     if (!day) return null;
     if (day.status === "published") throw new BusinessErrorResult(ErrorCode.BusinessError, "Homework is already published");
     const cnt = await DB.query(
-      singleLineString`select count(1)::int as n from homework_item where homework_day_id = $1 and status = 'active'`,
+      singleLineString`select
+          count(1)::int as n,
+          count(1) filter (where pdf_status in ('pending', 'converting'))::int as preparing,
+          count(1) filter (where pdf_status = 'failed')::int as failed
+        from homework_item where homework_day_id = $1 and status = 'active'`,
       [dayId],
     );
-    if (cnt[0].n === 0) throw new BusinessErrorResult(ErrorCode.BusinessError, "Add at least one photo before publishing");
+    if (cnt[0].n === 0) throw new BusinessErrorResult(ErrorCode.BusinessError, "Add at least one item before publishing");
+    // A Word doc is still being converted to PDF — publishing now would show parents an
+    // item that isn't ready. Block until the worker finishes (usually within a minute).
+    if (cnt[0].preparing > 0) {
+      throw new BusinessErrorResult(ErrorCode.BusinessError, "A document is still being prepared — try again in a moment");
+    }
+    if (cnt[0].failed > 0) {
+      throw new BusinessErrorResult(ErrorCode.BusinessError, "A document couldn't be processed — remove it (or upload a PDF) before publishing");
+    }
     const now = new Date();
     await DB.query(
       singleLineString`update homework_day set status = 'published', published_at = $1, publishedby_userid = $2, updatedby_userid = $2, updated_at = $1 where uuid = $3`,
@@ -416,13 +511,91 @@ class HomeworkService {
     if (!day || day.status !== "published") {
       return { date, classId: eff.classId, className, published: false, items: [] };
     }
+    // Publishing is blocked until every item is ready, so a published day should only
+    // hold ready items — filter defensively so a parent never sees a converting item.
+    const items = (await this.itemsForDay(schoolId, day.uuid)).filter((i) => i.conversionStatus === "ready");
     return {
       date,
       classId: eff.classId,
       className,
       published: true,
-      items: await this.itemsForDay(schoolId, day.uuid),
+      items,
     };
+  }
+
+  // ── Word→PDF conversion worker (docx -> pdf) ─────────────────────────────────
+  // Claim one pending Word item (for update skip locked, overlap-safe across drains),
+  // convert its source doc to PDF, store it as the 'original', mark ready. Transient
+  // failures go back to 'pending' until HW_MAX_CONVERT_ATTEMPTS, then 'failed'. When
+  // the converter is not enabled, we DON'T claim anything (so nothing is marked failed).
+  async processNextConversion(): Promise<ConvertResult> {
+    if (!isHomeworkConvertEnabled()) {
+      return { status: "skipped", reason: "converter not enabled" };
+    }
+    const claimed = await DB.query(
+      singleLineString`
+        update homework_item
+        set pdf_status = 'converting', pdf_attempts = coalesce(pdf_attempts, 0) + 1, updated_at = now()
+        where uuid = (
+          select uuid from homework_item
+          where status = 'active' and pdf_status = 'pending' and src_file_id is not null
+          order by created_at asc nulls first
+          limit 1
+          for update skip locked
+        )
+        returning uuid, school_id, src_file_id, coalesce(pdf_attempts, 0) as pdf_attempts`,
+      [],
+    );
+    if (claimed.length === 0) return { status: "idle" };
+    const item = claimed[0];
+
+    try {
+      const src = await fileStorageService.getWithData(item.srcFileId, item.schoolId);
+      if (!src) throw new Error("source Word file missing");
+      const pdfBase64 = await convertDocxToPdf(src.data, src.fileName);
+      await fileStorageService.upload({
+        fileName: (src.fileName || "homework").replace(/\.docx?$/i, "") + ".pdf",
+        mimeType: HW_PDF_MIME_OUT,
+        base64Data: pdfBase64,
+        entityType: FILE_ENTITY_TYPE,
+        entityId: item.uuid,
+        variant: HW_VARIANT_ORIGINAL,
+        schoolId: item.schoolId,
+        userId: "0",
+      });
+      await DB.query(
+        singleLineString`update homework_item set pdf_status = 'ready', pdf_error = null, updated_at = now() where uuid = $1`,
+        [item.uuid],
+      );
+      return { status: "converted", itemId: item.uuid };
+    } catch (e: any) {
+      const message = String(e?.message || e).slice(0, 500);
+      const giveUp = item.pdfAttempts >= HW_MAX_CONVERT_ATTEMPTS;
+      await DB.query(
+        singleLineString`update homework_item set pdf_status = $1, pdf_error = $2, updated_at = now() where uuid = $3`,
+        [giveUp ? "failed" : "pending", message, item.uuid],
+      );
+      return giveUp
+        ? { status: "failed", itemId: item.uuid, error: message }
+        : { status: "retry", itemId: item.uuid, error: message };
+    }
+  }
+
+  // Drain the queue until empty, the converter is unavailable, or the time budget runs
+  // out (EventBridge on AWS; a poller script drives it locally).
+  async drainConversions(maxMs = 50000): Promise<{ converted: number; failed: number; skipped: boolean }> {
+    const start = Date.now();
+    let converted = 0;
+    let failed = 0;
+    while (Date.now() - start < maxMs) {
+      const r = await this.processNextConversion();
+      if (r.status === "idle") break;
+      if (r.status === "skipped") return { converted, failed, skipped: true };
+      if (r.status === "converted") converted += 1;
+      if (r.status === "failed") failed += 1;
+      // 'retry' loops again
+    }
+    return { converted, failed, skipped: false };
   }
 
   // ── Single-image base64 (fallback / local dev) ───────────────────────────────

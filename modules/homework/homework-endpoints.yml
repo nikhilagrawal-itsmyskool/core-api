@@ -232,3 +232,47 @@
           path: me/today
           method: get
           cors: true
+
+  # ── Word→PDF conversion worker (docx -> pdf) ───────────────────────────────
+  # Heavy LibreOffice layer is isolated to these functions only; every CRUD endpoint
+  # above stays light (512 MB, no layer). Mirrors the syllabus model-paper worker.
+  # HTTP entrypoint for the local poller (scripts/local/homework-conversion-worker.js).
+  process-next-conversion:
+    handler: homework-conversion-handler.processNext
+    name: ${self:service}-process-next-conversion
+    timeout: 120
+    memorySize: 2048
+    ephemeralStorage: 2048
+    layers:
+      - arn:aws:lambda:ap-south-1:264318271546:layer:prod-itsmyskool-libreoffice:2
+    events:
+      - http:
+          path: conversions/process-next
+          method: post
+          cors: true
+
+  # AWS worker: EventBridge drains pending Word items to PDF every minute. Overlap-safe
+  # via `for update skip locked`; inert while HOMEWORK_CONVERT_ENABLED is not 'true'.
+  drain-conversions:
+    handler: homework-conversion-handler.drain
+    name: ${self:service}-drain-conversions
+    timeout: 120
+    memorySize: 2048
+    ephemeralStorage: 2048
+    layers:
+      - arn:aws:lambda:ap-south-1:264318271546:layer:prod-itsmyskool-libreoffice:2
+    events:
+      - schedule:
+          rate: rate(1 minute)
+          enabled: true
+
+  # Invoke-only runtime check for the LibreOffice layer (AL2 binary on AL2023).
+  # Run: serverless invoke -f convert-selftest --stage prod --region ap-south-1
+  convert-selftest:
+    handler: homework-conversion-handler.selftest
+    name: ${self:service}-convert-selftest
+    timeout: 120
+    memorySize: 2048
+    ephemeralStorage: 2048
+    layers:
+      - arn:aws:lambda:ap-south-1:264318271546:layer:prod-itsmyskool-libreoffice:2

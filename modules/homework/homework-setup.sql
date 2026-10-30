@@ -44,6 +44,18 @@ create table if not exists homework_item (
 );
 create index if not exists idx_homework_item_day on homework_item(homework_day_id, status);
 
+-- Word->PDF conversion state (additive). An image or PDF item has pdf_status null
+-- (no conversion, always "ready"). A Word item is uploaded as the 'source' file in
+-- file_storage, stored here as 'pending', and the conversion worker renders it to a
+-- PDF 'original' and flips it to 'ready' (or 'failed' after repeated errors). CHECK
+-- values are enforced in application code (app-level validation per module convention).
+alter table homework_item add column if not exists pdf_status varchar(16);   -- pending|converting|ready|failed (null = image/pdf, ready)
+alter table homework_item add column if not exists pdf_attempts integer;
+alter table homework_item add column if not exists pdf_error text;
+alter table homework_item add column if not exists src_file_id varchar(12);   -- file_storage uuid of the uploaded Word source
+-- Worker claim index: pending items ready to convert.
+create index if not exists idx_homework_item_pdf_pending on homework_item(pdf_status) where pdf_status = 'pending';
+
 -- homework_class_teacher: per-school admin OVERRIDE of the class -> class-teacher
 -- mapping. Resolution = this override (if active) else the timetable class_teacher.
 create table if not exists homework_class_teacher (

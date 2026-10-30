@@ -269,3 +269,5 @@ export const classTeacherMap = g("homework-handler.classTeacherMap", h.classTeac
 export const setClassTeacher = g("homework-handler.setClassTeacher", h.setClassTeacher);
 export const clearClassTeacher = g("homework-handler.clearClassTeacher", h.clearClassTeacher);
 export const getAudit = g("homework-handler.getAudit", h.getAudit);
+// Conversion worker handlers live in homework-conversion-handler.ts (own file so the
+// LibreOffice import stays off these light CRUD function bundles).

@@ -1,4 +1,4 @@
-import { BASE_URL, headers, getContext, histDate, closePool, TINY_PNG_BASE64 } from "./helpers";
+import { BASE_URL, headers, getContext, histDate, closePool, TINY_PNG_BASE64, TINY_PDF_BASE64, TINY_DOCX_BASE64, DOCX_MIME } from "./helpers";
 import { homeworkService } from "../homework-service";
 import { DB } from "../../../shared/lib/db";
 
@@ -166,7 +166,7 @@ describe("Homework API", () => {
     expect(clearedRow.source).not.toBe("override");
   });
 
-  it("rejects an unsupported image type", async () => {
+  it("rejects an unsupported file type", async () => {
     const { classId } = await getContext();
     const date = histDate();
     const bad = await post("/items", {
@@ -175,5 +175,49 @@ describe("Homework API", () => {
       image: { fileName: "x.gif", mimeType: "image/gif", base64Data: TINY_PNG_BASE64 },
     });
     expect(bad.status).toBe(400);
+  });
+
+  it("accepts a PDF directly — ready immediately, publishable, student sees it", async () => {
+    const { schoolId, classId, studentId, academicYearId } = await getContext();
+    const date = histDate();
+
+    const add = await post("/items", {
+      classId, date, academicYearId, subjectLabel: "Science",
+      image: { fileName: "worksheet.pdf", mimeType: "application/pdf", base64Data: TINY_PDF_BASE64 },
+    });
+    expect(add.status).toBe(200);
+    const item = add.json.day.items[0];
+    expect(item.mimeType).toBe("application/pdf");
+    expect(item.conversionStatus).toBe("ready");
+    expect(item.fileId).toBeTruthy();
+
+    // a PDF needs no conversion, so publishing is allowed right away
+    const pub = await post(`/day/${add.json.day.uuid}/publish`);
+    expect(pub.status).toBe(200);
+
+    const seen = await homeworkService.studentToday(schoolId, studentId, date, academicYearId);
+    expect(seen.published).toBe(true);
+    expect(seen.items.length).toBe(1);
+    expect(seen.items[0].mimeType).toBe("application/pdf");
+  });
+
+  it("queues a Word doc for conversion — pending blocks publish and is hidden from students", async () => {
+    const { schoolId, classId, studentId, academicYearId } = await getContext();
+    const date = histDate();
+
+    const add = await post("/items", {
+      classId, date, academicYearId, subjectLabel: "English",
+      image: { fileName: "notes.docx", mimeType: DOCX_MIME, base64Data: TINY_DOCX_BASE64 },
+    });
+    expect(add.status).toBe(200);
+    expect(add.json.day.items[0].conversionStatus).toBe("pending");
+
+    // publishing is blocked while a document is still being prepared
+    const pub = await post(`/day/${add.json.day.uuid}/publish`);
+    expect(pub.status).toBe(400);
+
+    // a pending item is never shown to the student (even if the day were published)
+    const seen = await homeworkService.studentToday(schoolId, studentId, date, academicYearId);
+    expect(seen.items.find((i: any) => i.conversionStatus !== "ready")).toBeUndefined();
   });
 });

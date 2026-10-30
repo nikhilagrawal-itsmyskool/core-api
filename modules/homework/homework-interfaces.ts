@@ -34,13 +34,23 @@ export interface SetClassTeacherRequest {
 }
 
 // ---- Read models ----
+// An item is either an image (imageUrl rendered inline) or a document (mimeType
+// 'application/pdf', opened via fileUrl). A freshly-uploaded Word item is 'pending'
+// until the worker converts it; publishing is blocked until every item is 'ready'
+// (so the student/parent app only ever sees ready items).
+export type ConversionStatus = "ready" | "pending" | "failed";
+
 export interface HomeworkItemView {
   uuid: string;
   subjectLabel?: string | null;
   note?: string | null;
   seq: number | null;
-  imageUrl?: string | null; // presigned (S3/prod); null in local/Postgres mode
-  fileId?: string | null;   // file_storage uuid — fetch base64 via /homework/items/{id}/image
+  imageUrl?: string | null;  // presigned image URL (images only); null in local/Postgres mode
+  fileUrl?: string | null;   // presigned URL for the stored file (image or pdf); null in local mode
+  mimeType?: string | null;  // e.g. image/jpeg, application/pdf
+  fileName?: string | null;
+  conversionStatus?: ConversionStatus; // 'ready' for images/pdfs; 'pending'/'failed' while a Word doc converts
+  fileId?: string | null;    // file_storage uuid — fetch base64 via /homework/items/{id}/image
 }
 
 export interface HomeworkDayView {

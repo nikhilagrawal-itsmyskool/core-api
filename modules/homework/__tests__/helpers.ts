@@ -18,6 +18,17 @@ export const headers = {
 export const TINY_PNG_BASE64 =
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
 
+// A minimal valid single-page PDF (header + one empty page) for document uploads.
+export const TINY_PDF_BASE64 = Buffer.from(
+  "%PDF-1.1\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 200 200]>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF",
+  "utf8",
+).toString("base64");
+
+// A tiny byte blob standing in for a .docx — enough to exercise the "queued for
+// conversion" path (the worker is disabled locally, so it just stays pending).
+export const TINY_DOCX_BASE64 = Buffer.from("PK homework test docx", "utf8").toString("base64");
+export const DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+
 let pool: Pool | null = null;
 function getPool(): Pool {
   if (!pool) {
