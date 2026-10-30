@@ -112,8 +112,28 @@ class TransferHandler {
       if (!tcId) { ResponseBuilder.badRequest(ErrorCode.MissingId, 'TC ID is required', callback); return; }
       const data = await transferService.printData(schoolId, tcId);
       if (!data) { ResponseBuilder.notFound(ErrorCode.InvalidId, 'TC not found', callback); return; }
+      if (data.tc.status !== 'issued') {
+        ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'Issue the Transfer Certificate before printing. A TC can only be printed once issued (which clears the dues gate).', callback);
+        return;
+      }
       await transferService.recordPrint(schoolId, tcId).catch(() => {});
       ResponseBuilder.returnHtml(buildTransferCertificateHtml(data), callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
+  // GET /transfer/tc/{tcId} — full TC row (for the self-contained view/edit in /transfer).
+  public getOne = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
+    _context.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const schoolId = await this.resolveSchool(event, callback);
+      if (!schoolId) return;
+      const tcId = event.pathParameters?.tcId;
+      if (!tcId) { ResponseBuilder.badRequest(ErrorCode.MissingId, 'TC ID is required', callback); return; }
+      const tc = await transferService.getById(tcId, schoolId);
+      if (!tc) { ResponseBuilder.notFound(ErrorCode.InvalidId, 'TC not found', callback); return; }
+      ResponseBuilder.ok(tc, callback);
     } catch (err: any) {
       ResponseBuilder.handleError(err, callback);
     }
@@ -160,6 +180,7 @@ class TransferHandler {
 const handler = new TransferHandler();
 export const list = guard(TRANSFER_ACTIONS['transfer-handler.list'], handler.list);
 export const listAll = guard(TRANSFER_ACTIONS['transfer-handler.listAll'], handler.listAll);
+export const getOne = guard(TRANSFER_ACTIONS['transfer-handler.getOne'], handler.getOne);
 export const prefill = guard(TRANSFER_ACTIONS['transfer-handler.prefill'], handler.prefill);
 export const create = guard(TRANSFER_ACTIONS['transfer-handler.create'], handler.create);
 export const update = guard(TRANSFER_ACTIONS['transfer-handler.update'], handler.update);

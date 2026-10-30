@@ -3,7 +3,7 @@ import { BusinessErrorResult } from '../../shared/lib/errors';
 import { ErrorCode } from '../../shared/lib/error-codes';
 import { StudentTc, CreateTcRequest, UpdateTcRequest, TransferConfig } from './transfer-interfaces';
 import { TC_STATUS_VALUES, DEFAULTS, CONFIG_DEFAULTS, DUES_GATE_MODES } from './transfer-constants';
-import { findStudent, deriveStudent, deriveConcession, deriveSubjects, deriveAttendance, nextSrnSequence, nextTcNumberSeq, latestAcademicYear, getTcBranding } from './transfer-common';
+import { findStudent, deriveStudent, deriveConcession, deriveSubjects, deriveAttendance, nextSrnSequence, nextTcNumberSeq, latestAcademicYear, getTcBranding, ymd, dateInWords } from './transfer-common';
 import { feesLedgerService } from '../fees/fees-ledger-service';
 const { generateShortUuid } = require('../../shared/util/generate-uuid.js');
 const QRCode = require('qrcode');
@@ -14,7 +14,8 @@ const TC_COLUMNS = singleLineString`
   uuid, school_id, student_id, application_date, srn_number, tc_number, book_no, issue_date,
   reason_for_leaving, result, failed_in_class, subjects_studied, qualified_for_promotion,
   dues_paid_upto, fee_concession, ncc_scout_guide, games_activities, general_conduct, remarks,
-  total_attendance_days, total_working_days, status, printed_at, print_count
+  total_attendance_days, total_working_days, status, printed_at, print_count,
+  mother_name, father_name, dob, nationality, category, first_admission_date
 `;
 
 // Transfer Certificate lifecycle for a student. Issuing a TC withdraws the
@@ -267,8 +268,11 @@ class TransferService {
         (uuid, school_id, student_id, application_date, srn_number, tc_number, book_no, issue_date,
          reason_for_leaving, result, failed_in_class, subjects_studied, qualified_for_promotion,
          dues_paid_upto, fee_concession, ncc_scout_guide, games_activities, general_conduct, remarks,
-         total_attendance_days, total_working_days, status, createdby_userid, created_at)
-        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)
+         total_attendance_days, total_working_days,
+         mother_name, father_name, dob, nationality, category, first_admission_date,
+         status, createdby_userid, created_at)
+        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21,
+                $22, $23, $24, $25, $26, $27, $28, $29, $30)
       `,
       [
         uuid, schoolId, studentId,
@@ -277,7 +281,10 @@ class TransferService {
         data.subjectsStudied || null, data.qualifiedForPromotion || null, data.duesPaidUpto || null,
         data.feeConcession || null, data.nccScoutGuide || null, data.gamesActivities || null,
         data.generalConduct || null, data.remarks || null,
-        data.totalAttendanceDays ?? null, data.totalWorkingDays ?? null, status, userId, now,
+        data.totalAttendanceDays ?? null, data.totalWorkingDays ?? null,
+        data.motherName || null, data.fatherName || null, data.dob || null,
+        data.nationality || null, data.category || null, data.firstAdmissionDate || null,
+        status, userId, now,
       ]
     );
 
@@ -330,6 +337,12 @@ class TransferService {
     if (data.remarks !== undefined) set('remarks', data.remarks);
     if (data.totalAttendanceDays !== undefined) set('total_attendance_days', data.totalAttendanceDays);
     if (data.totalWorkingDays !== undefined) set('total_working_days', data.totalWorkingDays);
+    if (data.motherName !== undefined) set('mother_name', data.motherName);
+    if (data.fatherName !== undefined) set('father_name', data.fatherName);
+    if (data.dob !== undefined) set('dob', data.dob || null);
+    if (data.nationality !== undefined) set('nationality', data.nationality);
+    if (data.category !== undefined) set('category', data.category);
+    if (data.firstAdmissionDate !== undefined) set('first_admission_date', data.firstAdmissionDate || null);
     if (data.status !== undefined) set('status', data.status);
 
     if (fields.length > 0) {
@@ -362,10 +375,24 @@ class TransferService {
       deriveStudent(schoolId, tc.studentId),
       getTcBranding(schoolId),
     ]);
+    // Identity = stored override if present, else live-derived. dob-in-words recomputed
+    // from the effective dob.
+    const base: any = derived || {};
+    const effDob = tc.dob ? ymd(tc.dob) : base.dob;
+    const identity = {
+      ...base,
+      motherName: tc.motherName || base.motherName,
+      fatherName: tc.fatherName || base.fatherName,
+      dob: effDob,
+      dobInWords: dateInWords(effDob),
+      nationality: tc.nationality || base.nationality,
+      category: tc.category || base.category,
+      admissionDate: tc.firstAdmissionDate ? ymd(tc.firstAdmissionDate) : base.admissionDate,
+    };
     const feeConcession = tc.feeConcession || (await deriveConcession(schoolId, tc.studentId));
     const verifyUrl = `${PORTAL_BASE_URL}/verify/tc/${tc.uuid}`;
     const qrDataUri = await QRCode.toDataURL(verifyUrl, { margin: 2, width: 220 });
-    return { tc, derived, branding, feeConcession, verifyUrl, qrDataUri };
+    return { tc, derived: identity, branding, feeConcession, verifyUrl, qrDataUri };
   }
 
   public async recordPrint(schoolId: string, tcId: string): Promise<void> {

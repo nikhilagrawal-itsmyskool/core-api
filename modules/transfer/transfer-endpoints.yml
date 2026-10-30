@@ -17,6 +17,16 @@
           method: get
           cors: true
 
+  # Full TC row (self-contained view/edit in /transfer)
+  get-tc:
+    handler: transfer-handler.getOne
+    name: ${self:service}-get-tc
+    events:
+      - http:
+          path: tc/{tcId}
+          method: get
+          cors: true
+
   # ── Transfer Certificates (per student) ───────────────────────────────────
   list-tc:
     handler: transfer-handler.list

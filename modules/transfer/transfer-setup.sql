@@ -42,6 +42,16 @@ alter table student_tc add column if not exists remarks varchar(1024);          
 alter table student_tc add column if not exists printed_at timestamp(0);                -- last print
 alter table student_tc add column if not exists print_count int;                        -- times printed
 
+-- Identity OVERRIDES: normally derived live from the student record, but stored here when
+-- the operator fills/corrects them (e.g. sparse left-student imports with no DOB/parents).
+-- Print uses override-if-present, else the live-derived value.
+alter table student_tc add column if not exists mother_name varchar(128);
+alter table student_tc add column if not exists father_name varchar(128);
+alter table student_tc add column if not exists dob date;
+alter table student_tc add column if not exists nationality varchar(64);
+alter table student_tc add column if not exists category varchar(64);
+alter table student_tc add column if not exists first_admission_date date;
+
 -- ── Per-school TC configuration (god-only Config screen) ─────────────────────
 -- One row per school; factory defaults live in transfer-constants.ts when absent.
 -- Holds dropdown option-sets + default values so the certificate adapts school to

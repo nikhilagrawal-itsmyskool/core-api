@@ -23,6 +23,13 @@ export interface StudentTc {
   status: string;
   printedAt?: string;
   printCount?: number;
+  // Identity overrides (stored only when filled/corrected; else derived live).
+  motherName?: string;
+  fatherName?: string;
+  dob?: string;
+  nationality?: string;
+  category?: string;
+  firstAdmissionDate?: string;
 }
 
 // All TC-specific editable fields the form submits. Identity fields (name, parents,
@@ -46,6 +53,13 @@ export interface CreateTcRequest {
   remarks?: string;
   totalAttendanceDays?: number;
   totalWorkingDays?: number;
+  // Identity overrides (optional; filled when the student record is sparse).
+  motherName?: string;
+  fatherName?: string;
+  dob?: string;
+  nationality?: string;
+  category?: string;
+  firstAdmissionDate?: string;
   status?: string; // defaults to 'applied'
   // When status transitions to 'issued' and dues are outstanding, a caller holding
   // transfer.dues.override may force the issue by passing overrideDues: true.

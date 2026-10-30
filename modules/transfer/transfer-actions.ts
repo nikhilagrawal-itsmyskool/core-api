@@ -8,6 +8,7 @@ const { TRANSFER_VIEW, TRANSFER_MANAGE, TRANSFER_CONFIG_MANAGE } = ACTIONS;
 export const TRANSFER_ACTIONS: Record<string, string> = {
   'transfer-handler.listAll': TRANSFER_VIEW,
   'transfer-handler.list': TRANSFER_VIEW,
+  'transfer-handler.getOne': TRANSFER_VIEW,
   'transfer-handler.print': TRANSFER_VIEW,
   'transfer-handler.prefill': TRANSFER_MANAGE,
   'transfer-handler.create': TRANSFER_MANAGE,
