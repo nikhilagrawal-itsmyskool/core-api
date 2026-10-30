@@ -42,6 +42,12 @@ export const ASSET_ACTIONS: Record<string, string> = {
   "asset-handler.move": ASSET_REGISTER_MANAGE,
   "asset-handler.individualize": ASSET_REGISTER_MANAGE,
   "asset-handler.setResponsibility": ASSET_REGISTER_MANAGE,
+
+  // AI-assisted inventory capture (photos -> draft counts -> quantity buckets).
+  // Gated as register.manage (it writes the register, and analyze spends LLM tokens),
+  // so admin + assets-incharge (asset.* wildcard) + god hold it; no teacher access.
+  "asset-inventory-handler.analyze": ASSET_REGISTER_MANAGE,
+  "asset-inventory-handler.commit": ASSET_REGISTER_MANAGE,
 };
 
 // Endpoints intentionally NOT gated by requireAction:

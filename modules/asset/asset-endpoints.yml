@@ -215,6 +215,25 @@
           method: get
           cors: true
 
+  # AI-assisted inventory capture
+  inventory-analyze:
+    handler: asset-inventory-handler.analyze
+    name: ${self:service}-inventory-analyze
+    events:
+      - http:
+          path: inventory/analyze
+          method: post
+          cors: true
+
+  inventory-commit:
+    handler: asset-inventory-handler.commit
+    name: ${self:service}-inventory-commit
+    events:
+      - http:
+          path: inventory/commit
+          method: post
+          cors: true
+
   # Asset movement history
   get-asset-movements:
     handler: asset-handler.getMovements
