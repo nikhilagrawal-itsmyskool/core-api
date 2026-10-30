@@ -386,8 +386,7 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
     'fee.receipt.verify', // Scan & Verify (admin + god only; NOT fee incharges)
     'leave.calendar.view', // See the shared who's-on-leave calendar
     'leave.application.apply', // Self-service own leave; oversight/config/biometric/deduction are god-only for now
-    'staff-attendance.record.view', // Oversight: daily ins/outs grid + reports
-    'staff-attendance.regularization.apply', // Admins also see own attendance + file regularization
+    'staff-attendance.regularization.apply', // Self-service only: admin sees own attendance + files regularization (NOT oversight — that's god/education-director)
     'documents.sign', // Read & sign own documents; authoring (documents.manage) is god-only
     // Clubs & Activities: NONE by default (locked to god). god grants admin what it needs via
     // the Permissions grid. No club.* here on purpose.
