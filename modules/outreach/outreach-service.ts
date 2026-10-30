@@ -756,8 +756,26 @@ class OutreachService {
   }
 
   // ── Staff read-only feed — ALL published moments, school-wide (no audience scoping) ──
-  // Any staff member can browse what's been shared with parents. The list reuses
-  // listMoments({status:'published'}); this returns one published moment in full.
+  // Mirrors studentFeed (full MomentView[] with photos, so the staff app renders the same
+  // inline gallery) but with NO audience filter — staff see everything published.
+  async staffFeed(schoolId: string, ay: string | null, opts: { limit?: number; offset?: number }): Promise<{ moments: MomentView[] }> {
+    const year = ay || (await getCurrentAcademicYearId(schoolId));
+    if (!year) return { moments: [] };
+    const limit = Math.min(opts.limit || 20, 50);
+    const offset = opts.offset || 0;
+    const rows = await DB.query(
+      singleLineString`select uuid from moment
+        where school_id = $1 and status = 'published' and academic_year_id = $2
+        order by published_at desc nulls last
+        limit ${limit} offset ${offset}`,
+      [schoolId, year],
+    );
+    const moments: MomentView[] = [];
+    for (const r of rows) moments.push(await this.getMoment(schoolId, r.uuid, { reactorId: null }));
+    return { moments };
+  }
+
+  // One published moment in full (any audience), for deep-links.
   async staffMoment(schoolId: string, momentId: string): Promise<MomentView | null> {
     const m = await this.momentRow(schoolId, momentId);
     if (!m || m.status !== "published") return null;

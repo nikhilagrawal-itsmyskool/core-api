@@ -226,19 +226,20 @@ class OutreachMeHandler {
 
   // ── Staff read-only feed (any logged-in employee; all published moments) ───────
 
-  // GET /outreach/staff/feed?status=published — lightweight list (cover + counts) for staff.
+  // GET /outreach/staff/feed — full published moments (with photos), school-wide, newest first.
+  // Same shape as the parent feed ({ moments: MomentView[] }) so the staff app renders the
+  // identical inline gallery.
   public staffFeed = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
     ctx.callbackWaitsForEmptyEventLoop = false;
     try {
       const emp = resolveEmployee(event, callback);
       if (!emp) return;
       const q = event.queryStringParameters || {};
-      const rows = await outreachService.listMoments(emp.schoolId, {
-        status: "published",
+      const result = await outreachService.staffFeed(emp.schoolId, q.academicYearId || null, {
         limit: q.limit ? parseInt(q.limit, 10) : undefined,
         offset: q.offset ? parseInt(q.offset, 10) : undefined,
       });
-      ResponseBuilder.ok(rows, callback);
+      ResponseBuilder.ok(result, callback);
     } catch (err: any) {
       ResponseBuilder.handleError(err, callback);
     }
