@@ -3,7 +3,7 @@ import { BusinessErrorResult } from '../../shared/lib/errors';
 import { ErrorCode } from '../../shared/lib/error-codes';
 import { StudentTc, CreateTcRequest, UpdateTcRequest, TransferConfig } from './transfer-interfaces';
 import { TC_STATUS_VALUES, DEFAULTS, CONFIG_DEFAULTS, DUES_GATE_MODES } from './transfer-constants';
-import { findStudent, deriveStudent, deriveConcession, deriveSubjects, getTcBranding } from './transfer-common';
+import { findStudent, deriveStudent, deriveConcession, deriveSubjects, deriveAttendance, nextTcSequence, getTcBranding } from './transfer-common';
 import { feesLedgerService } from '../fees/fees-ledger-service';
 const { generateShortUuid } = require('../../shared/util/generate-uuid.js');
 const QRCode = require('qrcode');
@@ -161,13 +161,17 @@ class TransferService {
     if (!derived) throw new BusinessErrorResult(ErrorCode.BusinessError, 'Student not found');
     const cfg = await this.getConfig(schoolId);
     const concession = await deriveConcession(schoolId, studentId);
-    const subjects = cfg.autoDeriveSubjects ? await deriveSubjects(schoolId, derived.classId, derived.academicYearId) : [];
+    const subjects = cfg.autoDeriveSubjects ? await deriveSubjects(schoolId, derived.classWords, derived.classId) : [];
     const subjectsStudied = subjects.map((s, i) => `${i + 1}. ${s}`).join('  ');
+    const att = await deriveAttendance(schoolId, studentId, derived.classId, derived.academicYearId);
+    const seq = await nextTcSequence(schoolId);
     return {
       derived,
       config: cfg,
       duesOutstanding: await this.getOutstandingDues(schoolId, studentId),
       suggested: {
+        srnNumber: `${cfg.srnPrefix || ''}${seq}`,
+        tcNumber: `${cfg.tcNumberPrefix || ''}${seq}`,
         result: cfg.defaultResult,
         generalConduct: cfg.defaultConduct,
         qualifiedForPromotion: cfg.defaultPromotion,
@@ -177,6 +181,8 @@ class TransferService {
         feeConcession: concession,
         subjectsStudied,
         bookNo: cfg.tcBookNo,
+        totalWorkingDays: att.workingDays,
+        totalAttendanceDays: att.presentDays,
       },
     };
   }

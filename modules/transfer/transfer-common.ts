@@ -196,20 +196,103 @@ export async function deriveConcession(schoolId: string, studentId: string): Pro
   }
 }
 
-// Field 11 — academic subjects of the student's class, best-effort (operator-editable).
-export async function deriveSubjects(schoolId: string, classId: string | null, academicYearId: string | null): Promise<string[]> {
-  if (!classId || !academicYearId) return [];
+// Grade prefix from a class name: "II-A" -> "II", "TENTH A" -> "TENTH", "Nursery" -> "Nursery".
+function gradeOf(className: string | null): string {
+  return className ? String(className).split(/[-\s]/)[0].trim() : '';
+}
+
+async function latestAcademicYearId(schoolId: string): Promise<string | null> {
+  const r = await DB.query(
+    singleLineString`select uuid from academic_year where school_id = $1 order by start_date desc nulls last limit 1`,
+    [schoolId]
+  );
+  return r.length ? r[0].uuid : null;
+}
+
+// Field 11 — ordered scholastic subjects for the student's grade. Primary source is the
+// exam report scheme (grade-band keyed, so it works even for students whose enrolment year
+// has no class_subject rows); falls back to the timetable class_subject for the class.
+export async function deriveSubjects(schoolId: string, className: string | null, classId: string | null): Promise<string[]> {
   try {
-    const rows = await DB.query(
-      singleLineString`select s.name from class_subject cs
-        join subject s on s.uuid = cs.subject_id and s.school_id = cs.school_id
-        where cs.school_id = $1 and cs.class_id = $2 and cs.academic_year_id = $3
-          and cs.status = 'active' and s.status = 'active' and s.kind = 'academic'
-        order by s.name`,
-      [schoolId, classId, academicYearId]
-    );
-    return rows.map((r: any) => String(r.name || '').toUpperCase()).filter(Boolean);
+    const grade = gradeOf(className).toUpperCase();
+    const ayId = await latestAcademicYearId(schoolId);
+    if (grade && ayId) {
+      const schemes = await DB.query(
+        singleLineString`select uuid, applies_to_grades from exam_report_scheme
+          where school_id = $1 and academic_year_id = $2 and status = 'active'`,
+        [schoolId, ayId]
+      );
+      const match = schemes.find((s: any) =>
+        String(s.appliesToGrades || '').split(',').map((x: string) => x.trim().toUpperCase()).includes(grade)
+      );
+      if (match) {
+        const subs = await DB.query(
+          singleLineString`select report_label from exam_report_subject
+            where scheme_id = $1 and status = 'active' order by sort_order asc nulls last`,
+          [match.uuid]
+        );
+        const labels = subs.map((r: any) => String(r.reportLabel || '').trim()).filter(Boolean);
+        if (labels.length) return labels.map((l: string) => l.toUpperCase());
+      }
+    }
+    if (classId) {
+      const rows = await DB.query(
+        singleLineString`select s.name from class_subject cs
+          join subject s on s.uuid = cs.subject_id and s.school_id = cs.school_id
+          where cs.school_id = $1 and cs.class_id = $2
+            and cs.status = 'active' and s.status = 'active' and s.kind = 'academic'
+          order by s.name`,
+        [schoolId, classId]
+      );
+      return rows.map((r: any) => String(r.name || '').toUpperCase()).filter(Boolean);
+    }
+    return [];
   } catch {
     return [];
+  }
+}
+
+// Fields 15/16 — working days (finalized sessions for the class+year) and the student's
+// presence (present/late/half-day). Returns nulls when no finalized attendance exists.
+export async function deriveAttendance(
+  schoolId: string,
+  studentId: string,
+  classId: string | null,
+  academicYearId: string | null
+): Promise<{ workingDays: number | null; presentDays: number | null }> {
+  if (!classId || !academicYearId) return { workingDays: null, presentDays: null };
+  try {
+    const w = await DB.query(
+      singleLineString`select count(*)::int as c from attendance_session
+        where school_id = $1 and class_id = $2 and academic_year_id = $3 and status = 'finalized'`,
+      [schoolId, classId, academicYearId]
+    );
+    const workingDays = w.length ? Number(w[0].c) : 0;
+    if (!workingDays) return { workingDays: null, presentDays: null };
+    const p = await DB.query(
+      singleLineString`select count(*)::int as c from attendance_record ar
+        join attendance_session s on s.uuid = ar.session_id
+        where s.school_id = $1 and s.class_id = $2 and s.academic_year_id = $3 and s.status = 'finalized'
+          and ar.student_id = $4 and ar.status in ('present', 'late', 'half_day')`,
+      [schoolId, classId, academicYearId, studentId]
+    );
+    return { workingDays, presentDays: p.length ? Number(p[0].c) : 0 };
+  } catch {
+    return { workingDays: null, presentDays: null };
+  }
+}
+
+// Next TC serial — highest trailing integer across existing SRNs + 1 (self-seeding from
+// migrated data). The prefix comes from config; the operator can override.
+export async function nextTcSequence(schoolId: string): Promise<number> {
+  try {
+    const r = await DB.query(
+      singleLineString`select coalesce(max((regexp_replace(srn_number, '[^0-9]', '', 'g'))::int), 0) + 1 as n
+        from student_tc where school_id = $1 and status <> 'deleted' and srn_number ~ '[0-9]'`,
+      [schoolId]
+    );
+    return r.length ? Number(r[0].n) : 1;
+  } catch {
+    return 1;
   }
 }
