@@ -201,12 +201,14 @@ function gradeOf(className: string | null): string {
   return className ? String(className).split(/[-\s]/)[0].trim() : '';
 }
 
-async function latestAcademicYearId(schoolId: string): Promise<string | null> {
+// The school's current academic year (latest by start_date) — used as the "issue year"
+// for the TC No. token and to resolve the report scheme for subjects.
+export async function latestAcademicYear(schoolId: string): Promise<{ uuid: string; name: string } | null> {
   const r = await DB.query(
-    singleLineString`select uuid from academic_year where school_id = $1 order by start_date desc nulls last limit 1`,
+    singleLineString`select uuid, name from academic_year where school_id = $1 order by start_date desc nulls last limit 1`,
     [schoolId]
   );
-  return r.length ? r[0].uuid : null;
+  return r.length ? { uuid: r[0].uuid, name: r[0].name } : null;
 }
 
 // Field 11 — ordered scholastic subjects for the student's grade. Primary source is the
@@ -215,7 +217,7 @@ async function latestAcademicYearId(schoolId: string): Promise<string | null> {
 export async function deriveSubjects(schoolId: string, className: string | null, classId: string | null): Promise<string[]> {
   try {
     const grade = gradeOf(className).toUpperCase();
-    const ayId = await latestAcademicYearId(schoolId);
+    const ayId = (await latestAcademicYear(schoolId))?.uuid || null;
     if (grade && ayId) {
       const schemes = await DB.query(
         singleLineString`select uuid, applies_to_grades from exam_report_scheme
@@ -282,9 +284,10 @@ export async function deriveAttendance(
   }
 }
 
-// Next TC serial — highest trailing integer across existing SRNs + 1 (self-seeding from
-// migrated data). The prefix comes from config; the operator can override.
-export async function nextTcSequence(schoolId: string): Promise<number> {
+// Next S.R.N. serial — CONTINUOUS, unbroken across all years (the scholar/withdrawal
+// register serial). Highest trailing integer across existing SRNs + 1 (self-seeds from
+// migrated data). Prefix from config; operator can override.
+export async function nextSrnSequence(schoolId: string): Promise<number> {
   try {
     const r = await DB.query(
       singleLineString`select coalesce(max((regexp_replace(srn_number, '[^0-9]', '', 'g'))::int), 0) + 1 as n
@@ -292,6 +295,29 @@ export async function nextTcSequence(schoolId: string): Promise<number> {
       [schoolId]
     );
     return r.length ? Number(r[0].n) : 1;
+  } catch {
+    return 1;
+  }
+}
+
+// Next TC No. serial — RESETS per academic year. Scans existing TC numbers for the
+// current year (format "<prefix><seq>/<ayName>") and returns max(seq)+1, else 1. The
+// seq is the segment immediately before the trailing "/<ayName>".
+export async function nextTcNumberSeq(schoolId: string, ayName: string | null): Promise<number> {
+  if (!ayName) return 1;
+  try {
+    const rows = await DB.query(
+      singleLineString`select tc_number from student_tc
+        where school_id = $1 and status <> 'deleted' and tc_number like $2`,
+      [schoolId, `%/${ayName}`]
+    );
+    let max = 0;
+    for (const r of rows) {
+      const parts = String(r.tcNumber || '').split('/');
+      const n = parseInt((parts[parts.length - 2] || '').replace(/[^0-9]/g, ''), 10);
+      if (!isNaN(n) && n > max) max = n;
+    }
+    return max + 1;
   } catch {
     return 1;
   }
