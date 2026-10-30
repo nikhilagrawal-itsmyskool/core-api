@@ -27,3 +27,7 @@ modules/fees/reports/
 
 # Per-stage config files contain secrets: keep local, do not track
 configs/prod/prod.yml
+
+# One-off migration working data (raw SchoolPad dumps + affected lists; contain student PII)
+incremental-*.json
+incremental-*.txt
