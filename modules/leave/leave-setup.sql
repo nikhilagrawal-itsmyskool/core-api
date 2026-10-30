@@ -26,6 +26,12 @@ create table if not exists leave_config (
 create unique index if not exists idx_leave_config_school
     on leave_config(school_id) where status = 'active';
 
+-- Penalty rules (LOP days). Half-day detection lives in staff-attendance Config; these say what a
+-- half-day costs + how late days roll up into LOP. Defaults handled in app code (no DDL defaults).
+alter table leave_config add column if not exists half_day_lop_weight numeric(4,2);
+alter table leave_config add column if not exists late_lop_every integer;        -- every N lates/month → a block (0/null = lates don't penalize)
+alter table leave_config add column if not exists late_lop_days numeric(4,2);     -- LOP days per block
+
 -- leave_type: per-school leave types (policy lives in data). Seeded on first use.
 create table if not exists leave_type (
     uuid varchar(12) primary key,

@@ -34,7 +34,12 @@ class LeaveHandler {
       if (!auth) return;
       const body = parseBody<any>(event, callback);
       if (!body) return;
-      ResponseBuilder.ok(await leaveService.updateConfig(auth.schoolId, { dailyCap: body.dailyCap }, auth.userId), callback);
+      ResponseBuilder.ok(await leaveService.updateConfig(auth.schoolId, {
+        dailyCap: body.dailyCap,
+        halfDayLopWeight: body.halfDayLopWeight,
+        lateLopEvery: body.lateLopEvery,
+        lateLopDays: body.lateLopDays,
+      }, auth.userId), callback);
     } catch (err: any) {
       ResponseBuilder.handleError(err, callback);
     }

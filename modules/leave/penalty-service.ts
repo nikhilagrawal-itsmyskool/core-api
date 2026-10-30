@@ -5,11 +5,8 @@ import { ErrorCode } from '../../shared/lib/error-codes';
 // punches + policy/seasons + approved leave + holidays). Penalties live here (Leave module)
 // because they own the LOP rules + payroll rollup; we consume the derived day statuses.
 import { staffAttendanceService } from '../staff-attendance/staff-attendance-service';
-
-// Stage 1 penalty weights. (Stage 2 moves the half-day weight + a late→LOP rule into a
-// Leave penalty-config; for now: absence = 1 LOP, half-day = 0.5, unpaid leave = 1, lates
-// are shown but don't deduct yet.)
-const HALF_DAY_LOP = 0.5;
+// Penalty RULES (half-day LOP weight + late→LOP) are leave-side config.
+import { leaveService } from './leave-service';
 
 export interface PenaltyDay {
   date: string;
@@ -38,6 +35,7 @@ class PenaltyService {
     const att = await staffAttendanceService.employeeDays(schoolId, employeeId, from, to);
     if (!att) throw new NotFoundResult(ErrorCode.InvalidId, 'Employee not found');
 
+    const cfg = await leaveService.ensureConfig(schoolId); // penalty rules (half-day weight, late→LOP)
     const types = await DB.query(
       singleLineString`select code, paid from leave_type where school_id = $1 and status = 'active'`,
       [schoolId],
@@ -49,6 +47,7 @@ class PenaltyService {
     };
 
     let totalLopDays = 0;
+    let lateCount = 0;
     const days: PenaltyDay[] = (att.days || []).map((d: any) => {
       let penaltyDays = 0;
       let reason: string | null = null;
@@ -66,11 +65,12 @@ class PenaltyService {
         case 'absent':
           penaltyDays = 1; kind = 'penalty'; reason = 'Absent — no approved leave'; break;
         case 'half_day':
-          penaltyDays = HALF_DAY_LOP; kind = 'penalty'; reason = 'Half day — short hours'; break;
+          penaltyDays = cfg.halfDayLopWeight; kind = 'penalty'; reason = 'Half day — short hours'; break;
         case 'missing_punch':
           kind = 'pending'; reason = 'Missing check-out — regularize'; break;
         case 'late':
-          kind = 'clean'; reason = `Late ${d.lateByMin || 0}m`; break; // no deduction in Stage 1
+          // Lates roll up into a MONTHLY late penalty below; the day itself isn't a deduction.
+          lateCount++; kind = 'clean'; reason = `Late ${d.lateByMin || 0}m`; break;
         case 'regularized':
           kind = 'clean'; reason = 'Regularized'; break;
         default: // present
@@ -83,6 +83,12 @@ class PenaltyService {
       };
     });
 
+    // Monthly late→LOP roll-up: every `lateLopEvery` late days = `lateLopDays` LOP (0 ⇒ off).
+    const latePenaltyDays = cfg.lateLopEvery > 0
+      ? Math.floor(lateCount / cfg.lateLopEvery) * cfg.lateLopDays
+      : 0;
+    totalLopDays += latePenaltyDays;
+
     return {
       employeeId,
       name: att.name,
@@ -91,6 +97,8 @@ class PenaltyService {
       to,
       totalLopDays: Math.round(totalLopDays * 10) / 10,
       penaltyDayCount: days.filter((d) => d.penaltyDays > 0).length,
+      lateCount,
+      latePenaltyDays: Math.round(latePenaltyDays * 10) / 10,
       days,
     };
   }

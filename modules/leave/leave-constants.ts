@@ -14,6 +14,12 @@ export const DEFAULT_DAILY_CAP = 2; // max staff on leave per working day (schoo
 // Legacy monthly-CL cap — no longer enforced (quota is annual). Kept for the config row.
 export const DEFAULT_CL_PER_MONTH = 1;
 
+// Penalty rules (LOP days). Half-day *detection* lives in staff-attendance Config; these say
+// what a half-day *costs* and how lates roll up into LOP. late_lop_every = 0 ⇒ lates don't penalize.
+export const DEFAULT_HALF_DAY_LOP = 0.5;
+export const DEFAULT_LATE_LOP_EVERY = 3;
+export const DEFAULT_LATE_LOP_DAYS = 0.5;
+
 // File attachment (medical certificate etc.).
 export const FILE_ENTITY_TYPE = "leave";
 export const ATTACHMENT_MAX_BYTES = 5 * 1024 * 1024; // 5 MB

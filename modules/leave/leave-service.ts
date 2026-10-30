@@ -12,6 +12,9 @@ import {
 import {
   DEFAULT_CL_PER_MONTH,
   DEFAULT_DAILY_CAP,
+  DEFAULT_HALF_DAY_LOP,
+  DEFAULT_LATE_LOP_EVERY,
+  DEFAULT_LATE_LOP_DAYS,
   LEAVE_TYPE_SEED,
   FILE_ENTITY_TYPE,
   ATTACHMENT_ALLOWED_MIME,
@@ -38,27 +41,66 @@ class LeaveService {
   // ── Config ─────────────────────────────────────────────────────────────────
   async ensureConfig(schoolId: string, userId = "system"): Promise<LeaveConfig> {
     const rows = await DB.query(
-      singleLineString`select cl_per_month, daily_cap, reset from leave_config where school_id = $1 and status = 'active'`,
+      singleLineString`select cl_per_month, daily_cap, reset, half_day_lop_weight, late_lop_every, late_lop_days
+        from leave_config where school_id = $1 and status = 'active'`,
       [schoolId],
     );
     if (rows.length) {
-      return { clPerMonth: rows[0].clPerMonth, dailyCap: rows[0].dailyCap, reset: rows[0].reset };
+      return this.configFromRow(rows[0]);
     }
     await DB.query(
       singleLineString`insert into leave_config (uuid, school_id, cl_per_month, daily_cap, reset, status, createdby_userid, created_at)
         values ($1, $2, $3, $4, 'monthly', 'active', $5, $6)`,
       [generateShortUuid(12), schoolId, DEFAULT_CL_PER_MONTH, DEFAULT_DAILY_CAP, userId, new Date()],
     );
-    return { clPerMonth: DEFAULT_CL_PER_MONTH, dailyCap: DEFAULT_DAILY_CAP, reset: "monthly" };
+    return {
+      clPerMonth: DEFAULT_CL_PER_MONTH, dailyCap: DEFAULT_DAILY_CAP, reset: "monthly",
+      halfDayLopWeight: DEFAULT_HALF_DAY_LOP, lateLopEvery: DEFAULT_LATE_LOP_EVERY, lateLopDays: DEFAULT_LATE_LOP_DAYS,
+    };
   }
 
-  // Update the per-school config knobs (currently the daily cap). god-gated in the handler.
-  async updateConfig(schoolId: string, patch: { dailyCap?: number }, userId: string): Promise<LeaveConfig> {
+  // Map a leave_config row to LeaveConfig, applying app defaults for null penalty columns.
+  // numeric(4,2) columns come back from pg as strings, so coerce with Number().
+  private configFromRow(r: any): LeaveConfig {
+    return {
+      clPerMonth: r.clPerMonth,
+      dailyCap: r.dailyCap,
+      reset: r.reset,
+      halfDayLopWeight: r.halfDayLopWeight == null ? DEFAULT_HALF_DAY_LOP : Number(r.halfDayLopWeight),
+      lateLopEvery: r.lateLopEvery == null ? DEFAULT_LATE_LOP_EVERY : Number(r.lateLopEvery),
+      lateLopDays: r.lateLopDays == null ? DEFAULT_LATE_LOP_DAYS : Number(r.lateLopDays),
+    };
+  }
+
+  // Update the per-school config knobs (daily cap + penalty rules). god-gated in the handler.
+  async updateConfig(
+    schoolId: string,
+    patch: { dailyCap?: number; halfDayLopWeight?: number; lateLopEvery?: number; lateLopDays?: number },
+    userId: string,
+  ): Promise<LeaveConfig> {
     await this.ensureConfig(schoolId);
+    const sets: string[] = [];
+    const params: any[] = [];
+    let i = 1;
     if (patch.dailyCap != null && Number.isFinite(patch.dailyCap) && patch.dailyCap >= 0) {
+      sets.push(`daily_cap = $${i++}`); params.push(Math.floor(patch.dailyCap));
+    }
+    if (patch.halfDayLopWeight != null && Number.isFinite(patch.halfDayLopWeight) && patch.halfDayLopWeight >= 0) {
+      sets.push(`half_day_lop_weight = $${i++}`); params.push(patch.halfDayLopWeight);
+    }
+    if (patch.lateLopEvery != null && Number.isInteger(patch.lateLopEvery) && patch.lateLopEvery >= 0) {
+      sets.push(`late_lop_every = $${i++}`); params.push(patch.lateLopEvery);
+    }
+    if (patch.lateLopDays != null && Number.isFinite(patch.lateLopDays) && patch.lateLopDays >= 0) {
+      sets.push(`late_lop_days = $${i++}`); params.push(patch.lateLopDays);
+    }
+    if (sets.length) {
+      sets.push(`updatedby_userid = $${i++}`); params.push(userId);
+      sets.push(`updated_at = $${i++}`); params.push(new Date());
+      params.push(schoolId);
       await DB.query(
-        singleLineString`update leave_config set daily_cap = $1, updatedby_userid = $2, updated_at = $3 where school_id = $4 and status = 'active'`,
-        [Math.floor(patch.dailyCap), userId, new Date(), schoolId],
+        singleLineString`update leave_config set ${sets.join(", ")} where school_id = $${i} and status = 'active'`,
+        params,
       );
     }
     return this.ensureConfig(schoolId);

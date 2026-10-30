@@ -12,6 +12,11 @@ export interface LeaveConfig {
   clPerMonth: number;
   dailyCap: number;
   reset: "monthly";
+  // Penalty rules (LOP days). halfDayLopWeight = what a half-day costs; lateLopEvery/lateLopDays =
+  // every N late days in a month → lateLopDays LOP (lateLopEvery 0 ⇒ lates don't penalize).
+  halfDayLopWeight: number;
+  lateLopEvery: number;
+  lateLopDays: number;
 }
 
 // ---- Leave type ----
