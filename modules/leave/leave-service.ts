@@ -13,6 +13,7 @@ import {
   DEFAULT_CL_PER_MONTH,
   DEFAULT_DAILY_CAP,
   DEFAULT_HALF_DAY_LOP,
+  DEFAULT_UNAUTHORIZED_LADDER,
   DEFAULT_LATE_LOP_EVERY,
   DEFAULT_LATE_LOP_DAYS,
   LEAVE_TYPE_SEED,
@@ -41,7 +42,7 @@ class LeaveService {
   // ── Config ─────────────────────────────────────────────────────────────────
   async ensureConfig(schoolId: string, userId = "system"): Promise<LeaveConfig> {
     const rows = await DB.query(
-      singleLineString`select cl_per_month, daily_cap, reset, half_day_lop_weight, late_lop_every, late_lop_days
+      singleLineString`select cl_per_month, daily_cap, reset, half_day_lop_weight, late_lop_every, late_lop_days, unauthorized_ladder
         from leave_config where school_id = $1 and status = 'active'`,
       [schoolId],
     );
@@ -56,6 +57,7 @@ class LeaveService {
     return {
       clPerMonth: DEFAULT_CL_PER_MONTH, dailyCap: DEFAULT_DAILY_CAP, reset: "monthly",
       halfDayLopWeight: DEFAULT_HALF_DAY_LOP, lateLopEvery: DEFAULT_LATE_LOP_EVERY, lateLopDays: DEFAULT_LATE_LOP_DAYS,
+      unauthorizedLadder: DEFAULT_UNAUTHORIZED_LADDER,
     };
   }
 
@@ -69,13 +71,14 @@ class LeaveService {
       halfDayLopWeight: r.halfDayLopWeight == null ? DEFAULT_HALF_DAY_LOP : Number(r.halfDayLopWeight),
       lateLopEvery: r.lateLopEvery == null ? DEFAULT_LATE_LOP_EVERY : Number(r.lateLopEvery),
       lateLopDays: r.lateLopDays == null ? DEFAULT_LATE_LOP_DAYS : Number(r.lateLopDays),
+      unauthorizedLadder: r.unauthorizedLadder == null ? DEFAULT_UNAUTHORIZED_LADDER : !!r.unauthorizedLadder,
     };
   }
 
   // Update the per-school config knobs (daily cap + penalty rules). god-gated in the handler.
   async updateConfig(
     schoolId: string,
-    patch: { dailyCap?: number; halfDayLopWeight?: number; lateLopEvery?: number; lateLopDays?: number },
+    patch: { dailyCap?: number; halfDayLopWeight?: number; lateLopEvery?: number; lateLopDays?: number; unauthorizedLadder?: boolean },
     userId: string,
   ): Promise<LeaveConfig> {
     await this.ensureConfig(schoolId);
@@ -93,6 +96,9 @@ class LeaveService {
     }
     if (patch.lateLopDays != null && Number.isFinite(patch.lateLopDays) && patch.lateLopDays >= 0) {
       sets.push(`late_lop_days = $${i++}`); params.push(patch.lateLopDays);
+    }
+    if (patch.unauthorizedLadder != null) {
+      sets.push(`unauthorized_ladder = $${i++}`); params.push(!!patch.unauthorizedLadder);
     }
     if (sets.length) {
       sets.push(`updatedby_userid = $${i++}`); params.push(userId);

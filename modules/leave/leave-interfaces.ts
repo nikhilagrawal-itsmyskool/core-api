@@ -17,6 +17,7 @@ export interface LeaveConfig {
   halfDayLopWeight: number;
   lateLopEvery: number;
   lateLopDays: number;
+  unauthorizedLadder: boolean; // escalate repeated unauthorized-absence spells at finalize
 }
 
 // ---- Leave type ----

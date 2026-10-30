@@ -31,6 +31,7 @@ create unique index if not exists idx_leave_config_school
 alter table leave_config add column if not exists half_day_lop_weight numeric(4,2);
 alter table leave_config add column if not exists late_lop_every integer;        -- every N lates/month → a block (0/null = lates don't penalize)
 alter table leave_config add column if not exists late_lop_days numeric(4,2);     -- LOP days per block
+alter table leave_config add column if not exists unauthorized_ladder boolean;    -- escalate repeated unauthorized-absence spells at finalize (default off, app-handled)
 
 -- leave_type: per-school leave types (policy lives in data). Seeded on first use.
 create table if not exists leave_type (
@@ -216,3 +217,7 @@ alter table leave_deduction_run alter column unauthorized_absences type numeric(
 alter table leave_deduction_run alter column ladder_deduction_days type numeric(6,1);
 alter table leave_deduction_run alter column plain_lwp_days type numeric(6,1);
 alter table leave_deduction_run alter column applied_deduction_days type numeric(6,1);
+-- Stage 2b: late + half-day LOP components (from the live staff-attendance pipeline), folded
+-- into applied_deduction_days alongside the absence (plain/ladder) figure.
+alter table leave_deduction_run add column if not exists late_lop_days numeric(6,1);
+alter table leave_deduction_run add column if not exists half_day_lop_days numeric(6,1);

@@ -19,6 +19,9 @@ export const DEFAULT_CL_PER_MONTH = 1;
 export const DEFAULT_HALF_DAY_LOP = 0.5;
 export const DEFAULT_LATE_LOP_EVERY = 3;
 export const DEFAULT_LATE_LOP_DAYS = 0.5;
+// Escalating penalty on repeated UNAUTHORIZED absence spells (Staff Leave Policy). Off by
+// default — when on, finalize applies the ladder figure instead of plain LWP for absences.
+export const DEFAULT_UNAUTHORIZED_LADDER = false;
 
 // File attachment (medical certificate etc.).
 export const FILE_ENTITY_TYPE = "leave";

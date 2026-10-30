@@ -48,6 +48,7 @@ class PenaltyService {
 
     let totalLopDays = 0;
     let lateCount = 0;
+    let present = 0, paidLeave = 0, unauthorizedAbs = 0, authorizedUnpaidAbs = 0, halfDayCount = 0;
     const days: PenaltyDay[] = (att.days || []).map((d: any) => {
       let penaltyDays = 0;
       let reason: string | null = null;
@@ -59,22 +60,22 @@ class PenaltyService {
         case 'holiday':
           kind = 'off'; reason = 'Holiday'; break;
         case 'on_leave':
-          if (isPaidLeave(d.leaveType)) { kind = 'off'; reason = `On leave (${d.leaveType || 'paid'})`; }
-          else { penaltyDays = 1; kind = 'penalty'; reason = `Unpaid leave (LWP${d.leaveType ? ' · ' + d.leaveType : ''})`; }
+          if (isPaidLeave(d.leaveType)) { paidLeave++; kind = 'off'; reason = `On leave (${d.leaveType || 'paid'})`; }
+          else { authorizedUnpaidAbs++; penaltyDays = 1; kind = 'penalty'; reason = `Unpaid leave (LWP${d.leaveType ? ' · ' + d.leaveType : ''})`; }
           break;
         case 'absent':
-          penaltyDays = 1; kind = 'penalty'; reason = 'Absent — no approved leave'; break;
+          unauthorizedAbs++; penaltyDays = 1; kind = 'penalty'; reason = 'Absent — no approved leave'; break;
         case 'half_day':
-          penaltyDays = cfg.halfDayLopWeight; kind = 'penalty'; reason = 'Half day — short hours'; break;
+          present++; halfDayCount++; penaltyDays = cfg.halfDayLopWeight; kind = 'penalty'; reason = 'Half day — short hours'; break;
         case 'missing_punch':
-          kind = 'pending'; reason = 'Missing check-out — regularize'; break;
+          present++; kind = 'pending'; reason = 'Missing check-out — regularize'; break;
         case 'late':
           // Lates roll up into a MONTHLY late penalty below; the day itself isn't a deduction.
-          lateCount++; kind = 'clean'; reason = `Late ${d.lateByMin || 0}m`; break;
+          present++; lateCount++; kind = 'clean'; reason = `Late ${d.lateByMin || 0}m`; break;
         case 'regularized':
-          kind = 'clean'; reason = 'Regularized'; break;
+          present++; kind = 'clean'; reason = 'Regularized'; break;
         default: // present
-          kind = 'clean'; break;
+          present++; kind = 'clean'; break;
       }
       totalLopDays += penaltyDays;
       return {
@@ -89,6 +90,13 @@ class PenaltyService {
       : 0;
     totalLopDays += latePenaltyDays;
 
+    // Deduction/payroll aggregates — the god Deduction Report finalizes from these (same source
+    // + rules as the teacher's My Penalty, so the two always agree). plainLwpDays = absence LOP
+    // (absent + unpaid-leave, each a full day); half-day + late are separate LOP components.
+    const plainLwpDays = unauthorizedAbs + authorizedUnpaidAbs;
+    const halfDayLopDays = Math.round(halfDayCount * cfg.halfDayLopWeight * 10) / 10;
+    const lateLopDays = Math.round(latePenaltyDays * 10) / 10;
+
     return {
       employeeId,
       name: att.name,
@@ -98,7 +106,15 @@ class PenaltyService {
       totalLopDays: Math.round(totalLopDays * 10) / 10,
       penaltyDayCount: days.filter((d) => d.penaltyDays > 0).length,
       lateCount,
-      latePenaltyDays: Math.round(latePenaltyDays * 10) / 10,
+      latePenaltyDays: lateLopDays,
+      // aggregates for the god Deduction Report / payroll rollup:
+      paidDays: present + paidLeave,
+      unauthorizedAbsences: unauthorizedAbs,
+      authorizedUnpaidAbsences: authorizedUnpaidAbs,
+      countedAbsences: plainLwpDays,
+      plainLwpDays,
+      halfDayLopDays,
+      lateLopDays,
       days,
     };
   }

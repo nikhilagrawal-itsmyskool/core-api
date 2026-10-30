@@ -39,6 +39,7 @@ class LeaveHandler {
         halfDayLopWeight: body.halfDayLopWeight,
         lateLopEvery: body.lateLopEvery,
         lateLopDays: body.lateLopDays,
+        unauthorizedLadder: body.unauthorizedLadder,
       }, auth.userId), callback);
     } catch (err: any) {
       ResponseBuilder.handleError(err, callback);
