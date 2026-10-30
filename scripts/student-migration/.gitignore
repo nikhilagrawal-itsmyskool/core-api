@@ -1,0 +1,7 @@
+# PII + scraped source data — never commit
+out/
+*.xls
+*.xlsx
+*.csv
+*.png
+.browser/

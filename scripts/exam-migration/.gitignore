@@ -1,0 +1,7 @@
+# student PII — never commit raw marks or parsed output
+out/
+# credentials
+.sp-creds
+.env
+# persistent browser profile (holds the logged-in session)
+.browser/

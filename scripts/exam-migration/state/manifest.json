@@ -1,0 +1,1305 @@
+{
+  "reports": {
+    "2025-2026/67": {
+      "year": "2025-2026",
+      "classId": "67",
+      "className": "NURSERY-A",
+      "subjects": [
+        "Art"
+      ],
+      "terms": [
+        "TERM 1",
+        "TERM 2"
+      ],
+      "bytes": 17690,
+      "file": "out\\raw\\2025-2026\\67__NURSERY-A.html",
+      "at": "2026-10-17T12:57:45Z"
+    },
+    "2025-2026/68": {
+      "year": "2025-2026",
+      "classId": "68",
+      "className": "LKG-A",
+      "subjects": [
+        "English Oral"
+      ],
+      "terms": [
+        "TERM 1",
+        "TERM 2"
+      ],
+      "bytes": 24804,
+      "file": "out\\raw\\2025-2026\\68__LKG-A.html",
+      "at": "2026-10-17T12:57:50Z"
+    },
+    "2025-2026/70": {
+      "year": "2025-2026",
+      "classId": "70",
+      "className": "I-A",
+      "subjects": [
+        "English",
+        "Hindi",
+        "Mathematics",
+        "EVS",
+        "Computer Science"
+      ],
+      "terms": [
+        "TERM 1",
+        "TERM 2"
+      ],
+      "bytes": 335371,
+      "file": "out\\raw\\2025-2026\\70__I-A.html",
+      "at": "2026-10-17T12:36:50Z"
+    },
+    "2025-2026/81": {
+      "year": "2025-2026",
+      "classId": "81",
+      "className": "I-B",
+      "subjects": [
+        "English",
+        "Hindi",
+        "Mathematics",
+        "EVS",
+        "Computer Science"
+      ],
+      "terms": [
+        "TERM 1",
+        "TERM 2"
+      ],
+      "bytes": 315529,
+      "file": "out\\raw\\2025-2026\\81__I-B.html",
+      "at": "2026-10-17T12:58:37Z"
+    },
+    "2021-2022/1": {
+      "year": "2021-2022",
+      "classId": "1",
+      "className": "NURSERY-A",
+      "error": "TimeoutError: page.waitForFunction: Timeout 20000ms exceeded.",
+      "at": "2026-10-17T12:14:47Z"
+    },
+    "2021-2022/2": {
+      "year": "2021-2022",
+      "classId": "2",
+      "className": "LKG-A",
+      "error": "TimeoutError: page.waitForFunction: Timeout 20000ms exceeded.",
+      "at": "2026-10-17T12:15:10Z"
+    },
+    "2021-2022/3": {
+      "year": "2021-2022",
+      "classId": "3",
+      "className": "UKG-A",
+      "error": "TimeoutError: page.waitForFunction: Timeout 20000ms exceeded.",
+      "at": "2026-10-17T12:15:32Z"
+    },
+    "2021-2022/4": {
+      "year": "2021-2022",
+      "classId": "4",
+      "className": "I-A",
+      "subjects": 0,
+      "terms": 0,
+      "error": "TimeoutError: page.waitForFunction: Timeout 20000ms exceeded.",
+      "at": "2026-10-17T12:34:39Z"
+    },
+    "2021-2022/5": {
+      "year": "2021-2022",
+      "classId": "5",
+      "className": "II-A",
+      "error": "TimeoutError: page.waitForFunction: Timeout 20000ms exceeded.",
+      "at": "2026-10-17T12:16:17Z"
+    },
+    "2021-2022/6": {
+      "year": "2021-2022",
+      "classId": "6",
+      "className": "III-A",
+      "error": "TimeoutError: page.waitForFunction: Timeout 20000ms exceeded.",
+      "at": "2026-10-17T12:16:40Z"
+    },
+    "2021-2022/7": {
+      "year": "2021-2022",
+      "classId": "7",
+      "className": "IV-A",
+      "error": "TimeoutError: page.waitForFunction: Timeout 20000ms exceeded.",
+      "at": "2026-10-17T12:17:02Z"
+    },
+    "2021-2022/8": {
+      "year": "2021-2022",
+      "classId": "8",
+      "className": "V-A",
+      "error": "TimeoutError: page.waitForFunction: Timeout 20000ms exceeded.",
+      "at": "2026-10-17T12:17:25Z"
+    },
+    "2021-2022/9": {
+      "year": "2021-2022",
+      "classId": "9",
+      "className": "VI-A",
+      "error": "TimeoutError: page.waitForFunction: Timeout 20000ms exceeded.",
+      "at": "2026-10-17T12:17:48Z"
+    },
+    "2021-2022/10": {
+      "year": "2021-2022",
+      "classId": "10",
+      "className": "VII-A",
+      "error": "TimeoutError: page.waitForFunction: Timeout 20000ms exceeded.",
+      "at": "2026-10-17T12:18:10Z"
+    },
+    "2021-2022/11": {
+      "year": "2021-2022",
+      "classId": "11",
+      "className": "VIII-A",
+      "error": "TimeoutError: page.waitForFunction: Timeout 20000ms exceeded.",
+      "at": "2026-10-17T12:18:33Z"
+    },
+    "2021-2022/12": {
+      "year": "2021-2022",
+      "classId": "12",
+      "className": "IX-A",
+      "error": "TimeoutError: page.waitForFunction: Timeout 20000ms exceeded.",
+      "at": "2026-10-17T12:18:55Z"
+    },
+    "2021-2022/25": {
+      "year": "2021-2022",
+      "classId": "25",
+      "className": "X-A",
+      "error": "TimeoutError: page.waitForFunction: Timeout 20000ms exceeded.",
+      "at": "2026-10-17T12:19:18Z"
+    },
+    "2022-2023/27": {
+      "year": "2022-2023",
+      "classId": "27",
+      "className": "Dummy-A",
+      "subjects": 0,
+      "terms": 0,
+      "error": "TimeoutError: page.waitForFunction: Timeout 20000ms exceeded.",
+      "at": "2026-10-17T12:40:19Z"
+    },
+    "2022-2023/13": {
+      "year": "2022-2023",
+      "classId": "13",
+      "className": "NURSERY-A",
+      "subjects": 0,
+      "terms": 0,
+      "error": "Error: could not open #subjectId widget",
+      "at": "2026-10-17T12:40:55Z"
+    },
+    "2022-2023/14": {
+      "year": "2022-2023",
+      "classId": "14",
+      "className": "LKG-A",
+      "subjects": 0,
+      "terms": 0,
+      "error": "Error: could not open #subjectId widget",
+      "at": "2026-10-17T12:41:30Z"
+    },
+    "2022-2023/15": {
+      "year": "2022-2023",
+      "classId": "15",
+      "className": "UKG-A",
+      "subjects": 0,
+      "terms": 0,
+      "error": "Error: could not open #subjectId widget",
+      "at": "2026-10-17T12:42:06Z"
+    },
+    "2022-2023/16": {
+      "year": "2022-2023",
+      "classId": "16",
+      "className": "I-A",
+      "subjects": 0,
+      "terms": 0,
+      "error": "Error: could not open #subjectId widget",
+      "at": "2026-10-17T12:42:41Z"
+    },
+    "2023-2024/32": {
+      "year": "2023-2024",
+      "classId": "32",
+      "className": "I-A",
+      "subjects": [
+        "English",
+        "Hindi",
+        "Mathematics",
+        "EVS",
+        "Computer Science"
+      ],
+      "terms": [
+        "TERM 1",
+        "TERM 2"
+      ],
+      "bytes": 351821,
+      "file": "out\\raw\\2023-2024\\32__I-A.html",
+      "at": "2026-10-17T12:35:49Z"
+    },
+    "2024-2025/50": {
+      "year": "2024-2025",
+      "classId": "50",
+      "className": "I-A",
+      "subjects": [
+        "English",
+        "Hindi",
+        "Mathematics",
+        "EVS",
+        "Computer Science"
+      ],
+      "terms": [
+        "TERM 1",
+        "TERM 2"
+      ],
+      "bytes": 820799,
+      "file": "out\\raw\\2024-2025\\50__I-A.html",
+      "at": "2026-10-17T12:36:29Z"
+    },
+    "2022-2023/20": {
+      "year": "2022-2023",
+      "classId": "20",
+      "className": "V-A",
+      "subjects": 0,
+      "terms": 0,
+      "error": "Error: could not open #subjectId widget",
+      "at": "2026-10-17T12:45:37Z"
+    },
+    "2022-2023/24": {
+      "year": "2022-2023",
+      "classId": "24",
+      "className": "IX-A",
+      "subjects": 0,
+      "terms": 0,
+      "error": "TimeoutError: page.waitForFunction: Timeout 20000ms exceeded.",
+      "at": "2026-10-17T12:47:45Z"
+    },
+    "2022-2023/28": {
+      "year": "2022-2023",
+      "classId": "28",
+      "className": "I-B",
+      "subjects": 0,
+      "terms": 0,
+      "error": "Error: could not open #subjectId widget",
+      "at": "2026-10-17T12:43:16Z"
+    },
+    "2022-2023/17": {
+      "year": "2022-2023",
+      "classId": "17",
+      "className": "II-A",
+      "subjects": 0,
+      "terms": 0,
+      "error": "Error: could not open #subjectId widget",
+      "at": "2026-10-17T12:43:51Z"
+    },
+    "2022-2023/18": {
+      "year": "2022-2023",
+      "classId": "18",
+      "className": "III-A",
+      "subjects": 0,
+      "terms": 0,
+      "error": "Error: could not open #subjectId widget",
+      "at": "2026-10-17T12:44:27Z"
+    },
+    "2022-2023/19": {
+      "year": "2022-2023",
+      "classId": "19",
+      "className": "IV-A",
+      "subjects": 0,
+      "terms": 0,
+      "error": "Error: could not open #subjectId widget",
+      "at": "2026-10-17T12:45:02Z"
+    },
+    "2022-2023/21": {
+      "year": "2022-2023",
+      "classId": "21",
+      "className": "VI-A",
+      "subjects": 0,
+      "terms": 0,
+      "error": "Error: could not open #subjectId widget",
+      "at": "2026-10-17T12:46:12Z"
+    },
+    "2022-2023/22": {
+      "year": "2022-2023",
+      "classId": "22",
+      "className": "VII-A",
+      "subjects": 0,
+      "terms": 0,
+      "error": "Error: could not open #subjectId widget",
+      "at": "2026-10-17T12:46:47Z"
+    },
+    "2022-2023/23": {
+      "year": "2022-2023",
+      "classId": "23",
+      "className": "VIII-A",
+      "subjects": 0,
+      "terms": 0,
+      "error": "Error: could not open #subjectId widget",
+      "at": "2026-10-17T12:47:22Z"
+    },
+    "2022-2023/26": {
+      "year": "2022-2023",
+      "classId": "26",
+      "className": "X-A",
+      "subjects": 0,
+      "terms": 0,
+      "error": "TimeoutError: page.waitForFunction: Timeout 20000ms exceeded.",
+      "at": "2026-10-17T12:48:08Z"
+    },
+    "2023-2024/42": {
+      "year": "2023-2024",
+      "classId": "42",
+      "className": "Dummy-A",
+      "subjects": 0,
+      "terms": 0,
+      "error": "TimeoutError: page.waitForFunction: Timeout 20000ms exceeded.",
+      "at": "2026-10-17T13:04:41Z"
+    },
+    "2023-2024/29": {
+      "year": "2023-2024",
+      "classId": "29",
+      "className": "NURSERY-A",
+      "subjects": [
+        "English Oral",
+        "English Written",
+        "Hindi Oral",
+        "Hindi Written",
+        "Mathematics Oral",
+        "Mathematics Written",
+        "EVS Written",
+        "Art"
+      ],
+      "terms": [
+        "TERM 1",
+        "TERM 2"
+      ],
+      "bytes": 57662,
+      "file": "out\\raw\\2023-2024\\29__NURSERY-A.html",
+      "at": "2026-10-17T12:48:43Z"
+    },
+    "2023-2024/30": {
+      "year": "2023-2024",
+      "classId": "30",
+      "className": "LKG-A",
+      "subjects": [
+        "English Oral"
+      ],
+      "terms": [
+        "TERM 1",
+        "TERM 2"
+      ],
+      "bytes": 25265,
+      "file": "out\\raw\\2023-2024\\30__LKG-A.html",
+      "at": "2026-10-17T12:48:48Z"
+    },
+    "2023-2024/31": {
+      "year": "2023-2024",
+      "classId": "31",
+      "className": "UKG-A",
+      "subjects": [
+        "English Oral",
+        "English Written",
+        "Hindi Written",
+        "Mathematics Oral",
+        "Mathematics Written",
+        "EVS Oral",
+        "EVS Written",
+        "Art"
+      ],
+      "terms": [
+        "TERM 1",
+        "TERM 2"
+      ],
+      "bytes": 90696,
+      "file": "out\\raw\\2023-2024\\31__UKG-A.html",
+      "at": "2026-10-17T12:48:58Z"
+    },
+    "2023-2024/43": {
+      "year": "2023-2024",
+      "classId": "43",
+      "className": "I-B",
+      "subjects": 0,
+      "terms": 0,
+      "error": "TimeoutError: page.waitForFunction: Timeout 20000ms exceeded.",
+      "at": "2026-10-17T13:05:03Z"
+    },
+    "2023-2024/33": {
+      "year": "2023-2024",
+      "classId": "33",
+      "className": "II-A",
+      "subjects": [
+        "English",
+        "Hindi",
+        "Mathematics",
+        "Computer Science"
+      ],
+      "terms": [
+        "TERM 1",
+        "TERM 2"
+      ],
+      "bytes": 202665,
+      "file": "out\\raw\\2023-2024\\33__II-A.html",
+      "at": "2026-10-17T12:49:36Z"
+    },
+    "2023-2024/45": {
+      "year": "2023-2024",
+      "classId": "45",
+      "className": "II-B",
+      "subjects": [
+        "Computer Science",
+        "English",
+        "Hindi",
+        "Mathematics"
+      ],
+      "terms": [
+        "TERM 1",
+        "TERM 2"
+      ],
+      "bytes": 199017,
+      "file": "out\\raw\\2023-2024\\45__II-B.html",
+      "at": "2026-10-17T12:49:52Z"
+    },
+    "2023-2024/34": {
+      "year": "2023-2024",
+      "classId": "34",
+      "className": "III-A",
+      "subjects": [
+        "English",
+        "Hindi",
+        "Mathematics",
+        "Science",
+        "Social Studies",
+        "Sanskrit",
+        "Computer Science"
+      ],
+      "terms": [
+        "TERM 1",
+        "TERM 2"
+      ],
+      "bytes": 219868,
+      "file": "out\\raw\\2023-2024\\34__III-A.html",
+      "at": "2026-10-17T12:50:10Z"
+    },
+    "2023-2024/46": {
+      "year": "2023-2024",
+      "classId": "46",
+      "className": "III-B",
+      "subjects": 0,
+      "terms": 0,
+      "error": "TimeoutError: page.waitForFunction: Timeout 20000ms exceeded.",
+      "at": "2026-10-17T13:05:25Z"
+    },
+    "2023-2024/35": {
+      "year": "2023-2024",
+      "classId": "35",
+      "className": "IV-A",
+      "subjects": [
+        "English",
+        "Hindi",
+        "Mathematics",
+        "Science",
+        "Social Studies",
+        "Sanskrit",
+        "Computer Science"
+      ],
+      "terms": [
+        "TERM 1",
+        "TERM 2"
+      ],
+      "bytes": 306104,
+      "file": "out\\raw\\2023-2024\\35__IV-A.html",
+      "at": "2026-10-17T12:50:57Z"
+    },
+    "2023-2024/36": {
+      "year": "2023-2024",
+      "classId": "36",
+      "className": "V-A",
+      "subjects": [
+        "English",
+        "Hindi",
+        "Mathematics",
+        "Science",
+        "Social Studies",
+        "Sanskrit",
+        "Computer Science"
+      ],
+      "terms": [
+        "TERM 1",
+        "TERM 2"
+      ],
+      "bytes": 310475,
+      "file": "out\\raw\\2023-2024\\36__V-A.html",
+      "at": "2026-10-17T12:51:23Z"
+    },
+    "2023-2024/37": {
+      "year": "2023-2024",
+      "classId": "37",
+      "className": "VI-A",
+      "subjects": [
+        "English",
+        "Hindi",
+        "Mathematics",
+        "Science",
+        "Social Science",
+        "Sanskrit",
+        "Computer Science"
+      ],
+      "terms": [
+        "TERM 1",
+        "TERM 2"
+      ],
+      "bytes": 212637,
+      "file": "out\\raw\\2023-2024\\37__VI-A.html",
+      "at": "2026-10-17T12:51:38Z"
+    },
+    "2023-2024/38": {
+      "year": "2023-2024",
+      "classId": "38",
+      "className": "VII-A",
+      "subjects": [
+        "Hindi",
+        "Mathematics",
+        "Science",
+        "Social Science",
+        "Sanskrit",
+        "Computer Science"
+      ],
+      "terms": [
+        "TERM 1",
+        "TERM 2"
+      ],
+      "bytes": 206575,
+      "file": "out\\raw\\2023-2024\\38__VII-A.html",
+      "at": "2026-10-17T12:51:52Z"
+    },
+    "2023-2024/39": {
+      "year": "2023-2024",
+      "classId": "39",
+      "className": "VIII-A",
+      "subjects": [
+        "Hindi",
+        "Mathematics",
+        "Science",
+        "Social Science",
+        "Sanskrit",
+        "Computer Science",
+        "English"
+      ],
+      "terms": [
+        "TERM 1",
+        "TERM 2"
+      ],
+      "bytes": 197897,
+      "file": "out\\raw\\2023-2024\\39__VIII-A.html",
+      "at": "2026-10-17T12:52:06Z"
+    },
+    "2023-2024/40": {
+      "year": "2023-2024",
+      "classId": "40",
+      "className": "IX-A",
+      "subjects": 0,
+      "terms": 0,
+      "error": "TimeoutError: page.waitForFunction: Timeout 20000ms exceeded.",
+      "at": "2026-10-17T13:05:48Z"
+    },
+    "2023-2024/41": {
+      "year": "2023-2024",
+      "classId": "41",
+      "className": "X-A",
+      "subjects": 0,
+      "terms": 0,
+      "error": "TimeoutError: page.waitForFunction: Timeout 20000ms exceeded.",
+      "at": "2026-10-17T13:06:11Z"
+    },
+    "2024-2025/60": {
+      "year": "2024-2025",
+      "classId": "60",
+      "className": "Dummy-A",
+      "subjects": 0,
+      "terms": 0,
+      "error": "TimeoutError: page.waitForFunction: Timeout 20000ms exceeded.",
+      "at": "2026-10-17T13:06:38Z"
+    },
+    "2024-2025/47": {
+      "year": "2024-2025",
+      "classId": "47",
+      "className": "NURSERY-A",
+      "subjects": [
+        "Art"
+      ],
+      "terms": [
+        "TERM 1",
+        "TERM 2"
+      ],
+      "bytes": 16298,
+      "file": "out\\raw\\2024-2025\\47__NURSERY-A.html",
+      "at": "2026-10-17T12:53:23Z"
+    },
+    "2024-2025/48": {
+      "year": "2024-2025",
+      "classId": "48",
+      "className": "LKG-A",
+      "subjects": [
+        "English Oral"
+      ],
+      "terms": [
+        "TERM 1",
+        "TERM 2"
+      ],
+      "bytes": 25369,
+      "file": "out\\raw\\2024-2025\\48__LKG-A.html",
+      "at": "2026-10-17T12:53:29Z"
+    },
+    "2024-2025/49": {
+      "year": "2024-2025",
+      "classId": "49",
+      "className": "UKG-A",
+      "subjects": [
+        "English Oral",
+        "English Written",
+        "Hindi Written",
+        "Mathematics Oral",
+        "Mathematics Written",
+        "EVS Oral",
+        "EVS Written",
+        "Art"
+      ],
+      "terms": [
+        "TERM 1",
+        "TERM 2"
+      ],
+      "bytes": 91901,
+      "file": "out\\raw\\2024-2025\\49__UKG-A.html",
+      "at": "2026-10-17T12:53:38Z"
+    },
+    "2024-2025/66": {
+      "year": "2024-2025",
+      "classId": "66",
+      "className": "UKG-B",
+      "subjects": 0,
+      "terms": 0,
+      "error": "TimeoutError: page.waitForFunction: Timeout 20000ms exceeded.",
+      "at": "2026-10-17T13:07:01Z"
+    },
+    "2024-2025/61": {
+      "year": "2024-2025",
+      "classId": "61",
+      "className": "I-B",
+      "subjects": 0,
+      "terms": 0,
+      "error": "TimeoutError: page.waitForFunction: Timeout 20000ms exceeded.",
+      "at": "2026-10-17T13:07:23Z"
+    },
+    "2024-2025/51": {
+      "year": "2024-2025",
+      "classId": "51",
+      "className": "II-A",
+      "subjects": [
+        "English",
+        "Hindi",
+        "Mathematics",
+        "EVS",
+        "Computer Science"
+      ],
+      "terms": [
+        "TERM 1",
+        "TERM 2"
+      ],
+      "bytes": 531191,
+      "file": "out\\raw\\2024-2025\\51__II-A.html",
+      "at": "2026-10-17T12:54:45Z"
+    },
+    "2024-2025/62": {
+      "year": "2024-2025",
+      "classId": "62",
+      "className": "II-B",
+      "subjects": [
+        "Hindi",
+        "Computer Science"
+      ],
+      "terms": [
+        "TERM 1",
+        "TERM 2"
+      ],
+      "bytes": 7205,
+      "file": "out\\raw\\2024-2025\\62__II-B.html",
+      "at": "2026-10-17T12:54:51Z"
+    },
+    "2024-2025/52": {
+      "year": "2024-2025",
+      "classId": "52",
+      "className": "III-A",
+      "subjects": [
+        "English",
+        "Hindi",
+        "Mathematics",
+        "EVS",
+        "Computer Science"
+      ],
+      "terms": [
+        "TERM 1",
+        "TERM 2"
+      ],
+      "bytes": 293241,
+      "file": "out\\raw\\2024-2025\\52__III-A.html",
+      "at": "2026-10-17T12:55:06Z"
+    },
+    "2024-2025/63": {
+      "year": "2024-2025",
+      "classId": "63",
+      "className": "III-B",
+      "subjects": [
+        "English",
+        "Hindi",
+        "Mathematics",
+        "EVS",
+        "Computer Science"
+      ],
+      "terms": [
+        "TERM 1",
+        "TERM 2"
+      ],
+      "bytes": 290327,
+      "file": "out\\raw\\2024-2025\\63__III-B.html",
+      "at": "2026-10-17T12:55:21Z"
+    },
+    "2024-2025/53": {
+      "year": "2024-2025",
+      "classId": "53",
+      "className": "IV-A",
+      "subjects": [
+        "English",
+        "Hindi",
+        "Mathematics",
+        "Science",
+        "Social Studies",
+        "Computer Science"
+      ],
+      "terms": [
+        "TERM 1",
+        "TERM 2"
+      ],
+      "bytes": 264545,
+      "file": "out\\raw\\2024-2025\\53__IV-A.html",
+      "at": "2026-10-17T12:55:34Z"
+    },
+    "2024-2025/65": {
+      "year": "2024-2025",
+      "classId": "65",
+      "className": "IV-B",
+      "subjects": [
+        "English",
+        "Hindi",
+        "Mathematics",
+        "Science",
+        "Social Studies",
+        "Computer Science"
+      ],
+      "terms": [
+        "TERM 1",
+        "TERM 2"
+      ],
+      "bytes": 270692,
+      "file": "out\\raw\\2024-2025\\65__IV-B.html",
+      "at": "2026-10-17T12:55:48Z"
+    },
+    "2024-2025/54": {
+      "year": "2024-2025",
+      "classId": "54",
+      "className": "V-A",
+      "subjects": [
+        "English",
+        "Hindi",
+        "Mathematics",
+        "Science",
+        "Social Studies",
+        "Computer Science"
+      ],
+      "terms": [
+        "TERM 1",
+        "TERM 2"
+      ],
+      "bytes": 440978,
+      "file": "out\\raw\\2024-2025\\54__V-A.html",
+      "at": "2026-10-17T12:56:07Z"
+    },
+    "2024-2025/55": {
+      "year": "2024-2025",
+      "classId": "55",
+      "className": "VI-A",
+      "subjects": [
+        "English",
+        "Hindi",
+        "Mathematics",
+        "Science",
+        "Sanskrit",
+        "Social Science",
+        "Computer Science"
+      ],
+      "terms": [
+        "TERM 1",
+        "TERM 2"
+      ],
+      "bytes": 469445,
+      "file": "out\\raw\\2024-2025\\55__VI-A.html",
+      "at": "2026-10-17T12:56:27Z"
+    },
+    "2024-2025/56": {
+      "year": "2024-2025",
+      "classId": "56",
+      "className": "VII-A",
+      "subjects": [
+        "English",
+        "Hindi",
+        "Mathematics",
+        "Science",
+        "Sanskrit",
+        "Social Science",
+        "Computer Science"
+      ],
+      "terms": [
+        "TERM 1",
+        "TERM 2"
+      ],
+      "bytes": 282478,
+      "file": "out\\raw\\2024-2025\\56__VII-A.html",
+      "at": "2026-10-17T12:56:41Z"
+    },
+    "2024-2025/57": {
+      "year": "2024-2025",
+      "classId": "57",
+      "className": "VIII-A",
+      "subjects": [
+        "English",
+        "Hindi",
+        "Mathematics",
+        "Science",
+        "Sanskrit",
+        "Social Science",
+        "Computer Science"
+      ],
+      "terms": [
+        "TERM 1",
+        "TERM 2"
+      ],
+      "bytes": 380876,
+      "file": "out\\raw\\2024-2025\\57__VIII-A.html",
+      "at": "2026-10-17T12:56:58Z"
+    },
+    "2024-2025/58": {
+      "year": "2024-2025",
+      "classId": "58",
+      "className": "IX-A",
+      "subjects": [
+        "English",
+        "Hindi",
+        "Mathematics",
+        "Science",
+        "Social Science",
+        "Computer Science"
+      ],
+      "terms": [
+        "TERM 1",
+        "TERM 2"
+      ],
+      "bytes": 271356,
+      "file": "out\\raw\\2024-2025\\58__IX-A.html",
+      "at": "2026-10-17T12:57:13Z"
+    },
+    "2024-2025/59": {
+      "year": "2024-2025",
+      "classId": "59",
+      "className": "X-A",
+      "subjects": 0,
+      "terms": 0,
+      "error": "TimeoutError: page.waitForFunction: Timeout 20000ms exceeded.",
+      "at": "2026-10-17T13:07:46Z"
+    },
+    "2025-2026/69": {
+      "year": "2025-2026",
+      "classId": "69",
+      "className": "UKG-A",
+      "subjects": [
+        "English Oral",
+        "English Written",
+        "Hindi Written",
+        "Mathematics Oral",
+        "Mathematics Written",
+        "EVS Oral",
+        "EVS Written",
+        "Art"
+      ],
+      "terms": [
+        "TERM 1",
+        "TERM 2"
+      ],
+      "bytes": 109400,
+      "file": "out\\raw\\2025-2026\\69__UKG-A.html",
+      "at": "2026-10-17T12:58:00Z"
+    },
+    "2025-2026/85": {
+      "year": "2025-2026",
+      "classId": "85",
+      "className": "UKG-B",
+      "subjects": 0,
+      "terms": 0,
+      "error": "TimeoutError: page.waitForFunction: Timeout 20000ms exceeded.",
+      "at": "2026-10-17T13:08:13Z"
+    },
+    "2025-2026/71": {
+      "year": "2025-2026",
+      "classId": "71",
+      "className": "II-A",
+      "subjects": [
+        "English",
+        "Hindi",
+        "Mathematics",
+        "EVS",
+        "Computer Science"
+      ],
+      "terms": [
+        "TERM 1",
+        "TERM 2"
+      ],
+      "bytes": 566920,
+      "file": "out\\raw\\2025-2026\\71__II-A.html",
+      "at": "2026-10-17T12:59:01Z"
+    },
+    "2025-2026/82": {
+      "year": "2025-2026",
+      "classId": "82",
+      "className": "II-B",
+      "subjects": [
+        "Computer Science",
+        "Hindi"
+      ],
+      "terms": [
+        "TERM 1",
+        "TERM 2"
+      ],
+      "bytes": 7203,
+      "file": "out\\raw\\2025-2026\\82__II-B.html",
+      "at": "2026-10-17T12:59:06Z"
+    },
+    "2025-2026/72": {
+      "year": "2025-2026",
+      "classId": "72",
+      "className": "III-A",
+      "subjects": [
+        "English",
+        "Hindi",
+        "Mathematics",
+        "EVS",
+        "Computer Science"
+      ],
+      "terms": [
+        "TERM 1",
+        "TERM 2"
+      ],
+      "bytes": 420884,
+      "file": "out\\raw\\2025-2026\\72__III-A.html",
+      "at": "2026-10-17T12:59:24Z"
+    },
+    "2025-2026/83": {
+      "year": "2025-2026",
+      "classId": "83",
+      "className": "III-B",
+      "subjects": [
+        "Mathematics",
+        "Computer Science"
+      ],
+      "terms": [
+        "TERM 1",
+        "TERM 2"
+      ],
+      "bytes": 5940,
+      "file": "out\\raw\\2025-2026\\83__III-B.html",
+      "at": "2026-10-17T12:59:29Z"
+    },
+    "2025-2026/73": {
+      "year": "2025-2026",
+      "classId": "73",
+      "className": "IV-A",
+      "subjects": [
+        "English",
+        "Hindi",
+        "Mathematics",
+        "Science",
+        "Social Studies",
+        "Computer Science"
+      ],
+      "terms": [
+        "TERM 1",
+        "TERM 2"
+      ],
+      "bytes": 365948,
+      "file": "out\\raw\\2025-2026\\73__IV-A.html",
+      "at": "2026-10-17T12:59:46Z"
+    },
+    "2025-2026/84": {
+      "year": "2025-2026",
+      "classId": "84",
+      "className": "IV-B",
+      "subjects": [
+        "English",
+        "Hindi",
+        "Mathematics",
+        "Science",
+        "Social Studies",
+        "Computer Science"
+      ],
+      "terms": [
+        "TERM 1",
+        "TERM 2"
+      ],
+      "bytes": 351759,
+      "file": "out\\raw\\2025-2026\\84__IV-B.html",
+      "at": "2026-10-17T13:00:04Z"
+    },
+    "2025-2026/74": {
+      "year": "2025-2026",
+      "classId": "74",
+      "className": "V-A",
+      "subjects": [
+        "English",
+        "Hindi",
+        "Mathematics",
+        "Science",
+        "Social Studies",
+        "Computer Science"
+      ],
+      "terms": [
+        "TERM 1",
+        "TERM 2"
+      ],
+      "bytes": 264586,
+      "file": "out\\raw\\2025-2026\\74__V-A.html",
+      "at": "2026-10-17T13:00:17Z"
+    },
+    "2025-2026/86": {
+      "year": "2025-2026",
+      "classId": "86",
+      "className": "V-B",
+      "subjects": [
+        "English",
+        "Hindi",
+        "Mathematics",
+        "Science",
+        "Social Studies",
+        "Computer Science"
+      ],
+      "terms": [
+        "TERM 1",
+        "TERM 2"
+      ],
+      "bytes": 264511,
+      "file": "out\\raw\\2025-2026\\86__V-B.html",
+      "at": "2026-10-17T13:00:31Z"
+    },
+    "2025-2026/75": {
+      "year": "2025-2026",
+      "classId": "75",
+      "className": "VI-A",
+      "subjects": [
+        "English",
+        "Hindi",
+        "Sanskrit",
+        "Mathematics",
+        "Science",
+        "Social Science",
+        "Computer Science"
+      ],
+      "terms": [
+        "TERM 1",
+        "TERM 2"
+      ],
+      "bytes": 435298,
+      "file": "out\\raw\\2025-2026\\75__VI-A.html",
+      "at": "2026-10-17T13:00:50Z"
+    },
+    "2025-2026/88": {
+      "year": "2025-2026",
+      "classId": "88",
+      "className": "VI-B",
+      "subjects": [
+        "Hindi"
+      ],
+      "terms": [
+        "TERM 1",
+        "TERM 2"
+      ],
+      "bytes": 3576,
+      "file": "out\\raw\\2025-2026\\88__VI-B.html",
+      "at": "2026-10-17T13:00:55Z"
+    },
+    "2025-2026/76": {
+      "year": "2025-2026",
+      "classId": "76",
+      "className": "VII-A",
+      "subjects": [
+        "English",
+        "Hindi",
+        "Sanskrit",
+        "Mathematics",
+        "Science",
+        "Social Science",
+        "Computer Science"
+      ],
+      "terms": [
+        "TERM 1",
+        "TERM 2"
+      ],
+      "bytes": 235120,
+      "file": "out\\raw\\2025-2026\\76__VII-A.html",
+      "at": "2026-10-17T13:01:08Z"
+    },
+    "2025-2026/87": {
+      "year": "2025-2026",
+      "classId": "87",
+      "className": "VII-B",
+      "subjects": [
+        "English",
+        "Hindi",
+        "Sanskrit",
+        "Mathematics",
+        "Science",
+        "Social Science",
+        "Computer Science"
+      ],
+      "terms": [
+        "TERM 1",
+        "TERM 2"
+      ],
+      "bytes": 227186,
+      "file": "out\\raw\\2025-2026\\87__VII-B.html",
+      "at": "2026-10-17T13:01:21Z"
+    },
+    "2025-2026/77": {
+      "year": "2025-2026",
+      "classId": "77",
+      "className": "VIII-A",
+      "subjects": [
+        "English",
+        "Hindi",
+        "Sanskrit",
+        "Mathematics",
+        "Science",
+        "Social Science",
+        "Computer Science"
+      ],
+      "terms": [
+        "TERM 1",
+        "TERM 2"
+      ],
+      "bytes": 308941,
+      "file": "out\\raw\\2025-2026\\77__VIII-A.html",
+      "at": "2026-10-17T13:01:36Z"
+    },
+    "2025-2026/89": {
+      "year": "2025-2026",
+      "classId": "89",
+      "className": "VIII-B",
+      "subjects": 0,
+      "terms": 0,
+      "error": "TimeoutError: page.waitForFunction: Timeout 20000ms exceeded.",
+      "at": "2026-10-17T13:08:35Z"
+    },
+    "2025-2026/78": {
+      "year": "2025-2026",
+      "classId": "78",
+      "className": "IX-A",
+      "subjects": [
+        "English",
+        "Hindi",
+        "Mathematics",
+        "Science",
+        "Social Science",
+        "Computer Science"
+      ],
+      "terms": [
+        "TERM 1",
+        "TERM 2"
+      ],
+      "bytes": 303080,
+      "file": "out\\raw\\2025-2026\\78__IX-A.html",
+      "at": "2026-10-17T13:02:14Z"
+    },
+    "2025-2026/79": {
+      "year": "2025-2026",
+      "classId": "79",
+      "className": "X-A",
+      "subjects": 0,
+      "terms": 0,
+      "error": "TimeoutError: page.waitForFunction: Timeout 20000ms exceeded.",
+      "at": "2026-10-17T13:08:58Z"
+    },
+    "2025-2026/80": {
+      "year": "2025-2026",
+      "classId": "80",
+      "className": "Dummy-A",
+      "subjects": 0,
+      "terms": 0,
+      "error": "TimeoutError: page.waitForFunction: Timeout 20000ms exceeded.",
+      "at": "2026-10-17T13:09:20Z"
+    }
+  },
+  "runs": [
+    {
+      "sessions": [
+        "11"
+      ],
+      "maxClasses": 2,
+      "at": "2026-10-17T11:45:53Z"
+    },
+    {
+      "sessions": [
+        "11"
+      ],
+      "maxClasses": 0,
+      "at": "2026-10-17T11:48:50Z"
+    },
+    {
+      "sessions": [
+        "11"
+      ],
+      "maxClasses": 0,
+      "at": "2026-10-17T12:13:16Z"
+    },
+    {
+      "sessions": [
+        "7",
+        "8",
+        "9",
+        "10",
+        "11"
+      ],
+      "maxClasses": 0,
+      "at": "2026-10-17T12:31:17Z"
+    },
+    {
+      "sessions": [
+        "7",
+        "8",
+        "9",
+        "10",
+        "11"
+      ],
+      "maxClasses": 0,
+      "at": "2026-10-17T12:36:50Z"
+    },
+    {
+      "sessions": [
+        "8"
+      ],
+      "maxClasses": 0,
+      "at": "2026-10-17T12:38:32Z"
+    },
+    {
+      "sessions": [
+        "8",
+        "9",
+        "10",
+        "11"
+      ],
+      "maxClasses": 0,
+      "at": "2026-10-17T13:02:58Z"
+    },
+    {
+      "sessions": [
+        "9",
+        "10",
+        "11"
+      ],
+      "maxClasses": 0,
+      "at": "2026-10-17T13:09:20Z"
+    }
+  ]
+}
