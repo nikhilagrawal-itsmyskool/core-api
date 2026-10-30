@@ -206,6 +206,9 @@ alter table school_branding add column if not exists contact varchar(128);
 alter table school_branding add column if not exists email varchar(128);
 alter table school_branding add column if not exists website varchar(128);
 alter table school_branding add column if not exists board_logo_file_id varchar(12);
+-- CBSE registration number printed on the Transfer Certificate header (central school
+-- identity; falls back to affiliation_no when blank). Edited on the same Branding page.
+alter table school_branding add column if not exists cbse_reg_no varchar(64);
 
 -- ══ Phase 3: exam attendance + invigilator signatures ════════════════════════════
 

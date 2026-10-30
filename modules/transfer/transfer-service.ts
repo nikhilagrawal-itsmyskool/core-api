@@ -1,14 +1,20 @@
 import { DB, singleLineString } from '../../shared/lib/db';
 import { BusinessErrorResult } from '../../shared/lib/errors';
 import { ErrorCode } from '../../shared/lib/error-codes';
-import { StudentTc, CreateTcRequest, UpdateTcRequest } from './transfer-interfaces';
-import { TC_STATUS_VALUES, DEFAULTS } from './transfer-constants';
-import { findStudent } from './transfer-common';
+import { StudentTc, CreateTcRequest, UpdateTcRequest, TransferConfig } from './transfer-interfaces';
+import { TC_STATUS_VALUES, DEFAULTS, CONFIG_DEFAULTS, DUES_GATE_MODES } from './transfer-constants';
+import { findStudent, deriveStudent, deriveConcession, deriveSubjects, getTcBranding } from './transfer-common';
+import { feesLedgerService } from '../fees/fees-ledger-service';
 const { generateShortUuid } = require('../../shared/util/generate-uuid.js');
+const QRCode = require('qrcode');
+
+const PORTAL_BASE_URL = process.env.PORTAL_BASE_URL || 'https://dbpasn.itsmyskool.com';
 
 const TC_COLUMNS = singleLineString`
-  uuid, school_id, student_id, application_date, srn_number, issue_date,
-  reason_for_leaving, total_attendance_days, total_working_days, status
+  uuid, school_id, student_id, application_date, srn_number, tc_number, book_no, issue_date,
+  reason_for_leaving, result, failed_in_class, subjects_studied, qualified_for_promotion,
+  dues_paid_upto, fee_concession, ncc_scout_guide, games_activities, general_conduct, remarks,
+  total_attendance_days, total_working_days, status, printed_at, print_count
 `;
 
 // Transfer Certificate lifecycle for a student. Issuing a TC withdraws the
@@ -17,6 +23,75 @@ class TransferService {
   private assertStatus(status: string | undefined): void {
     if (status !== undefined && !(TC_STATUS_VALUES as readonly string[]).includes(status)) {
       throw new BusinessErrorResult(ErrorCode.BusinessError, `status must be one of: ${TC_STATUS_VALUES.join(', ')}`);
+    }
+  }
+
+  // ── Per-school TC configuration (god-only Config screen) ─────────────────────
+  public async getConfig(schoolId: string): Promise<TransferConfig> {
+    const rows = await DB.query(singleLineString`select * from transfer_config where school_id = $1`, [schoolId]);
+    const r: any = rows.length ? rows[0] : {};
+    const D = CONFIG_DEFAULTS;
+    return {
+      duesGateMode: r.duesGateMode || D.duesGateMode,
+      tcBookNo: r.tcBookNo ?? D.tcBookNo,
+      srnPrefix: r.srnPrefix ?? D.srnPrefix,
+      tcNumberPrefix: r.tcNumberPrefix ?? D.tcNumberPrefix,
+      defaultResult: r.defaultResult ?? D.defaultResult,
+      defaultConduct: r.defaultConduct ?? D.defaultConduct,
+      defaultPromotion: r.defaultPromotion ?? D.defaultPromotion,
+      defaultFailed: r.defaultFailed ?? D.defaultFailed,
+      defaultDuesPaidUpto: r.defaultDuesPaidUpto ?? D.defaultDuesPaidUpto,
+      defaultNcc: r.defaultNcc ?? D.defaultNcc,
+      resultOptions: Array.isArray(r.resultOptions) && r.resultOptions.length ? r.resultOptions : [...D.resultOptions],
+      conductOptions: Array.isArray(r.conductOptions) && r.conductOptions.length ? r.conductOptions : [...D.conductOptions],
+      autoDeriveSubjects: r.autoDeriveSubjects == null ? D.autoDeriveSubjects : !!r.autoDeriveSubjects,
+    };
+  }
+
+  public async updateConfig(schoolId: string, data: Partial<TransferConfig>, userId: string): Promise<TransferConfig> {
+    if (data.duesGateMode !== undefined && !(DUES_GATE_MODES as readonly string[]).includes(data.duesGateMode)) {
+      throw new BusinessErrorResult(ErrorCode.BusinessError, `duesGateMode must be one of: ${DUES_GATE_MODES.join(', ')}`);
+    }
+    const cur = await this.getConfig(schoolId);
+    const m = { ...cur, ...data };
+    const now = new Date();
+    const vals = [
+      m.duesGateMode, m.tcBookNo || null, m.srnPrefix || null, m.tcNumberPrefix || null,
+      m.defaultResult || null, m.defaultConduct || null, m.defaultPromotion || null, m.defaultFailed || null,
+      m.defaultDuesPaidUpto || null, m.defaultNcc || null,
+      JSON.stringify(m.resultOptions || []), JSON.stringify(m.conductOptions || []),
+      !!m.autoDeriveSubjects,
+    ];
+    const exists = await DB.query(singleLineString`select 1 from transfer_config where school_id = $1`, [schoolId]);
+    if (exists.length) {
+      await DB.query(
+        singleLineString`update transfer_config set dues_gate_mode = $2, tc_book_no = $3, srn_prefix = $4,
+          tc_number_prefix = $5, default_result = $6, default_conduct = $7, default_promotion = $8,
+          default_failed = $9, default_dues_paid_upto = $10, default_ncc = $11, result_options = $12,
+          conduct_options = $13, auto_derive_subjects = $14, updatedby_userid = $15, updated_at = $16
+          where school_id = $1`,
+        [schoolId, ...vals, userId, now]
+      );
+    } else {
+      await DB.query(
+        singleLineString`insert into transfer_config (school_id, dues_gate_mode, tc_book_no, srn_prefix,
+          tc_number_prefix, default_result, default_conduct, default_promotion, default_failed,
+          default_dues_paid_upto, default_ncc, result_options, conduct_options, auto_derive_subjects,
+          updatedby_userid, updated_at)
+          values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
+        [schoolId, ...vals, userId, now]
+      );
+    }
+    return this.getConfig(schoolId);
+  }
+
+  // Total academic+transport dues outstanding across all years (fees public API, read-only).
+  public async getOutstandingDues(schoolId: string, studentId: string): Promise<number> {
+    try {
+      const led: any = await feesLedgerService.studentLedger(schoolId, studentId);
+      return Math.max(0, Number(led?.totals?.outstanding || 0));
+    } catch {
+      return 0;
     }
   }
 
@@ -49,8 +124,9 @@ class TransferService {
     }
     return DB.query(
       singleLineString`
-        select tc.uuid, tc.student_id, tc.application_date, tc.srn_number, tc.issue_date,
+        select tc.uuid, tc.student_id, tc.application_date, tc.srn_number, tc.tc_number, tc.issue_date,
                tc.reason_for_leaving, tc.total_attendance_days, tc.total_working_days, tc.status,
+               tc.printed_at, tc.print_count,
                s.name as student_name, s.admission_number,
                cur.class_name
         from student_tc tc
@@ -76,6 +152,33 @@ class TransferService {
       [tcId, schoolId]
     );
     return rows.length > 0 ? rows[0] : null;
+  }
+
+  // Suggested form values for a new TC: identity derived live + config defaults +
+  // concession/subjects derivation + current outstanding dues.
+  public async prefill(schoolId: string, studentId: string): Promise<any> {
+    const derived = await deriveStudent(schoolId, studentId);
+    if (!derived) throw new BusinessErrorResult(ErrorCode.BusinessError, 'Student not found');
+    const cfg = await this.getConfig(schoolId);
+    const concession = await deriveConcession(schoolId, studentId);
+    const subjects = cfg.autoDeriveSubjects ? await deriveSubjects(schoolId, derived.classId, derived.academicYearId) : [];
+    const subjectsStudied = subjects.map((s, i) => `${i + 1}. ${s}`).join('  ');
+    return {
+      derived,
+      config: cfg,
+      duesOutstanding: await this.getOutstandingDues(schoolId, studentId),
+      suggested: {
+        result: cfg.defaultResult,
+        generalConduct: cfg.defaultConduct,
+        qualifiedForPromotion: cfg.defaultPromotion,
+        failedInClass: cfg.defaultFailed,
+        duesPaidUpto: cfg.defaultDuesPaidUpto,
+        nccScoutGuide: cfg.defaultNcc,
+        feeConcession: concession,
+        subjectsStudied,
+        bookNo: cfg.tcBookNo,
+      },
+    };
   }
 
   // Mark the student as withdrawn. Owns the write to the shared `student` row.
@@ -104,58 +207,95 @@ class TransferService {
     );
   }
 
+  // Enforce the configurable no-dues gate when a TC transitions to 'issued'. Returns a
+  // warning string (warn mode) or null. Throws in block mode unless the caller may override.
+  private async enforceDuesGate(
+    schoolId: string,
+    studentId: string,
+    overrideDues: boolean,
+    canOverrideDues: boolean
+  ): Promise<string | null> {
+    const cfg = await this.getConfig(schoolId);
+    if (cfg.duesGateMode === 'off') return null;
+    const outstanding = await this.getOutstandingDues(schoolId, studentId);
+    if (outstanding <= 0) return null;
+    const amt = `₹${outstanding.toLocaleString('en-IN')}`;
+    if (cfg.duesGateMode === 'block') {
+      const overriding = overrideDues && canOverrideDues;
+      if (!overriding) {
+        throw new BusinessErrorResult(
+          ErrorCode.BusinessError,
+          `Student has outstanding dues of ${amt}. Clear the dues, or a super-admin can override to issue the TC.`
+        );
+      }
+      return `Issued with outstanding dues of ${amt} (overridden).`;
+    }
+    return `Student has outstanding dues of ${amt}.`;
+  }
+
   public async create(
     studentId: string,
     data: CreateTcRequest,
     schoolId: string,
-    userId: string
+    userId: string,
+    canOverrideDues = false
   ): Promise<StudentTc> {
     const student = await findStudent(schoolId, studentId);
     if (!student) throw new BusinessErrorResult(ErrorCode.BusinessError, 'Student not found');
     this.assertStatus(data.status);
 
     const status = data.status || DEFAULTS.STATUS;
+    let duesWarning: string | null = null;
+    if (status === 'issued') {
+      duesWarning = await this.enforceDuesGate(schoolId, studentId, !!data.overrideDues, canOverrideDues);
+    }
+
     const uuid = generateShortUuid(12);
     const now = new Date();
     await DB.query(
       singleLineString`
         insert into student_tc
-        (uuid, school_id, student_id, application_date, srn_number, issue_date,
-         reason_for_leaving, total_attendance_days, total_working_days, status,
-         createdby_userid, created_at)
-        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+        (uuid, school_id, student_id, application_date, srn_number, tc_number, book_no, issue_date,
+         reason_for_leaving, result, failed_in_class, subjects_studied, qualified_for_promotion,
+         dues_paid_upto, fee_concession, ncc_scout_guide, games_activities, general_conduct, remarks,
+         total_attendance_days, total_working_days, status, createdby_userid, created_at)
+        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)
       `,
       [
-        uuid,
-        schoolId,
-        studentId,
-        data.applicationDate || null,
-        data.srnNumber || null,
-        data.issueDate || null,
-        data.reasonForLeaving || null,
-        data.totalAttendanceDays ?? null,
-        data.totalWorkingDays ?? null,
-        status,
-        userId,
-        now,
+        uuid, schoolId, studentId,
+        data.applicationDate || null, data.srnNumber || null, data.tcNumber || null, data.bookNo || null,
+        data.issueDate || null, data.reasonForLeaving || null, data.result || null, data.failedInClass || null,
+        data.subjectsStudied || null, data.qualifiedForPromotion || null, data.duesPaidUpto || null,
+        data.feeConcession || null, data.nccScoutGuide || null, data.gamesActivities || null,
+        data.generalConduct || null, data.remarks || null,
+        data.totalAttendanceDays ?? null, data.totalWorkingDays ?? null, status, userId, now,
       ]
     );
 
     if (status === 'issued') {
-      await this.withdrawStudent(studentId, schoolId, data.issueDate || null, null, userId);
+      await this.withdrawStudent(studentId, schoolId, data.issueDate || null, data.reasonForLeaving || null, userId);
     }
-    return this.getById(uuid, schoolId) as Promise<StudentTc>;
+    const tc = (await this.getById(uuid, schoolId)) as StudentTc;
+    if (duesWarning) (tc as any).duesWarning = duesWarning;
+    return tc;
   }
 
   public async update(
     tcId: string,
     data: UpdateTcRequest,
     schoolId: string,
-    userId: string
+    userId: string,
+    canOverrideDues = false
   ): Promise<StudentTc | null> {
     const existing = await this.getById(tcId, schoolId);
     if (!existing) return null;
     this.assertStatus(data.status);
+
+    // Gate BEFORE writing so a blocked issue leaves the row untouched.
+    let duesWarning: string | null = null;
+    if (data.status === 'issued' && existing.status !== 'issued') {
+      duesWarning = await this.enforceDuesGate(schoolId, existing.studentId, !!data.overrideDues, canOverrideDues);
+    }
 
     const fields: string[] = [];
     const params: any[] = [];
@@ -165,8 +305,20 @@ class TransferService {
     };
     if (data.applicationDate !== undefined) set('application_date', data.applicationDate);
     if (data.srnNumber !== undefined) set('srn_number', data.srnNumber);
+    if (data.tcNumber !== undefined) set('tc_number', data.tcNumber);
+    if (data.bookNo !== undefined) set('book_no', data.bookNo);
     if (data.issueDate !== undefined) set('issue_date', data.issueDate);
     if (data.reasonForLeaving !== undefined) set('reason_for_leaving', data.reasonForLeaving);
+    if (data.result !== undefined) set('result', data.result);
+    if (data.failedInClass !== undefined) set('failed_in_class', data.failedInClass);
+    if (data.subjectsStudied !== undefined) set('subjects_studied', data.subjectsStudied);
+    if (data.qualifiedForPromotion !== undefined) set('qualified_for_promotion', data.qualifiedForPromotion);
+    if (data.duesPaidUpto !== undefined) set('dues_paid_upto', data.duesPaidUpto);
+    if (data.feeConcession !== undefined) set('fee_concession', data.feeConcession);
+    if (data.nccScoutGuide !== undefined) set('ncc_scout_guide', data.nccScoutGuide);
+    if (data.gamesActivities !== undefined) set('games_activities', data.gamesActivities);
+    if (data.generalConduct !== undefined) set('general_conduct', data.generalConduct);
+    if (data.remarks !== undefined) set('remarks', data.remarks);
     if (data.totalAttendanceDays !== undefined) set('total_attendance_days', data.totalAttendanceDays);
     if (data.totalWorkingDays !== undefined) set('total_working_days', data.totalWorkingDays);
     if (data.status !== undefined) set('status', data.status);
@@ -187,7 +339,65 @@ class TransferService {
       const issueDate = data.issueDate || existing.issueDate || null;
       await this.withdrawStudent(existing.studentId, schoolId, data.withdrawalDate || issueDate, data.withdrawalRemarks || null, userId);
     }
-    return this.getById(tcId, schoolId);
+    const tc = await this.getById(tcId, schoolId);
+    if (tc && duesWarning) (tc as any).duesWarning = duesWarning;
+    return tc;
+  }
+
+  // Everything the certificate template needs: stored TC + live-derived identity +
+  // central branding + a verification QR.
+  public async printData(schoolId: string, tcId: string): Promise<any | null> {
+    const tc = await this.getById(tcId, schoolId);
+    if (!tc) return null;
+    const [derived, branding] = await Promise.all([
+      deriveStudent(schoolId, tc.studentId),
+      getTcBranding(schoolId),
+    ]);
+    const feeConcession = tc.feeConcession || (await deriveConcession(schoolId, tc.studentId));
+    const verifyUrl = `${PORTAL_BASE_URL}/verify/tc/${tc.uuid}`;
+    const qrDataUri = await QRCode.toDataURL(verifyUrl, { margin: 2, width: 220 });
+    return { tc, derived, branding, feeConcession, verifyUrl, qrDataUri };
+  }
+
+  public async recordPrint(schoolId: string, tcId: string): Promise<void> {
+    await DB.query(
+      singleLineString`update student_tc set printed_at = $1, print_count = coalesce(print_count, 0) + 1
+        where uuid = $2 and school_id = $3 and status <> 'deleted'`,
+      [new Date(), tcId, schoolId]
+    );
+  }
+
+  // Public QR verification — resolve by uuid alone (globally unique); only 'issued' TCs verify.
+  public async verifyPublic(tcId: string): Promise<any> {
+    const rows = await DB.query(
+      singleLineString`select tc.uuid, tc.tc_number, tc.srn_number, tc.issue_date, tc.status,
+          s.name as student_name, s.admission_number, b.school_name,
+          cur.class_name
+        from student_tc tc
+        join student s on s.uuid = tc.student_id and s.school_id = tc.school_id
+        left join school_branding b on b.school_id = tc.school_id
+        left join lateral (
+          select c.name as class_name from student_class sc
+          join academic_year ay on sc.academic_year_id = ay.uuid
+          left join class c on sc.class_id = c.uuid
+          where sc.student_id = s.uuid and (sc.status is null or sc.status <> 'deleted')
+          order by ay.start_date desc nulls last limit 1
+        ) cur on true
+        where tc.uuid = $1 and tc.status = 'issued'`,
+      [tcId]
+    );
+    if (!rows.length) return { valid: false };
+    const r: any = rows[0];
+    return {
+      valid: true,
+      studentName: r.studentName,
+      admissionNumber: r.admissionNumber,
+      className: r.className || null,
+      tcNumber: r.tcNumber || null,
+      srnNumber: r.srnNumber || null,
+      issueDate: r.issueDate || null,
+      schoolName: r.schoolName || null,
+    };
   }
 }
 

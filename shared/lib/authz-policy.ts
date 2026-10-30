@@ -171,6 +171,8 @@ export const ACTIONS = {
   TRANSPORT_ATTENDANCE_FINALIZE: 'transport.attendance.finalize',
   TRANSFER_VIEW: 'transfer.certificate.view',
   TRANSFER_MANAGE: 'transfer.certificate.manage',
+  TRANSFER_CONFIG_MANAGE: 'transfer.config.manage',
+  TRANSFER_DUES_OVERRIDE: 'transfer.dues.override',
   SYLLABUS_VIEW: 'syllabus.plan.view',
   SYLLABUS_MANAGE: 'syllabus.plan.manage',
   SYLLABUS_PROGRESS_MARK: 'syllabus.progress.mark',

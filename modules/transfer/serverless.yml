@@ -12,6 +12,8 @@ custom:
   fullServiceName: ${self:custom.prefix}-${self:custom.baseServiceName}
   customDomain:
    basePath: 'transfer'
+  authorizerExtraExempt:
+    - 'verify/tc/{uuid}'   # public TC verification (QR scan) — no JWT
   $<<: ${file(../global-config-${self:provider.stage}.yml):custom}
 
 service: ${self:provider.stage}-${self:custom.fullServiceName}

@@ -27,6 +27,16 @@
           method: get
           cors: true
 
+  # Form prefill — derived identity + config defaults for a new TC
+  prefill-tc:
+    handler: transfer-handler.prefill
+    name: ${self:service}-prefill-tc
+    events:
+      - http:
+          path: students/{id}/tc/prefill
+          method: get
+          cors: true
+
   create-tc:
     handler: transfer-handler.create
     name: ${self:service}-create-tc
@@ -43,4 +53,43 @@
       - http:
           path: students/{id}/tc/{tcId}
           method: put
+          cors: true
+
+  # Printable A4 certificate HTML
+  print-tc:
+    handler: transfer-handler.print
+    name: ${self:service}-print-tc
+    events:
+      - http:
+          path: students/{id}/tc/{tcId}/print
+          method: get
+          cors: true
+
+  # ── TC Config (god-only write) ───────────────────────────────────────────────
+  get-config:
+    handler: transfer-handler.getConfig
+    name: ${self:service}-get-config
+    events:
+      - http:
+          path: config
+          method: get
+          cors: true
+
+  update-config:
+    handler: transfer-handler.updateConfig
+    name: ${self:service}-update-config
+    events:
+      - http:
+          path: config
+          method: put
+          cors: true
+
+  # Public TC verification (QR scan) — authorizer-exempt (see serverless.yml)
+  verify-tc:
+    handler: transfer-handler.verify
+    name: ${self:service}-verify-tc
+    events:
+      - http:
+          path: verify/tc/{uuid}
+          method: get
           cors: true

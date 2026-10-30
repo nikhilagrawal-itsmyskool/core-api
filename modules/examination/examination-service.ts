@@ -761,7 +761,7 @@ class ExaminationService {
   async getBranding(schoolId: string): Promise<any> {
     const rows = await DB.query(
       singleLineString`select logo_file_id, stamp_file_id, board_logo_file_id, school_name, motto, address,
-          affiliation_no, school_code, contact, email, website from school_branding where school_id = $1`,
+          affiliation_no, cbse_reg_no, school_code, contact, email, website from school_branding where school_id = $1`,
       [schoolId],
     );
     const base = rows.length ? rows[0] : {};
@@ -769,7 +769,7 @@ class ExaminationService {
     return {
       logoFileId: base.logoFileId || null, stampFileId: base.stampFileId || null, boardLogoFileId: base.boardLogoFileId || null,
       schoolName: base.schoolName || null, motto: base.motto || null, address: base.address || null,
-      affiliationNo: base.affiliationNo || null, schoolCode: base.schoolCode || null,
+      affiliationNo: base.affiliationNo || null, cbseRegNo: base.cbseRegNo || null, schoolCode: base.schoolCode || null,
       contact: base.contact || null, email: base.email || null, website: base.website || null,
       ...uris,
     };
@@ -777,7 +777,7 @@ class ExaminationService {
 
   // Save the printed-header text — school name / motto / address plus the report-card masthead
   // fields (affiliation no, school code, contact, email, website).
-  async setBrandingText(schoolId: string, text: { schoolName?: string; motto?: string; address?: string; affiliationNo?: string; schoolCode?: string; contact?: string; email?: string; website?: string }, userId: string): Promise<any> {
+  async setBrandingText(schoolId: string, text: { schoolName?: string; motto?: string; address?: string; affiliationNo?: string; cbseRegNo?: string; schoolCode?: string; contact?: string; email?: string; website?: string }, userId: string): Promise<any> {
     const now = new Date();
     const exists = await DB.query(singleLineString`select 1 from school_branding where school_id = $1`, [schoolId]);
     const vals = [
@@ -785,6 +785,7 @@ class ExaminationService {
       (text.motto || "").trim().slice(0, 256) || null,
       (text.address || "").trim().slice(0, 512) || null,
       (text.affiliationNo || "").trim().slice(0, 64) || null,
+      (text.cbseRegNo || "").trim().slice(0, 64) || null,
       (text.schoolCode || "").trim().slice(0, 64) || null,
       (text.contact || "").trim().slice(0, 128) || null,
       (text.email || "").trim().slice(0, 128) || null,
@@ -792,12 +793,12 @@ class ExaminationService {
     ];
     if (exists.length) {
       await DB.query(
-        singleLineString`update school_branding set school_name = $2, motto = $3, address = $4, affiliation_no = $5, school_code = $6, contact = $7, email = $8, website = $9, updatedby_userid = $10, updated_at = $11 where school_id = $1`,
+        singleLineString`update school_branding set school_name = $2, motto = $3, address = $4, affiliation_no = $5, cbse_reg_no = $6, school_code = $7, contact = $8, email = $9, website = $10, updatedby_userid = $11, updated_at = $12 where school_id = $1`,
         [schoolId, ...vals, userId, now],
       );
     } else {
       await DB.query(
-        singleLineString`insert into school_branding (school_id, school_name, motto, address, affiliation_no, school_code, contact, email, website, updatedby_userid, updated_at) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+        singleLineString`insert into school_branding (school_id, school_name, motto, address, affiliation_no, cbse_reg_no, school_code, contact, email, website, updatedby_userid, updated_at) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
         [schoolId, ...vals, userId, now],
       );
     }

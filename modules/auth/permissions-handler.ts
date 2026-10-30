@@ -470,6 +470,8 @@ const CATALOGS: Record<string, Catalog> = {
     actions: [
       { action: ACTIONS.TRANSFER_VIEW, label: 'View transfer certificates' },
       { action: ACTIONS.TRANSFER_MANAGE, label: 'Issue / edit transfer certificates' },
+      { action: ACTIONS.TRANSFER_CONFIG_MANAGE, label: 'Manage TC config (defaults, dues gate) — god-only' },
+      { action: ACTIONS.TRANSFER_DUES_OVERRIDE, label: 'Override dues gate when issuing a TC — god-only' },
     ],
   },
   assistant: {
