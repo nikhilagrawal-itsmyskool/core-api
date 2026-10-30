@@ -233,6 +233,17 @@
           method: get
           cors: true
 
+  me-history:
+    handler: homework-me-handler.studentHistory
+    name: ${self:service}-me-history
+    memorySize: 512
+    timeout: 20
+    events:
+      - http:
+          path: me/history
+          method: get
+          cors: true
+
   # ── Word→PDF conversion worker (docx -> pdf) ───────────────────────────────
   # Heavy LibreOffice layer is isolated to these functions only; every CRUD endpoint
   # above stays light (512 MB, no layer). Mirrors the syllabus model-paper worker.

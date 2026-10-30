@@ -523,6 +523,35 @@ class HomeworkService {
     };
   }
 
+  // Parent/student app: recent PUBLISHED homework days for the child's effective class,
+  // newest first — a scrollable "history" feed. Only days that actually have ready items.
+  async studentHistory(
+    schoolId: string,
+    studentId: string,
+    opts: { limit?: number; offset?: number; academicYearId?: string },
+  ): Promise<{ classId: string | null; className: string | null; days: { date: string; publishedAt: string | null; items: HomeworkItemView[] }[] }> {
+    const ay = opts.academicYearId || (await getCurrentAcademicYearId(schoolId));
+    const eff = ay ? await resolveEffectiveClassId(schoolId, studentId, ay) : null;
+    if (!ay || !eff) return { classId: null, className: null, days: [] };
+    const className = await findClassName(schoolId, eff.classId);
+    const limit = Math.min(opts.limit || 30, 60);
+    const offset = opts.offset || 0;
+    const dayRows = await DB.query(
+      singleLineString`select uuid, homework_date::text as homework_date, published_at
+        from homework_day
+        where school_id = $1 and academic_year_id = $2 and class_id = $3 and status = 'published'
+        order by homework_date desc
+        limit ${limit} offset ${offset}`,
+      [schoolId, ay, eff.classId],
+    );
+    const days: { date: string; publishedAt: string | null; items: HomeworkItemView[] }[] = [];
+    for (const d of dayRows as any[]) {
+      const items = (await this.itemsForDay(schoolId, d.uuid)).filter((i) => i.conversionStatus === "ready");
+      if (items.length) days.push({ date: d.homeworkDate, publishedAt: d.publishedAt || null, items });
+    }
+    return { classId: eff.classId, className, days };
+  }
+
   // ── Word→PDF conversion worker (docx -> pdf) ─────────────────────────────────
   // Claim one pending Word item (for update skip locked, overlap-safe across drains),
   // convert its source doc to PDF, store it as the 'original', mark ready. Transient

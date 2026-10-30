@@ -214,6 +214,24 @@ class HomeworkMeHandler {
       ResponseBuilder.handleError(err, callback);
     }
   };
+
+  // GET /homework/me/history?limit=&offset=&academicYearId=  (student/parent app)
+  public studentHistory = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const auth = guardActiveStudent(event, callback);
+      if (!auth) return;
+      const q = event.queryStringParameters || {};
+      const result = await homeworkService.studentHistory(auth.token.school_id, auth.activeStudentId, {
+        limit: q.limit ? parseInt(q.limit, 10) : undefined,
+        offset: q.offset ? parseInt(q.offset, 10) : undefined,
+        academicYearId: q.academicYearId,
+      });
+      ResponseBuilder.ok(result, callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
 }
 
 const h = new HomeworkMeHandler();
@@ -229,3 +247,4 @@ export const publish = g("homework-me-handler.publish", h.publish);
 export const unpublish = g("homework-me-handler.unpublish", h.unpublish);
 // Student/parent app — self-authorizes via the student token (PUBLIC in the manifest, not guarded).
 export const studentToday = h.studentToday;
+export const studentHistory = h.studentHistory;
