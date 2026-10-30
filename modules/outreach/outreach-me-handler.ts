@@ -224,6 +224,42 @@ class OutreachMeHandler {
     }
   };
 
+  // ── Staff read-only feed (any logged-in employee; all published moments) ───────
+
+  // GET /outreach/staff/feed?status=published — lightweight list (cover + counts) for staff.
+  public staffFeed = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const emp = resolveEmployee(event, callback);
+      if (!emp) return;
+      const q = event.queryStringParameters || {};
+      const rows = await outreachService.listMoments(emp.schoolId, {
+        status: "published",
+        limit: q.limit ? parseInt(q.limit, 10) : undefined,
+        offset: q.offset ? parseInt(q.offset, 10) : undefined,
+      });
+      ResponseBuilder.ok(rows, callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
+  // GET /outreach/staff/feed/{id} — a single published moment, full view (photos + videos).
+  public staffFeedMoment = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const emp = resolveEmployee(event, callback);
+      if (!emp) return;
+      const id = requireParam(event, "id", callback);
+      if (!id) return;
+      const result = await outreachService.staffMoment(emp.schoolId, id);
+      if (!result) return ResponseBuilder.notFound(ErrorCode.InvalidId, "Moment not found", callback);
+      ResponseBuilder.ok(result, callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
   // GET /outreach/me/feed/{id}/photos/{photoId}/image — base64 (fallback / local dev)
   public getFeedPhotoImage = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
     ctx.callbackWaitsForEmptyEventLoop = false;
@@ -267,3 +303,6 @@ export const feed = h.feed;
 export const getFeedMoment = h.getFeedMoment;
 export const setReaction = h.setReaction;
 export const getFeedPhotoImage = h.getFeedPhotoImage;
+// Staff read-only feed — any logged-in employee (resolveEmployee); no RBAC perm = all staff.
+export const staffFeed = h.staffFeed;
+export const staffFeedMoment = h.staffFeedMoment;

@@ -14,6 +14,7 @@ export const OUTREACH_ACTIONS: Record<string, string> = {
   // Admin / compose (outreach-handler)
   "outreach-handler.listMoments": OUTREACH_MOMENT_VIEW,
   "outreach-handler.getMoment": OUTREACH_MOMENT_VIEW,
+  "outreach-handler.getReactions": OUTREACH_MOMENT_VIEW,
   "outreach-handler.getPhotoImage": OUTREACH_MOMENT_VIEW,
   "outreach-handler.getAudit": OUTREACH_MOMENT_VIEW,
   "outreach-handler.audienceOptions": OUTREACH_MOMENT_VIEW,
@@ -50,6 +51,10 @@ export const OUTREACH_PUBLIC: string[] = [
   "outreach-me-handler.getFeedMoment",
   "outreach-me-handler.setReaction",
   "outreach-me-handler.getFeedPhotoImage",
+  // Staff read-only feed: resolveEmployee enforces a valid employee token (students rejected),
+  // but it carries NO requireAction so EVERY staff member can browse published moments.
+  "outreach-me-handler.staffFeed",
+  "outreach-me-handler.staffFeedMoment",
   // EventBridge-driven scheduled-publish worker — no HTTP/authorizer, invoked by the schedule event.
   "outreach-scheduled-handler.drain",
 ];

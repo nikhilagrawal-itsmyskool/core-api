@@ -656,6 +656,28 @@ class OutreachService {
     return { counts, total, mine };
   }
 
+  // Admin-only: WHO reacted (names), for the Moments dashboard. A family reaction is
+  // recorded against the child (reactor_type='student'), so the name is the child's +
+  // the family login. NEVER surfaced in the parent feed.
+  async reactionDetail(schoolId: string, momentId: string): Promise<{ reactors: { emoji: string; reactorType: string; name: string | null; familyNumber: string | null; at: string | null }[] }> {
+    const rows = await DB.query(
+      singleLineString`select r.emoji, r.reactor_type, r.reactor_id, r.created_at::text as at,
+          coalesce(s.name, e.name) as name, s.family_unique_number
+        from moment_reaction r
+        left join student s on r.reactor_type = 'student' and s.uuid = r.reactor_id and s.school_id = r.school_id
+        left join employee e on r.reactor_type = 'employee' and e.uuid = r.reactor_id and e.school_id = r.school_id
+        where r.moment_id = $1 and r.school_id = $2
+        order by r.created_at desc`,
+      [momentId, schoolId],
+    );
+    return {
+      reactors: rows.map((r: any) => ({
+        emoji: r.emoji, reactorType: r.reactorType, name: r.name || null,
+        familyNumber: r.familyUniqueNumber || null, at: r.at || null,
+      })),
+    };
+  }
+
   async setReaction(schoolId: string, momentId: string, reactorType: "student" | "employee", reactorId: string, emoji: string | null): Promise<ReactionSummary> {
     const token = (emoji || "").trim();
     if (!token) {
@@ -731,6 +753,15 @@ class OutreachService {
     const moments: MomentView[] = [];
     for (const id of ids) moments.push(await this.getMoment(schoolId, id, { reactorId: studentId }));
     return { moments };
+  }
+
+  // ── Staff read-only feed — ALL published moments, school-wide (no audience scoping) ──
+  // Any staff member can browse what's been shared with parents. The list reuses
+  // listMoments({status:'published'}); this returns one published moment in full.
+  async staffMoment(schoolId: string, momentId: string): Promise<MomentView | null> {
+    const m = await this.momentRow(schoolId, momentId);
+    if (!m || m.status !== "published") return null;
+    return this.getMoment(schoolId, momentId, { reactorId: null });
   }
 
   // A single published moment, only if the student is in its audience.

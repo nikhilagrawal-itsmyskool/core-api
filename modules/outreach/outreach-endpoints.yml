@@ -106,6 +106,15 @@
           method: get
           cors: true
 
+  get-moment-reactions:
+    handler: outreach-handler.getReactions
+    name: ${self:service}-get-moment-reactions
+    events:
+      - http:
+          path: moments/{id}/reactions
+          method: get
+          cors: true
+
   audience-options:
     handler: outreach-handler.audienceOptions
     name: ${self:service}-audience-options
@@ -243,6 +252,29 @@
       - http:
           path: me/moments/{id}/unpublish
           method: post
+          cors: true
+
+  # ── Staff read-only feed (employee token; all staff see all published moments) ──
+  staff-feed:
+    handler: outreach-me-handler.staffFeed
+    name: ${self:service}-staff-feed
+    memorySize: 512
+    timeout: 20
+    events:
+      - http:
+          path: staff/feed
+          method: get
+          cors: true
+
+  staff-feed-moment:
+    handler: outreach-me-handler.staffFeedMoment
+    name: ${self:service}-staff-feed-moment
+    memorySize: 512
+    timeout: 20
+    events:
+      - http:
+          path: staff/feed/{id}
+          method: get
           cors: true
 
   # ── Parent / student app feed (student token + X-Student-Id) ───────────────
