@@ -5,6 +5,7 @@ import { resolveEmployee, parseBody, requireParam } from "./handler-util";
 import { leaveService } from "./leave-service";
 import { leaveAttendanceService } from "./leave-attendance-service";
 import { leaveDeductionService } from "./leave-deduction-service";
+import { penaltyService } from "./penalty-service";
 import { leaveHandoverService } from "./leave-handover-service";
 import { ApplyLeaveRequest } from "./leave-interfaces";
 import { guard } from "../auth/authz";
@@ -141,6 +142,21 @@ class LeaveMeHandler {
     }
   };
 
+  // GET /leave/me/penalty?month=YYYY-MM  (my month, day-by-day, from the live staff-attendance
+  // pipeline: green/clean vs the LOP reason per day + a monthly LOP-days total)
+  public myPenalty = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
+    ctx.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const emp = resolveEmployee(event, callback);
+      if (!emp) return;
+      const q = event.queryStringParameters || {};
+      const month = q.month && MONTH_RE.test(q.month) ? q.month : istToday().slice(0, 7);
+      ResponseBuilder.ok(await penaltyService.monthPenalty(emp.schoolId, emp.employeeId, month), callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
   // GET /leave/me/applications/{id}/attachment
   public getAttachment = async (event: ApiEvent, ctx: ApiContext, callback: ApiCallback) => {
     ctx.callbackWaitsForEmptyEventLoop = false;
@@ -233,6 +249,7 @@ export const apply = g("leave-me-handler.apply", h.apply);
 export const cancel = g("leave-me-handler.cancel", h.cancel);
 export const attendance = g("leave-me-handler.attendance", h.attendance);
 export const deductions = g("leave-me-handler.deductions", h.deductions);
+export const myPenalty = g("leave-me-handler.myPenalty", h.myPenalty);
 export const getAttachment = g("leave-me-handler.getAttachment", h.getAttachment);
 export const covering = g("leave-me-handler.covering", h.covering);
 export const getCovering = g("leave-me-handler.getCovering", h.getCovering);

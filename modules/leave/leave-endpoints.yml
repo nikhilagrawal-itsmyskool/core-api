@@ -290,6 +290,16 @@
           method: get
           cors: true
 
+  me-penalty:
+    handler: leave-me-handler.myPenalty
+    name: ${self:service}-me-penalty
+    timeout: 30
+    events:
+      - http:
+          path: me/penalty
+          method: get
+          cors: true
+
   me-handover-preview:
     handler: leave-me-handler.handoverPreview
     name: ${self:service}-me-handover-preview

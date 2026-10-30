@@ -52,6 +52,7 @@ export const LEAVE_ACTIONS: Record<string, string> = {
   "leave-me-handler.cancel": LEAVE_APPLICATION_APPLY,
   "leave-me-handler.attendance": LEAVE_APPLICATION_APPLY,
   "leave-me-handler.deductions": LEAVE_APPLICATION_APPLY,
+  "leave-me-handler.myPenalty": LEAVE_APPLICATION_APPLY,
   "leave-me-handler.getAttachment": LEAVE_APPLICATION_APPLY,
   "leave-me-handler.covering": LEAVE_APPLICATION_APPLY,
   "leave-me-handler.getCovering": LEAVE_APPLICATION_APPLY,
