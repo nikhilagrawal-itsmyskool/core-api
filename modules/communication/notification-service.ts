@@ -87,8 +87,9 @@ class NotificationService {
         params,
       );
     }
-    // Best-effort push; never blocks or throws.
-    this.pushToRecipients(input.schoolId, input.recipientType, ids, input.title, input.body || "").catch(() => {});
+    // Best-effort push; never blocks or throws. entityType/entityId ride along in the push
+    // data so a tray tap can deep-link to the right screen (same mapping as the in-app inbox).
+    this.pushToRecipients(input.schoolId, input.recipientType, ids, input.title, input.body || "", input.entityType, input.entityId).catch(() => {});
     return { created: ids.length };
   }
 
@@ -256,7 +257,12 @@ class NotificationService {
     recipientIds: string[],
     title: string,
     body: string,
+    entityType?: string | null,
+    entityId?: string | null,
   ): Promise<void> {
+    const entity: Record<string, string> = {};
+    if (entityType) entity.entityType = entityType;
+    if (entityId) entity.entityId = entityId;
     if (String(process.env.EXPO_PUSH_ENABLED || "").toLowerCase() !== "true") return;
     try {
       let messages: any[] = [];
@@ -279,7 +285,7 @@ class NotificationService {
           );
           const childBody = k.name ? (body ? `${k.name}: ${body}` : k.name) : body;
           for (const t of toks) {
-            messages.push({ to: t.token, title, body: childBody, sound: "default", data: { studentId: k.uuid } });
+            messages.push({ to: t.token, title, body: childBody, sound: "default", data: { studentId: k.uuid, ...entity } });
           }
         }
       } else {
@@ -288,7 +294,7 @@ class NotificationService {
             where school_id = $1 and recipient_type = $2 and recipient_id = any($3) and status = 'active'`,
           [schoolId, recipientType, recipientIds],
         );
-        messages = toks.map((t: any) => ({ to: t.token, title, body, sound: "default" }));
+        messages = toks.map((t: any) => ({ to: t.token, title, body, sound: "default", data: { ...entity } }));
       }
       if (!messages.length) return;
       const headers: Record<string, string> = { "Content-Type": "application/json" };
