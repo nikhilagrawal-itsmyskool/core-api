@@ -73,7 +73,9 @@ create table if not exists transfer_config (
     conduct_options jsonb,                  -- allowed values for field 19 dropdown
     auto_derive_subjects boolean,           -- prefill field 11 from exam report scheme
     allow_identity_override boolean,         -- allow editing DOB/parents/etc. on the TC (default off)
+    show_book_no boolean,                    -- show the "Book No." line on the certificate (default on)
     updatedby_userid varchar(12),
     updated_at timestamp(0)
 );
 alter table transfer_config add column if not exists allow_identity_override boolean;
+alter table transfer_config add column if not exists show_book_no boolean;

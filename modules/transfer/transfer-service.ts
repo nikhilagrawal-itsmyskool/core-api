@@ -47,6 +47,7 @@ class TransferService {
       conductOptions: Array.isArray(r.conductOptions) && r.conductOptions.length ? r.conductOptions : [...D.conductOptions],
       autoDeriveSubjects: r.autoDeriveSubjects == null ? D.autoDeriveSubjects : !!r.autoDeriveSubjects,
       allowIdentityOverride: r.allowIdentityOverride == null ? D.allowIdentityOverride : !!r.allowIdentityOverride,
+      showBookNo: r.showBookNo == null ? D.showBookNo : !!r.showBookNo,
     };
   }
 
@@ -62,7 +63,7 @@ class TransferService {
       m.defaultResult || null, m.defaultConduct || null, m.defaultPromotion || null, m.defaultFailed || null,
       m.defaultDuesPaidUpto || null, m.defaultNcc || null,
       JSON.stringify(m.resultOptions || []), JSON.stringify(m.conductOptions || []),
-      !!m.autoDeriveSubjects, !!m.allowIdentityOverride,
+      !!m.autoDeriveSubjects, !!m.allowIdentityOverride, !!m.showBookNo,
     ];
     const exists = await DB.query(singleLineString`select 1 from transfer_config where school_id = $1`, [schoolId]);
     if (exists.length) {
@@ -70,8 +71,8 @@ class TransferService {
         singleLineString`update transfer_config set dues_gate_mode = $2, tc_book_no = $3, srn_prefix = $4,
           tc_number_prefix = $5, default_result = $6, default_conduct = $7, default_promotion = $8,
           default_failed = $9, default_dues_paid_upto = $10, default_ncc = $11, result_options = $12,
-          conduct_options = $13, auto_derive_subjects = $14, allow_identity_override = $15,
-          updatedby_userid = $16, updated_at = $17
+          conduct_options = $13, auto_derive_subjects = $14, allow_identity_override = $15, show_book_no = $16,
+          updatedby_userid = $17, updated_at = $18
           where school_id = $1`,
         [schoolId, ...vals, userId, now]
       );
@@ -80,8 +81,8 @@ class TransferService {
         singleLineString`insert into transfer_config (school_id, dues_gate_mode, tc_book_no, srn_prefix,
           tc_number_prefix, default_result, default_conduct, default_promotion, default_failed,
           default_dues_paid_upto, default_ncc, result_options, conduct_options, auto_derive_subjects,
-          allow_identity_override, updatedby_userid, updated_at)
-          values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
+          allow_identity_override, show_book_no, updatedby_userid, updated_at)
+          values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)`,
         [schoolId, ...vals, userId, now]
       );
     }
@@ -403,9 +404,10 @@ class TransferService {
   public async printData(schoolId: string, tcId: string): Promise<any | null> {
     const tc = await this.getById(tcId, schoolId);
     if (!tc) return null;
-    const [derived, branding] = await Promise.all([
+    const [derived, branding, cfg] = await Promise.all([
       deriveStudent(schoolId, tc.studentId),
       getTcBranding(schoolId),
+      this.getConfig(schoolId),
     ]);
     // Identity = stored override if present, else live-derived. dob-in-words recomputed
     // from the effective dob.
@@ -433,7 +435,7 @@ class TransferService {
       const dues = await this.getOutstandingDues(schoolId, tc.studentId);
       watermark = dues > 0 ? 'DRAFT — DUES PENDING' : 'DRAFT — NOT ISSUED';
     }
-    return { tc, derived: identity, branding, feeConcession, verifyUrl, qrDataUri, watermark };
+    return { tc, derived: identity, branding, feeConcession, verifyUrl, qrDataUri, watermark, showBookNo: cfg.showBookNo };
   }
 
   public async recordPrint(schoolId: string, tcId: string): Promise<void> {

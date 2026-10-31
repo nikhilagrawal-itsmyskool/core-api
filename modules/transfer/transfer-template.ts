@@ -10,6 +10,7 @@ export interface TcTemplateData {
   qrDataUri?: string | null;
   verifyUrl?: string | null;
   watermark?: string | null; // e.g. "DRAFT — NOT ISSUED" / "CANCELLED"; null when issued
+  showBookNo?: boolean;      // render the "Book No." line (default true)
 }
 
 const esc = (s: any) => String(s ?? '').replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c] as string));
@@ -142,7 +143,7 @@ export function buildTransferCertificateHtml(d: TcTemplateData): string {
     </div>
     <div class="title">TRANSFER CERTIFICATE</div>
     <div class="hd">
-      <span>Book No.: ${esc(tc.bookNo || '')}</span>
+      <span>${d.showBookNo === false ? '' : `Book No.: ${esc(tc.bookNo || '')}`}</span>
       <span>S.R.N.: ${esc(tc.srnNumber || '')}</span>
     </div>
     <div class="ids">

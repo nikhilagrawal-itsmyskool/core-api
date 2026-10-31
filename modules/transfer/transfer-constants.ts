@@ -37,4 +37,6 @@ export const CONFIG_DEFAULTS = {
   // Off by default: identity (DOB/parents/category/etc.) is entered on the STUDENT record
   // and derived live. Turn on only to allow filling/correcting it from the TC form.
   allowIdentityOverride: false,
+  // Show the "Book No." line on the certificate (schools without a TC register turn off).
+  showBookNo: true,
 } as const;
