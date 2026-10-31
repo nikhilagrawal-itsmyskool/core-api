@@ -73,7 +73,7 @@ class PaymentsService {
   }
 
   async payable(schoolId: string, schoolCode: string, studentId: string, academicYearId: string | null): Promise<PayableResponse> {
-    const enabled = rzp.paymentsEnabled();
+    const enabled = (await rzp.resolveConfig(schoolCode)).enabled;
     const ay = academicYearId || (await resolveStudentEnrollment(schoolId, studentId))?.academicYearId || null;
     if (!ay) return { enabled, academicYearId: null, currency: "INR", cycles: [], totalDue: 0 };
     const { lines } = await this.feesLedger(schoolCode, studentId, ay);
@@ -88,7 +88,8 @@ class PaymentsService {
     schoolId: string; schoolCode: string; studentId: string; academicYearId: string | null;
     userId: string; cycleKeys: string[];
   }): Promise<CreateOrderResponse> {
-    if (!rzp.paymentsEnabled()) throw new BusinessErrorResult(ErrorCode.BusinessError, "Online payment is not available yet");
+    const cfg = await rzp.resolveConfig(args.schoolCode);
+    if (!cfg.enabled) throw new BusinessErrorResult(ErrorCode.BusinessError, "Online payment is not available yet");
     const keys = [...new Set((args.cycleKeys || []).filter(Boolean))];
     if (!keys.length) throw new BadRequestResult(ErrorCode.InvalidInput, "Select at least one cycle to pay");
 
@@ -119,7 +120,7 @@ class PaymentsService {
     const amountPaise = Math.round(amount * PAISE);
 
     const intentId = generateShortUuid(12);
-    const order = await rzp.createOrder(amountPaise, intentId, {
+    const order = await rzp.createOrder(cfg, amountPaise, intentId, {
       schoolCode: args.schoolCode, studentId: args.studentId, intentId,
     });
 
@@ -133,7 +134,7 @@ class PaymentsService {
 
     return {
       intentId, orderId: order.id, amount, amountPaise, currency: "INR",
-      keyId: rzp.publicKeyId(),
+      keyId: cfg.keyId,
       prefill: { name: studentName || undefined, contact: familyNumber || undefined },
       studentName,
     };
@@ -189,22 +190,27 @@ class PaymentsService {
       [body.intentId, schoolId, studentId, body.orderId],
     );
     if (!rows.length) throw new NotFoundResult(ErrorCode.InvalidId, "Payment not found");
-    if (!rzp.verifyCheckoutSignature(body.orderId, body.paymentId, body.signature))
+    const cfg = await rzp.resolveConfig(rows[0].schoolCode);
+    if (!rzp.verifyCheckoutSignature(body.orderId, body.paymentId, body.signature, cfg.keySecret))
       throw new BusinessErrorResult(ErrorCode.BusinessError, "Payment signature verification failed");
     return this.reconcile(body.intentId, body.paymentId, body.signature);
   }
 
-  // Webhook path: verify webhook signature (caller), then reconcile by order id.
+  // Webhook path: find the intent by order id FIRST (so we know which school's webhook
+  // secret to verify with — each school's Razorpay signs with its own secret), verify, then
+  // reconcile. Reading order_id from the unverified body is safe: reconcile is still gated by
+  // the HMAC check over the raw body with that school's secret.
   async handleWebhookEvent(payload: any, signature: string, rawBody: string): Promise<{ ok: boolean }> {
-    if (!rzp.verifyWebhookSignature(rawBody, signature)) throw new BusinessErrorResult(ErrorCode.BusinessError, "Invalid webhook signature");
     const event = payload?.event;
     const entity = payload?.payload?.payment?.entity;
     if (!entity || !["payment.captured", "payment.authorized"].includes(event)) return { ok: true }; // ignore others
     const orderId = entity.order_id;
     const paymentId = entity.id;
     if (!orderId || !paymentId) return { ok: true };
-    const rows: any[] = await DB.query(singleLineString`select uuid from payment_intent where order_id=$1 and provider=$2`, [orderId, PROVIDER]);
+    const rows: any[] = await DB.query(singleLineString`select uuid, school_code from payment_intent where order_id=$1 and provider=$2`, [orderId, PROVIDER]);
     if (!rows.length) return { ok: true }; // unknown order — nothing to do
+    const cfg = await rzp.resolveConfig(rows[0].schoolCode);
+    if (!rzp.verifyWebhookSignature(rawBody, signature, cfg.webhookSecret)) throw new BusinessErrorResult(ErrorCode.BusinessError, "Invalid webhook signature");
     await this.reconcile(rows[0].uuid, paymentId, "webhook");
     return { ok: true };
   }
