@@ -46,6 +46,7 @@ class TransferService {
       resultOptions: Array.isArray(r.resultOptions) && r.resultOptions.length ? r.resultOptions : [...D.resultOptions],
       conductOptions: Array.isArray(r.conductOptions) && r.conductOptions.length ? r.conductOptions : [...D.conductOptions],
       autoDeriveSubjects: r.autoDeriveSubjects == null ? D.autoDeriveSubjects : !!r.autoDeriveSubjects,
+      allowIdentityOverride: r.allowIdentityOverride == null ? D.allowIdentityOverride : !!r.allowIdentityOverride,
     };
   }
 
@@ -61,7 +62,7 @@ class TransferService {
       m.defaultResult || null, m.defaultConduct || null, m.defaultPromotion || null, m.defaultFailed || null,
       m.defaultDuesPaidUpto || null, m.defaultNcc || null,
       JSON.stringify(m.resultOptions || []), JSON.stringify(m.conductOptions || []),
-      !!m.autoDeriveSubjects,
+      !!m.autoDeriveSubjects, !!m.allowIdentityOverride,
     ];
     const exists = await DB.query(singleLineString`select 1 from transfer_config where school_id = $1`, [schoolId]);
     if (exists.length) {
@@ -69,7 +70,8 @@ class TransferService {
         singleLineString`update transfer_config set dues_gate_mode = $2, tc_book_no = $3, srn_prefix = $4,
           tc_number_prefix = $5, default_result = $6, default_conduct = $7, default_promotion = $8,
           default_failed = $9, default_dues_paid_upto = $10, default_ncc = $11, result_options = $12,
-          conduct_options = $13, auto_derive_subjects = $14, updatedby_userid = $15, updated_at = $16
+          conduct_options = $13, auto_derive_subjects = $14, allow_identity_override = $15,
+          updatedby_userid = $16, updated_at = $17
           where school_id = $1`,
         [schoolId, ...vals, userId, now]
       );
@@ -78,12 +80,26 @@ class TransferService {
         singleLineString`insert into transfer_config (school_id, dues_gate_mode, tc_book_no, srn_prefix,
           tc_number_prefix, default_result, default_conduct, default_promotion, default_failed,
           default_dues_paid_upto, default_ncc, result_options, conduct_options, auto_derive_subjects,
-          updatedby_userid, updated_at)
-          values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
+          allow_identity_override, updatedby_userid, updated_at)
+          values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
         [schoolId, ...vals, userId, now]
       );
     }
     return this.getConfig(schoolId);
+  }
+
+  // Identity (DOB/parents/category/etc.) is entered on the student record and derived live
+  // unless the school explicitly enables TC-level editing. When disabled, drop any override
+  // fields the request carried so they are never stored.
+  private async stripIdentityIfDisallowed(schoolId: string, data: CreateTcRequest | UpdateTcRequest): Promise<void> {
+    const cfg = await this.getConfig(schoolId);
+    if (cfg.allowIdentityOverride) return;
+    data.motherName = undefined;
+    data.fatherName = undefined;
+    data.dob = undefined;
+    data.nationality = undefined;
+    data.category = undefined;
+    data.firstAdmissionDate = undefined;
   }
 
   // Total academic+transport dues outstanding across all years (fees public API, read-only).
@@ -253,6 +269,7 @@ class TransferService {
     const student = await findStudent(schoolId, studentId);
     if (!student) throw new BusinessErrorResult(ErrorCode.BusinessError, 'Student not found');
     this.assertStatus(data.status);
+    await this.stripIdentityIfDisallowed(schoolId, data);
 
     const status = data.status || DEFAULTS.STATUS;
     let duesWarning: string | null = null;
@@ -306,6 +323,7 @@ class TransferService {
     const existing = await this.getById(tcId, schoolId);
     if (!existing) return null;
     this.assertStatus(data.status);
+    await this.stripIdentityIfDisallowed(schoolId, data);
 
     // Gate BEFORE writing so a blocked issue leaves the row untouched.
     let duesWarning: string | null = null;

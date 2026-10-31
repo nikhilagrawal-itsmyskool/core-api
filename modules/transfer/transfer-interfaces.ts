@@ -88,6 +88,7 @@ export interface TransferConfig {
   resultOptions: string[];
   conductOptions: string[];
   autoDeriveSubjects: boolean;
+  allowIdentityOverride: boolean;
 }
 
 // Values derived live from the student record (never stored on the TC).

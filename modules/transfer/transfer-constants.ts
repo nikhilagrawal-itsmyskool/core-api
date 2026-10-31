@@ -34,4 +34,7 @@ export const CONFIG_DEFAULTS = {
   resultOptions: ['EXCELLENT', 'VERY GOOD', 'GOOD', 'SATISFACTORY', 'PASS'],
   conductOptions: ['EXCELLENT', 'VERY GOOD', 'GOOD', 'SATISFACTORY'],
   autoDeriveSubjects: true,
+  // Off by default: identity (DOB/parents/category/etc.) is entered on the STUDENT record
+  // and derived live. Turn on only to allow filling/correcting it from the TC form.
+  allowIdentityOverride: false,
 } as const;
