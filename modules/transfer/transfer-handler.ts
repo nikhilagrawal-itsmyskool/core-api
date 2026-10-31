@@ -112,11 +112,9 @@ class TransferHandler {
       if (!tcId) { ResponseBuilder.badRequest(ErrorCode.MissingId, 'TC ID is required', callback); return; }
       const data = await transferService.printData(schoolId, tcId);
       if (!data) { ResponseBuilder.notFound(ErrorCode.InvalidId, 'TC not found', callback); return; }
-      if (data.tc.status !== 'issued') {
-        ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'Issue the Transfer Certificate before printing. A TC can only be printed once issued (which clears the dues gate).', callback);
-        return;
-      }
-      await transferService.recordPrint(schoolId, tcId).catch(() => {});
+      // Any status is printable (preview) — non-issued prints carry a DRAFT/CANCELLED
+      // watermark marking them not valid. Only count real prints of an issued TC.
+      if (data.tc.status === 'issued') await transferService.recordPrint(schoolId, tcId).catch(() => {});
       ResponseBuilder.returnHtml(buildTransferCertificateHtml(data), callback);
     } catch (err: any) {
       ResponseBuilder.handleError(err, callback);

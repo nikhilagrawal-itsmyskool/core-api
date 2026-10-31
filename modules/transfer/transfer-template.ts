@@ -9,6 +9,7 @@ export interface TcTemplateData {
   feeConcession: string;
   qrDataUri?: string | null;
   verifyUrl?: string | null;
+  watermark?: string | null; // e.g. "DRAFT — NOT ISSUED" / "CANCELLED"; null when issued
 }
 
 const esc = (s: any) => String(s ?? '').replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c] as string));
@@ -122,10 +123,14 @@ export function buildTransferCertificateHtml(d: TcTemplateData): string {
   .qr{position:absolute;right:14mm;bottom:30mm;text-align:center}
   .qr img{width:84px;height:84px}
   .qrcap{font-size:9px;color:#444;margin-top:2px}
+  .watermark{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-32deg);
+    font-size:60px;font-weight:800;letter-spacing:4px;color:#c0202a;opacity:.14;white-space:nowrap;
+    pointer-events:none;z-index:5;text-transform:uppercase;-webkit-print-color-adjust:exact;print-color-adjust:exact}
   @media print{body{background:#fff}.sheet{margin:0;max-width:none;min-height:auto;box-shadow:none}}
 </style></head>
 <body>
   <div class="sheet">
+    ${d.watermark ? `<div class="watermark">${esc(d.watermark)}</div>` : ''}
     ${corner ? `<div class="corner">${esc(corner)}</div>` : ''}
     <div class="mast">
       ${logo}

@@ -139,7 +139,7 @@ class TransferService {
       params.push(opts.status);
       filters.push(`tc.status = $${params.length}`);
     }
-    return DB.query(
+    const rows = await DB.query(
       singleLineString`
         select tc.uuid, tc.student_id, tc.application_date, tc.srn_number, tc.tc_number, tc.issue_date,
                tc.reason_for_leaving, tc.total_attendance_days, tc.total_working_days, tc.status,
@@ -161,6 +161,20 @@ class TransferService {
       `,
       params
     );
+    // Dues clearance per student — all-years ledger balance in ONE query (matches the
+    // issue gate's figure). A positive balance means the TC is blocked from issuing.
+    const ids = [...new Set(rows.map((r: any) => r.studentId).filter(Boolean))];
+    if (ids.length) {
+      const bals = await DB.query(
+        singleLineString`select student_id, round(coalesce(sum(debit),0) - coalesce(sum(credit),0), 2) as bal
+          from student_ledger_entry where school_id = $1 and student_id = any($2::text[]) and status = 'active'
+          group by student_id`,
+        [schoolId, ids]
+      );
+      const m = new Map(bals.map((b: any) => [b.studentId, Math.max(0, Number(b.bal) || 0)]));
+      rows.forEach((r: any) => { r.outstandingDues = m.get(r.studentId) || 0; });
+    }
+    return rows;
   }
 
   public async getById(tcId: string, schoolId: string): Promise<StudentTc | null> {
@@ -410,7 +424,16 @@ class TransferService {
     const feeConcession = tc.feeConcession || (await deriveConcession(schoolId, tc.studentId));
     const verifyUrl = `${PORTAL_BASE_URL}/verify/tc/${tc.uuid}`;
     const qrDataUri = await QRCode.toDataURL(verifyUrl, { margin: 2, width: 220 });
-    return { tc, derived: identity, branding, feeConcession, verifyUrl, qrDataUri };
+    // Non-issued prints are previews only — stamp a watermark so a draft is never mistaken
+    // for a valid certificate.
+    let watermark: string | null = null;
+    if (tc.status === 'cancelled') {
+      watermark = 'CANCELLED';
+    } else if (tc.status !== 'issued') {
+      const dues = await this.getOutstandingDues(schoolId, tc.studentId);
+      watermark = dues > 0 ? 'DRAFT — DUES PENDING' : 'DRAFT — NOT ISSUED';
+    }
+    return { tc, derived: identity, branding, feeConcession, verifyUrl, qrDataUri, watermark };
   }
 
   public async recordPrint(schoolId: string, tcId: string): Promise<void> {
