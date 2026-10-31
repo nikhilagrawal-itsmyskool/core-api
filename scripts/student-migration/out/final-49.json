@@ -1,0 +1,1619 @@
+[
+ {
+  "adm": "1/T/2K22",
+  "uuid": "3lpcl95gouuo",
+  "studentId": "363",
+  "className": "IX-A",
+  "withdrawn": "1",
+  "info": {
+   "gender": "Female",
+   "nationality": "Indian",
+   "dob": "30-11-0001",
+   "category": "OBC",
+   "motherTongue": "Hindi",
+   "admDate": "07-04-2022",
+   "placeOfBirth": null,
+   "domicile": "Uttar Pradesh",
+   "withdrawalDate": "29-04-2022",
+   "withdrawalRemarks": "Unfit for the school environment."
+  },
+  "father": {
+   "name": "Mr Balveer Singh",
+   "mobile": "9452614674",
+   "occupation": "Army"
+  },
+  "mother": {
+   "name": "Mrs Ganga Shree",
+   "mobile": null,
+   "occupation": "House Wife"
+  },
+  "qs": {
+   "dob": "30-11-0001"
+  },
+  "flags": []
+ },
+ {
+  "adm": "219/J/2K22",
+  "uuid": "vodvx4n3p622",
+  "studentId": "307",
+  "className": "LKG-A",
+  "withdrawn": "---",
+  "info": {
+   "gender": "Male",
+   "nationality": "Indian",
+   "dob": "12-10-2017",
+   "category": "General",
+   "motherTongue": null,
+   "admDate": "31-03-2022",
+   "placeOfBirth": null,
+   "domicile": null,
+   "withdrawalDate": null,
+   "withdrawalRemarks": null
+  },
+  "father": {
+   "name": "Mr Vishram Singh",
+   "mobile": "9935549519",
+   "occupation": "Agriculture"
+  },
+  "mother": {
+   "name": "Mrs Reeta Devi",
+   "mobile": null,
+   "occupation": "House Wife"
+  },
+  "qs": {
+   "dob": "12-10-2017"
+  },
+  "flags": []
+ },
+ {
+  "adm": "225/J/2K22",
+  "uuid": "uhqgeuclr125",
+  "studentId": "324",
+  "className": "UKG-A",
+  "withdrawn": "---",
+  "info": {
+   "gender": "Male",
+   "nationality": "Indian",
+   "dob": "30-11-0001",
+   "category": "General",
+   "motherTongue": "Hindi",
+   "admDate": "04-04-2022",
+   "placeOfBirth": null,
+   "domicile": "Uttar Pradesh",
+   "withdrawalDate": null,
+   "withdrawalRemarks": null
+  },
+  "father": {
+   "name": "Mr Shubham Dixit",
+   "mobile": "6386028220",
+   "occupation": null
+  },
+  "mother": {
+   "name": "Mrs Sunaina Dixit",
+   "mobile": null,
+   "occupation": null
+  },
+  "qs": {
+   "dob": "30-11-0001"
+  },
+  "flags": []
+ },
+ {
+  "adm": "258/J/2K22",
+  "uuid": "arx3t8k65rhz",
+  "studentId": "400",
+  "className": "LKG-A",
+  "withdrawn": "---",
+  "info": {
+   "gender": "Female",
+   "nationality": "Indian",
+   "dob": "30-11-0001",
+   "category": "General",
+   "motherTongue": "Hindi",
+   "admDate": "13-04-2022",
+   "placeOfBirth": null,
+   "domicile": "Uttar Pradesh",
+   "withdrawalDate": null,
+   "withdrawalRemarks": null
+  },
+  "father": {
+   "name": "Mr. Om Pal Singh",
+   "mobile": "8953995676",
+   "occupation": "Designation: ---"
+  },
+  "mother": {
+   "name": "Mrs. Hradesh Kumari",
+   "mobile": "9919015378",
+   "occupation": "Health Employee"
+  },
+  "qs": {
+   "dob": "30-11-0001"
+  },
+  "flags": []
+ },
+ {
+  "adm": "283/J/2K22",
+  "uuid": "pbmcvs93ek3e",
+  "studentId": "493",
+  "className": "NURSERY-A",
+  "withdrawn": "---",
+  "info": {
+   "gender": "Male",
+   "nationality": "Indian",
+   "dob": "20-06-2019",
+   "category": "General",
+   "motherTongue": "Hindi",
+   "admDate": "13-05-2022",
+   "placeOfBirth": null,
+   "domicile": "Uttar Pradesh",
+   "withdrawalDate": null,
+   "withdrawalRemarks": null
+  },
+  "father": {
+   "name": "Mr Yogesh Chandra Dixit",
+   "mobile": "9956820477",
+   "occupation": "Advocate"
+  },
+  "mother": {
+   "name": "Mrs Radha",
+   "mobile": "9935939714",
+   "occupation": "House Wife"
+  },
+  "qs": {
+   "dob": "20-06-2019"
+  },
+  "flags": []
+ },
+ {
+  "adm": "288/J/2K22",
+  "uuid": "fx1g78vb2ye5",
+  "studentId": "508",
+  "className": "UKG-A",
+  "withdrawn": "---",
+  "info": {
+   "gender": "Female",
+   "nationality": "Indian",
+   "dob": "11-08-2018",
+   "category": "OBC",
+   "motherTongue": "Hindi",
+   "admDate": "01-07-2022",
+   "placeOfBirth": null,
+   "domicile": "Uttar Pradesh",
+   "withdrawalDate": null,
+   "withdrawalRemarks": null
+  },
+  "father": {
+   "name": "Mr. Satendra Kumar",
+   "mobile": "9919358042",
+   "occupation": "U.P. Police"
+  },
+  "mother": {
+   "name": "Mrs. Twinkl Verma",
+   "mobile": null,
+   "occupation": "U.P. Police"
+  },
+  "qs": {
+   "dob": "11-08-2018"
+  },
+  "flags": []
+ },
+ {
+  "adm": "295/J/2K22",
+  "uuid": "vk2kcjeb9mwt",
+  "studentId": "518",
+  "className": "NURSERY-A",
+  "withdrawn": "---",
+  "info": {
+   "gender": "Male",
+   "nationality": "Indian",
+   "dob": "22-10-2018",
+   "category": "OBC",
+   "motherTongue": "Hindi",
+   "admDate": "04-07-2022",
+   "placeOfBirth": null,
+   "domicile": "Uttar Pradesh",
+   "withdrawalDate": null,
+   "withdrawalRemarks": null
+  },
+  "father": {
+   "name": "Mr. Ankit Yadav",
+   "mobile": "8090521131",
+   "occupation": "Private Job"
+  },
+  "mother": {
+   "name": "Mrs. Sheela Yadav",
+   "mobile": "6306673223",
+   "occupation": "House Wife"
+  },
+  "qs": {
+   "dob": "22-10-2018"
+  },
+  "flags": []
+ },
+ {
+  "adm": "2/T/2K22",
+  "uuid": "3vi07f391xfm",
+  "studentId": "362",
+  "className": "IX-A",
+  "withdrawn": "1",
+  "info": {
+   "gender": "Female",
+   "nationality": "Indian",
+   "dob": "30-11-0001",
+   "category": "OBC",
+   "motherTongue": "Hindi",
+   "admDate": "07-04-2022",
+   "placeOfBirth": null,
+   "domicile": "Uttar Pradesh",
+   "withdrawalDate": "29-04-2022",
+   "withdrawalRemarks": "Unfit for the school environment."
+  },
+  "father": {
+   "name": "Mr Balveer Singh",
+   "mobile": "9452614674",
+   "occupation": "Army"
+  },
+  "mother": {
+   "name": "Mrs Ganga Shree",
+   "mobile": null,
+   "occupation": "House Wife"
+  },
+  "qs": {
+   "dob": "30-11-0001"
+  },
+  "flags": []
+ },
+ {
+  "adm": "320/J/2K23",
+  "uuid": "p2znq9hhjjc9",
+  "studentId": "559",
+  "className": "NURSERY-A",
+  "withdrawn": "1",
+  "info": {
+   "gender": "Female",
+   "nationality": "Indian",
+   "dob": "15-08-2020",
+   "category": "General",
+   "motherTongue": "Hindi",
+   "admDate": "13-03-2023",
+   "placeOfBirth": null,
+   "domicile": "Uttar Pradesh",
+   "withdrawalDate": "27-09-2023",
+   "withdrawalRemarks": null
+  },
+  "father": {
+   "name": "Mr. Ashish Kumar Shukla",
+   "mobile": "9621505217",
+   "occupation": null
+  },
+  "mother": {
+   "name": "Mrs. Sonam Pandey",
+   "mobile": null,
+   "occupation": null
+  },
+  "qs": {
+   "dob": "15-08-2020"
+  },
+  "flags": []
+ },
+ {
+  "adm": "376/J/2K24",
+  "uuid": "d89vp9tr1j40",
+  "studentId": "709",
+  "className": "UKG-B",
+  "withdrawn": "---",
+  "info": {
+   "gender": "Female",
+   "nationality": "Indian",
+   "dob": "14-11-2018",
+   "category": "OBC",
+   "motherTongue": null,
+   "admDate": "19-03-2024",
+   "placeOfBirth": null,
+   "domicile": null,
+   "withdrawalDate": null,
+   "withdrawalRemarks": null
+  },
+  "father": {
+   "name": "Mr. Vijay Kumar",
+   "mobile": "7355625796",
+   "occupation": null
+  },
+  "mother": {
+   "name": "Mrs. Vijeta",
+   "mobile": "8887969934",
+   "occupation": null
+  },
+  "qs": {
+   "dob": "14-11-2018"
+  },
+  "flags": []
+ },
+ {
+  "adm": "378/J/2K24",
+  "uuid": "wfsyoxjfoem0",
+  "studentId": "711",
+  "className": "UKG-B",
+  "withdrawn": "---",
+  "info": {
+   "gender": "Female",
+   "nationality": "Indian",
+   "dob": "06-12-2018",
+   "category": "SC",
+   "motherTongue": null,
+   "admDate": "02-04-2024",
+   "placeOfBirth": null,
+   "domicile": null,
+   "withdrawalDate": null,
+   "withdrawalRemarks": null
+  },
+  "father": {
+   "name": "Mr. Bardani Lal",
+   "mobile": "7607626792",
+   "occupation": null
+  },
+  "mother": {
+   "name": "Mrs. Priyanka Ahirwar",
+   "mobile": "9936209655",
+   "occupation": null
+  },
+  "qs": {
+   "dob": "06-12-2018"
+  },
+  "flags": []
+ },
+ {
+  "adm": "3/T/2K22",
+  "uuid": "2z3caisdkt8o",
+  "studentId": "386",
+  "className": "IX-A",
+  "withdrawn": "1",
+  "info": {
+   "gender": "Female",
+   "nationality": "Indian",
+   "dob": "16-01-2007",
+   "category": "OBC",
+   "motherTongue": "Hindi",
+   "admDate": "09-04-2022",
+   "placeOfBirth": null,
+   "domicile": "Uttar Pradesh",
+   "withdrawalDate": "29-04-2022",
+   "withdrawalRemarks": "Unfit for the school environment."
+  },
+  "father": {
+   "name": "Mr Sudheer Kumar Shakya",
+   "mobile": "9140113019",
+   "occupation": "Army CRPF"
+  },
+  "mother": {
+   "name": "Mrs Manju Shakya",
+   "mobile": "8400015381",
+   "occupation": "Beautician"
+  },
+  "qs": {
+   "dob": "16-01-2007"
+  },
+  "flags": []
+ },
+ {
+  "adm": "412/S/2K22",
+  "uuid": "qzrz9brv9skk",
+  "studentId": "424",
+  "className": "VI-A",
+  "withdrawn": "---",
+  "info": {
+   "gender": "Female",
+   "nationality": "Indian",
+   "dob": "22-02-2011",
+   "category": "General",
+   "motherTongue": "Hindi",
+   "admDate": "18-04-2022",
+   "placeOfBirth": "Uttarakhand",
+   "domicile": "Uttarakhand",
+   "withdrawalDate": null,
+   "withdrawalRemarks": null
+  },
+  "father": {
+   "name": "Mr Ramchandra Chauchan",
+   "mobile": "8791369416",
+   "occupation": "Private Job"
+  },
+  "mother": {
+   "name": "Mrs Nirmala Chauhan",
+   "mobile": "8791224745",
+   "occupation": "House Wife"
+  },
+  "qs": {
+   "dob": "22-02-2011"
+  },
+  "flags": []
+ },
+ {
+  "adm": "413/S/2K22",
+  "uuid": "39mahykuki5l",
+  "studentId": "425",
+  "className": "IV-A",
+  "withdrawn": "---",
+  "info": {
+   "gender": "Male",
+   "nationality": "Indian",
+   "dob": "07-03-2012",
+   "category": "General",
+   "motherTongue": "Hindi",
+   "admDate": "18-04-2022",
+   "placeOfBirth": "Uttarakhand",
+   "domicile": "Uttarakhand",
+   "withdrawalDate": null,
+   "withdrawalRemarks": null
+  },
+  "father": {
+   "name": "Mr Ramchandra Chauchan",
+   "mobile": "8791369416",
+   "occupation": "Private Job"
+  },
+  "mother": {
+   "name": "Mrs Nirmala Chauhan",
+   "mobile": "8791224745",
+   "occupation": "House Wife"
+  },
+  "qs": {
+   "dob": "07-03-2012"
+  },
+  "flags": []
+ },
+ {
+  "adm": "444/J/2K25",
+  "uuid": "vqx8iw6riazh",
+  "studentId": "899",
+  "className": "UKG-A",
+  "withdrawn": "---",
+  "info": {
+   "gender": "Female",
+   "nationality": "Indian",
+   "dob": "12-03-2019",
+   "category": "OBC",
+   "motherTongue": null,
+   "admDate": "03-04-2025",
+   "placeOfBirth": null,
+   "domicile": null,
+   "withdrawalDate": null,
+   "withdrawalRemarks": null
+  },
+  "father": {
+   "name": "Mr. Shyam Singh",
+   "mobile": "8318856596",
+   "occupation": "Designation: ---"
+  },
+  "mother": {
+   "name": "Mrs. Vinita Devi",
+   "mobile": "7275369428",
+   "occupation": "Designation: ---"
+  },
+  "qs": {
+   "dob": "12-03-2019"
+  },
+  "flags": []
+ },
+ {
+  "adm": "450/S/2K22",
+  "uuid": "jiyufjy72st0",
+  "studentId": "468",
+  "className": "VIII-A",
+  "withdrawn": "---",
+  "info": {
+   "gender": "Female",
+   "nationality": "Indian",
+   "dob": "01-01-2009",
+   "category": "OBC",
+   "motherTongue": "Hindi",
+   "admDate": "05-05-2022",
+   "placeOfBirth": null,
+   "domicile": "Uttar Pradesh",
+   "withdrawalDate": null,
+   "withdrawalRemarks": null
+  },
+  "father": {
+   "name": "Mr Pramod Kumar",
+   "mobile": "7348590781",
+   "occupation": "Business"
+  },
+  "mother": {
+   "name": "Mrs Mithilesh Rajput",
+   "mobile": "9935928066",
+   "occupation": "House Wife"
+  },
+  "qs": {
+   "dob": "01-01-2009"
+  },
+  "flags": []
+ },
+ {
+  "adm": "454/J/2K25",
+  "uuid": "fbyzcijn7jz1",
+  "studentId": "909",
+  "className": "NURSERY-A",
+  "withdrawn": "---",
+  "info": {
+   "gender": "Female",
+   "nationality": "Indian",
+   "dob": "05-03-2022",
+   "category": "SC",
+   "motherTongue": null,
+   "admDate": "15-04-2025",
+   "placeOfBirth": null,
+   "domicile": null,
+   "withdrawalDate": null,
+   "withdrawalRemarks": null
+  },
+  "father": {
+   "name": "Mr. Arjun Singh",
+   "mobile": "7906136069",
+   "occupation": null
+  },
+  "mother": {
+   "name": "Mrs. Savita Aharvar",
+   "mobile": "9670357082",
+   "occupation": null
+  },
+  "qs": {
+   "dob": "05-03-2022"
+  },
+  "flags": []
+ },
+ {
+  "adm": "458/S/2K22",
+  "uuid": "jtm2i4i9afax",
+  "studentId": "481",
+  "className": "IX-A",
+  "withdrawn": "---",
+  "info": {
+   "gender": "Female",
+   "nationality": "Indian",
+   "dob": "30-11-0001",
+   "category": "General",
+   "motherTongue": "Hindi",
+   "admDate": "09-05-2022",
+   "placeOfBirth": null,
+   "domicile": "Uttar Pradesh",
+   "withdrawalDate": null,
+   "withdrawalRemarks": null
+  },
+  "father": {
+   "name": "Mr Yogesh Chandra Dixit",
+   "mobile": "9956820477",
+   "occupation": "Advocate"
+  },
+  "mother": {
+   "name": "Mrs Radha",
+   "mobile": "9935939714",
+   "occupation": "House Wife"
+  },
+  "qs": {
+   "dob": "30-11-0001"
+  },
+  "flags": []
+ },
+ {
+  "adm": "461/J/2K25",
+  "uuid": "o5y1rdg9pthe",
+  "studentId": "916",
+  "className": "UKG-A",
+  "withdrawn": "---",
+  "info": {
+   "gender": "Male",
+   "nationality": "Indian",
+   "dob": "09-07-2020",
+   "category": "OBC",
+   "motherTongue": null,
+   "admDate": "17-04-2025",
+   "placeOfBirth": null,
+   "domicile": null,
+   "withdrawalDate": null,
+   "withdrawalRemarks": null
+  },
+  "father": {
+   "name": "Mr. Hemraj",
+   "mobile": "6386663736",
+   "occupation": null
+  },
+  "mother": {
+   "name": "Mrs. Shalini",
+   "mobile": "9956232653",
+   "occupation": null
+  },
+  "qs": {
+   "dob": "09-07-2020"
+  },
+  "flags": []
+ },
+ {
+  "adm": "464/S/2K22",
+  "uuid": "eh2ao2pul6ic",
+  "studentId": "486",
+  "className": "VI-A",
+  "withdrawn": "---",
+  "info": {
+   "gender": "Male",
+   "nationality": "Indian",
+   "dob": "20-10-2011",
+   "category": "OBC",
+   "motherTongue": "Hindi",
+   "admDate": "11-05-2022",
+   "placeOfBirth": null,
+   "domicile": "Uttar Pradesh",
+   "withdrawalDate": null,
+   "withdrawalRemarks": null
+  },
+  "father": {
+   "name": "Mr. Ashok Kumar",
+   "mobile": "9411479755",
+   "occupation": "Police"
+  },
+  "mother": {
+   "name": "Mrs. Menka Yadav",
+   "mobile": null,
+   "occupation": "House Wife"
+  },
+  "qs": {
+   "dob": "20-10-2011"
+  },
+  "flags": []
+ },
+ {
+  "adm": "504/S/2K22",
+  "uuid": "vac1ci8errnn",
+  "studentId": "546",
+  "className": "III-A",
+  "withdrawn": "---",
+  "info": {
+   "gender": "Male",
+   "nationality": "Indian",
+   "dob": "30-11-0001",
+   "category": "SC",
+   "motherTongue": "Hindi",
+   "admDate": "25-07-2022",
+   "placeOfBirth": null,
+   "domicile": "Uttar Pradesh",
+   "withdrawalDate": null,
+   "withdrawalRemarks": null
+  },
+  "father": {
+   "name": "Mr Anil Kumar",
+   "mobile": "8604947590",
+   "occupation": "Private Job"
+  },
+  "mother": {
+   "name": "Mrs Geeta",
+   "mobile": "8737973602",
+   "occupation": "House Wife"
+  },
+  "qs": {
+   "dob": "30-11-0001"
+  },
+  "flags": []
+ },
+ {
+  "adm": "509/S/2K23",
+  "uuid": "j06ts71stixh",
+  "studentId": "564",
+  "className": "I-A",
+  "withdrawn": "---",
+  "info": {
+   "gender": "Male",
+   "nationality": "Indian",
+   "dob": "01-01-2018",
+   "category": "General",
+   "motherTongue": "Hindi",
+   "admDate": "22-02-2023",
+   "placeOfBirth": null,
+   "domicile": "Uttar Pradesh",
+   "withdrawalDate": null,
+   "withdrawalRemarks": null
+  },
+  "father": {
+   "name": "Mr. Ajeet Kumar",
+   "mobile": "7487370277",
+   "occupation": "B.S.F."
+  },
+  "mother": {
+   "name": "Mrs. Shikha Tiwari",
+   "mobile": "8303106203",
+   "occupation": "House Wife"
+  },
+  "qs": {
+   "dob": "01-01-2018"
+  },
+  "flags": []
+ },
+ {
+  "adm": "533/S/2K23",
+  "uuid": "pmmjjdzpva8e",
+  "studentId": "591",
+  "className": "VI-A",
+  "withdrawn": "1",
+  "info": {
+   "gender": "Male",
+   "nationality": "Indian",
+   "dob": "19-07-2013",
+   "category": "OBC",
+   "motherTongue": "Hindi",
+   "admDate": "03-04-2023",
+   "placeOfBirth": null,
+   "domicile": "Uttar Pradesh",
+   "withdrawalDate": "02-05-2024",
+   "withdrawalRemarks": null
+  },
+  "father": {
+   "name": "Mr. Shri Mahesh",
+   "mobile": "9452397717",
+   "occupation": "Private Job"
+  },
+  "mother": {
+   "name": "Mrs. Archana",
+   "mobile": null,
+   "occupation": "House Wife"
+  },
+  "qs": {
+   "dob": "19-07-2013"
+  },
+  "flags": []
+ },
+ {
+  "adm": "539/S/2K23",
+  "uuid": "qyen2jm3twnz",
+  "studentId": "600",
+  "className": "IX-A",
+  "withdrawn": "1",
+  "info": {
+   "gender": "Female",
+   "nationality": "Indian",
+   "dob": "15-04-2011",
+   "category": "General",
+   "motherTongue": null,
+   "admDate": "05-04-2023",
+   "placeOfBirth": null,
+   "domicile": "Uttar Pradesh",
+   "withdrawalDate": "08-08-2023",
+   "withdrawalRemarks": null
+  },
+  "father": {
+   "name": "Mr. Sandeep Babu Agnihotri",
+   "mobile": "9044793064",
+   "occupation": "Autodriver"
+  },
+  "mother": {
+   "name": "Mrs. Suman Lata",
+   "mobile": null,
+   "occupation": "House Wife"
+  },
+  "qs": {
+   "dob": "15-04-2011"
+  },
+  "flags": []
+ },
+ {
+  "adm": "544/S/2K23",
+  "uuid": "tdy8hm3kexmu",
+  "studentId": "603",
+  "className": "VIII-A",
+  "withdrawn": "1",
+  "info": {
+   "gender": "Male",
+   "nationality": "Indian",
+   "dob": "19-02-2012",
+   "category": "General",
+   "motherTongue": "Hindi",
+   "admDate": "07-04-2023",
+   "placeOfBirth": null,
+   "domicile": "Uttar Pradesh",
+   "withdrawalDate": "25-07-2024",
+   "withdrawalRemarks": null
+  },
+  "father": {
+   "name": "Mr. Rajanish Kumar",
+   "mobile": "7905645701",
+   "occupation": "Doctor"
+  },
+  "mother": {
+   "name": "Mrs. Anjali",
+   "mobile": null,
+   "occupation": "House Wife"
+  },
+  "qs": {
+   "dob": "19-02-2012"
+  },
+  "flags": []
+ },
+ {
+  "adm": "548/S/2K23",
+  "uuid": "axoh77c0zydi",
+  "studentId": "606",
+  "className": "III-B",
+  "withdrawn": "1",
+  "info": {
+   "gender": "Male",
+   "nationality": "Indian",
+   "dob": "14-06-2016",
+   "category": "General",
+   "motherTongue": "Hindi",
+   "admDate": "08-04-2023",
+   "placeOfBirth": null,
+   "domicile": "Uttar Pradesh",
+   "withdrawalDate": "27-09-2023",
+   "withdrawalRemarks": null
+  },
+  "father": {
+   "name": "Mr. Prashant Shukla",
+   "mobile": "6393364954",
+   "occupation": "Govt. Job"
+  },
+  "mother": {
+   "name": "Mrs. Anjali Shukla",
+   "mobile": null,
+   "occupation": "House Wife"
+  },
+  "qs": {
+   "dob": "14-06-2016"
+  },
+  "flags": []
+ },
+ {
+  "adm": "549/S/2K23",
+  "uuid": "u0uohllja5tq",
+  "studentId": "607",
+  "className": "IX-A",
+  "withdrawn": "---",
+  "info": {
+   "gender": "Male",
+   "nationality": "Indian",
+   "dob": "01-07-2010",
+   "category": "General",
+   "motherTongue": "Hindi",
+   "admDate": "08-04-2023",
+   "placeOfBirth": null,
+   "domicile": "Uttar Pradesh",
+   "withdrawalDate": null,
+   "withdrawalRemarks": null
+  },
+  "father": {
+   "name": "Mr. Prashant Shukla",
+   "mobile": "6393364954",
+   "occupation": "Govt. Job"
+  },
+  "mother": {
+   "name": "Mrs. Anjali Shukla",
+   "mobile": null,
+   "occupation": "House Wife"
+  },
+  "qs": {
+   "dob": "01-07-2010"
+  },
+  "flags": []
+ },
+ {
+  "adm": "571/S/2K23",
+  "uuid": "rtvsw21zlw2c",
+  "studentId": "649",
+  "className": "IX-A",
+  "withdrawn": "---",
+  "info": {
+   "gender": "Male",
+   "nationality": "Indian",
+   "dob": "04-05-2008",
+   "category": "General",
+   "motherTongue": "Hindi",
+   "admDate": "17-04-2023",
+   "placeOfBirth": null,
+   "domicile": "Uttar Pradesh",
+   "withdrawalDate": null,
+   "withdrawalRemarks": null
+  },
+  "father": {
+   "name": "Mr. Kamalkant Mishra",
+   "mobile": "9839250485",
+   "occupation": "Businessman"
+  },
+  "mother": {
+   "name": "Mrs. Richa Mishra",
+   "mobile": "8707655649",
+   "occupation": "House Wife"
+  },
+  "qs": {
+   "dob": "04-05-2008"
+  },
+  "flags": []
+ },
+ {
+  "adm": "581/S/2K23",
+  "uuid": "rqun8rtfl04p",
+  "studentId": "655",
+  "className": "IX-A",
+  "withdrawn": "1",
+  "info": {
+   "gender": "Male",
+   "nationality": "Indian",
+   "dob": "30-03-2008",
+   "category": "OBC",
+   "motherTongue": "Hindi",
+   "admDate": "25-04-2023",
+   "placeOfBirth": null,
+   "domicile": "Uttar Pradesh",
+   "withdrawalDate": "21-02-2024",
+   "withdrawalRemarks": null
+  },
+  "father": {
+   "name": "Dr. Rajeev Kumar",
+   "mobile": "9044221867",
+   "occupation": "Professor"
+  },
+  "mother": {
+   "name": "Mrs. Jyoti Shrivastav",
+   "mobile": "9453411979",
+   "occupation": "House Wife"
+  },
+  "qs": {
+   "dob": "30-03-2008"
+  },
+  "flags": []
+ },
+ {
+  "adm": "617/S/2K23",
+  "uuid": "xvy1d4ptnbwp",
+  "studentId": "667",
+  "className": "VI-A",
+  "withdrawn": "1",
+  "info": {
+   "gender": "Female",
+   "nationality": "Indian",
+   "dob": "29-09-2010",
+   "category": "OBC",
+   "motherTongue": "Hindi",
+   "admDate": "06-05-2023",
+   "placeOfBirth": null,
+   "domicile": "Uttar Pradesh",
+   "withdrawalDate": "05-05-2026",
+   "withdrawalRemarks": null
+  },
+  "father": {
+   "name": "Mr. Devendra Singh",
+   "mobile": "9621987694",
+   "occupation": "Farmer"
+  },
+  "mother": {
+   "name": "Mrs. Ragni",
+   "mobile": null,
+   "occupation": "House Wife"
+  },
+  "qs": {
+   "dob": "29-09-2010"
+  },
+  "flags": []
+ },
+ {
+  "adm": "639/S/2K24",
+  "uuid": "u1u89nv8zt5o",
+  "studentId": "733",
+  "className": "I-A",
+  "withdrawn": "---",
+  "info": {
+   "gender": "Male",
+   "nationality": "Indian",
+   "dob": "01-01-2016",
+   "category": "General",
+   "motherTongue": null,
+   "admDate": "01-04-2024",
+   "placeOfBirth": null,
+   "domicile": null,
+   "withdrawalDate": null,
+   "withdrawalRemarks": null
+  },
+  "father": {
+   "name": "Mr. Abdul Salam",
+   "mobile": "6394165643",
+   "occupation": null
+  },
+  "mother": {
+   "name": "Mrs. Anjum Khan",
+   "mobile": "7905479176",
+   "occupation": null
+  },
+  "qs": {
+   "dob": "01-01-2016"
+  },
+  "flags": []
+ },
+ {
+  "adm": "646/S/2K24",
+  "uuid": "34syqqobcmq3",
+  "studentId": "740",
+  "className": "II-A",
+  "withdrawn": "1",
+  "info": {
+   "gender": "Female",
+   "nationality": "Indian",
+   "dob": "21-09-2017",
+   "category": "General",
+   "motherTongue": null,
+   "admDate": "06-04-2024",
+   "placeOfBirth": null,
+   "domicile": null,
+   "withdrawalDate": "29-10-2025",
+   "withdrawalRemarks": null
+  },
+  "father": {
+   "name": "Mr. Sanjeev Aherwar",
+   "mobile": "7275656392",
+   "occupation": null
+  },
+  "mother": {
+   "name": "Mrs. Namrata Singh",
+   "mobile": "9411860698",
+   "occupation": null
+  },
+  "qs": {
+   "dob": "21-09-2017"
+  },
+  "flags": []
+ },
+ {
+  "adm": "670/S/2K24",
+  "uuid": "d6rmqjrjwkyk",
+  "studentId": "764",
+  "className": "IX-A",
+  "withdrawn": "---",
+  "info": {
+   "gender": "Male",
+   "nationality": "Indian",
+   "dob": "25-06-2011",
+   "category": "OBC",
+   "motherTongue": null,
+   "admDate": "08-04-2024",
+   "placeOfBirth": null,
+   "domicile": null,
+   "withdrawalDate": null,
+   "withdrawalRemarks": null
+  },
+  "father": {
+   "name": "Mr. Pramod Kumar",
+   "mobile": "9935676592",
+   "occupation": null
+  },
+  "mother": {
+   "name": "Mrs. Lalita Devi",
+   "mobile": "6394565962",
+   "occupation": null
+  },
+  "qs": {
+   "dob": "25-06-2011"
+  },
+  "flags": []
+ },
+ {
+  "adm": "678/S/2K24",
+  "uuid": "9mjd4qoyttl1",
+  "studentId": "772",
+  "className": "II-A",
+  "withdrawn": "---",
+  "info": {
+   "gender": "Male",
+   "nationality": "Indian",
+   "dob": "11-02-2017",
+   "category": "OBC",
+   "motherTongue": null,
+   "admDate": "08-04-2024",
+   "placeOfBirth": null,
+   "domicile": null,
+   "withdrawalDate": null,
+   "withdrawalRemarks": null
+  },
+  "father": {
+   "name": "Mr. Bhuvnesh Kumar",
+   "mobile": "9919338331",
+   "occupation": null
+  },
+  "mother": {
+   "name": "Mrs. Rajrani",
+   "mobile": null,
+   "occupation": null
+  },
+  "qs": {
+   "dob": "11-02-2017"
+  },
+  "flags": []
+ },
+ {
+  "adm": "687/S/2K24",
+  "uuid": "ey9p3zdb60yp",
+  "studentId": "783",
+  "className": "II-A",
+  "withdrawn": "---",
+  "info": {
+   "gender": "Female",
+   "nationality": "Indian",
+   "dob": "21-12-2016",
+   "category": "OBC",
+   "motherTongue": null,
+   "admDate": "13-04-2024",
+   "placeOfBirth": null,
+   "domicile": null,
+   "withdrawalDate": null,
+   "withdrawalRemarks": null
+  },
+  "father": {
+   "name": "Mr. Yogesh Pal",
+   "mobile": "7985683528",
+   "occupation": null
+  },
+  "mother": {
+   "name": "Mrs. Vandana Kumari",
+   "mobile": "9554746017",
+   "occupation": null
+  },
+  "qs": {
+   "dob": "21-12-2016"
+  },
+  "flags": []
+ },
+ {
+  "adm": "694/S/2K24",
+  "uuid": "dcsd1lhryopv",
+  "studentId": "798",
+  "className": "IV-B",
+  "withdrawn": "---",
+  "info": {
+   "gender": "Male",
+   "nationality": "Indian",
+   "dob": "15-02-2010",
+   "category": "OBC",
+   "motherTongue": null,
+   "admDate": "22-04-2024",
+   "placeOfBirth": null,
+   "domicile": null,
+   "withdrawalDate": null,
+   "withdrawalRemarks": null
+  },
+  "father": {
+   "name": "Mr. Rashid Ansari",
+   "mobile": "8303141279",
+   "occupation": null
+  },
+  "mother": {
+   "name": "Mrs. Shahin Ansari",
+   "mobile": "7275471445",
+   "occupation": null
+  },
+  "qs": {
+   "dob": "15-02-2010"
+  },
+  "flags": []
+ },
+ {
+  "adm": "703/S/2K24",
+  "uuid": "74ub187ejqrs",
+  "studentId": "810",
+  "className": "IX-A",
+  "withdrawn": "---",
+  "info": {
+   "gender": "Male",
+   "nationality": "Indian",
+   "dob": "16-01-2011",
+   "category": "General",
+   "motherTongue": null,
+   "admDate": "27-04-2024",
+   "placeOfBirth": null,
+   "domicile": null,
+   "withdrawalDate": null,
+   "withdrawalRemarks": null
+  },
+  "father": {
+   "name": "Mr. Khalid Mahmood",
+   "mobile": "6306729181",
+   "occupation": null
+  },
+  "mother": {
+   "name": "Late Ufaira Begum",
+   "mobile": "9838880309",
+   "occupation": null
+  },
+  "qs": {
+   "dob": "16-01-2011"
+  },
+  "flags": []
+ },
+ {
+  "adm": "719/S/2K24",
+  "uuid": "5kilhjod12o9",
+  "studentId": "826",
+  "className": "I-A",
+  "withdrawn": "1",
+  "info": {
+   "gender": "Male",
+   "nationality": "Indian",
+   "dob": "09-08-2018",
+   "category": "General",
+   "motherTongue": null,
+   "admDate": "01-04-2024",
+   "placeOfBirth": null,
+   "domicile": null,
+   "withdrawalDate": "12-05-2025",
+   "withdrawalRemarks": null
+  },
+  "father": {
+   "name": "Mr. Rajesh Tripathi",
+   "mobile": "9919352210",
+   "occupation": null
+  },
+  "mother": {
+   "name": "Mrs. Nidhi Tripathi",
+   "mobile": "9919352210",
+   "occupation": null
+  },
+  "qs": {
+   "dob": "09-08-2018"
+  },
+  "flags": []
+ },
+ {
+  "adm": "720/S/2K24",
+  "uuid": "knqculqd7yio",
+  "studentId": "827",
+  "className": "I-A",
+  "withdrawn": "---",
+  "info": {
+   "gender": "Male",
+   "nationality": "Indian",
+   "dob": "01-04-2000",
+   "category": "General",
+   "motherTongue": null,
+   "admDate": "01-04-2024",
+   "placeOfBirth": null,
+   "domicile": null,
+   "withdrawalDate": null,
+   "withdrawalRemarks": null
+  },
+  "father": {
+   "name": "Mr. Atul Kumar Gupta",
+   "mobile": "9696018988",
+   "occupation": null
+  },
+  "mother": {
+   "name": "Mrs. Rachana Gupta",
+   "mobile": null,
+   "occupation": null
+  },
+  "qs": {
+   "dob": "01-04-2000"
+  },
+  "flags": []
+ },
+ {
+  "adm": "750/S/2K24",
+  "uuid": "ro29xlblmm22",
+  "studentId": "857",
+  "className": "IX-A",
+  "withdrawn": "---",
+  "info": {
+   "gender": "Female",
+   "nationality": "Indian",
+   "dob": "15-03-2009",
+   "category": "General",
+   "motherTongue": null,
+   "admDate": "07-05-2024",
+   "placeOfBirth": null,
+   "domicile": null,
+   "withdrawalDate": null,
+   "withdrawalRemarks": null
+  },
+  "father": {
+   "name": "Mr. Rajkumar Rajput",
+   "mobile": "9956186690",
+   "occupation": null
+  },
+  "mother": {
+   "name": "Mrs. Manju Devi",
+   "mobile": "7897790849",
+   "occupation": null
+  },
+  "qs": {
+   "dob": "15-03-2009"
+  },
+  "flags": []
+ },
+ {
+  "adm": "770/S/2K25",
+  "uuid": "yyn4dyn73d5s",
+  "studentId": "929",
+  "className": "IV-A",
+  "withdrawn": "---",
+  "info": {
+   "gender": "Female",
+   "nationality": "Indian",
+   "dob": "22-05-2017",
+   "category": "OBC",
+   "motherTongue": null,
+   "admDate": "17-03-2025",
+   "placeOfBirth": null,
+   "domicile": null,
+   "withdrawalDate": null,
+   "withdrawalRemarks": null
+  },
+  "father": {
+   "name": "Mr. Sunil Kumar Singh",
+   "mobile": "9451077924",
+   "occupation": null
+  },
+  "mother": {
+   "name": "Mrs. Manju Devi",
+   "mobile": "8303937234",
+   "occupation": null
+  },
+  "qs": {
+   "dob": "22-05-2017"
+  },
+  "flags": []
+ },
+ {
+  "adm": "777/S/2K25",
+  "uuid": "eya8dsnsiia7",
+  "studentId": "936",
+  "className": "VI-A",
+  "withdrawn": "1",
+  "info": {
+   "gender": "Male",
+   "nationality": "Indian",
+   "dob": "08-06-2015",
+   "category": "OBC",
+   "motherTongue": null,
+   "admDate": "02-04-2025",
+   "placeOfBirth": null,
+   "domicile": null,
+   "withdrawalDate": "11-05-2026",
+   "withdrawalRemarks": null
+  },
+  "father": {
+   "name": "Mr. Ashish Kumar",
+   "mobile": "9839132508",
+   "occupation": null
+  },
+  "mother": {
+   "name": "Mrs. Sangeeta Chaurasiya",
+   "mobile": "6306818384",
+   "occupation": null
+  },
+  "qs": {
+   "dob": "08-06-2015"
+  },
+  "flags": []
+ },
+ {
+  "adm": "787/S/2K25",
+  "uuid": "6xd96nlzt7cg",
+  "studentId": "946",
+  "className": "IV-B",
+  "withdrawn": "---",
+  "info": {
+   "gender": "Male",
+   "nationality": "Indian",
+   "dob": "01-07-2016",
+   "category": "OBC",
+   "motherTongue": null,
+   "admDate": "07-04-2025",
+   "placeOfBirth": null,
+   "domicile": null,
+   "withdrawalDate": null,
+   "withdrawalRemarks": null
+  },
+  "father": {
+   "name": "Mr. Manoj Kumar",
+   "mobile": "9458750787",
+   "occupation": "Govt. Job"
+  },
+  "mother": {
+   "name": "Mrs. Priti",
+   "mobile": null,
+   "occupation": "Designation: ---"
+  },
+  "qs": {
+   "dob": "01-07-2016"
+  },
+  "flags": []
+ },
+ {
+  "adm": "802/S/2K25",
+  "uuid": "mipb8pyqi71g",
+  "studentId": "961",
+  "className": "VI-A",
+  "withdrawn": "---",
+  "info": {
+   "gender": "Male",
+   "nationality": "Indian",
+   "dob": "02-11-2013",
+   "category": "OBC",
+   "motherTongue": null,
+   "admDate": "07-04-2025",
+   "placeOfBirth": null,
+   "domicile": null,
+   "withdrawalDate": null,
+   "withdrawalRemarks": null
+  },
+  "father": {
+   "name": "Mr. Vikram Singh",
+   "mobile": "9936108493",
+   "occupation": null
+  },
+  "mother": {
+   "name": "Mrs. Preeti Singh",
+   "mobile": "7860472390",
+   "occupation": null
+  },
+  "qs": {
+   "dob": "02-11-2013"
+  },
+  "flags": []
+ },
+ {
+  "adm": "807/S/2K25",
+  "uuid": "f9wexh5luari",
+  "studentId": "966",
+  "className": "V-A",
+  "withdrawn": "---",
+  "info": {
+   "gender": "Female",
+   "nationality": "Indian",
+   "dob": "17-04-2016",
+   "category": "General",
+   "motherTongue": null,
+   "admDate": "28-04-2025",
+   "placeOfBirth": null,
+   "domicile": null,
+   "withdrawalDate": null,
+   "withdrawalRemarks": null
+  },
+  "father": {
+   "name": "Late Gopal",
+   "mobile": null,
+   "occupation": null
+  },
+  "mother": {
+   "name": "Mrs. Hema",
+   "mobile": "7310721025",
+   "occupation": null
+  },
+  "qs": {
+   "dob": "17-04-2016"
+  },
+  "flags": []
+ },
+ {
+  "adm": "819/S/2K25",
+  "uuid": "minr1xfsxup3",
+  "studentId": "1130",
+  "className": "IX-A",
+  "withdrawn": "1",
+  "info": {
+   "gender": "Male",
+   "nationality": "Indian",
+   "dob": "24-10-2010",
+   "category": "OBC",
+   "motherTongue": null,
+   "admDate": "11-04-2025",
+   "placeOfBirth": null,
+   "domicile": null,
+   "withdrawalDate": "19-05-2026",
+   "withdrawalRemarks": null
+  },
+  "father": {
+   "name": "Mr. Sudeep Rajput",
+   "mobile": null,
+   "occupation": null
+  },
+  "mother": {
+   "name": "Mrs. Poonam Rajput",
+   "mobile": null,
+   "occupation": null
+  },
+  "qs": {
+   "dob": "24-10-2010"
+  },
+  "flags": []
+ },
+ {
+  "adm": "85/S/2K18",
+  "uuid": "36i7dlv817ss",
+  "studentId": "345",
+  "className": "VII-A",
+  "withdrawn": "---",
+  "info": {
+   "gender": "Male",
+   "nationality": "Indian",
+   "dob": "14-05-2009",
+   "category": "General",
+   "motherTongue": "Hindi",
+   "admDate": "04-04-2018",
+   "placeOfBirth": null,
+   "domicile": "Uttar Pradesh",
+   "withdrawalDate": null,
+   "withdrawalRemarks": null
+  },
+  "father": {
+   "name": "Mr. Asheet Haldar",
+   "mobile": "9793044491",
+   "occupation": "Doctor"
+  },
+  "mother": {
+   "name": "Mrs. Sapna Haldar",
+   "mobile": null,
+   "occupation": "House Wife"
+  },
+  "qs": {
+   "dob": "14-05-2009"
+  },
+  "flags": []
+ },
+ {
+  "adm": "947/2K25",
+  "uuid": "nqr4cg8bxz8l",
+  "studentId": "1002",
+  "className": "NURSERY-A",
+  "withdrawn": "---",
+  "info": {
+   "gender": "Male",
+   "nationality": "Indian",
+   "dob": "26-03-2022",
+   "category": "OBC",
+   "motherTongue": null,
+   "admDate": "07-07-2025",
+   "placeOfBirth": null,
+   "domicile": null,
+   "withdrawalDate": null,
+   "withdrawalRemarks": null
+  },
+  "father": {
+   "name": "Mr. Pankaj",
+   "mobile": "7499062971",
+   "occupation": "Private Job"
+  },
+  "mother": {
+   "name": "Mrs. Reena Rajput",
+   "mobile": "8318322392",
+   "occupation": "Designation: ---"
+  },
+  "qs": {
+   "dob": "26-03-2022"
+  },
+  "flags": []
+ },
+ {
+  "adm": "952/2K25",
+  "uuid": "sfxsps610pv0",
+  "studentId": "1007",
+  "className": "NURSERY-A",
+  "withdrawn": "---",
+  "info": {
+   "gender": "Female",
+   "nationality": "Indian",
+   "dob": "17-01-2022",
+   "category": "OBC",
+   "motherTongue": null,
+   "admDate": "16-07-2025",
+   "placeOfBirth": null,
+   "domicile": null,
+   "withdrawalDate": null,
+   "withdrawalRemarks": null
+  },
+  "father": {
+   "name": "Mr. Mahaveer Singh Yadav",
+   "mobile": "7607775852",
+   "occupation": "Teacher"
+  },
+  "mother": {
+   "name": "Mrs. Mamta",
+   "mobile": "9264970066",
+   "occupation": "Designation: ---"
+  },
+  "qs": {
+   "dob": "17-01-2022"
+  },
+  "flags": []
+ }
+]

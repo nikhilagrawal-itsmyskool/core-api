@@ -19,7 +19,8 @@ const URL = BASE + '/studentReport/display';
 const USER_DATA = path.join(__dirname, '..', 'exam-migration', '.browser');
 const OUT = path.join(__dirname, 'out');
 const YEARS = { 7: '2021-22', 8: '2022-23', 9: '2023-24', 10: '2024-25', 11: '2025-26', 12: '2026-27' };
-const SAVED_REPORT = '84'; // data-sync-detalied-report
+// "data-sync-detalied-report" has a DIFFERENT saved-report id per session.
+const REPORTS = { 7: '84', 8: '88', 9: '87', 10: '86', 11: '85', 12: '84' };
 const arg = (n, d) => { const i = process.argv.indexOf('--' + n); if (i === -1) return d; const v = process.argv[i + 1]; return v && !v.startsWith('--') ? v : true; };
 const SESSIONS = String(arg('sessions', '7,8,9,10,11,12')).split(',').map((s) => s.trim());
 const FORCE = !!arg('force', false);
@@ -51,14 +52,15 @@ async function extractSession(page, ctx, sid) {
   await page.goto(URL, { waitUntil: 'networkidle' }).catch(() => {});
   await page.waitForTimeout(2000);
 
-  // Step 1: select saved report
+  // Step 1: select saved report (per-session id)
+  const reportId = REPORTS[sid] || '84';
   const hasReport = await page.evaluate((rid) => {
     const s = document.querySelector('select[name=txtReportName]');
     if (!s || ![...s.options].some((o) => o.value === rid)) return false;
     s.value = rid; s.dispatchEvent(new Event('change', { bubbles: true })); if (window.jQuery) jQuery(s).trigger('change');
     return true;
-  }, SAVED_REPORT);
-  if (!hasReport) throw new Error(`saved report ${SAVED_REPORT} not available for session ${sid}`);
+  }, reportId);
+  if (!hasReport) throw new Error(`saved report ${reportId} not available for session ${sid}`);
   await page.waitForTimeout(2000);
 
   // click "Select Classes"
