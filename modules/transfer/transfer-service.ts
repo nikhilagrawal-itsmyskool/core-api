@@ -186,6 +186,17 @@ class TransferService {
     return rows.length > 0 ? rows[0] : null;
   }
 
+  // The student's current live TC (applied or issued), if any — used to prevent duplicates.
+  public async activeTc(schoolId: string, studentId: string): Promise<{ uuid: string; status: string } | null> {
+    const rows = await DB.query(
+      singleLineString`select uuid, status from student_tc
+        where school_id = $1 and student_id = $2 and status in ('applied', 'issued')
+        order by created_at desc limit 1`,
+      [schoolId, studentId]
+    );
+    return rows.length ? { uuid: rows[0].uuid, status: rows[0].status } : null;
+  }
+
   // Suggested form values for a new TC: identity derived live + config defaults +
   // concession/subjects derivation + current outstanding dues.
   public async prefill(schoolId: string, studentId: string): Promise<any> {
@@ -204,6 +215,7 @@ class TransferService {
       derived,
       config: cfg,
       duesOutstanding: await this.getOutstandingDues(schoolId, studentId),
+      existingTc: await this.activeTc(schoolId, studentId), // non-null → student already has a live TC
       suggested: {
         srnNumber: `${cfg.srnPrefix || ''}${srnSeq}`,
         tcNumber: `${cfg.tcNumberPrefix || ''}${tcSeq}${ayToken}`,
@@ -284,6 +296,15 @@ class TransferService {
     const student = await findStudent(schoolId, studentId);
     if (!student) throw new BusinessErrorResult(ErrorCode.BusinessError, 'Student not found');
     this.assertStatus(data.status);
+    // One live TC per student — block a second record (edit the existing one instead).
+    // Cancelled/deleted TCs don't count, so a student can re-apply after a cancellation.
+    const dup = await this.activeTc(schoolId, studentId);
+    if (dup) {
+      throw new BusinessErrorResult(
+        ErrorCode.BusinessError,
+        `This student already has a Transfer Certificate (status: ${dup.status}). Edit that one instead of creating another.`
+      );
+    }
     await this.stripIdentityIfDisallowed(schoolId, data);
 
     const status = data.status || DEFAULTS.STATUS;
