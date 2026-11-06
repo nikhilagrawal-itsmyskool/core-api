@@ -156,8 +156,8 @@ class EmployeeService {
 
     queries.push(singleLineString`
       insert into employee
-      (uuid, employee_number, name, code, gender, dob, family_unique_number, mobile, whatsapp, email, status, school_id, createdby_userid, created_at, device_number)
-      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+      (uuid, employee_number, name, code, gender, dob, family_unique_number, mobile, whatsapp, email, status, school_id, createdby_userid, created_at, device_number, date_of_joining)
+      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
     `);
     params.push([
       employeeUuid,
@@ -175,6 +175,7 @@ class EmployeeService {
       userId,
       now,
       data.deviceNumber ? String(data.deviceNumber).trim() : null,
+      data.dateOfJoining || null,
     ]);
 
     queries.push(singleLineString`
@@ -244,6 +245,7 @@ class EmployeeService {
     if (data.code !== undefined) setField('code', data.code);
     if (data.deviceNumber !== undefined) setField('device_number', data.deviceNumber ? String(data.deviceNumber).trim() : null);
     if (data.loginDisabled !== undefined) setField('login_disabled', data.loginDisabled === true);
+    if (data.dateOfJoining !== undefined) setField('date_of_joining', data.dateOfJoining || null);
     if (data.gender !== undefined) setField('gender', data.gender);
     if (data.dob !== undefined) setField('dob', data.dob);
     if (data.mobile !== undefined) setField('mobile', data.mobile);

@@ -102,3 +102,6 @@ alter table employee_config add column if not exists edit_protected_roles text;
 -- Inactive employees: login_disabled = true blocks login but keeps the employee active and listed
 -- (distinct from soft-delete). The employee table lives in modules/db/*; additive + idempotent here.
 alter table employee add column if not exists login_disabled boolean;
+
+-- Date of joining (staff). Additive + idempotent.
+alter table employee add column if not exists date_of_joining date;
