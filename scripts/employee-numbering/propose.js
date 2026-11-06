@@ -59,8 +59,8 @@ const SHEET = [
 ];
 
 // User-confirmed name links (sheet sn -> exact system name) and exclusions (sheet sn).
-const CONFIRMED = { 2: 'Dinesh Chandra Agnihotri', 23: 'Shraddha Pandey' };
-const EXCLUDE = new Set([16]); // Samiksha Tiwari — match not confirmed yet
+const CONFIRMED = { 2: 'Dinesh Chandra Agnihotri', 23: 'Shraddha Pandey', 16: 'Samicha Bajpai' };
+const EXCLUDE = new Set([]); // all sheet rows confirmed/matched
 
 const TITLES = /^(mr|mrs|ms|miss|dr|smt|shri|sri)\.?\s+/i;
 const norm = (s) =>
@@ -190,18 +190,34 @@ const norm = (s) =>
     if (!WRITE) {
       console.log(`\nSummary: ${datable.length} to number (101..${100 + datable.length}), ${noDate.length} no-date, ${unmatched.length} unmatched, ${extra.length} not on sheet. DRY RUN — nothing written. Pass --write to apply.`);
     } else {
-      console.log(`\n=== WRITING ${datable.length} updates ===`);
-      let n = 101, done = 0;
-      for (const r of datable) {
-        const dateStr = `${r.y}-${String(r.m).padStart(2, '0')}-${String(r.d || 1).padStart(2, '0')}`;
-        await pool.query(
-          `update employee set employee_number = $1, device_number = $2, date_of_joining = $3::date,
-             updatedby_userid = 'numbering', updated_at = now() where uuid = $4 and school_id = $5`,
-          [`DBPASN/${n}`, String(n), dateStr, r.emp.uuid, schoolId]
-        );
-        done++; n++;
+      console.log(`\n=== WRITING ${datable.length} updates (two-phase, in a transaction) ===`);
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        // Phase 1: free every target employee_number AND device_number (BOTH are unique per
+        // school, so a +1 renumber collides otherwise). NULLs don't conflict in a unique index.
+        for (const r of datable) {
+          await client.query(`update employee set employee_number = null, device_number = null where uuid = $1 and school_id = $2`, [r.emp.uuid, schoolId]);
+        }
+        // Phase 2: set the final number + device token + date of joining.
+        let n = 101;
+        for (const r of datable) {
+          const dateStr = `${r.y}-${String(r.m).padStart(2, '0')}-${String(r.d || 1).padStart(2, '0')}`;
+          await client.query(
+            `update employee set employee_number = $1, device_number = $2, date_of_joining = $3::date,
+               updatedby_userid = 'numbering', updated_at = now() where uuid = $4 and school_id = $5`,
+            [`DBPASN/${n}`, String(n), dateStr, r.emp.uuid, schoolId]
+          );
+          n++;
+        }
+        await client.query('COMMIT');
+        console.log(`Wrote ${datable.length} rows (DBPASN/101..DBPASN/${100 + datable.length}, device 101..${100 + datable.length}). Excluded: ${unmatched.map((u) => u.name).join(', ') || 'none'}.`);
+      } catch (e) {
+        await client.query('ROLLBACK');
+        throw e;
+      } finally {
+        client.release();
       }
-      console.log(`Wrote ${done} rows (DBPASN/101..DBPASN/${100 + done}, device 101..${100 + done}). Excluded: ${unmatched.map((u) => u.name).join(', ') || 'none'}.`);
     }
   } finally {
     await pool.end();
