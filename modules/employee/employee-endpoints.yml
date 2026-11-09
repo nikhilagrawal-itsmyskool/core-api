@@ -25,6 +25,16 @@
           method: get
           cors: true
 
+  # Next employee-number recommendation (Add form). Static 'next-number' before /{id}.
+  next-employee-number:
+    handler: employee-handler.nextNumber
+    name: ${self:service}-next-employee-number
+    events:
+      - http:
+          path: next-number
+          method: get
+          cors: true
+
   # Per-school employee config. GET readable by employee viewers (UI gating); PUT = god.
   # Static 'config' must resolve ahead of /{id}.
   get-employee-config:

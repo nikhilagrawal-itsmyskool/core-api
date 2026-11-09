@@ -338,6 +338,24 @@ class EmployeeHandler {
     }
   };
 
+  // GET /next-number?type=teaching|non_teaching — recommend the next employee number + device token.
+  public nextNumber = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
+    _context.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const schoolCode = validateSchoolCodeHeader(event);
+      const schoolId = await employeeService.getSchoolIdByCode(schoolCode);
+      if (!schoolId) {
+        ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'Invalid school code', callback);
+        return;
+      }
+      const type = event.queryStringParameters?.type === 'non_teaching' ? 'non_teaching' : 'teaching';
+      const result = await employeeService.nextNumber(schoolId, schoolCode, type);
+      ResponseBuilder.ok(result, callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
   private async resolveSchoolId(event: ApiEvent, callback: ApiCallback): Promise<string | null> {
     const schoolCode = validateSchoolCodeHeader(event);
     const schoolId = await employeeService.getSchoolIdByCode(schoolCode);
@@ -364,5 +382,6 @@ export const restore = guard(EMPLOYEE_ACTIONS['employee-handler.restore'], handl
 export const getCredentials = guard(EMPLOYEE_ACTIONS['employee-handler.getCredentials'], handler.getCredentials);
 export const resetPassword = guard(EMPLOYEE_ACTIONS['employee-handler.resetPassword'], handler.resetPassword);
 export const forceReLogin = guard(EMPLOYEE_ACTIONS['employee-handler.forceReLogin'], handler.forceReLogin);
+export const nextNumber = guard(EMPLOYEE_ACTIONS['employee-handler.nextNumber'], handler.nextNumber);
 export const getConfig = guard(EMPLOYEE_ACTIONS['employee-handler.getConfig'], handler.getConfig);
 export const updateConfig = guard(EMPLOYEE_ACTIONS['employee-handler.updateConfig'], handler.updateConfig);

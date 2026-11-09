@@ -19,6 +19,8 @@ export const EMPLOYEE_ACTIONS: Record<string, string> = {
   'employee-handler.resetPassword': EMPLOYEE_MANAGE,
   // Force re-login is a stronger, god-only control (NOT part of employee.manage).
   'employee-handler.forceReLogin': EMPLOYEE_SESSION_RESET,
+  // Next-number recommendation (used by the Add form) = manage.
+  'employee-handler.nextNumber': EMPLOYEE_MANAGE,
   // Employee config: reading is open to employee viewers (so the UI can gate buttons);
   // changing it is god-only (employee.config.manage).
   'employee-handler.getConfig': EMPLOYEE_VIEW,

@@ -156,8 +156,8 @@ class EmployeeService {
 
     queries.push(singleLineString`
       insert into employee
-      (uuid, employee_number, name, code, gender, dob, family_unique_number, mobile, whatsapp, email, status, school_id, createdby_userid, created_at, device_number, date_of_joining)
-      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+      (uuid, employee_number, name, code, gender, dob, family_unique_number, mobile, whatsapp, email, status, school_id, createdby_userid, created_at, device_number, date_of_joining, employee_type)
+      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
     `);
     params.push([
       employeeUuid,
@@ -176,6 +176,7 @@ class EmployeeService {
       now,
       data.deviceNumber ? String(data.deviceNumber).trim() : null,
       data.dateOfJoining || null,
+      data.employeeType || null,
     ]);
 
     queries.push(singleLineString`
@@ -246,6 +247,7 @@ class EmployeeService {
     if (data.deviceNumber !== undefined) setField('device_number', data.deviceNumber ? String(data.deviceNumber).trim() : null);
     if (data.loginDisabled !== undefined) setField('login_disabled', data.loginDisabled === true);
     if (data.dateOfJoining !== undefined) setField('date_of_joining', data.dateOfJoining || null);
+    if (data.employeeType !== undefined) setField('employee_type', data.employeeType || null);
     if (data.gender !== undefined) setField('gender', data.gender);
     if (data.dob !== undefined) setField('dob', data.dob);
     if (data.mobile !== undefined) setField('mobile', data.mobile);
@@ -514,6 +516,38 @@ class EmployeeService {
       [id, schoolId, editProtectedRoles]
     );
     return rows.length > 0;
+  }
+
+  // Recommend the next employee number + device token for a new hire of the given type.
+  // employee_number uses a PER-TYPE counter: <CODE>/T/<n> | <CODE>/NT/<n> (both start at 101).
+  // device_number is a single GLOBALLY-unique numeric sequence per school (next free integer),
+  // so teaching/non-teaching device PINs never collide (device is unique per school).
+  public async nextNumber(
+    schoolId: string,
+    schoolCode: string,
+    type: string
+  ): Promise<{ employeeNumber: string; deviceNumber: string }> {
+    const tag = type === 'non_teaching' ? 'NT' : 'T';
+    const prefix = `${schoolCode.toUpperCase()}/${tag}/`;
+    const empRows = await DB.query(
+      singleLineString`select employee_number from employee where school_id = $1 and employee_number like $2`,
+      [schoolId, prefix + '%']
+    );
+    let maxN = 100;
+    for (const r of empRows) {
+      const n = parseInt(String(r.employeeNumber || '').slice(prefix.length), 10);
+      if (Number.isFinite(n) && n > maxN) maxN = n;
+    }
+    const devRows = await DB.query(
+      singleLineString`select device_number from employee where school_id = $1 and device_number ~ '^[0-9]+$'`,
+      [schoolId]
+    );
+    let maxD = 100;
+    for (const r of devRows) {
+      const d = parseInt(String(r.deviceNumber), 10);
+      if (Number.isFinite(d) && d > maxD) maxD = d;
+    }
+    return { employeeNumber: `${prefix}${maxN + 1}`, deviceNumber: String(maxD + 1) };
   }
 
   public async listRoles(schoolId: string): Promise<EmployeeRole[]> {

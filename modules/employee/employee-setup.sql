@@ -105,3 +105,8 @@ alter table employee add column if not exists login_disabled boolean;
 
 -- Date of joining (staff). Additive + idempotent.
 alter table employee add column if not exists date_of_joining date;
+
+-- Teaching vs non-teaching. Drives the employee-number prefix (<CODE>/T/<n> vs <CODE>/NT/<n>)
+-- and its own per-type counter. Values validated in app code (kept CHECK-free so the alter stays
+-- idempotent). null = unclassified.
+alter table employee add column if not exists employee_type varchar(16);
