@@ -451,6 +451,11 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
   'assets-incharge': ['asset.*'],
   'library-incharge': ['library.*'],
   'supplies-incharge': ['supplies.*'],
+  // Uniform store staff (non-teaching): full uniform module + the common staff basics
+  // (see the academic calendar, apply for own leave). Note: unlike the other pure *-incharge
+  // roles, this bundles the staff self-service basics so a non-teaching uniform staffer is
+  // self-contained.
+  'uniform-incharge': ['uniform.*', 'academic-calendar.view', 'leave.application.apply', 'leave.calendar.view'],
   'hiring-incharge': ['hiring.*'],
   'transport-incharge': ['transport.*'],
   'syllabus-incharge': ['syllabus.*'],
