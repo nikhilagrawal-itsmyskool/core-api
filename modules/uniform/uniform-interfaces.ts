@@ -28,6 +28,8 @@ export interface UniformItemSize {
   bulkDiscountPct?: number;
   currentStock: number;
   isPool: boolean;
+  isUnknown: boolean;
+  note?: string;
   status: string;
   createdbyUserid: string;
   createdAt: Date;
@@ -130,10 +132,27 @@ export interface CreateSizeRequest {
   mrp?: number;
   studentDiscountPct?: number;
   bulkDiscountPct?: number;
+  isUnknown?: boolean;
+  note?: string;
 }
 
 export interface UpdateSizeRequest {
   sizeLabel?: string;
+  mrp?: number;
+  studentDiscountPct?: number;
+  bulkDiscountPct?: number;
+  isUnknown?: boolean;
+  note?: string;
+}
+
+// Move units from one size to another within a sized item (e.g. assign an Unknown-bucket
+// piece to a real number). Target is an existing size (toSizeId) or a new one (toSizeLabel
+// + optional price). Used to drain the tailor-stitched "Unknown" bucket into numbers.
+export interface MoveStockRequest {
+  fromSizeId: string;
+  toSizeId?: string;
+  toSizeLabel?: string;
+  quantity: number;
   mrp?: number;
   studentDiscountPct?: number;
   bulkDiscountPct?: number;

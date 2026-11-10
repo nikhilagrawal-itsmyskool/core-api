@@ -55,6 +55,12 @@ create unique index if not exists idx_uniform_size_label_item on uniform_item_si
 -- before it is broken into numbers). Default (false) handled in application code.
 alter table uniform_item_size add column if not exists is_pool boolean;
 
+-- is_unknown marks an "unknown-number" bucket on a normally-sized item (e.g. tailor-stitched
+-- Full Shirts whose number isn't known yet); note holds the reason ("tailor stitched").
+-- Units are moved out of this bucket into real numbered sizes over time (move-stock).
+alter table uniform_item_size add column if not exists is_unknown boolean;
+alter table uniform_item_size add column if not exists note varchar(256);
+
 -- Table 2b: uniform_price_band (per-item number->price bands for unsized items)
 -- The counter enters the judged number; the covering band [number_from, number_to]
 -- supplies the suggested mrp + discounts. Bands are per item (not shared school-wide).

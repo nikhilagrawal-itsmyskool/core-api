@@ -31,6 +31,7 @@ export const UNIFORM_ACTIONS: Record<string, string> = {
   "uniform-item-handler.suggestPrice": UNIFORM_INVENTORY_VIEW,
   "uniform-item-handler.breakSizes": UNIFORM_INVENTORY_MANAGE,
   "uniform-item-handler.setStock": UNIFORM_INVENTORY_MANAGE,
+  "uniform-item-handler.moveStock": UNIFORM_INVENTORY_MANAGE,
 
   "uniform-purchase-handler.list": UNIFORM_PURCHASE_VIEW,
   "uniform-purchase-handler.getById": UNIFORM_PURCHASE_VIEW,

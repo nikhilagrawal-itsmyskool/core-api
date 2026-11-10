@@ -322,6 +322,33 @@ class UniformItemHandler {
     }
   };
 
+  public moveStock = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
+    _context.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const schoolCode = validateSchoolCodeHeader(event);
+      const schoolId = await uniformItemService.getSchoolIdByCode(schoolCode);
+      if (!schoolId) { ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'Invalid school code', callback); return; }
+
+      const itemId = event.pathParameters?.id;
+      if (!itemId) { ResponseBuilder.badRequest(ErrorCode.MissingId, 'Item ID is required', callback); return; }
+
+      const body = JSON.parse(event.body || '{}');
+      if (!body.fromSizeId) { ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'fromSizeId is required', callback); return; }
+      if (!body.toSizeId && !(body.toSizeLabel && String(body.toSizeLabel).trim())) {
+        ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'toSizeId or toSizeLabel is required', callback); return;
+      }
+
+      const userId = event.requestContext?.authorizer?.principalId || 'system';
+      const result = await uniformItemService.moveStock(itemId, body, schoolId, userId);
+      ResponseBuilder.ok(result, callback);
+    } catch (err: any) {
+      // moveStock throws plain Errors for business-rule violations (insufficient stock,
+      // unsized item, same source/target) — surface those as 400s.
+      if (err instanceof BadRequestResult) { ResponseBuilder.handleError(err, callback); return; }
+      ResponseBuilder.badRequest(ErrorCode.InvalidInput, err.message || 'Could not move stock', callback);
+    }
+  };
+
   private validateBand(body: any): string | null {
     if (body.numberFrom == null || body.numberTo == null) return 'numberFrom and numberTo are required';
     if (isNaN(Number(body.numberFrom)) || isNaN(Number(body.numberTo))) return 'numberFrom and numberTo must be numbers';
@@ -345,3 +372,4 @@ export const deleteBand = g('uniform-item-handler.deleteBand', handler.deleteBan
 export const suggestPrice = g('uniform-item-handler.suggestPrice', handler.suggestPrice);
 export const breakSizes = g('uniform-item-handler.breakSizes', handler.breakSizes);
 export const setStock = g('uniform-item-handler.setStock', handler.setStock);
+export const moveStock = g('uniform-item-handler.moveStock', handler.moveStock);

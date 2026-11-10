@@ -12,6 +12,7 @@ import {
   UpdateBandRequest,
   BreakSizesRequest,
   SetOpeningStockRequest,
+  MoveStockRequest,
   PriceSuggestion,
 } from './uniform-interfaces';
 import { DEFAULTS } from './uniform-constants';
@@ -173,14 +174,14 @@ class UniformItemService {
     const now = new Date();
     const query = singleLineString`
       insert into uniform_item_size
-      (uuid, item_id, school_id, size_label, mrp, student_discount_pct, bulk_discount_pct, current_stock, status, createdby_userid, created_at)
-      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      (uuid, item_id, school_id, size_label, mrp, student_discount_pct, bulk_discount_pct, current_stock, is_unknown, note, status, createdby_userid, created_at)
+      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
       returning *
     `;
     const results = await DB.query(query, [
       uuid, itemId, schoolId, data.sizeLabel,
       data.mrp ?? null, data.studentDiscountPct ?? null, data.bulkDiscountPct ?? null,
-      DEFAULTS.CURRENT_STOCK, DEFAULTS.STATUS, userId, now,
+      DEFAULTS.CURRENT_STOCK, data.isUnknown === true, data.note ?? null, DEFAULTS.STATUS, userId, now,
     ]);
     return this.parseSizeNumericFields(results[0]);
   }
@@ -194,6 +195,8 @@ class UniformItemService {
     if (data.mrp !== undefined) { updates.push(`mrp = $${i++}`); params.push(data.mrp); }
     if (data.studentDiscountPct !== undefined) { updates.push(`student_discount_pct = $${i++}`); params.push(data.studentDiscountPct); }
     if (data.bulkDiscountPct !== undefined) { updates.push(`bulk_discount_pct = $${i++}`); params.push(data.bulkDiscountPct); }
+    if (data.isUnknown !== undefined) { updates.push(`is_unknown = $${i++}`); params.push(data.isUnknown === true); }
+    if (data.note !== undefined) { updates.push(`note = $${i++}`); params.push(data.note || null); }
 
     if (updates.length === 0) {
       const results = await DB.query(`select * from uniform_item_size where uuid = $1 and school_id = $2`, [sizeId, schoolId]);
@@ -246,6 +249,7 @@ class UniformItemService {
       bulkDiscountPct: size.bulkDiscountPct != null ? parseFloat(size.bulkDiscountPct) : null,
       currentStock: size.currentStock != null ? parseInt(size.currentStock, 10) : 0,
       isPool: size.isPool === true,
+      isUnknown: size.isUnknown === true,
     };
   }
 
@@ -402,6 +406,63 @@ class UniformItemService {
     params.push([userId, now, pool.uuid, schoolId]);
     queries.push(`update uniform_item set sizing_mode = 'sized', updatedby_userid = $1, updated_at = $2 where uuid = $3 and school_id = $4`);
     params.push([userId, now, itemId, schoolId]);
+
+    await DB.queriesInTransaction(queries, params);
+    return this.getItemWithSizes(itemId, schoolId) as Promise<UniformItemWithSizes>;
+  }
+
+  // Move units from one size to another within a sized item (assign an Unknown-bucket
+  // piece to a real number). Target is an existing size (toSizeId) or a new one created
+  // from toSizeLabel (+ optional price). Decrements the source, credits the target.
+  public async moveStock(itemId: string, data: MoveStockRequest, schoolId: string, userId: string): Promise<UniformItemWithSizes> {
+    const item = await this.getItemById(itemId, schoolId);
+    if (!item) throw new Error('Item not found');
+    if (item.sizingMode === 'unsized') throw new Error('Move stock applies to sized items only');
+
+    const qty = Number(data.quantity);
+    if (!Number.isInteger(qty) || qty <= 0) throw new Error('Quantity must be a whole number greater than 0');
+
+    const sizes = await this.getSizesByItemId(itemId, schoolId);
+    const from = sizes.find(s => s.uuid === data.fromSizeId);
+    if (!from) throw new Error('Source size not found');
+    if ((from.currentStock || 0) < qty) throw new Error(`Only ${from.currentStock || 0} in stock to move from ${from.sizeLabel}`);
+
+    const now = new Date();
+    const queries: string[] = [];
+    const params: any[][] = [];
+
+    // Resolve the target: an existing size, or a new one created from the label.
+    let targetId: string;
+    if (data.toSizeId) {
+      const to = sizes.find(s => s.uuid === data.toSizeId);
+      if (!to) throw new Error('Target size not found');
+      if (to.uuid === from.uuid) throw new Error('Source and target size are the same');
+      targetId = to.uuid;
+      queries.push(`update uniform_item_size set current_stock = current_stock + $1, updatedby_userid = $2, updated_at = $3 where uuid = $4 and school_id = $5`);
+      params.push([qty, userId, now, targetId, schoolId]);
+    } else {
+      const label = (data.toSizeLabel ?? '').toString().trim();
+      if (!label) throw new Error('Target size (number) is required');
+      const existing = sizes.find(s => s.sizeLabel.toLowerCase() === label.toLowerCase() && !s.isPool);
+      if (existing) {
+        if (existing.uuid === from.uuid) throw new Error('Source and target size are the same');
+        targetId = existing.uuid;
+        queries.push(`update uniform_item_size set current_stock = current_stock + $1, updatedby_userid = $2, updated_at = $3 where uuid = $4 and school_id = $5`);
+        params.push([qty, userId, now, targetId, schoolId]);
+      } else {
+        targetId = generateShortUuid(12);
+        queries.push(singleLineString`
+          insert into uniform_item_size
+          (uuid, item_id, school_id, size_label, mrp, student_discount_pct, bulk_discount_pct, current_stock, is_unknown, note, status, createdby_userid, created_at)
+          values ($1, $2, $3, $4, $5, $6, $7, $8, false, null, $9, $10, $11)
+        `);
+        params.push([targetId, itemId, schoolId, label, data.mrp ?? null, data.studentDiscountPct ?? null, data.bulkDiscountPct ?? null, qty, DEFAULTS.STATUS, userId, now]);
+      }
+    }
+
+    // Debit the source.
+    queries.push(`update uniform_item_size set current_stock = current_stock - $1, updatedby_userid = $2, updated_at = $3 where uuid = $4 and school_id = $5`);
+    params.push([qty, userId, now, from.uuid, schoolId]);
 
     await DB.queriesInTransaction(queries, params);
     return this.getItemWithSizes(itemId, schoolId) as Promise<UniformItemWithSizes>;

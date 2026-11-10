@@ -147,6 +147,15 @@
           method: post
           cors: true
 
+  move-stock:
+    handler: uniform-item-handler.moveStock
+    name: ${self:service}-move-stock
+    events:
+      - http:
+          path: items/{id}/move-stock
+          method: post
+          cors: true
+
   # Purchases
   create-purchase:
     handler: uniform-purchase-handler.create
