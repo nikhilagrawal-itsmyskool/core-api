@@ -16,6 +16,7 @@ const {
   SUPPLIES_PURCHASE_MANAGE,
   SUPPLIES_ISSUE_VIEW,
   SUPPLIES_ISSUE_MANAGE,
+  SUPPLIES_ISSUE_ME,
   SUPPLIES_WASTAGE_VIEW,
   SUPPLIES_WASTAGE_MANAGE,
 } = ACTIONS;
@@ -58,6 +59,9 @@ export const SUPPLY_ACTIONS: Record<string, string> = {
   "supply-issue-handler.update": SUPPLIES_ISSUE_MANAGE,
   "supply-issue-handler.remove": SUPPLIES_ISSUE_MANAGE,
   "supply-issue-handler.returnItem": SUPPLIES_ISSUE_MANAGE,
+
+  // Teacher PWA — items issued to the caller (self-scoped in-handler)
+  "supply-me-handler.myIssues": SUPPLIES_ISSUE_ME,
 
   // Wastage log
   "supply-wastage-handler.list": SUPPLIES_WASTAGE_VIEW,

@@ -167,6 +167,8 @@ export interface UpdatePurchaseBatchRequest {
 export interface SupplyIssueLog extends BaseEntity {
   itemId: string;
   itemName?: string;
+  itemType?: ItemType; // resolved from supply_item (consumable | equipment)
+  unit?: SupplyUnit; // resolved from supply_item
   issueDate: Date;
   quantity: number;
   issueType: IssueType;

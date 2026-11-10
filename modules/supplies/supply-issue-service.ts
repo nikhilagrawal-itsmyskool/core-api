@@ -118,7 +118,7 @@ class SupplyIssueService {
   }
 
   private readonly selectWithJoins = `
-    select il.*, i.name as item_name,
+    select il.*, i.name as item_name, i.item_type as item_type, i.unit as unit,
       case
         when il.issued_to_type = 'employee' then e.name
         when il.issued_to_type = 'student' then s.name
@@ -163,6 +163,17 @@ class SupplyIssueService {
     if (params.issueType) { query += ` and il.issue_type = $${idx++}`; queryParams.push(params.issueType); }
     query += ` order by il.issue_date desc`;
     return DB.query(query, queryParams);
+  }
+
+  // Teacher PWA: every supply issued TO this employee (issued_to_type='employee').
+  // Not date-bounded — an outstanding loan may be months old. Outstanding (not yet
+  // returned) rows sort first, then by most-recent issue date.
+  public async myIssues(schoolId: string, employeeId: string): Promise<SupplyIssueLog[]> {
+    const query = `${this.selectWithJoins}
+      where il.school_id = $1 and il.status = 'active'
+        and il.issued_to_type = 'employee' and il.issued_to_id = $2
+      order by (case when il.returned then 1 else 0 end) asc, il.issue_date desc`;
+    return DB.query(query, [schoolId, employeeId]);
   }
 }
 

@@ -29,6 +29,10 @@ class SupplyIssueHandler {
       if (!body.issueType || !VALID_ISSUE_TYPES.includes(body.issueType)) { ResponseBuilder.badRequest(ErrorCode.InvalidInput, `Invalid issue type. Must be one of: ${VALID_ISSUE_TYPES.join(', ')}`, callback); return; }
       if (body.quantity !== undefined && body.quantity <= 0) { ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'Quantity must be greater than 0', callback); return; }
       if (body.issuedToType && !ISSUED_TO_TYPES.includes(body.issuedToType as any)) { ResponseBuilder.badRequest(ErrorCode.InvalidInput, `Invalid issued to type. Must be one of: ${ISSUED_TO_TYPES.join(', ')}`, callback); return; }
+      // When issuing to a staff member, a real employee id is required — the teacher
+      // "My Issued Items" PWA surface keys off issued_to_id, so a free-text name alone
+      // would make the item invisible to the recipient.
+      if (body.issuedToType === 'employee' && !body.issuedToId) { ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'issuedToId (the staff member) is required when issuing to an employee', callback); return; }
 
       const item = await supplyItemService.getById(body.itemId, schoolId);
       if (!item) { ResponseBuilder.badRequest(ErrorCode.InvalidId, 'Item not found', callback); return; }

@@ -264,6 +264,16 @@
           method: put
           cors: true
 
+  # Teacher PWA — items issued to me (self-scoped)
+  me-list-issues:
+    handler: supply-me-handler.myIssues
+    name: ${self:service}-me-list-issues
+    events:
+      - http:
+          path: me/issues
+          method: get
+          cors: true
+
   # Wastage endpoints
   create-wastage:
     handler: supply-wastage-handler.create
