@@ -518,7 +518,13 @@ type Override = { role: string; action: string; effect: 'grant' | 'revoke' };
 let OVERRIDES: Override[] = [];
 let overridesLoadedAt = 0;
 let overridesLoading = false;
-const OVERRIDE_TTL_MS = 60_000;
+// 5 min (was 60s): role overrides and temporary grants change rarely, and a god write
+// force-reloads the writing container immediately (reloadPermissionOverrides / reloadUserGrants),
+// so only OTHER containers lag — now by up to 5 min instead of 60s. This cuts the per-container
+// background refresh rate (two queries: authz_permission_override + authz_user_grant) ~5x across
+// the whole fleet, easing the DB connection pressure. Force-logout stays on its own 60s TTL in
+// session-version.ts so kill-switch propagation is unaffected.
+const OVERRIDE_TTL_MS = 300_000;
 
 async function loadOverridesNow(): Promise<void> {
   try {

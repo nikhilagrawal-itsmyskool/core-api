@@ -46,7 +46,18 @@ async function fetchPassword(): Promise<string | undefined> {
 
 async function buildPool(): Promise<Pool> {
   const password = await fetchPassword();
-  const pool = new Pool({ ...baseConfig, password });
+  // Pool tuning for Lambda. A container serves ONE request at a time, so it rarely needs many
+  // connections; pg's default (max 10, no connect timeout) let cold-start bursts across ~25
+  // module Lambdas each open up to 10 connections and approach RDS's ~225 ceiling
+  // (db.t4g.small), after which acquiring a connection would HANG indefinitely (~10s stalls
+  // seen in prod). Cap connections per container and fail fast instead of hanging.
+  const pool = new Pool({
+    ...baseConfig,
+    password,
+    max: 6,                         // was default 10 — enough for the widest parallel fan-out, far fewer in a storm
+    connectionTimeoutMillis: 5000,  // was 0 (infinite wait) — bound the stall, let runWithRetry recover
+    idleTimeoutMillis: 10000,       // release idle connections promptly so they don't linger on RDS
+  });
   pool.on('error', (err) => {
     console.error('Unexpected error on idle client', err);
   });
