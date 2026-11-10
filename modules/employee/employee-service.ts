@@ -527,7 +527,7 @@ class EmployeeService {
     schoolCode: string,
     type: string
   ): Promise<{ employeeNumber: string; deviceNumber: string }> {
-    const tag = type === 'non_teaching' ? 'NT' : 'T';
+    const tag = type === 'non_teaching' ? 'NT' : type === 'management' ? 'M' : 'T';
     const prefix = `${schoolCode.toUpperCase()}/${tag}/`;
     const empRows = await DB.query(
       singleLineString`select employee_number from employee where school_id = $1 and employee_number like $2`,
