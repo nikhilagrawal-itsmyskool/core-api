@@ -165,6 +165,7 @@ class SupplyItemService {
     searchTerm?: string;
     lowStock?: boolean;
     includeDeleted?: boolean;
+    hideSeeded?: boolean;
   }): Promise<SupplyItem[]> {
     // Seed defaults + master on first use so the typeahead is populated.
     await supplyService.seedForSchool(params.schoolId, params.userId);
@@ -194,6 +195,11 @@ class SupplyItemService {
     }
     if (params.lowStock) {
       query += ` and i.reorder_level > 0 and i.current_stock <= i.reorder_level`;
+    }
+    // Declutter: drop unused (zero-stock) seeded items. Seeded items the school has
+    // actually stocked still show, so real inventory is never hidden.
+    if (params.hideSeeded) {
+      query += ` and not (i.is_seeded is true and i.current_stock = 0)`;
     }
 
     query += ` order by i.name`;

@@ -55,6 +55,7 @@ class SupplyItemHandler {
         searchTerm: event.queryStringParameters?.search,
         lowStock: event.queryStringParameters?.lowStock === 'true',
         includeDeleted: event.queryStringParameters?.includeDeleted === 'true',
+        hideSeeded: event.queryStringParameters?.hideSeeded === 'true',
       });
       ResponseBuilder.ok(results, callback);
     } catch (err: any) {

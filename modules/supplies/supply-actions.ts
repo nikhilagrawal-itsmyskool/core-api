@@ -26,6 +26,10 @@ export const SUPPLY_ACTIONS: Record<string, string> = {
   "supply-lookup-handler.getUnits": SUPPLIES_INVENTORY_VIEW,
   "supply-lookup-handler.getConditions": SUPPLIES_INVENTORY_VIEW,
 
+  // Per-school module config (settings). Reuses inventory view/manage (like uniform).
+  "supply-config-handler.getConfig": SUPPLIES_INVENTORY_VIEW,
+  "supply-config-handler.updateConfig": SUPPLIES_INVENTORY_MANAGE,
+
   // Categories (setup)
   "supply-category-handler.list": SUPPLIES_CATEGORY_VIEW,
   "supply-category-handler.getById": SUPPLIES_CATEGORY_VIEW,

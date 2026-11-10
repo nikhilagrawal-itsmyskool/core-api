@@ -43,6 +43,7 @@ export interface SupplyItem extends BaseEntity {
   itemCondition?: ItemCondition;
   costPerUnit?: number;
   comments?: string;
+  isSeeded?: boolean; // created by the curated seed master (vs hand-added)
   status: StatusValue;
 }
 

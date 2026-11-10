@@ -12,7 +12,10 @@
 
 import { ItemType, SupplyUnit } from './supply-constants';
 
-export const SUPPLY_ITEM_MASTER_VERSION = 1;
+// v2: no new items — the bump re-runs seedForSchool on already-seeded schools so
+// its self-heal pass back-fills is_seeded=true on rows that match the master (the
+// column was added after v1, so pre-existing seeded rows had no marker).
+export const SUPPLY_ITEM_MASTER_VERSION = 2;
 
 export interface SupplyItemSeed {
   name: string;

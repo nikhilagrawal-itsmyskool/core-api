@@ -46,6 +46,10 @@ create table if not exists supply_item (
     updated_at timestamp(0)
 );
 
+-- Marks items created by the curated seed master (vs hand-added), so a school can
+-- hide unused seeded clutter from the catalog (see supply_config.hide_seeded_items).
+alter table supply_item add column if not exists is_seeded boolean;
+
 create index if not exists idx_supply_item_school_status on supply_item(school_id, status);
 create index if not exists idx_supply_item_school_category on supply_item(school_id, category_id);
 create index if not exists idx_supply_item_name on supply_item(school_id, category_id, name);
@@ -154,4 +158,12 @@ create table if not exists supply_seed_state (
     school_id varchar(12) primary key,
     seeded_version integer not null,
     seeded_at timestamp(0) not null
+);
+
+-- Table 8: supply_config (per-school module settings; one row per school)
+create table if not exists supply_config (
+    school_id varchar(12) primary key,
+    hide_seeded_items boolean,   -- hide unused (zero-stock) seeded catalog items from the item list (default false in app)
+    updatedby_userid varchar(12),
+    updated_at timestamp(0)
 );
