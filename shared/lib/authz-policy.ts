@@ -107,7 +107,7 @@ export const ACTIONS = {
   LIBRARY_CONFIG_VIEW: 'library.config.view',
   LIBRARY_CONFIG_MANAGE: 'library.config.manage',
   // School supplies / consumables (strict module.resource.action). admin + supplies-incharge
-  // hold the supplies.* wildcard; teachers get inventory.view + issue.view.
+  // hold the supplies.* wildcard; teachers get inventory.view + issue.view + issue.me.
   SUPPLIES_CATEGORY_VIEW: 'supplies.category.view',
   SUPPLIES_CATEGORY_MANAGE: 'supplies.category.manage',
   SUPPLIES_INVENTORY_VIEW: 'supplies.inventory.view',
@@ -116,6 +116,9 @@ export const ACTIONS = {
   SUPPLIES_PURCHASE_MANAGE: 'supplies.purchase.manage',
   SUPPLIES_ISSUE_VIEW: 'supplies.issue.view',
   SUPPLIES_ISSUE_MANAGE: 'supplies.issue.manage',
+  // issue.me = a teacher reads ONLY the supplies issued to themselves (the /me PWA surface,
+  // self-scoped in-handler by issued_to_id). Distinct from issue.view (all school issues).
+  SUPPLIES_ISSUE_ME: 'supplies.issue.me',
   SUPPLIES_WASTAGE_VIEW: 'supplies.wastage.view',
   SUPPLIES_WASTAGE_MANAGE: 'supplies.wastage.manage',
   TIMETABLE_VIEW: 'timetable.grid.view',
@@ -404,6 +407,7 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
     'library.catalog.view', // Browse the library catalog
     'supplies.inventory.view', // See supply stock
     'supplies.issue.view', // See what supplies have been issued
+    'supplies.issue.me', // See the supplies issued to ME (the /me PWA surface)
     'timetable.grid.view',
     'student.record.view',
     'student.contacts.view',
@@ -416,6 +420,7 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
     'programme.source.view', // Download the class-module reference docs
     'assembly.plan.view', // Read the assembly plan for their wing
     'assembly.week.conduct', // Run their assigned assembly week (/me duties; scoped in-handler by house/evaluator)
+    'exam.schedule.view', // See the Examinations menu — exam schedule/datesheet + their own invigilation duties
     'academic-calendar.view',
     'leave.calendar.view', // See the shared who's-on-leave calendar
     'leave.application.apply', // Apply for own leave
