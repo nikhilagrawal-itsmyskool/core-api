@@ -24,26 +24,70 @@ class UniformSaleService {
     );
     const sizeMap = new Map(sizes.map((s: any) => [s.uuid, s]));
 
+    // Fetch item sizing mode + the bands for any unsized items on this sale. Unsized
+    // lines price from the band covering the judged number instead of the pool size.
+    const itemIds = Array.from(new Set(data.items.map(i => i.itemId)));
+    const items = await DB.query(
+      `select uuid, sizing_mode from uniform_item where uuid = ANY($1) and school_id = $2`,
+      [itemIds, schoolId]
+    );
+    const itemModeMap = new Map(items.map((it: any) => [it.uuid, it.sizingMode || 'sized']));
+    const unsizedItemIds = items.filter((it: any) => (it.sizingMode || 'sized') === 'unsized').map((it: any) => it.uuid);
+    const bands = unsizedItemIds.length
+      ? await DB.query(
+          singleLineString`
+            select item_id, number_from, number_to, mrp, student_discount_pct, bulk_discount_pct, sort_order
+            from uniform_price_band
+            where item_id = ANY($1) and school_id = $2 and status = 'active'
+            order by sort_order nulls last, number_from
+          `,
+          [unsizedItemIds, schoolId]
+        )
+      : [];
+    const bandsByItem = new Map<string, any[]>();
+    for (const b of bands) {
+      const list = bandsByItem.get(b.itemId) || [];
+      list.push(b);
+      bandsByItem.set(b.itemId, list);
+    }
+    const bandFor = (itemId: string, judged?: string) => {
+      const n = parseInt((judged ?? '').toString(), 10);
+      if (isNaN(n)) return undefined;
+      return (bandsByItem.get(itemId) || []).find((b: any) => n >= b.numberFrom && n <= b.numberTo);
+    };
+
     // Compute totals — discount always from size (studentDiscountPct for student, bulkDiscountPct for bulk)
     let totalMrp = 0;
     let totalDiscount = 0;
 
     const itemRows: Array<{
-      uuid: string; sizeId: string; itemId: string; quantity: number;
+      uuid: string; sizeId: string; itemId: string; judgedSize: string | null; quantity: number;
       mrp: number; discountPct: number; unitPrice: number; lineTotal: number;
     }> = [];
 
     for (const item of data.items) {
       const size = sizeMap.get(item.sizeId) as any;
-      const mrp = parseFloat(size?.mrp ?? 0);
+      const isUnsized = itemModeMap.get(item.itemId) === 'unsized';
+      const band = isUnsized ? bandFor(item.itemId, item.judgedSize) : undefined;
+
+      // Price source: band for unsized lines (fallback to pool size), else the size row.
+      const mrp = parseFloat((isUnsized ? (band?.mrp ?? size?.mrp) : size?.mrp) ?? 0);
       const discountPct = data.saleType === 'bulk'
-        ? parseFloat(size?.bulkDiscountPct ?? 0)
-        : parseFloat(size?.studentDiscountPct ?? 0);
-      const unitPrice = parseFloat((mrp * (1 - discountPct / 100)).toFixed(2));
+        ? parseFloat((isUnsized ? (band?.bulkDiscountPct ?? size?.bulkDiscountPct) : size?.bulkDiscountPct) ?? 0)
+        : parseFloat((isUnsized ? (band?.studentDiscountPct ?? size?.studentDiscountPct) : size?.studentDiscountPct) ?? 0);
+
+      const suggestedUnit = parseFloat((mrp * (1 - discountPct / 100)).toFixed(2));
+      const unitPrice = item.unitPriceOverride != null
+        ? parseFloat(Number(item.unitPriceOverride).toFixed(2))
+        : suggestedUnit;
       const lineTotal = parseFloat((unitPrice * item.quantity).toFixed(2));
       totalMrp += mrp * item.quantity;
       totalDiscount += (mrp - unitPrice) * item.quantity;
-      itemRows.push({ uuid: generateShortUuid(12), sizeId: item.sizeId, itemId: item.itemId, quantity: item.quantity, mrp, discountPct, unitPrice, lineTotal });
+      itemRows.push({
+        uuid: generateShortUuid(12), sizeId: item.sizeId, itemId: item.itemId,
+        judgedSize: isUnsized ? ((item.judgedSize ?? '').toString().trim() || null) : null,
+        quantity: item.quantity, mrp, discountPct, unitPrice, lineTotal,
+      });
     }
 
     totalMrp = parseFloat(totalMrp.toFixed(2));
@@ -91,11 +135,11 @@ class UniformSaleService {
     for (const row of itemRows) {
       queries.push(singleLineString`
         insert into uniform_sale_item
-        (uuid, sale_id, school_id, item_id, size_id, quantity, mrp, discount_pct, unit_price, line_total, returned_quantity, status, createdby_userid, created_at)
-        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+        (uuid, sale_id, school_id, item_id, size_id, judged_size, quantity, mrp, discount_pct, unit_price, line_total, returned_quantity, status, createdby_userid, created_at)
+        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
       `);
       params.push([
-        row.uuid, saleUuid, schoolId, row.itemId, row.sizeId, row.quantity,
+        row.uuid, saleUuid, schoolId, row.itemId, row.sizeId, row.judgedSize, row.quantity,
         row.mrp, row.discountPct, row.unitPrice, row.lineTotal,
         DEFAULTS.RETURNED_QUANTITY, DEFAULTS.STATUS, userId, now,
       ]);
@@ -141,7 +185,7 @@ class UniformSaleService {
 
     const returns = await DB.query(
       singleLineString`
-        select ur.*, ui.name as item_name, uis.size_label,
+        select ur.*, ui.name as item_name, uis.size_label, si.judged_size,
           fs.file_name as return_file_name, fs.mime_type as return_mime_type
         from uniform_return ur
         join uniform_sale_item si on ur.sale_item_id = si.uuid

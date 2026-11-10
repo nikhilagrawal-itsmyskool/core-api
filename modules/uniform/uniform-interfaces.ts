@@ -1,4 +1,4 @@
-import { UniformCategory, UniformGender, SaleType, PaymentStatus } from './uniform-constants';
+import { UniformCategory, UniformGender, SaleType, PaymentStatus, SizingMode } from './uniform-constants';
 
 // ── Item ──────────────────────────────────────────────────────────────────────
 
@@ -8,6 +8,7 @@ export interface UniformItem {
   name: string;
   category: UniformCategory;
   gender: UniformGender;
+  sizingMode: SizingMode;
   isSeeded: boolean;
   description?: string;
   status: string;
@@ -26,6 +27,25 @@ export interface UniformItemSize {
   studentDiscountPct?: number;
   bulkDiscountPct?: number;
   currentStock: number;
+  isPool: boolean;
+  status: string;
+  createdbyUserid: string;
+  createdAt: Date;
+  updatedbyUserid?: string;
+  updatedAt?: Date;
+}
+
+// Per-item number→price band (unsized items only).
+export interface UniformPriceBand {
+  uuid: string;
+  itemId: string;
+  schoolId: string;
+  numberFrom: number;
+  numberTo: number;
+  mrp?: number;
+  studentDiscountPct?: number;
+  bulkDiscountPct?: number;
+  sortOrder: number;
   status: string;
   createdbyUserid: string;
   createdAt: Date;
@@ -35,12 +55,14 @@ export interface UniformItemSize {
 
 export interface UniformItemWithSizes extends UniformItem {
   sizes: UniformItemSize[];
+  bands?: UniformPriceBand[];
 }
 
 export interface CreateItemRequest {
   name: string;
   category: UniformCategory;
   gender: UniformGender;
+  sizingMode?: SizingMode;
   description?: string;
 }
 
@@ -49,6 +71,46 @@ export interface UpdateItemRequest {
   category?: UniformCategory;
   gender?: UniformGender;
   description?: string;
+}
+
+export interface CreateBandRequest {
+  numberFrom: number;
+  numberTo: number;
+  mrp?: number;
+  studentDiscountPct?: number;
+  bulkDiscountPct?: number;
+  sortOrder?: number;
+}
+
+export interface UpdateBandRequest {
+  numberFrom?: number;
+  numberTo?: number;
+  mrp?: number;
+  studentDiscountPct?: number;
+  bulkDiscountPct?: number;
+  sortOrder?: number;
+}
+
+// Break an unsized pool into per-number sized stock rows (permanent conversion).
+export interface BreakSizesRequest {
+  breakdown: Array<{
+    sizeLabel: string;
+    quantity: number;
+    mrp?: number;
+    studentDiscountPct?: number;
+    bulkDiscountPct?: number;
+  }>;
+}
+
+// Suggested price for a judged number on an unsized item.
+export interface PriceSuggestion {
+  itemId: string;
+  number: number;
+  bandId: string | null;
+  mrp: number | null;
+  studentDiscountPct: number | null;
+  bulkDiscountPct: number | null;
+  matched: boolean;
 }
 
 export interface CreateSizeRequest {
@@ -219,6 +281,7 @@ export interface UniformSaleItem {
   schoolId: string;
   itemId: string;
   sizeId: string;
+  judgedSize?: string;
   quantity: number;
   mrp?: number;
   discountPct?: number;
@@ -267,6 +330,11 @@ export interface CreateSaleItemRequest {
   itemId: string;
   sizeId: string;
   quantity: number;
+  // For unsized items: the number judged at the counter. Drives band price lookup
+  // and is recorded on the sale line. Ignored for sized items.
+  judgedSize?: string;
+  // Optional operator override of the suggested unit price (post-discount, per unit).
+  unitPriceOverride?: number;
 }
 
 // ── Return ────────────────────────────────────────────────────────────────────

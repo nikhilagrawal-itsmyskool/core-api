@@ -92,6 +92,52 @@
           method: delete
           cors: true
 
+  # Price bands (unsized items) + bulk-split
+  create-band:
+    handler: uniform-item-handler.createBand
+    name: ${self:service}-create-band
+    events:
+      - http:
+          path: items/{id}/bands
+          method: post
+          cors: true
+
+  update-band:
+    handler: uniform-item-handler.updateBand
+    name: ${self:service}-update-band
+    events:
+      - http:
+          path: items/{id}/bands/{bandId}
+          method: put
+          cors: true
+
+  delete-band:
+    handler: uniform-item-handler.deleteBand
+    name: ${self:service}-delete-band
+    events:
+      - http:
+          path: items/{id}/bands/{bandId}
+          method: delete
+          cors: true
+
+  suggest-price:
+    handler: uniform-item-handler.suggestPrice
+    name: ${self:service}-suggest-price
+    events:
+      - http:
+          path: items/{id}/suggest-price
+          method: get
+          cors: true
+
+  break-sizes:
+    handler: uniform-item-handler.breakSizes
+    name: ${self:service}-break-sizes
+    events:
+      - http:
+          path: items/{id}/break-sizes
+          method: post
+          cors: true
+
   # Purchases
   create-purchase:
     handler: uniform-purchase-handler.create

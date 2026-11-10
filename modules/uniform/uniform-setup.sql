@@ -19,6 +19,12 @@ create table if not exists uniform_item (
     updated_at timestamp(0)
 );
 
+-- sizing_mode: 'sized' = per-number stock rows (blazer/sweater); 'unsized' = one pool
+-- count, number judged at the counter and priced from uniform_price_band (tailor shirt,
+-- 3-piece pant). An unsized item carries exactly one uniform_item_size row with is_pool.
+-- Default ('sized') handled in application code.
+alter table uniform_item add column if not exists sizing_mode varchar(16);
+
 create index if not exists idx_uniform_item_school_id on uniform_item(school_id);
 create index if not exists idx_uniform_item_school_status on uniform_item(school_id, status);
 create index if not exists idx_uniform_item_category on uniform_item(school_id, category);
@@ -44,6 +50,33 @@ create table if not exists uniform_item_size (
 create index if not exists idx_uniform_size_item_id on uniform_item_size(item_id);
 create index if not exists idx_uniform_size_school_id on uniform_item_size(school_id, status);
 create unique index if not exists idx_uniform_size_label_item on uniform_item_size(lower(size_label), item_id) where status = 'active';
+
+-- is_pool marks the single sentinel stock row that an unsized item holds (the bulk count
+-- before it is broken into numbers). Default (false) handled in application code.
+alter table uniform_item_size add column if not exists is_pool boolean;
+
+-- Table 2b: uniform_price_band (per-item number->price bands for unsized items)
+-- The counter enters the judged number; the covering band [number_from, number_to]
+-- supplies the suggested mrp + discounts. Bands are per item (not shared school-wide).
+create table if not exists uniform_price_band (
+    uuid varchar(12) primary key,
+    item_id varchar(12) not null,
+    school_id varchar(12) not null,
+    number_from integer not null,
+    number_to integer not null,
+    mrp decimal(10,2),
+    student_discount_pct decimal(5,2),
+    bulk_discount_pct decimal(5,2),
+    sort_order integer,
+    status varchar(16) not null check (status in ('active', 'deleted')),
+    createdby_userid varchar(12),
+    created_at timestamp(0),
+    updatedby_userid varchar(12),
+    updated_at timestamp(0)
+);
+
+create index if not exists idx_uniform_band_item on uniform_price_band(item_id, status);
+create index if not exists idx_uniform_band_school on uniform_price_band(school_id, status);
 
 -- Table 3: uniform_purchase_batch (lot/bill header)
 create table if not exists uniform_purchase_batch (
@@ -166,6 +199,10 @@ create table if not exists uniform_sale_item (
 
 create index if not exists idx_uniform_sale_item_sale_id on uniform_sale_item(sale_id);
 create index if not exists idx_uniform_sale_item_school on uniform_sale_item(school_id, status);
+
+-- judged_size: the number the operator entered at the counter for an unsized item's
+-- pool line (null for normal sized lines, whose number is on the size row).
+alter table uniform_sale_item add column if not exists judged_size varchar(32);
 
 -- Table 9: uniform_return (return records)
 create table if not exists uniform_return (

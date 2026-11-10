@@ -54,6 +54,7 @@ export async function cleanupTestSchool(school: TestSchool): Promise<void> {
   await pool.query(`delete from uniform_purchase_batch where school_id = $1`, [schoolId]);
   await pool.query(`delete from uniform_set_item where school_id = $1`, [schoolId]);
   await pool.query(`delete from uniform_set where school_id = $1`, [schoolId]);
+  await pool.query(`delete from uniform_price_band where school_id = $1`, [schoolId]);
   await pool.query(`delete from uniform_item_size where school_id = $1`, [schoolId]);
   await pool.query(`delete from uniform_item where school_id = $1`, [schoolId]);
   await pool.query(`delete from student where school_id = $1`, [schoolId]);

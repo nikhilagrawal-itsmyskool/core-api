@@ -22,21 +22,33 @@ export const PAYMENT_STATUSES = [
   { value: 'due', label: 'Due' },
 ] as const;
 
+// sized   = per-number stock rows, chosen at sale (blazer, sweater, full shirt)
+// unsized = one bulk pool count, number judged at the counter and priced from a band
+//           (tailor shirt, 3-piece pant). Can be broken into numbers → becomes sized.
+export const SIZING_MODES = [
+  { value: 'sized', label: 'Sized (number-wise stock)' },
+  { value: 'unsized', label: 'Unsized (judge number at sale)' },
+] as const;
+
 export const CATEGORY_VALUES = UNIFORM_CATEGORIES.map(c => c.value);
 export const GENDER_VALUES = UNIFORM_GENDERS.map(g => g.value);
 export const SALE_TYPE_VALUES = SALE_TYPES.map(s => s.value);
 export const PAYMENT_STATUS_VALUES = PAYMENT_STATUSES.map(p => p.value);
+export const SIZING_MODE_VALUES = SIZING_MODES.map(s => s.value);
 
 export type UniformCategory = typeof CATEGORY_VALUES[number];
 export type UniformGender = typeof GENDER_VALUES[number];
 export type SaleType = typeof SALE_TYPE_VALUES[number];
 export type PaymentStatus = typeof PAYMENT_STATUS_VALUES[number];
+export type SizingMode = typeof SIZING_MODE_VALUES[number];
 
 export const DEFAULTS = {
   STATUS: 'active',
   CURRENT_STOCK: 0,
   RETURNED_QUANTITY: 0,
   SORT_ORDER: 0,
+  SIZING_MODE: 'sized' as SizingMode,
+  POOL_SIZE_LABEL: 'Unsized',
 };
 
 // Pre-seeded catalog items — schools activate these and add sizes/pricing

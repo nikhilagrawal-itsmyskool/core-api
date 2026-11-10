@@ -4,7 +4,7 @@ import { ErrorCode } from '../../shared/lib/error-codes';
 import { BadRequestResult } from '../../shared/lib/errors';
 import { validateSchoolCodeHeader } from '../auth/auth-utils';
 import { uniformItemService } from './uniform-item-service';
-import { CATEGORY_VALUES, GENDER_VALUES } from './uniform-constants';
+import { CATEGORY_VALUES, GENDER_VALUES, SIZING_MODE_VALUES } from './uniform-constants';
 import { guard } from '../auth/authz';
 import { UNIFORM_ACTIONS } from './uniform-actions';
 
@@ -25,6 +25,9 @@ class UniformItemHandler {
       }
       if (!body.gender || !GENDER_VALUES.includes(body.gender)) {
         ResponseBuilder.badRequest(ErrorCode.InvalidInput, `gender must be one of: ${GENDER_VALUES.join(', ')}`, callback); return;
+      }
+      if (body.sizingMode && !SIZING_MODE_VALUES.includes(body.sizingMode)) {
+        ResponseBuilder.badRequest(ErrorCode.InvalidInput, `sizingMode must be one of: ${SIZING_MODE_VALUES.join(', ')}`, callback); return;
       }
 
       const userId = event.requestContext?.authorizer?.principalId || 'system';
@@ -177,6 +180,128 @@ class UniformItemHandler {
       ResponseBuilder.handleError(err, callback);
     }
   };
+
+  // ── Price bands (unsized items) ──────────────────────────────────────────────
+
+  public createBand = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
+    _context.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const schoolCode = validateSchoolCodeHeader(event);
+      const schoolId = await uniformItemService.getSchoolIdByCode(schoolCode);
+      if (!schoolId) { ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'Invalid school code', callback); return; }
+
+      const itemId = event.pathParameters?.id;
+      if (!itemId) { ResponseBuilder.badRequest(ErrorCode.MissingId, 'Item ID is required', callback); return; }
+      const item = await uniformItemService.getItemById(itemId, schoolId);
+      if (!item) { ResponseBuilder.notFound(ErrorCode.InvalidId, 'Item not found', callback); return; }
+
+      const body = JSON.parse(event.body || '{}');
+      const err = this.validateBand(body);
+      if (err) { ResponseBuilder.badRequest(ErrorCode.InvalidInput, err, callback); return; }
+
+      const userId = event.requestContext?.authorizer?.principalId || 'system';
+      const result = await uniformItemService.createBand(itemId, body, schoolId, userId);
+      ResponseBuilder.ok(result, callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
+  public updateBand = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
+    _context.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const schoolCode = validateSchoolCodeHeader(event);
+      const schoolId = await uniformItemService.getSchoolIdByCode(schoolCode);
+      if (!schoolId) { ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'Invalid school code', callback); return; }
+
+      const bandId = event.pathParameters?.bandId;
+      if (!bandId) { ResponseBuilder.badRequest(ErrorCode.MissingId, 'Band ID is required', callback); return; }
+
+      const body = JSON.parse(event.body || '{}');
+      if (body.numberFrom != null && body.numberTo != null && Number(body.numberFrom) > Number(body.numberTo)) {
+        ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'numberFrom must be <= numberTo', callback); return;
+      }
+
+      const userId = event.requestContext?.authorizer?.principalId || 'system';
+      const result = await uniformItemService.updateBand(bandId, body, schoolId, userId);
+      if (!result) { ResponseBuilder.notFound(ErrorCode.InvalidId, 'Band not found', callback); return; }
+      ResponseBuilder.ok(result, callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
+  public deleteBand = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
+    _context.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const schoolCode = validateSchoolCodeHeader(event);
+      const schoolId = await uniformItemService.getSchoolIdByCode(schoolCode);
+      if (!schoolId) { ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'Invalid school code', callback); return; }
+
+      const bandId = event.pathParameters?.bandId;
+      if (!bandId) { ResponseBuilder.badRequest(ErrorCode.MissingId, 'Band ID is required', callback); return; }
+
+      const userId = event.requestContext?.authorizer?.principalId || 'system';
+      await uniformItemService.deleteBand(bandId, schoolId, userId);
+      ResponseBuilder.ok({ message: 'Band deleted' }, callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
+  public suggestPrice = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
+    _context.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const schoolCode = validateSchoolCodeHeader(event);
+      const schoolId = await uniformItemService.getSchoolIdByCode(schoolCode);
+      if (!schoolId) { ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'Invalid school code', callback); return; }
+
+      const itemId = event.pathParameters?.id;
+      if (!itemId) { ResponseBuilder.badRequest(ErrorCode.MissingId, 'Item ID is required', callback); return; }
+
+      const raw = (event.queryStringParameters || {}).number;
+      const num = parseInt((raw ?? '').toString(), 10);
+      if (isNaN(num)) { ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'number query param is required', callback); return; }
+
+      const result = await uniformItemService.suggestPrice(itemId, num, schoolId);
+      ResponseBuilder.ok(result, callback);
+    } catch (err: any) {
+      ResponseBuilder.handleError(err, callback);
+    }
+  };
+
+  public breakSizes = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
+    _context.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const schoolCode = validateSchoolCodeHeader(event);
+      const schoolId = await uniformItemService.getSchoolIdByCode(schoolCode);
+      if (!schoolId) { ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'Invalid school code', callback); return; }
+
+      const itemId = event.pathParameters?.id;
+      if (!itemId) { ResponseBuilder.badRequest(ErrorCode.MissingId, 'Item ID is required', callback); return; }
+
+      const body = JSON.parse(event.body || '{}');
+      if (!Array.isArray(body.breakdown) || body.breakdown.length === 0) {
+        ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'breakdown (array) is required', callback); return;
+      }
+
+      const userId = event.requestContext?.authorizer?.principalId || 'system';
+      const result = await uniformItemService.breakIntoSizes(itemId, body, schoolId, userId);
+      ResponseBuilder.ok(result, callback);
+    } catch (err: any) {
+      // breakIntoSizes throws plain Errors for business-rule violations (wrong mode,
+      // total mismatch, duplicate numbers) — surface those as 400s.
+      if (err instanceof BadRequestResult) { ResponseBuilder.handleError(err, callback); return; }
+      ResponseBuilder.badRequest(ErrorCode.InvalidInput, err.message || 'Could not break into numbers', callback);
+    }
+  };
+
+  private validateBand(body: any): string | null {
+    if (body.numberFrom == null || body.numberTo == null) return 'numberFrom and numberTo are required';
+    if (isNaN(Number(body.numberFrom)) || isNaN(Number(body.numberTo))) return 'numberFrom and numberTo must be numbers';
+    if (Number(body.numberFrom) > Number(body.numberTo)) return 'numberFrom must be <= numberTo';
+    return null;
+  }
 }
 
 const handler = new UniformItemHandler();
@@ -188,3 +313,8 @@ export const deleteItem = g('uniform-item-handler.deleteItem', handler.deleteIte
 export const createSize = g('uniform-item-handler.createSize', handler.createSize);
 export const updateSize = g('uniform-item-handler.updateSize', handler.updateSize);
 export const deleteSize = g('uniform-item-handler.deleteSize', handler.deleteSize);
+export const createBand = g('uniform-item-handler.createBand', handler.createBand);
+export const updateBand = g('uniform-item-handler.updateBand', handler.updateBand);
+export const deleteBand = g('uniform-item-handler.deleteBand', handler.deleteBand);
+export const suggestPrice = g('uniform-item-handler.suggestPrice', handler.suggestPrice);
+export const breakSizes = g('uniform-item-handler.breakSizes', handler.breakSizes);
