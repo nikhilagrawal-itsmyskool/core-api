@@ -61,6 +61,14 @@ alter table uniform_item_size add column if not exists is_pool boolean;
 alter table uniform_item_size add column if not exists is_unknown boolean;
 alter table uniform_item_size add column if not exists note varchar(256);
 
+-- Table 1b: uniform_config (per-school module settings; one row per school)
+create table if not exists uniform_config (
+    school_id varchar(12) primary key,
+    show_seeded_hints boolean,   -- show preset item-name suggestions in Add Item (default true in app)
+    updatedby_userid varchar(12),
+    updated_at timestamp(0)
+);
+
 -- Table 2b: uniform_price_band (per-item number->price bands for unsized items)
 -- The counter enters the judged number; the covering band [number_from, number_to]
 -- supplies the suggested mrp + discounts. Bands are per item (not shared school-wide).

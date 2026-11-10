@@ -4,6 +4,7 @@ import {
   UniformItemSize,
   UniformItemWithSizes,
   UniformPriceBand,
+  UniformConfig,
   CreateItemRequest,
   UpdateItemRequest,
   CreateSizeRequest,
@@ -25,6 +26,34 @@ class UniformItemService {
       [schoolCode]
     );
     return results.length > 0 ? results[0].uuid : null;
+  }
+
+  // ── Config ───────────────────────────────────────────────────────────────────
+
+  public async getConfig(schoolId: string): Promise<UniformConfig> {
+    const rows = await DB.query(`select * from uniform_config where school_id = $1`, [schoolId]);
+    if (rows.length === 0) return { schoolId, showSeededHints: true }; // default: presets shown
+    const r = rows[0];
+    return { ...r, showSeededHints: r.showSeededHints !== false };
+  }
+
+  public async updateConfig(schoolId: string, data: Partial<UniformConfig>, userId: string): Promise<UniformConfig> {
+    const cur = await this.getConfig(schoolId);
+    const showSeededHints = data.showSeededHints !== undefined ? data.showSeededHints === true : cur.showSeededHints;
+    const now = new Date();
+    const exists = await DB.query(`select 1 from uniform_config where school_id = $1`, [schoolId]);
+    if (exists.length > 0) {
+      await DB.query(
+        `update uniform_config set show_seeded_hints = $2, updatedby_userid = $3, updated_at = $4 where school_id = $1`,
+        [schoolId, showSeededHints, userId, now]
+      );
+    } else {
+      await DB.query(
+        `insert into uniform_config (school_id, show_seeded_hints, updatedby_userid, updated_at) values ($1, $2, $3, $4)`,
+        [schoolId, showSeededHints, userId, now]
+      );
+    }
+    return this.getConfig(schoolId);
   }
 
   // ── Items ──────────────────────────────────────────────────────────────────

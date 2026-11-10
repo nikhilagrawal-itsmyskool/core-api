@@ -17,6 +17,8 @@ const {
 export const UNIFORM_ACTIONS: Record<string, string> = {
   "uniform-stats-handler.getStats": UNIFORM_INVENTORY_VIEW,
   "uniform-lookup-handler.getLookups": UNIFORM_INVENTORY_VIEW,
+  "uniform-config-handler.getConfig": UNIFORM_INVENTORY_VIEW,
+  "uniform-config-handler.updateConfig": UNIFORM_INVENTORY_MANAGE,
 
   "uniform-item-handler.listItems": UNIFORM_INVENTORY_VIEW,
   "uniform-item-handler.createItem": UNIFORM_INVENTORY_MANAGE,

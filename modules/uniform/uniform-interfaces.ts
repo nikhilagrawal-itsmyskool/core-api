@@ -60,6 +60,14 @@ export interface UniformItemWithSizes extends UniformItem {
   bands?: UniformPriceBand[];
 }
 
+// Per-school uniform module settings (Config screen).
+export interface UniformConfig {
+  schoolId?: string;
+  showSeededHints: boolean;
+  updatedbyUserid?: string;
+  updatedAt?: Date;
+}
+
 export interface CreateItemRequest {
   name: string;
   category: UniformCategory;

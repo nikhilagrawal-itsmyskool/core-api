@@ -27,6 +27,25 @@
           method: get
           cors: true
 
+  # Config (per-school module settings)
+  get-config:
+    handler: uniform-config-handler.getConfig
+    name: ${self:service}-get-config
+    events:
+      - http:
+          path: config
+          method: get
+          cors: true
+
+  update-config:
+    handler: uniform-config-handler.updateConfig
+    name: ${self:service}-update-config
+    events:
+      - http:
+          path: config
+          method: put
+          cors: true
+
   # Items
   create-item:
     handler: uniform-item-handler.createItem
