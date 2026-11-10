@@ -11,6 +11,7 @@ import {
   CreateBandRequest,
   UpdateBandRequest,
   BreakSizesRequest,
+  SetOpeningStockRequest,
   PriceSuggestion,
 } from './uniform-interfaces';
 import { DEFAULTS } from './uniform-constants';
@@ -414,6 +415,61 @@ class UniformItemService {
       this.getBandsByItemId(itemId, schoolId),
     ]);
     return { ...item, sizes, bands };
+  }
+
+  // Bulk opening-stock entry for a sized item: upsert each row's size by label and SET
+  // its count (absolute). Price fields set only when provided. One transaction. No
+  // purchase logs (opening counts carry no cost), mirroring break-into-numbers.
+  public async setOpeningStock(itemId: string, data: SetOpeningStockRequest, schoolId: string, userId: string): Promise<UniformItemWithSizes> {
+    const item = await this.getItemById(itemId, schoolId);
+    if (!item) throw new Error('Item not found');
+    if (item.sizingMode === 'unsized') throw new Error('Unsized items are stocked via their pool / break-into-numbers, not size counts');
+
+    const rows = data.rows || [];
+    if (rows.length === 0) throw new Error('rows is required');
+
+    const seen = new Set<string>();
+    for (const r of rows) {
+      const label = (r.sizeLabel ?? '').toString().trim();
+      if (!label) throw new Error('Each row needs a size (number)');
+      if (seen.has(label.toLowerCase())) throw new Error(`Duplicate size in rows: ${label}`);
+      seen.add(label.toLowerCase());
+      const q = Number(r.quantity);
+      if (!Number.isInteger(q) || q < 0) throw new Error(`Quantity for ${label} must be a whole number >= 0`);
+    }
+
+    const existing = await this.getSizesByItemId(itemId, schoolId);
+    const byLabel = new Map(existing.map(s => [s.sizeLabel.toLowerCase(), s]));
+
+    const now = new Date();
+    const queries: string[] = [];
+    const params: any[][] = [];
+
+    for (const r of rows) {
+      const label = r.sizeLabel.toString().trim();
+      const ex = byLabel.get(label.toLowerCase());
+      if (ex) {
+        const sets = ['current_stock = $1', 'updatedby_userid = $2', 'updated_at = $3'];
+        const p: any[] = [r.quantity, userId, now];
+        let idx = 4;
+        if (r.mrp !== undefined) { sets.push(`mrp = $${idx++}`); p.push(r.mrp); }
+        if (r.studentDiscountPct !== undefined) { sets.push(`student_discount_pct = $${idx++}`); p.push(r.studentDiscountPct); }
+        if (r.bulkDiscountPct !== undefined) { sets.push(`bulk_discount_pct = $${idx++}`); p.push(r.bulkDiscountPct); }
+        p.push(ex.uuid, schoolId);
+        queries.push(`update uniform_item_size set ${sets.join(', ')} where uuid = $${idx++} and school_id = $${idx++}`);
+        params.push(p);
+      } else {
+        queries.push(singleLineString`
+          insert into uniform_item_size
+          (uuid, item_id, school_id, size_label, mrp, student_discount_pct, bulk_discount_pct, current_stock, is_pool, status, createdby_userid, created_at)
+          values ($1, $2, $3, $4, $5, $6, $7, $8, false, $9, $10, $11)
+        `);
+        params.push([generateShortUuid(12), itemId, schoolId, label, r.mrp ?? null, r.studentDiscountPct ?? null, r.bulkDiscountPct ?? null, r.quantity, DEFAULTS.STATUS, userId, now]);
+      }
+    }
+
+    await DB.queriesInTransaction(queries, params);
+    return this.getItemWithSizes(itemId, schoolId) as Promise<UniformItemWithSizes>;
   }
 
   private parseBandNumericFields(band: any): UniformPriceBand {

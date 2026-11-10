@@ -91,6 +91,18 @@ export interface UpdateBandRequest {
   sortOrder?: number;
 }
 
+// Bulk opening-stock entry for a sized item: upsert sizes by label and set their
+// counts in one call. Price fields are optional (add them later). Absolute set, not add.
+export interface SetOpeningStockRequest {
+  rows: Array<{
+    sizeLabel: string;
+    quantity: number;
+    mrp?: number;
+    studentDiscountPct?: number;
+    bulkDiscountPct?: number;
+  }>;
+}
+
 // Break an unsized pool into per-number sized stock rows (permanent conversion).
 export interface BreakSizesRequest {
   breakdown: Array<{

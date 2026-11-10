@@ -296,6 +296,32 @@ class UniformItemHandler {
     }
   };
 
+  public setStock = async (event: ApiEvent, _context: ApiContext, callback: ApiCallback) => {
+    _context.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const schoolCode = validateSchoolCodeHeader(event);
+      const schoolId = await uniformItemService.getSchoolIdByCode(schoolCode);
+      if (!schoolId) { ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'Invalid school code', callback); return; }
+
+      const itemId = event.pathParameters?.id;
+      if (!itemId) { ResponseBuilder.badRequest(ErrorCode.MissingId, 'Item ID is required', callback); return; }
+
+      const body = JSON.parse(event.body || '{}');
+      if (!Array.isArray(body.rows) || body.rows.length === 0) {
+        ResponseBuilder.badRequest(ErrorCode.InvalidInput, 'rows (array) is required', callback); return;
+      }
+
+      const userId = event.requestContext?.authorizer?.principalId || 'system';
+      const result = await uniformItemService.setOpeningStock(itemId, body, schoolId, userId);
+      ResponseBuilder.ok(result, callback);
+    } catch (err: any) {
+      // setOpeningStock throws plain Errors for business-rule violations (unsized item,
+      // duplicate/invalid rows) — surface those as 400s.
+      if (err instanceof BadRequestResult) { ResponseBuilder.handleError(err, callback); return; }
+      ResponseBuilder.badRequest(ErrorCode.InvalidInput, err.message || 'Could not set stock', callback);
+    }
+  };
+
   private validateBand(body: any): string | null {
     if (body.numberFrom == null || body.numberTo == null) return 'numberFrom and numberTo are required';
     if (isNaN(Number(body.numberFrom)) || isNaN(Number(body.numberTo))) return 'numberFrom and numberTo must be numbers';
@@ -318,3 +344,4 @@ export const updateBand = g('uniform-item-handler.updateBand', handler.updateBan
 export const deleteBand = g('uniform-item-handler.deleteBand', handler.deleteBand);
 export const suggestPrice = g('uniform-item-handler.suggestPrice', handler.suggestPrice);
 export const breakSizes = g('uniform-item-handler.breakSizes', handler.breakSizes);
+export const setStock = g('uniform-item-handler.setStock', handler.setStock);

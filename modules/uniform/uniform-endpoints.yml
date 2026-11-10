@@ -138,6 +138,15 @@
           method: post
           cors: true
 
+  set-stock:
+    handler: uniform-item-handler.setStock
+    name: ${self:service}-set-stock
+    events:
+      - http:
+          path: items/{id}/stock
+          method: post
+          cors: true
+
   # Purchases
   create-purchase:
     handler: uniform-purchase-handler.create
