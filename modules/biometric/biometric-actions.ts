@@ -19,6 +19,9 @@ export const BIOMETRIC_ACTIONS: Record<string, string> = {
   'biometric-admin-handler.updateDevice': BIOMETRIC_DEVICE_MANAGE,
   'biometric-admin-handler.syncEmployee': BIOMETRIC_ENROLLMENT_SYNC,
   'biometric-admin-handler.unsyncEmployee': BIOMETRIC_ENROLLMENT_SYNC,
+  'biometric-admin-handler.setPrivilege': BIOMETRIC_ENROLLMENT_SYNC,
+  'biometric-admin-handler.syncAll': BIOMETRIC_ENROLLMENT_SYNC,
+  'biometric-admin-handler.reconcileDevice': BIOMETRIC_DEVICE_MANAGE,
   'biometric-admin-handler.listEnrollments': BIOMETRIC_ENROLLMENT_VIEW,
   'biometric-admin-handler.listPunches': BIOMETRIC_PUNCH_VIEW,
 };
@@ -26,4 +29,9 @@ export const BIOMETRIC_ACTIONS: Record<string, string> = {
 // Endpoints intentionally NOT gated by requireAction:
 //   - health: authorizer-exempt readiness probe
 //   - device-handler.iclock: the machine push endpoints (authorizer-exempt, SN-gated)
-export const BIOMETRIC_PUBLIC: string[] = ['health-handler.health', 'device-handler.iclock'];
+//   - reconcile-handler.reconcileDevices: EventBridge schedule (no HTTP caller, no school scope)
+export const BIOMETRIC_PUBLIC: string[] = [
+  'health-handler.health',
+  'device-handler.iclock',
+  'reconcile-handler.reconcileDevices',
+];

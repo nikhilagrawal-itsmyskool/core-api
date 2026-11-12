@@ -82,10 +82,19 @@ export function deviceName(name: string | null | undefined): string {
   return (name || '').replace(/[\t\r\n]+/g, ' ').trim().slice(0, 24);
 }
 
-export function buildPushUserPayload(pin: string, name: string): string {
-  return `DATA UPDATE USERINFO PIN=${pin}\tName=${name}\tPri=0\tPasswd=\tCard=\tGrp=1\tTZ=`;
+// Create/update a device user. `pri` is the privilege/role: 0 = normal user,
+// 14 = super admin (can enrol others at the keypad). Default 0.
+export function buildPushUserPayload(pin: string, name: string, pri: number = 0): string {
+  return `DATA UPDATE USERINFO PIN=${pin}\tName=${name}\tPri=${pri}\tPasswd=\tCard=\tGrp=1\tTZ=`;
 }
 
 export function buildDeleteUserPayload(pin: string): string {
   return `DATA DELETE USERINFO PIN=${pin}`;
+}
+
+// Push a stored fingerprint template back to the device (replay after a wipe or on
+// restoring a reactivated employee, so they need not re-enrol at the keypad). fid is
+// the finger index (0..9); tmp is the base64 template captured from the device.
+export function buildFpPayload(pin: string, fid: number, size: number, valid: number, tmp: string): string {
+  return `DATA UPDATE FINGERTMP PIN=${pin}\tFID=${fid}\tSize=${size}\tValid=${valid}\tTMP=${tmp}`;
 }

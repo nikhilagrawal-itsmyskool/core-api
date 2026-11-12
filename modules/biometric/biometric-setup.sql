@@ -47,7 +47,7 @@ create table if not exists biometric_command (
   device_sn varchar(64),
   employee_id varchar(12),
   device_number varchar(16),
-  kind varchar(32) check (kind in ('push_user', 'delete_user', 'reload_data', 'reboot', 'clear_users')),
+  kind varchar(32) check (kind in ('push_user', 'delete_user', 'push_fp', 'reload_data', 'reboot', 'clear_users')),
   payload text,                             -- raw command body (without the C:<id>: prefix)
   status varchar(16) check (status in ('queued', 'sent', 'confirmed', 'failed', 'cancelled')),
   cmd_id varchar(24),                       -- the numeric id issued to the device
@@ -78,7 +78,7 @@ create table if not exists biometric_enrollment (
   card varchar(32),
   fp_count integer,
   face_count integer,
-  status varchar(16) check (status in ('pending', 'synced', 'enrolled', 'removed')),
+  status varchar(16) check (status in ('pending', 'synced', 'enrolled', 'removed', 'suspended')),
   synced_at timestamp(0),                   -- when the user record was pushed
   enrolled_at timestamp(0),                 -- when the first credential arrived
   created_at timestamp(0),
@@ -126,3 +126,18 @@ create table if not exists biometric_punch (
 create unique index if not exists idx_biometric_punch_unique on biometric_punch (device_sn, device_number, punched_at);
 create index if not exists idx_biometric_punch_emp on biometric_punch (employee_id, punched_at);
 create index if not exists idx_biometric_punch_school_time on biometric_punch (school_id, punched_at);
+
+-- ── v2 (device membership) ──────────────────────────────────────────────────
+-- Widen the enum-like checks on tables created before v2 (create-table-if-not-exists
+-- won't touch an existing table's constraint). Drop-then-add so it's re-runnable.
+--   enrolment 'suspended' = the device user was removed because the employee went
+--     inactive/deleted, but the enrolment is retained so it can be restored (re-push
+--     user + replay stored fingerprint templates) when the employee is active again.
+--   command 'push_fp' = replay a stored fingerprint template to the device (used on
+--     restore so a reactivated employee need not re-enrol at the keypad).
+alter table biometric_enrollment drop constraint if exists biometric_enrollment_status_check;
+alter table biometric_enrollment add constraint biometric_enrollment_status_check
+  check (status in ('pending', 'synced', 'enrolled', 'removed', 'suspended'));
+alter table biometric_command drop constraint if exists biometric_command_kind_check;
+alter table biometric_command add constraint biometric_command_kind_check
+  check (kind in ('push_user', 'delete_user', 'push_fp', 'reload_data', 'reboot', 'clear_users'));

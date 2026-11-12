@@ -24,6 +24,21 @@ export async function findEmployee(
   return rows.length > 0 ? rows[0] : null;
 }
 
+// An employee by uuid (scoped to school) REGARDLESS of status — includes inactive and
+// soft-deleted. Used by reconcile, which must act on employees who just went inactive/
+// deleted (findEmployee would hide them). Returns `status` so the caller can decide.
+export async function findEmployeeAny(
+  schoolId: string,
+  employeeId: string,
+): Promise<{ uuid: string; name: string; status: string; deviceNumber: string | null; employeeNumber: string | null; code: string | null } | null> {
+  const rows = await DB.query(
+    singleLineString`select uuid, name, status, device_number, employee_number, code from employee
+      where uuid = $1 and school_id = $2`,
+    [employeeId, schoolId],
+  );
+  return rows.length > 0 ? rows[0] : null;
+}
+
 // A valid device PIN is numeric and short enough for the firmware (<= 9 digits).
 export function isValidDevicePin(value: string | null | undefined): boolean {
   return !!value && /^[0-9]{1,9}$/.test(value.trim());

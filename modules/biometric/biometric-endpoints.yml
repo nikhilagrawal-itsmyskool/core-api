@@ -79,6 +79,50 @@
           method: post
           cors: true
 
+  # Change a synced employee's device role (0 = user, 14 = super admin) — re-pushes the
+  # user record with the new Pri on every device they're on.
+  set-privilege:
+    handler: biometric-admin-handler.setPrivilege
+    name: ${self:service}-set-privilege
+    events:
+      - http:
+          path: employees/{employeeId}/privilege
+          method: post
+          cors: true
+
+  # Push every not-yet-synced active employee to this device in one action.
+  sync-all:
+    handler: biometric-admin-handler.syncAll
+    name: ${self:service}-sync-all
+    events:
+      - http:
+          path: devices/{sn}/sync-all
+          method: post
+          cors: true
+
+  # On-demand reconcile for one device: suspend users whose employee went inactive/
+  # deleted, restore users whose employee is active again (re-push user + fingerprints).
+  reconcile-device:
+    handler: biometric-admin-handler.reconcileDevice
+    name: ${self:service}-reconcile-device
+    events:
+      - http:
+          path: devices/{sn}/reconcile
+          method: post
+          cors: true
+
+  # Scheduled cross-school device-membership reconcile — EventBridge every 15 minutes.
+  # No HTTP caller, no authorizer. Longer timeout: it may enqueue many commands in a
+  # burst (e.g. after a bulk inactive). Inert under serverless-offline (no schedule firing).
+  reconcile-devices:
+    handler: reconcile-handler.reconcileDevices
+    name: ${self:service}-reconcile-devices
+    timeout: 120
+    events:
+      - schedule:
+          rate: rate(15 minutes)
+          enabled: true
+
   list-enrollments:
     handler: biometric-admin-handler.listEnrollments
     name: ${self:service}-list-enrollments

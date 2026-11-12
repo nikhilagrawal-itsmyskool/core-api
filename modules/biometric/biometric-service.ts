@@ -1,8 +1,13 @@
 import { DB, singleLineString } from '../../shared/lib/db';
 import { BusinessErrorResult, NotFoundResult } from '../../shared/lib/errors';
 import { ErrorCode } from '../../shared/lib/error-codes';
-import { findEmployee, findDeviceBySn, activeDevicesForSchool, nextDeviceNumber, isValidDevicePin } from './biometric-common';
-import { deviceName, buildPushUserPayload, buildDeleteUserPayload } from './biometric-parse';
+import { findEmployee, findEmployeeAny, findDeviceBySn, activeDevicesForSchool, nextDeviceNumber, isValidDevicePin } from './biometric-common';
+import { deviceName, buildPushUserPayload, buildDeleteUserPayload, buildFpPayload } from './biometric-parse';
+
+// Device privilege/role: a normal user vs a super admin (who can enrol others at the
+// keypad). The firmware only recognises these two for our purposes.
+const PRI_USER = 0;
+const PRI_SUPER_ADMIN = 14;
 
 const { generateShortUuid } = require('../../shared/util/generate-uuid.js');
 
@@ -58,7 +63,7 @@ class BiometricService {
       [sn],
     );
     const enrollments = await DB.query(
-      singleLineString`select e.*, emp.name as employee_name from biometric_enrollment e
+      singleLineString`select e.*, emp.name as employee_name, emp.status as employee_status from biometric_enrollment e
         left join employee emp on emp.uuid = e.employee_id
         where e.device_sn = $1 order by e.updated_at desc`,
       [sn],
@@ -93,11 +98,12 @@ class BiometricService {
     schoolId: string,
     userId: string,
     employeeId: string,
-    data: { deviceSn?: string; deviceNumber?: string },
+    data: { deviceSn?: string; deviceNumber?: string; privilege?: number },
   ): Promise<any> {
     const employee = await findEmployee(schoolId, employeeId);
     if (!employee) throw new NotFoundResult(ErrorCode.InvalidId, 'Employee not found');
 
+    const privilege = data.privilege == null ? PRI_USER : this.normalizePrivilege(data.privilege);
     const deviceNumber = await this.resolveDeviceNumber(schoolId, employee, data.deviceNumber, userId);
     const devices = await this.targetDevices(schoolId, data.deviceSn);
 
@@ -123,15 +129,15 @@ class BiometricService {
       await DB.query(
         singleLineString`insert into biometric_enrollment
           (uuid, school_id, device_sn, employee_id, device_number, name, privilege, fp_count, face_count, status, synced_at, created_at, updated_at)
-          values ($1,$2,$3,$4,$5,$6,0,0,0,'pending', now(), now(), now())
+          values ($1,$2,$3,$4,$5,$6,$7,0,0,'pending', now(), now(), now())
           on conflict (device_sn, device_number)
-          do update set employee_id = excluded.employee_id, name = excluded.name, updated_at = now()`,
-        [generateShortUuid(12), schoolId, d.serialNumber, employeeId, deviceNumber, name],
+          do update set employee_id = excluded.employee_id, name = excluded.name, privilege = excluded.privilege, updated_at = now()`,
+        [generateShortUuid(12), schoolId, d.serialNumber, employeeId, deviceNumber, name, privilege],
       );
       // queue the user-create command
-      await this.enqueue(schoolId, userId, d.serialNumber, employeeId, deviceNumber, 'push_user', buildPushUserPayload(deviceNumber, name));
+      await this.enqueue(schoolId, userId, d.serialNumber, employeeId, deviceNumber, 'push_user', buildPushUserPayload(deviceNumber, name, privilege));
     }
-    return { employeeId, deviceNumber, devices: devices.map((d) => d.serialNumber), queued: devices.length };
+    return { employeeId, deviceNumber, privilege, devices: devices.map((d) => d.serialNumber), queued: devices.length };
   }
 
   public async unsyncEmployee(
@@ -155,10 +161,165 @@ class BiometricService {
     return { employeeId, devices: devices.map((d) => d.serialNumber), queued: devices.length };
   }
 
+  // Change an employee's role (privilege) on the device(s) they are already synced to:
+  // 0 = normal user, 14 = super admin. Re-pushes the user record with the new Pri and
+  // updates the stored enrolment. Only touches live enrolments (not removed/suspended).
+  public async setPrivilege(
+    schoolId: string,
+    userId: string,
+    employeeId: string,
+    data: { deviceSn?: string; privilege?: number },
+  ): Promise<any> {
+    const employee = await findEmployee(schoolId, employeeId);
+    if (!employee) throw new NotFoundResult(ErrorCode.InvalidId, 'Employee not found');
+    const privilege = this.normalizePrivilege(data.privilege);
+    const devices = await this.targetDevices(schoolId, data.deviceSn);
+    let queued = 0;
+    for (const d of devices) {
+      const enrs = await DB.query(
+        singleLineString`select device_number, name from biometric_enrollment
+          where device_sn = $1 and employee_id = $2 and status in ('pending', 'synced', 'enrolled')`,
+        [d.serialNumber, employeeId],
+      );
+      for (const e of enrs) {
+        await DB.query(
+          singleLineString`update biometric_enrollment set privilege = $3, updated_at = now()
+            where device_sn = $1 and device_number = $2`,
+          [d.serialNumber, e.deviceNumber, privilege],
+        );
+        const name = deviceName(e.name || employee.name);
+        await this.enqueue(schoolId, userId, d.serialNumber, employeeId, e.deviceNumber, 'push_user', buildPushUserPayload(e.deviceNumber, name, privilege));
+        queued++;
+      }
+    }
+    if (!queued) throw new BusinessErrorResult(ErrorCode.BusinessError, 'Employee is not currently synced to a device');
+    return { employeeId, privilege, queued };
+  }
+
+  // Push every not-yet-synced ACTIVE employee to a device in one go ("sync all un-synced").
+  // Skips anyone already holding a live enrolment on that device. Delegates each to
+  // syncEmployee (so device_number assignment + stale cleanup rules apply uniformly).
+  public async syncAll(
+    schoolId: string,
+    userId: string,
+    deviceSn: string,
+    data: { privilege?: number },
+  ): Promise<any> {
+    const [device] = await this.targetDevices(schoolId, deviceSn);
+    const privilege = data.privilege == null ? PRI_USER : this.normalizePrivilege(data.privilege);
+    const rows = await DB.query(
+      singleLineString`select e.uuid from employee e
+        where e.school_id = $1 and e.status = 'active'
+          and not exists (select 1 from biometric_enrollment b
+            where b.device_sn = $2 and b.employee_id = e.uuid and b.status in ('pending', 'synced', 'enrolled'))
+        order by e.name`,
+      [schoolId, device.serialNumber],
+    );
+    let synced = 0;
+    for (const r of rows) {
+      await this.syncEmployee(schoolId, userId, r.uuid, { deviceSn: device.serialNumber, privilege });
+      synced++;
+    }
+    return { deviceSn: device.serialNumber, synced };
+  }
+
+  // ── Reconcile (device membership follows employee active/inactive) ───────────
+  // Bring an employee's device presence in line with their current status, on every
+  // ACTIVE device in their school:
+  //   • employee no longer active (inactive/deleted) AND a live enrolment exists
+  //       → enqueue delete_user + mark the enrolment 'suspended' (retained, not removed).
+  //   • employee active again AND a 'suspended' enrolment exists
+  //       → enqueue push_user (with the stored privilege) + replay every stored fingerprint
+  //         template (push_fp) so no re-enrolment is needed + mark the enrolment 'synced'.
+  // Idempotent: it only acts on enrolments whose state disagrees with the employee.
+  public async reconcileEmployee(schoolId: string, employeeId: string, userId: string = 'system'): Promise<{ changed: number }> {
+    const employee = await findEmployeeAny(schoolId, employeeId);
+    if (!employee) return { changed: 0 };
+    const active = employee.status === 'active';
+    const devices = await activeDevicesForSchool(schoolId);
+    let changed = 0;
+    for (const d of devices) {
+      const enrs = await DB.query(
+        singleLineString`select device_number, name, privilege, status from biometric_enrollment
+          where device_sn = $1 and employee_id = $2`,
+        [d.serialNumber, employeeId],
+      );
+      for (const e of enrs) {
+        if (!active && ['pending', 'synced', 'enrolled'].includes(e.status)) {
+          await this.enqueue(schoolId, userId, d.serialNumber, employeeId, e.deviceNumber, 'delete_user', buildDeleteUserPayload(e.deviceNumber));
+          await DB.query(
+            singleLineString`update biometric_enrollment set status = 'suspended', updated_at = now()
+              where device_sn = $1 and device_number = $2`,
+            [d.serialNumber, e.deviceNumber],
+          );
+          changed++;
+        } else if (active && e.status === 'suspended') {
+          const pri = e.privilege == null ? PRI_USER : e.privilege;
+          const name = deviceName(e.name || employee.name);
+          await this.enqueue(schoolId, userId, d.serialNumber, employeeId, e.deviceNumber, 'push_user', buildPushUserPayload(e.deviceNumber, name, pri));
+          const tmps = await DB.query(
+            singleLineString`select fid, size, valid, template from biometric_template
+              where device_sn = $1 and device_number = $2 and kind = 'fp'`,
+            [d.serialNumber, e.deviceNumber],
+          );
+          for (const t of tmps) {
+            await this.enqueue(schoolId, userId, d.serialNumber, employeeId, e.deviceNumber, 'push_fp', buildFpPayload(e.deviceNumber, t.fid, t.size, t.valid, t.template));
+          }
+          await DB.query(
+            singleLineString`update biometric_enrollment set status = 'synced', synced_at = now(), updated_at = now()
+              where device_sn = $1 and device_number = $2`,
+            [d.serialNumber, e.deviceNumber],
+          );
+          changed++;
+        }
+      }
+    }
+    return { changed };
+  }
+
+  // Reconcile every enrolled employee on one device (on-demand "Reconcile now" button).
+  public async reconcileDevice(schoolId: string, userId: string, deviceSn: string): Promise<any> {
+    const device = await findDeviceBySn(deviceSn);
+    if (!device || device.schoolId !== schoolId || device.status === 'deleted') {
+      throw new NotFoundResult(ErrorCode.InvalidId, 'Device not found');
+    }
+    const rows = await DB.query(
+      singleLineString`select distinct employee_id from biometric_enrollment
+        where device_sn = $1 and employee_id is not null and status in ('pending', 'synced', 'enrolled', 'suspended')`,
+      [deviceSn],
+    );
+    let changed = 0;
+    for (const r of rows) {
+      const res = await this.reconcileEmployee(schoolId, r.employeeId, userId);
+      changed += res.changed;
+    }
+    return { deviceSn, scanned: rows.length, changed };
+  }
+
+  // Cross-school sweep for the scheduled job. Finds only the enrolments whose state
+  // disagrees with the employee's current status (on active devices) and reconciles each,
+  // so a tick is cheap when nothing changed.
+  public async reconcileAll(): Promise<{ scanned: number; changed: number }> {
+    const rows = await DB.query(
+      singleLineString`select distinct e.school_id, e.employee_id from biometric_enrollment e
+        join biometric_device d on d.serial_number = e.device_sn and d.status = 'active'
+        join employee emp on emp.uuid = e.employee_id
+        where (emp.status <> 'active' and e.status in ('pending', 'synced', 'enrolled'))
+           or (emp.status = 'active' and e.status = 'suspended')`,
+      [],
+    );
+    let changed = 0;
+    for (const r of rows) {
+      const res = await this.reconcileEmployee(r.schoolId, r.employeeId, 'system');
+      changed += res.changed;
+    }
+    return { scanned: rows.length, changed };
+  }
+
   // ── Reads ────────────────────────────────────────────────────────────────────
   public async listEnrollments(schoolId: string, filter: { deviceSn?: string }): Promise<any[]> {
     return DB.query(
-      singleLineString`select e.*, emp.name as employee_name, emp.employee_number
+      singleLineString`select e.*, emp.name as employee_name, emp.employee_number, emp.status as employee_status
         from biometric_enrollment e
         left join employee emp on emp.uuid = e.employee_id
         where e.school_id = $1 and ($2::text is null or e.device_sn = $2)
@@ -186,6 +347,16 @@ class BiometricService {
   }
 
   // ── helpers ──────────────────────────────────────────────────────────────────
+  // Coerce + validate a privilege value to the two roles the firmware uses for us:
+  // 0 (normal user) or 14 (super admin). Anything else is rejected.
+  private normalizePrivilege(value: number | string | undefined): number {
+    const n = typeof value === 'string' ? parseInt(value, 10) : value;
+    if (n !== PRI_USER && n !== PRI_SUPER_ADMIN) {
+      throw new BusinessErrorResult(ErrorCode.InvalidInput, 'privilege must be 0 (user) or 14 (super admin)');
+    }
+    return n;
+  }
+
   // Resolve the device PIN for an employee, in priority order:
   //   1. an explicit override passed to sync (must be numeric + unique)
   //   2. the employee's already-assigned device_number

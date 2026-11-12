@@ -90,6 +90,47 @@ class BiometricAdminHandler {
     }
   };
 
+  setPrivilege = async (event: ApiEvent, context: ApiContext, callback: ApiCallback) => {
+    context.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const ctx = await resolveSchool(event, callback);
+      if (!ctx) return;
+      const employeeId = requireParam(event, 'employeeId', callback);
+      if (!employeeId) return;
+      const body = parseBody<any>(event, callback) || {};
+      ResponseBuilder.ok(await biometricService.setPrivilege(ctx.schoolId, ctx.userId, employeeId, body), callback);
+    } catch (err) {
+      ResponseBuilder.handleError(err as Error, callback);
+    }
+  };
+
+  syncAll = async (event: ApiEvent, context: ApiContext, callback: ApiCallback) => {
+    context.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const ctx = await resolveSchool(event, callback);
+      if (!ctx) return;
+      const sn = requireParam(event, 'sn', callback);
+      if (!sn) return;
+      const body = parseBody<any>(event, callback) || {};
+      ResponseBuilder.ok(await biometricService.syncAll(ctx.schoolId, ctx.userId, sn, body), callback);
+    } catch (err) {
+      ResponseBuilder.handleError(err as Error, callback);
+    }
+  };
+
+  reconcileDevice = async (event: ApiEvent, context: ApiContext, callback: ApiCallback) => {
+    context.callbackWaitsForEmptyEventLoop = false;
+    try {
+      const ctx = await resolveSchool(event, callback);
+      if (!ctx) return;
+      const sn = requireParam(event, 'sn', callback);
+      if (!sn) return;
+      ResponseBuilder.ok(await biometricService.reconcileDevice(ctx.schoolId, ctx.userId, sn), callback);
+    } catch (err) {
+      ResponseBuilder.handleError(err as Error, callback);
+    }
+  };
+
   listEnrollments = async (event: ApiEvent, context: ApiContext, callback: ApiCallback) => {
     context.callbackWaitsForEmptyEventLoop = false;
     try {
@@ -127,5 +168,8 @@ export const getDevice = g('biometric-admin-handler.getDevice', h.getDevice);
 export const updateDevice = g('biometric-admin-handler.updateDevice', h.updateDevice);
 export const syncEmployee = g('biometric-admin-handler.syncEmployee', h.syncEmployee);
 export const unsyncEmployee = g('biometric-admin-handler.unsyncEmployee', h.unsyncEmployee);
+export const setPrivilege = g('biometric-admin-handler.setPrivilege', h.setPrivilege);
+export const syncAll = g('biometric-admin-handler.syncAll', h.syncAll);
+export const reconcileDevice = g('biometric-admin-handler.reconcileDevice', h.reconcileDevice);
 export const listEnrollments = g('biometric-admin-handler.listEnrollments', h.listEnrollments);
 export const listPunches = g('biometric-admin-handler.listPunches', h.listPunches);
