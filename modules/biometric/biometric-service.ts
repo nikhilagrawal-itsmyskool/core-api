@@ -9,6 +9,15 @@ import { deviceName, buildPushUserPayload, buildDeleteUserPayload, buildFpPayloa
 const PRI_USER = 0;
 const PRI_SUPER_ADMIN = 14;
 
+// One device-membership change a reconcile applied — surfaced so the UI can say WHO
+// was suspended/restored rather than just a count.
+interface ReconcileAction {
+  action: 'suspended' | 'restored';
+  name: string;
+  deviceNumber: string;
+  deviceSn: string;
+}
+
 const { generateShortUuid } = require('../../shared/util/generate-uuid.js');
 
 class BiometricService {
@@ -196,31 +205,38 @@ class BiometricService {
     return { employeeId, privilege, queued };
   }
 
-  // Push every not-yet-synced ACTIVE employee to a device in one go ("sync all un-synced").
-  // Skips anyone already holding a live enrolment on that device. Delegates each to
-  // syncEmployee (so device_number assignment + stale cleanup rules apply uniformly).
+  // Push not-yet-synced staff to a device in one go ("sync all un-synced").
+  // IMPORTANT: only employees who ALREADY HAVE a numeric device_number are candidates — a
+  // bulk sweep must never INVENT numbers (that once auto-assigned arbitrary 1001+ PINs to
+  // management who had no number). Assigning a device_number is a deliberate per-person act;
+  // syncAll just pushes the people an admin has already made device-ready.
+  // Skips anyone already holding a live enrolment on that device. `dryRun` returns the
+  // candidate list WITHOUT syncing, so the UI can show exactly who will be pushed first.
   public async syncAll(
     schoolId: string,
     userId: string,
     deviceSn: string,
-    data: { privilege?: number },
+    data: { privilege?: number; dryRun?: boolean },
   ): Promise<any> {
     const [device] = await this.targetDevices(schoolId, deviceSn);
     const privilege = data.privilege == null ? PRI_USER : this.normalizePrivilege(data.privilege);
     const rows = await DB.query(
-      singleLineString`select e.uuid from employee e
+      singleLineString`select e.uuid, e.name, e.device_number from employee e
         where e.school_id = $1 and e.status = 'active'
+          and e.device_number is not null and e.device_number ~ '^[0-9]+$'
           and not exists (select 1 from biometric_enrollment b
             where b.device_sn = $2 and b.employee_id = e.uuid and b.status in ('pending', 'synced', 'enrolled'))
         order by e.name`,
       [schoolId, device.serialNumber],
     );
-    let synced = 0;
-    for (const r of rows) {
-      await this.syncEmployee(schoolId, userId, r.uuid, { deviceSn: device.serialNumber, privilege });
-      synced++;
+    const candidates = rows.map((r) => ({ uuid: r.uuid, name: r.name, deviceNumber: r.deviceNumber }));
+    if (data.dryRun) return { deviceSn: device.serialNumber, count: candidates.length, candidates };
+    const people: Array<{ name: string; deviceNumber: string }> = [];
+    for (const c of candidates) {
+      await this.syncEmployee(schoolId, userId, c.uuid, { deviceSn: device.serialNumber, deviceNumber: c.deviceNumber, privilege });
+      people.push({ name: c.name, deviceNumber: c.deviceNumber });
     }
-    return { deviceSn: device.serialNumber, synced };
+    return { deviceSn: device.serialNumber, synced: people.length, people };
   }
 
   // ── Reconcile (device membership follows employee active/inactive) ───────────
@@ -232,12 +248,13 @@ class BiometricService {
   //       → enqueue push_user (with the stored privilege) + replay every stored fingerprint
   //         template (push_fp) so no re-enrolment is needed + mark the enrolment 'synced'.
   // Idempotent: it only acts on enrolments whose state disagrees with the employee.
-  public async reconcileEmployee(schoolId: string, employeeId: string, userId: string = 'system'): Promise<{ changed: number }> {
+  public async reconcileEmployee(schoolId: string, employeeId: string, userId: string = 'system'): Promise<{ changed: number; actions: ReconcileAction[] }> {
     const employee = await findEmployeeAny(schoolId, employeeId);
-    if (!employee) return { changed: 0 };
+    if (!employee) return { changed: 0, actions: [] };
     const active = employee.status === 'active';
     const devices = await activeDevicesForSchool(schoolId);
     let changed = 0;
+    const actions: ReconcileAction[] = [];
     for (const d of devices) {
       const enrs = await DB.query(
         singleLineString`select device_number, name, privilege, status from biometric_enrollment
@@ -252,6 +269,7 @@ class BiometricService {
               where device_sn = $1 and device_number = $2`,
             [d.serialNumber, e.deviceNumber],
           );
+          actions.push({ action: 'suspended', name: employee.name, deviceNumber: e.deviceNumber, deviceSn: d.serialNumber });
           changed++;
         } else if (active && e.status === 'suspended') {
           const pri = e.privilege == null ? PRI_USER : e.privilege;
@@ -270,11 +288,12 @@ class BiometricService {
               where device_sn = $1 and device_number = $2`,
             [d.serialNumber, e.deviceNumber],
           );
+          actions.push({ action: 'restored', name: employee.name, deviceNumber: e.deviceNumber, deviceSn: d.serialNumber });
           changed++;
         }
       }
     }
-    return { changed };
+    return { changed, actions };
   }
 
   // Reconcile every enrolled employee on one device (on-demand "Reconcile now" button).
@@ -289,11 +308,13 @@ class BiometricService {
       [deviceSn],
     );
     let changed = 0;
+    const actions: ReconcileAction[] = [];
     for (const r of rows) {
       const res = await this.reconcileEmployee(schoolId, r.employeeId, userId);
       changed += res.changed;
+      actions.push(...res.actions);
     }
-    return { deviceSn, scanned: rows.length, changed };
+    return { deviceSn, scanned: rows.length, changed, actions };
   }
 
   // Cross-school sweep for the scheduled job. Finds only the enrolments whose state
@@ -315,6 +336,8 @@ class BiometricService {
     }
     return { scanned: rows.length, changed };
   }
+
+  // (type below) one membership change a reconcile made, for human-readable feedback.
 
   // ── Reads ────────────────────────────────────────────────────────────────────
   public async listEnrollments(schoolId: string, filter: { deviceSn?: string }): Promise<any[]> {
