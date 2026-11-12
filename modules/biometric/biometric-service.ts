@@ -248,7 +248,9 @@ class BiometricService {
   //       → enqueue push_user (with the stored privilege) + replay every stored fingerprint
   //         template (push_fp) so no re-enrolment is needed + mark the enrolment 'synced'.
   // Idempotent: it only acts on enrolments whose state disagrees with the employee.
-  public async reconcileEmployee(schoolId: string, employeeId: string, userId: string = 'system'): Promise<{ changed: number; actions: ReconcileAction[] }> {
+  // `dryRun` computes the planned actions WITHOUT enqueuing commands or touching enrolment
+  // status — so the UI can show exactly what reconcile is about to do before it runs.
+  public async reconcileEmployee(schoolId: string, employeeId: string, userId: string = 'system', dryRun: boolean = false): Promise<{ changed: number; actions: ReconcileAction[] }> {
     const employee = await findEmployeeAny(schoolId, employeeId);
     if (!employee) return { changed: 0, actions: [] };
     const active = employee.status === 'active';
@@ -263,31 +265,35 @@ class BiometricService {
       );
       for (const e of enrs) {
         if (!active && ['pending', 'synced', 'enrolled'].includes(e.status)) {
-          await this.enqueue(schoolId, userId, d.serialNumber, employeeId, e.deviceNumber, 'delete_user', buildDeleteUserPayload(e.deviceNumber));
-          await DB.query(
-            singleLineString`update biometric_enrollment set status = 'suspended', updated_at = now()
-              where device_sn = $1 and device_number = $2`,
-            [d.serialNumber, e.deviceNumber],
-          );
+          if (!dryRun) {
+            await this.enqueue(schoolId, userId, d.serialNumber, employeeId, e.deviceNumber, 'delete_user', buildDeleteUserPayload(e.deviceNumber));
+            await DB.query(
+              singleLineString`update biometric_enrollment set status = 'suspended', updated_at = now()
+                where device_sn = $1 and device_number = $2`,
+              [d.serialNumber, e.deviceNumber],
+            );
+          }
           actions.push({ action: 'suspended', name: employee.name, deviceNumber: e.deviceNumber, deviceSn: d.serialNumber });
           changed++;
         } else if (active && e.status === 'suspended') {
-          const pri = e.privilege == null ? PRI_USER : e.privilege;
-          const name = deviceName(e.name || employee.name);
-          await this.enqueue(schoolId, userId, d.serialNumber, employeeId, e.deviceNumber, 'push_user', buildPushUserPayload(e.deviceNumber, name, pri));
-          const tmps = await DB.query(
-            singleLineString`select fid, size, valid, template from biometric_template
-              where device_sn = $1 and device_number = $2 and kind = 'fp'`,
-            [d.serialNumber, e.deviceNumber],
-          );
-          for (const t of tmps) {
-            await this.enqueue(schoolId, userId, d.serialNumber, employeeId, e.deviceNumber, 'push_fp', buildFpPayload(e.deviceNumber, t.fid, t.size, t.valid, t.template));
+          if (!dryRun) {
+            const pri = e.privilege == null ? PRI_USER : e.privilege;
+            const name = deviceName(e.name || employee.name);
+            await this.enqueue(schoolId, userId, d.serialNumber, employeeId, e.deviceNumber, 'push_user', buildPushUserPayload(e.deviceNumber, name, pri));
+            const tmps = await DB.query(
+              singleLineString`select fid, size, valid, template from biometric_template
+                where device_sn = $1 and device_number = $2 and kind = 'fp'`,
+              [d.serialNumber, e.deviceNumber],
+            );
+            for (const t of tmps) {
+              await this.enqueue(schoolId, userId, d.serialNumber, employeeId, e.deviceNumber, 'push_fp', buildFpPayload(e.deviceNumber, t.fid, t.size, t.valid, t.template));
+            }
+            await DB.query(
+              singleLineString`update biometric_enrollment set status = 'synced', synced_at = now(), updated_at = now()
+                where device_sn = $1 and device_number = $2`,
+              [d.serialNumber, e.deviceNumber],
+            );
           }
-          await DB.query(
-            singleLineString`update biometric_enrollment set status = 'synced', synced_at = now(), updated_at = now()
-              where device_sn = $1 and device_number = $2`,
-            [d.serialNumber, e.deviceNumber],
-          );
           actions.push({ action: 'restored', name: employee.name, deviceNumber: e.deviceNumber, deviceSn: d.serialNumber });
           changed++;
         }
@@ -297,7 +303,8 @@ class BiometricService {
   }
 
   // Reconcile every enrolled employee on one device (on-demand "Reconcile now" button).
-  public async reconcileDevice(schoolId: string, userId: string, deviceSn: string): Promise<any> {
+  // `dryRun` returns the planned actions without applying them (UI preview-before-apply).
+  public async reconcileDevice(schoolId: string, userId: string, deviceSn: string, dryRun: boolean = false): Promise<any> {
     const device = await findDeviceBySn(deviceSn);
     if (!device || device.schoolId !== schoolId || device.status === 'deleted') {
       throw new NotFoundResult(ErrorCode.InvalidId, 'Device not found');
@@ -310,7 +317,7 @@ class BiometricService {
     let changed = 0;
     const actions: ReconcileAction[] = [];
     for (const r of rows) {
-      const res = await this.reconcileEmployee(schoolId, r.employeeId, userId);
+      const res = await this.reconcileEmployee(schoolId, r.employeeId, userId, dryRun);
       changed += res.changed;
       actions.push(...res.actions);
     }

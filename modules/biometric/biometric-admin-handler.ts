@@ -125,7 +125,8 @@ class BiometricAdminHandler {
       if (!ctx) return;
       const sn = requireParam(event, 'sn', callback);
       if (!sn) return;
-      ResponseBuilder.ok(await biometricService.reconcileDevice(ctx.schoolId, ctx.userId, sn), callback);
+      const body = parseBody<any>(event, callback) || {};
+      ResponseBuilder.ok(await biometricService.reconcileDevice(ctx.schoolId, ctx.userId, sn, !!body.dryRun), callback);
     } catch (err) {
       ResponseBuilder.handleError(err as Error, callback);
     }
