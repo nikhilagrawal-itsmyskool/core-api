@@ -467,23 +467,37 @@ class EmployeeService {
   // ── Per-school employee config ──────────────────────────────────────────────────────
   // restrictRoledEdit: when true (the default when no row exists), admins can't edit/delete a
   // roled employee. Enforced in the handlers; the screen is god-only (employee.config.manage).
-  public async getConfig(schoolId: string): Promise<{ editProtectedRoles: string[] }> {
+  public async getConfig(schoolId: string): Promise<{ editProtectedRoles: string[]; sessionTokenHours: number | null }> {
     const rows = await DB.query(
-      singleLineString`select edit_protected_roles from employee_config where school_id = $1`,
+      singleLineString`select edit_protected_roles, session_token_hours from employee_config where school_id = $1`,
       [schoolId]
     );
-    return { editProtectedRoles: csvToList(rows.length ? rows[0].editProtectedRoles : null) };
+    const r = rows.length ? rows[0] : null;
+    const h = r && r.sessionTokenHours != null ? Number(r.sessionTokenHours) : null;
+    return {
+      editProtectedRoles: csvToList(r ? r.editProtectedRoles : null),
+      // null = use the JWT_ADMIN_EXPIRY_TIME default (7d in prod). Bounded 1..720h.
+      sessionTokenHours: h != null && Number.isFinite(h) && h >= 1 && h <= 720 ? h : null,
+    };
   }
 
   public async updateConfig(
     schoolId: string,
-    data: { editProtectedRoles?: string[] },
+    data: { editProtectedRoles?: string[]; sessionTokenHours?: number | null },
     userId: string
-  ): Promise<{ editProtectedRoles: string[] }> {
+  ): Promise<{ editProtectedRoles: string[]; sessionTokenHours: number | null }> {
     const current = await this.getConfig(schoolId);
     const editProtectedRoles = Array.isArray(data.editProtectedRoles)
       ? data.editProtectedRoles.map((r) => String(r).trim()).filter(Boolean)
       : current.editProtectedRoles;
+    // sessionTokenHours: explicit null clears (back to default); a valid 1..720 sets it; anything
+    // else (undefined/invalid) keeps the current value.
+    let sessionTokenHours = current.sessionTokenHours;
+    if (data.sessionTokenHours === null) sessionTokenHours = null;
+    else if (data.sessionTokenHours !== undefined) {
+      const n = Number(data.sessionTokenHours);
+      if (Number.isFinite(n) && n >= 1 && n <= 720) sessionTokenHours = Math.round(n);
+    }
     const csv = editProtectedRoles.join(',');
     const now = new Date();
     const existing = await DB.query(
@@ -492,16 +506,16 @@ class EmployeeService {
     );
     if (existing.length) {
       await DB.query(
-        singleLineString`update employee_config set edit_protected_roles = $1, updatedby_userid = $2, updated_at = $3 where school_id = $4`,
-        [csv, userId, now, schoolId]
+        singleLineString`update employee_config set edit_protected_roles = $1, session_token_hours = $2, updatedby_userid = $3, updated_at = $4 where school_id = $5`,
+        [csv, sessionTokenHours, userId, now, schoolId]
       );
     } else {
       await DB.query(
-        singleLineString`insert into employee_config (school_id, edit_protected_roles, updatedby_userid, updated_at) values ($1, $2, $3, $4)`,
-        [schoolId, csv, userId, now]
+        singleLineString`insert into employee_config (school_id, edit_protected_roles, session_token_hours, updatedby_userid, updated_at) values ($1, $2, $3, $4, $5)`,
+        [schoolId, csv, sessionTokenHours, userId, now]
       );
     }
-    return { editProtectedRoles };
+    return { editProtectedRoles, sessionTokenHours };
   }
 
   // True when this employee may NOT be edited/deleted by a non-god admin: the school configured a

@@ -80,7 +80,9 @@ class EmployeeAuthHandler {
         token = employeeAuthService.signToken(payload, DEVICE_TOKEN_TTL);
         await registerDevice(schoolId, employeeLogin.employeeId, username, deviceId, deviceLabel);
       } else {
-        token = employeeAuthService.signToken(payload);
+        // Per-school configurable token lifetime (Employee Config); null → JWT_ADMIN_EXPIRY_TIME.
+        const expiresIn = await employeeAuthService.getSessionExpiresIn(schoolId);
+        token = employeeAuthService.signToken(payload, expiresIn || undefined);
       }
 
       if (!token) {

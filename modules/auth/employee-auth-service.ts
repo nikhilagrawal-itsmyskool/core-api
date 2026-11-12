@@ -43,6 +43,22 @@ export class EmployeeAuthService {
     return results.length > 0 ? results[0].uuid : null;
   }
 
+  // Per-school staff-login token lifetime as a jwt expiresIn string (e.g. '168h'), from the
+  // Employee Config (employee_config.session_token_hours). null → fall back to JWT_ADMIN_EXPIRY_TIME.
+  // Bounded 1..720h. Reads the shared employee_config table directly (auth mints the token).
+  public async getSessionExpiresIn(schoolId: string): Promise<string | null> {
+    try {
+      const rows = await DB.query(
+        singleLineString`select session_token_hours from employee_config where school_id = $1`,
+        [schoolId]
+      );
+      const h = rows.length && rows[0].sessionTokenHours != null ? Number(rows[0].sessionTokenHours) : null;
+      return h != null && Number.isFinite(h) && h >= 1 && h <= 720 ? `${Math.round(h)}h` : null;
+    } catch {
+      return null; // never block login on a config read / missing column
+    }
+  }
+
   public async validateUsernameAndPassword(username: string, password: string, schoolId: string): Promise<EmployeeLogin | null> {
     const loginQuery = singleLineString`select uuid, password, display_name, must_change_password, session_version from employee_login where username = $1 and school_id = $2`;
     const loginResults = await DB.query(loginQuery, [username, schoolId]);

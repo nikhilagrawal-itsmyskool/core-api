@@ -98,6 +98,9 @@ create table if not exists employee_config (
     updated_at timestamp(0)
 );
 alter table employee_config add column if not exists edit_protected_roles text;
+-- Per-school staff-login token lifetime in HOURS (null = JWT_ADMIN_EXPIRY_TIME default, 7d in prod).
+-- Read by the auth login path; bounded 1..720h in app code.
+alter table employee_config add column if not exists session_token_hours integer;
 
 -- Inactive employees: login_disabled = true blocks login but keeps the employee active and listed
 -- (distinct from soft-delete). The employee table lives in modules/db/*; additive + idempotent here.
