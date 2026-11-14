@@ -481,6 +481,11 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
   // Collection-desk manager: a locked, read-only fee-collection view, plus the one-tap
   // late-fine exemption (the counter escape hatch — clerks can't skip/forgive fines).
   manager: ['fee.manager.view', 'fee.fine.exempt'],
+  // Fee caller: a locked, single-screen tele-caller. Reads the defaulter list (dues + unmasked
+  // contacts) and logs each call's outcome via the fee.manager.view-gated follow-up endpoints.
+  // Nothing else — no collect, no fine-exempt, no menu. (A genuinely restricted clerk, not a
+  // manager variant — manager is a trusted persona; this is a scoped job role.)
+  'fee-caller': ['fee.manager.view'],
   // Education director: lands on the Cockpit / School Pulse and reviews the school's
   // heartbeat. Read-oriented oversight across the pulse domains. Additive — a person can
   // also hold `god`. Mirrors admin-portal/src/permissions/policy.js.

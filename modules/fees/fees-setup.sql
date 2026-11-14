@@ -333,8 +333,10 @@ create table if not exists fee_followup_entry (
   note varchar(1000),
   promised_date date,
   createdby_userid varchar(12),
-  created_at timestamp(0)
+  created_at timestamp                        -- full precision: sub-second so "latest outcome" ordering is deterministic
 );
+-- widen any existing second-precision column (safe: preserves values) so same-second call logs order correctly
+alter table fee_followup_entry alter column created_at type timestamp;
 create index if not exists idx_fee_followup_entry on fee_followup_entry (school_id, student_id, academic_year_id, created_at desc);
 
 -- Bad-debt write-off. A student flagged here is removed from the COLLECTABLE dues number

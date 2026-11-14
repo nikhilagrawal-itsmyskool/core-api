@@ -12,3 +12,16 @@
     name: ${self:service}-student-write-off
     events:
       - http: { path: 'students/{id}/write-off', method: post, cors: true }
+
+  # ---- Fee-caller follow-up (gated fee.manager.view, so the tele-caller/manager can log calls
+  # without fee.collect.collect). Logic lives in ../fees/fees-report-service (get/setFollowup). ----
+  caller-followup-get:
+    handler: fees-ext-handler.getFollowup
+    name: ${self:service}-caller-followup-get
+    events:
+      - http: { path: 'students/{id}/followup', method: get, cors: true }
+  caller-followup-set:
+    handler: fees-ext-handler.setFollowup
+    name: ${self:service}-caller-followup-set
+    events:
+      - http: { path: 'students/{id}/followup', method: post, cors: true }

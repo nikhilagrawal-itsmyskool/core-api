@@ -5,6 +5,10 @@ import { ACTIONS } from '../../shared/lib/authz-policy';
 // is gated or explicitly public. The actual guard lives on the re-exported fees handler.
 export const FEE_EXT_ACTIONS: Record<string, string> = {
   'fees-ext-handler.writeOff': ACTIONS.FEE_WRITEOFF_MANAGE, // god-only (also enforced on the fees export)
+  // Fee-caller call-log: read/write a student's follow-up timeline. Gated fee.manager.view so the
+  // tele-caller (and manager) can log calls without the broader fee.collect.collect.
+  'fees-ext-handler.getFollowup': ACTIONS.FEE_MANAGER_VIEW,
+  'fees-ext-handler.setFollowup': ACTIONS.FEE_MANAGER_VIEW,
 };
 
 export const FEE_EXT_PUBLIC: string[] = [

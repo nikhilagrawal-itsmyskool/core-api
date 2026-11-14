@@ -352,6 +352,16 @@ class FeesReportService {
     g.forEach((row) => { (contactsById[row.studentId] ||= []).push({ relation: row.relation, name: row.name || null, mobile: row.mobile || null }); });
     Object.values(contactsById).forEach((arr) => arr.sort((a, b) => relRank(a.relation) - relRank(b.relation)));
 
+    // latest call-log (follow-up) per shown student — powers the fee-caller worklist chips
+    const fu: any[] = await DB.query(
+      singleLineString`select distinct on (student_id) student_id, status, created_at
+        from fee_followup_entry where school_id = $1 and student_id = any($2)
+        order by student_id, created_at desc, uuid desc`,
+      [schoolId, ids]
+    );
+    const followupById: Record<string, any> = {};
+    fu.forEach((r) => { followupById[r.studentId] = { status: r.status || null, at: r.createdAt }; });
+
     const rows = list
       .filter((s: any) => infoById[s.studentId])
       .map((s: any) => {
@@ -360,6 +370,7 @@ class FeesReportService {
           studentId: s.studentId, name: i.name || s.studentId, admissionNumber: i.admissionNumber || null,
           className: i.className || '—', hasLeft: i.status !== 'active' || i.withdrawalDate != null,
           writtenOff: writtenOffSet.has(s.studentId),
+          followup: followupById[s.studentId] || null,
           contacts: contactsById[s.studentId] || [], byYear: s.byYear, total: s.total,
         };
       });
@@ -593,7 +604,7 @@ class FeesReportService {
     if (!q?.studentId || !q?.academicYearId) return { entries: [] };
     const entries: any[] = await DB.query(
       singleLineString`select uuid, status, note, promised_date, createdby_userid, created_at from fee_followup_entry
-        where school_id = $1 and student_id = $2 and academic_year_id = $3 order by created_at desc`,
+        where school_id = $1 and student_id = $2 and academic_year_id = $3 order by created_at desc, uuid desc`,
       [schoolId, q.studentId, q.academicYearId]
     );
     for (const e of entries) {
