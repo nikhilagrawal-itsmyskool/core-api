@@ -25,3 +25,10 @@
     name: ${self:service}-caller-followup-set
     events:
       - http: { path: 'students/{id}/followup', method: post, cors: true }
+  # Call-activity report (admin oversight) — follow-up trend + per-day breakdown. Gated fee.report.view.
+  followup-activity:
+    handler: fees-ext-handler.followupActivity
+    name: ${self:service}-followup-activity
+    timeout: 30
+    events:
+      - http: { path: 'reports/followup-activity', method: get, cors: true }

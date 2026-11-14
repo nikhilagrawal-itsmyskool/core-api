@@ -617,6 +617,47 @@ class FeesReportService {
     return { entries };
   }
 
+  // Call-activity report (admin oversight): follow-up counts per IST day + per status over a window,
+  // plus the flat entries for a per-day drill-down. Powers the trend chart + expandable day rows.
+  public async followupActivity(schoolId: string, q: any) {
+    const days = Math.min(Math.max(Number(q?.days) || 30, 1), 120);
+    // group by IST day (created_at is stored UTC; +5:30 then date). to_char keeps it a plain string.
+    const agg: any[] = await DB.query(
+      singleLineString`select to_char(f.created_at + interval '330 minutes', 'YYYY-MM-DD') as day,
+        coalesce(f.status, 'none') as status, count(*)::int as n
+        from fee_followup_entry f
+        where f.school_id = $1 and f.created_at >= current_date - ($2::int + 1)
+        group by 1, 2`,
+      [schoolId, days]
+    );
+    const ent: any[] = await DB.query(
+      singleLineString`select to_char(f.created_at + interval '330 minutes', 'YYYY-MM-DD') as day,
+        f.student_id, f.status, f.note, f.created_at, f.createdby_userid,
+        s.name as student_name, s.admission_number,
+        (select c.name from student_class sc left join class c on c.uuid = sc.class_id where sc.student_id = f.student_id order by sc.created_at desc limit 1) as class_name
+        from fee_followup_entry f left join student s on s.uuid = f.student_id
+        where f.school_id = $1 and f.created_at >= current_date - ($2::int + 1)
+        order by f.created_at desc limit 3000`,
+      [schoolId, days]
+    );
+
+    // window of IST day strings, newest first
+    const todayStr = istToday();
+    const dayStrings: string[] = [];
+    for (let i = 0; i < days; i++) { const d = new Date(todayStr + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() - i); dayStrings.push(d.toISOString().slice(0, 10)); }
+    const byDay: Record<string, any> = {};
+    dayStrings.forEach((ds) => { byDay[ds] = { date: ds, total: 0, called: 0, promised: 0, unreachable: 0, settled: 0, none: 0 }; });
+    agg.forEach((r) => { const d = byDay[r.day]; if (d) { d[r.status] = (d[r.status] || 0) + Number(r.n); d.total += Number(r.n); } });
+    const daysOut = dayStrings.map((ds) => byDay[ds]); // newest first
+
+    const entries = ent
+      .filter((e) => byDay[e.day])
+      .map((e) => ({ date: e.day, studentId: e.studentId, name: e.studentName || e.studentId, admissionNumber: e.admissionNumber || null, className: e.className || null, status: e.status || null, note: e.note || null, by: e.createdbyUserid || null, at: e.createdAt }));
+
+    const totals = daysOut.reduce((a, d) => ({ total: a.total + d.total, called: a.called + d.called, promised: a.promised + d.promised, unreachable: a.unreachable + d.unreachable, settled: a.settled + d.settled }), { total: 0, called: 0, promised: 0, unreachable: 0, settled: 0 });
+    return { window: days, days: daysOut, entries, totals, truncated: ent.length >= 3000 };
+  }
+
   // Per-student outstanding across ALL academic years — powers the "also owes in other years"
   // banner on Collect so a clerk on one year isn't misled into thinking a student is all-clear.
   public async duesByYear(schoolId: string, studentId: string) {

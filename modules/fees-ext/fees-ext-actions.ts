@@ -9,6 +9,8 @@ export const FEE_EXT_ACTIONS: Record<string, string> = {
   // tele-caller (and manager) can log calls without the broader fee.collect.collect.
   'fees-ext-handler.getFollowup': ACTIONS.FEE_MANAGER_VIEW,
   'fees-ext-handler.setFollowup': ACTIONS.FEE_MANAGER_VIEW,
+  // Call-activity report — admin oversight (not the caller). Gated fee.report.view.
+  'fees-ext-handler.followupActivity': ACTIONS.FEE_REPORT_VIEW,
 };
 
 export const FEE_EXT_PUBLIC: string[] = [
