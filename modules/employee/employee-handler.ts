@@ -349,7 +349,7 @@ class EmployeeHandler {
         return;
       }
       const t = event.queryStringParameters?.type;
-      const type = t === 'non_teaching' || t === 'management' ? t : 'teaching';
+      const type = t === 'non_teaching' || t === 'management' || t === 'office' ? t : 'teaching';
       const result = await employeeService.nextNumber(schoolId, schoolCode, type);
       ResponseBuilder.ok(result, callback);
     } catch (err: any) {
