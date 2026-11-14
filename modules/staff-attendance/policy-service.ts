@@ -12,7 +12,13 @@ function csvToList(raw: any): string[] {
 }
 
 // Hardcoded fallback when a school hasn't configured anything yet (keeps derivation working).
-const DEFAULTS: ConfigRow = { expectedIn: '09:00', expectedOut: '15:00', graceMin: 10, halfDayAfterMin: null };
+// halfDayAfterMin 240 = a real in+out under 4h is a half day; missingPunchAfter null = a lone
+// check-in stays 'checked in' until the day's expected check-out; dedupGapMin 5 = scans within
+// 5 min collapse to one (double-scan guard).
+const DEFAULTS: ConfigRow = {
+  expectedIn: '09:00', expectedOut: '15:00', graceMin: 10,
+  halfDayAfterMin: 240, missingPunchAfter: null, dedupGapMin: 5,
+};
 
 function assertHHMM(label: string, v: any): void {
   if (v == null || v === '') return;
@@ -33,7 +39,9 @@ class PolicyService {
       expectedIn: c.expectedIn || DEFAULTS.expectedIn,
       expectedOut: c.expectedOut || DEFAULTS.expectedOut,
       graceMin: c.graceMin ?? DEFAULTS.graceMin,
-      halfDayAfterMin: c.halfDayAfterMin ?? null,
+      halfDayAfterMin: c.halfDayAfterMin ?? DEFAULTS.halfDayAfterMin,
+      missingPunchAfter: c.missingPunchAfter || null,
+      dedupGapMin: c.dedupGapMin ?? DEFAULTS.dedupGapMin,
       minPresentMin: c.minPresentMin ?? null,
       enabled: c.enabled || 'on',
       exemptRoleCodes: csvToList(c.exemptRoleCodes),
@@ -45,6 +53,7 @@ class PolicyService {
   async upsertConfig(schoolId: string, userId: string, data: any): Promise<any> {
     assertHHMM('expectedIn', data.expectedIn);
     assertHHMM('expectedOut', data.expectedOut);
+    assertHHMM('missingPunchAfter', data.missingPunchAfter);
     // Preserve any group not sent (timing vs exemption are saved from different UI sections).
     const current: any = await this.getConfig(schoolId);
     const toCsv = (v: any, fallback: string[]): string =>
@@ -60,20 +69,23 @@ class PolicyService {
       toCsv(data.exemptRoleCodes, current.exemptRoleCodes || []),
       toCsv(data.includeEmployeeIds, current.includeEmployeeIds || []),
       toCsv(data.exemptEmployeeIds, current.exemptEmployeeIds || []),
+      (data.missingPunchAfter ?? '') === '' ? null : data.missingPunchAfter,
+      data.dedupGapMin ?? DEFAULTS.dedupGapMin,
     ];
     if (existing.length) {
       await DB.query(
         singleLineString`update staff_attendance_config set
           expected_in = $2, expected_out = $3, grace_min = $4, half_day_after_min = $5, min_present_min = $6, enabled = $7,
           exempt_role_codes = $8, include_employee_ids = $9, exempt_employee_ids = $10,
-          updatedby_userid = $11, updated_at = now() where school_id = $1`,
+          missing_punch_after = $11, dedup_gap_min = $12,
+          updatedby_userid = $13, updated_at = now() where school_id = $1`,
         [schoolId, ...vals, userId],
       );
     } else {
       await DB.query(
         singleLineString`insert into staff_attendance_config
-          (uuid, school_id, expected_in, expected_out, grace_min, half_day_after_min, min_present_min, enabled, exempt_role_codes, include_employee_ids, exempt_employee_ids, createdby_userid, created_at, updated_at)
-          values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12, now(), now())`,
+          (uuid, school_id, expected_in, expected_out, grace_min, half_day_after_min, min_present_min, enabled, exempt_role_codes, include_employee_ids, exempt_employee_ids, missing_punch_after, dedup_gap_min, createdby_userid, created_at, updated_at)
+          values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14, now(), now())`,
         [generateShortUuid(12), schoolId, ...vals, userId],
       );
     }
@@ -152,7 +164,11 @@ class PolicyService {
     const config = await this.getConfig(schoolId);
     const seasons = await this.listSeasons(schoolId);
     return {
-      config: { expectedIn: config.expectedIn, expectedOut: config.expectedOut, graceMin: config.graceMin, halfDayAfterMin: config.halfDayAfterMin },
+      config: {
+        expectedIn: config.expectedIn, expectedOut: config.expectedOut, graceMin: config.graceMin,
+        halfDayAfterMin: config.halfDayAfterMin, missingPunchAfter: (config as any).missingPunchAfter ?? null,
+        dedupGapMin: (config as any).dedupGapMin ?? DEFAULTS.dedupGapMin,
+      },
       seasons: seasons.map((s: any) => ({
         name: s.name, startMonth: s.startMonth, startDay: s.startDay, endMonth: s.endMonth, endDay: s.endDay,
         expectedIn: s.expectedIn, expectedOut: s.expectedOut, graceMin: s.graceMin ?? 0, halfDayAfterMin: s.halfDayAfterMin ?? null,

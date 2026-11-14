@@ -67,6 +67,9 @@ class PenaltyService {
           unauthorizedAbs++; penaltyDays = 1; kind = 'penalty'; reason = 'Absent — no approved leave'; break;
         case 'half_day':
           present++; halfDayCount++; penaltyDays = cfg.halfDayLopWeight; kind = 'penalty'; reason = 'Half day — short hours'; break;
+        case 'checked_in':
+          // Today, still at work (checked in, not yet out). No penalty — the day isn't done.
+          present++; kind = 'clean'; reason = 'Checked in'; break;
         case 'missing_punch':
           present++; kind = 'pending'; reason = 'Missing check-out — regularize'; break;
         case 'late':

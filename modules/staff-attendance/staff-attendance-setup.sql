@@ -31,6 +31,13 @@ alter table staff_attendance_config add column if not exists exempt_role_codes t
 alter table staff_attendance_config add column if not exists include_employee_ids text;  -- 'take attendance anyway' (override)
 alter table staff_attendance_config add column if not exists exempt_employee_ids text;   -- also exempt (no role needed)
 
+-- Status-derivation knobs (all tunable from the Config screen):
+--   missing_punch_after: 'HH:MM' after which a lone check-in flips checked_in -> missing_punch
+--     (null = use the day's expected check-out).
+--   dedup_gap_min: scans within this many minutes collapse to one event (double-scan guard).
+alter table staff_attendance_config add column if not exists missing_punch_after varchar(5);
+alter table staff_attendance_config add column if not exists dedup_gap_min integer;
+
 -- Seasonal timing overrides (summer/winter/...). Recurring by month-day (no year), so no
 -- annual maintenance; a window may wrap the year end (start_md > end_md). A date picks the
 -- first matching active season (by sort_order); none -> config defaults.

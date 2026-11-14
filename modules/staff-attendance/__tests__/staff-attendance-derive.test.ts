@@ -2,7 +2,7 @@ import {
   toMinutes, monthDayInSeason, resolvePolicyForDate, deriveDay, Policy, SeasonRow, ConfigRow,
 } from '../staff-attendance-derive';
 
-const POLICY: Policy = { expectedIn: '09:00', expectedOut: '15:00', graceMin: 10, halfDayAfterMin: 240, seasonName: null };
+const POLICY: Policy = { expectedIn: '09:00', expectedOut: '15:00', graceMin: 10, halfDayAfterMin: 240, missingPunchAfterMin: 900 /* 15:00 */, dedupGapMin: 5, seasonName: null };
 
 describe('toMinutes', () => {
   it('parses HH:MM and HH:MM:SS', () => {
@@ -63,10 +63,29 @@ describe('deriveDay', () => {
     const r = deriveDay('2026-10-26', 'working', POLICY, ['09:05:00', '12:00:00'], null);
     expect(r.status).toBe('half_day');
   });
-  it('missing_punch with a single punch', () => {
+  it('missing_punch with a single punch (no live clock = past/finalized day)', () => {
     const r = deriveDay('2026-10-26', 'working', POLICY, ['09:05:00'], null);
     expect(r.status).toBe('missing_punch');
     expect(r.lastOut).toBeNull();
+  });
+  it('checked_in for a lone punch when today and before the cutoff', () => {
+    const r = deriveDay('2026-10-26', 'working', POLICY, ['09:05:00'], null, null, 600 /* 10:00 < 15:00 */);
+    expect(r.status).toBe('checked_in');
+    expect(r.firstIn).toBe('09:05');
+    expect(r.lastOut).toBeNull();
+  });
+  it('missing_punch for a lone punch once past the cutoff even today', () => {
+    const r = deriveDay('2026-10-26', 'working', POLICY, ['09:05:00'], null, null, 960 /* 16:00 >= 15:00 */);
+    expect(r.status).toBe('missing_punch');
+  });
+  it('collapses a double-scan at check-in into one checked_in (not present)', () => {
+    const r = deriveDay('2026-10-26', 'working', POLICY, ['07:52:03', '07:52:40'], null, null, 600);
+    expect(r.status).toBe('checked_in'); // two scans within the 5-min gap = one check-in
+    expect(r.lastOut).toBeNull();
+  });
+  it('a real in+out beyond the dedup gap still derives present', () => {
+    const r = deriveDay('2026-10-26', 'working', POLICY, ['09:05:00', '15:10:00'], null, null, 960);
+    expect(r.status).toBe('present');
   });
   it('absent with no punches', () => {
     expect(deriveDay('2026-10-26', 'working', POLICY, [], null).status).toBe('absent');

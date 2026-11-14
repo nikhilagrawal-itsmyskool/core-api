@@ -14,6 +14,8 @@ interface Context {
   leaveByEmp: Map<string, { from: string; to: string; typeCode: string }[]>;
   regByEmpDate: Map<string, { claimedIn: string | null; claimedOut: string | null }>;
   punchByDevDate: Map<string, Map<string, string[]>>;
+  todayIso: string;  // IST 'YYYY-MM-DD' — the only date that derives against a live clock
+  nowMin: number;    // IST minute-of-day (for the single-punch checked_in vs missing_punch cut)
 }
 
 class StaffAttendanceService {
@@ -46,7 +48,12 @@ class StaffAttendanceService {
     const regByEmpDate = new Map<string, { claimedIn: string | null; claimedOut: string | null }>();
     for (const r of regs) regByEmpDate.set(`${r.employeeId}|${r.d}`, { claimedIn: r.claimedIn, claimedOut: r.claimedOut });
 
-    return { config, seasons, weeklyOff, holidays, leaveByEmp, regByEmpDate, punchByDevDate };
+    // IST "now" for the live single-punch cutoff (Lambda runs UTC; IST = UTC+5:30).
+    const ist = new Date(Date.now() + 330 * 60000);
+    const todayIso = ist.toISOString().slice(0, 10);
+    const nowMin = ist.getUTCHours() * 60 + ist.getUTCMinutes();
+
+    return { config, seasons, weeklyOff, holidays, leaveByEmp, regByEmpDate, punchByDevDate, todayIso, nowMin };
   }
 
   private deriveEmployeeDay(staff: StaffRow, date: string, ctx: Context): DayResult {
@@ -61,7 +68,9 @@ class StaffAttendanceService {
     }
     const times = (staff.deviceNumber && ctx.punchByDevDate.get(staff.deviceNumber)?.get(date)) || [];
     const reg = ctx.regByEmpDate.get(`${staff.uuid}|${date}`) || null;
-    return deriveDay(date, dayType, policy, times, reg, leaveType);
+    // Only TODAY derives against the live clock (checked_in before cutoff); past days are final.
+    const liveNow = date === ctx.todayIso ? ctx.nowMin : null;
+    return deriveDay(date, dayType, policy, times, reg, leaveType, liveNow);
   }
 
   // Daily grid: every active staff member's status for one date.
@@ -114,6 +123,7 @@ function summarize(days: DayResult[]): any {
     present: c.present || 0,
     late: c.late || 0,
     halfDay: c.half_day || 0,
+    checkedIn: c.checked_in || 0,
     absent: c.absent || 0,
     missingPunch: c.missing_punch || 0,
     regularized: c.regularized || 0,
